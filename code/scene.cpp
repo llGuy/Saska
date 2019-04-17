@@ -432,8 +432,8 @@ init_scene(Scene *scene
     load_pipelines_from_json(&vk->gpu
 			     , &vk->swapchain);
 
-    load_render_passes_from_json(&vk->gpu
-				 , &vk->swapchain);
+    //    load_render_passes_from_json(&vk->gpu
+    //				 , &vk->swapchain);
     
     load_framebuffers_from_json(&vk->gpu
     				, &vk->swapchain);

@@ -29,13 +29,13 @@ process_vertex(std::vector<std::string> const & vertex_data,
 	glm::vec3 current_normal = raw_normals[std::stoi(vertex_data[2]) - 1];
 	f32 normal_y = current_normal.y;
 	f32 normal_z = current_normal.z;
-
+	
 	normals[current_vertex] = current_normal;
     }
 
     triangle_vertex = current_vertex;
 }
-    
+
 std::vector<std::string>
 split(std::string const & str, char const splitter)
 {
@@ -512,7 +512,7 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 			 , Vulkan_API::Swapchain *swapchain)
 {
     persist const char *json_file_name = "config/pipelines.json";
-    File_Contents contents = read_file(json_file_name);
+    File_Contents contents = read_file(json_file_name, "r");
     nlohmann::json j = nlohmann::json::parse(contents.content);
     for (nlohmann::json::iterator i = j.begin(); i != j.end(); ++i)
     {
@@ -677,7 +677,7 @@ load_renderers_from_json(Vulkan_API::GPU *gpu
 			 , VkCommandPool *command_pool)
 {
     persist const char *rndr_json_filename = "config/rndr.json";
-    File_Contents f = read_file(rndr_json_filename);
+    File_Contents f = read_file(rndr_json_filename, "r");
     nlohmann::json json = nlohmann::json::parse(f.content);
     for (nlohmann::json::iterator i = json.begin(); i != json.end(); ++i)
     {
@@ -729,7 +729,7 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 			    , Vulkan_API::Swapchain *swapchain)
 {
     persist const char *filename = "config/fbos.json";
-    File_Contents file = read_file(filename);
+    File_Contents file = read_file(filename, "r");
     nlohmann::json json = nlohmann::json::parse(file.content);
     for (auto i = json.begin(); i != json.end(); ++i)
     {
@@ -964,7 +964,7 @@ load_render_passes_from_json(Vulkan_API::GPU *gpu
 			     , Vulkan_API::Swapchain *swapchain)
 {
     persist const char *filename = "config/rndr_pass.json";
-    File_Contents file = read_file(filename);
+    File_Contents file = read_file(filename, "r");
     nlohmann::json json = nlohmann::json::parse(file.content);
     for (auto i = json.begin(); i != json.end(); ++i)
     {

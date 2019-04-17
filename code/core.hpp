@@ -204,9 +204,10 @@ struct File_Contents
 
 internal File_Contents
 read_file(const char *filename
+	  , const char *flags = "rb"
 	  , Stack_Allocator *allocator = &stack_allocator_global)
 {
-    FILE *file = fopen(filename, "rb");
+    FILE *file = fopen(filename, flags);
     if (file == nullptr)
     {
 	OUTPUT_DEBUG_LOG("error - couldnt load file \"%s\"\n", filename);

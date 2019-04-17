@@ -1,0 +1,10 @@
+*~
+*.obj
+*.dep
+*.exe
+*.pdb
+*.ilk
+.vs
+*.sln
+.debug
+TAGS

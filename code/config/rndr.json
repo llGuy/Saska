@@ -1,0 +1,8 @@
+{
+    "renderer.other_material_renderer": {
+	"max": 3,
+	"graphics_pipeline": "pipeline.main_pipeline",
+	"push_data_dst": "vf",
+	"descriptor_sets": ["descriptor_set.test_descriptor_sets"]
+    }
+}

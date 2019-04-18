@@ -1,32 +1,27 @@
 {
-    "graphics_pipeline.terrain_mesh": {
+    "pipeline.deferred_pipeline": {
 	"stages": {
-	    "v": "shaders/SPV/triangle.vert.spv",
-	    "f": "shaders/SPV/triangle.frag.spv"
+	    "v": "shaders/SPV/deferred_lighting.vert.spv",
+	    "f": "shaders/SPV/deferred_lighting.frag.spv"
 	},
 	"assemble": {
-	    "topology": "f",
-	    "restart": true
+	    "topology": "l",
+	    "restart": false
 	},
 	"raster": {
 	    "poly_mode": "f",
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layout": "descriptor_set_layout.test_descriptor_set_layout",
-	    "push_constant": {
-		"stage_flags": "vf",
-		"size": 100,
-		"offset": 0
-	    }
+	    "descriptor_set_layout": "descriptor_set_layout.deferred_layout"
 	},
 	"viewport": [0, 0],
 	"blend": ["disable"],
-	"vertex_input": "vulkan_model.test_model",
-	"depth": true,
+	"vertex_input": "",
+	"depth": false,
 	"render_pass": {
 	    "name": "render_pass.deferred_render_pass",
-	    "subpass": 0
+	    "subpass": 1
 	}
     }
 }

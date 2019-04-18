@@ -6,7 +6,7 @@
 	"color_attachment_count": 2,
 	"compatible_render_pass": "render_pass.deferred_render_pass",
 	"color_attachments": {
-	    "image2D.fbo_albedo_test": {
+	    "image2D.fbo_albedo": {
 		"to_create": true,
 		"index": 1,
 		"format": 8,
@@ -14,7 +14,7 @@
 	    }
 	},
 	"depth_attachment": {
-	    "name": "image2D.fbo_depth_test",
+	    "name": "image2D.fbo_depth",
 	    "to_create": true,
 	    "index": 3,
 	    "usage": "d"

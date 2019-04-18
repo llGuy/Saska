@@ -600,30 +600,47 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	std::string set_lyt = ppln_lyt.value().find("descriptor_set_layout").value();
 	Vulkan_API::Registered_Descriptor_Set_Layout descriptor_set_layout = Vulkan_API::get_object(init_const_str(set_lyt.c_str(), set_lyt.length()));
 	new_ppln->descriptor_set_layout = *descriptor_set_layout.p;
+
 	auto push_k = ppln_lyt.value().find("push_constant");
 	VkShaderStageFlags push_k_flags = 0;
-	std::string push_k_stage_flags_str = push_k.value().find("stage_flags").value();
-	for (u32 l = 0; l < push_k_stage_flags_str.length(); ++l)
+	Memory_Buffer_View<VkPushConstantRange> ranges = {};
+	if (push_k != ppln_lyt.value().end())
 	{
-	    switch(push_k_stage_flags_str[l])
+	    std::string push_k_stage_flags_str = push_k.value().find("stage_flags").value();
+	    for (u32 l = 0; l < push_k_stage_flags_str.length(); ++l)
 	    {
-	    case 'v': {push_k_flags |= VK_SHADER_STAGE_VERTEX_BIT; break;}
-	    case 'f': {push_k_flags |= VK_SHADER_STAGE_FRAGMENT_BIT; break;}
-	    case 'g': {push_k_flags |= VK_SHADER_STAGE_GEOMETRY_BIT; break;}
+		switch(push_k_stage_flags_str[l])
+		{
+		case 'v': {push_k_flags |= VK_SHADER_STAGE_VERTEX_BIT; break;}
+		case 'f': {push_k_flags |= VK_SHADER_STAGE_FRAGMENT_BIT; break;}
+		case 'g': {push_k_flags |= VK_SHADER_STAGE_GEOMETRY_BIT; break;}
+		}
 	    }
+	    u32 push_k_offset = push_k.value().find("offset").value();
+	    u32 push_k_size = push_k.value().find("size").value();
+	    VkPushConstantRange k_rng = {};
+	    Vulkan_API::init_push_constant_range(push_k_flags, push_k_size, push_k_offset, &k_rng);
+	    ranges = Memory_Buffer_View<VkPushConstantRange>{1, &k_rng};
 	}
-	u32 push_k_offset = push_k.value().find("offset").value();
-	u32 push_k_size = push_k.value().find("size").value();
-	VkPushConstantRange k_rng = {};
-	Vulkan_API::init_push_constant_range(push_k_flags, push_k_size, push_k_offset, &k_rng);
-	Memory_Buffer_View<VkPushConstantRange> ranges = {1, &k_rng};
 	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {1, &new_ppln->descriptor_set_layout};
 	Vulkan_API::init_pipeline_layout(&layouts, &ranges, gpu, &new_ppln->layout);
 
-	std::string vtx_inp_model = i.value().find("vertex_input").value();
-	Vulkan_API::Registered_Model model = Vulkan_API::get_object(init_const_str(vtx_inp_model.c_str(), vtx_inp_model.length()));
+	auto vertex_input_info_json = i.value().find("vertex_input");
 	VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
-	Vulkan_API::init_pipeline_vertex_input_info(model.p, &vertex_input_info);
+	Vulkan_API::init_pipeline_vertex_input_info(null_buffer<VkVertexInputBindingDescription>()
+						    , null_buffer<VkVertexInputAttributeDescription>());	
+	if (vertex_input_info_json != i.value().end())
+	{
+	    std::string vtx_inp_model = i.value().find("vertex_input").value();
+	    if (vtx_inp_model != "")
+	    {
+		Vulkan_API::Registered_Model model = Vulkan_API::get_object(init_const_str(vtx_inp_model.c_str(), vtx_inp_model.length()));
+		Vulkan_API::init_pipeline_vertex_input_info(model.p, &vertex_input_info);
+	    }
+	    else
+	    {
+	    }
+	}
 
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_info = {};
 	bool enable_depth = i.value().find("depth").value();

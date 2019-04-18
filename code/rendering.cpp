@@ -801,64 +801,7 @@ namespace Rendering
 	// fbos dont work yet
 	
 	load_framebuffers_from_json(gpu, swapchain);
-	rndr_sys.fbos = Vulkan_API::register_object("framebuffer.main_fbo"_hash, sizeof(Vulkan_API::Framebuffer) * swapchain->imgs.count);
-	/*	enum class G_Buffer_Attachment :u32 {FINAL, ALBEDO, POSITION, NORMAL, DEPTH, INVALID};
-
-	for (u32 i = 0; i < swapchain->imgs.count; ++i)
-	{
-	    allocate_memory_buffer(rndr_sys.fbos.p[i].color_attachments, 2);
-	}
-
-	auto create_attachment = [&gpu, &swapchain](const Constant_String &name
-						    , VkFormat format
-						    , VkImageUsageFlags usage
-						    , G_Buffer_Attachment attachment) -> Vulkan_API::Registered_Image2D
-	{
-	    Vulkan_API::Registered_Image2D img = Vulkan_API::register_object(name, sizeof(Vulkan_API::Image2D));
-
-	    Vulkan_API::init_framebuffer_attachment(swapchain->extent.width
-						    , swapchain->extent.height
-						    , format
-						    , usage
-						    , gpu
-						    , img.p);
-
-	    return(img);
-	};
-
-	auto albedo = create_attachment("image2D.fbo_albedo"_hash
-					, VK_FORMAT_R8G8B8A8_UNORM
-					, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-					, G_Buffer_Attachment::ALBEDO);
-	
-	auto position = create_attachment("image2D.fbo_position"_hash
-					  , VK_FORMAT_R16G16B16A16_SFLOAT
-					  , VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-					  , G_Buffer_Attachment::POSITION);
-	
-	auto normal = create_attachment("image2D.fbo_normal"_hash
-					, VK_FORMAT_R16G16B16A16_SFLOAT
-					, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
-					, G_Buffer_Attachment::NORMAL);
-	
-	auto depth = create_attachment("image2D.fbo_depth"_hash
-				       , gpu->supported_depth_format
-				       , VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
-				       , G_Buffer_Attachment::DEPTH);
-
-	for (u32 i = 0; i < swapchain->imgs.count; ++i)
-	{ 
-	    rndr_sys.fbos.p[i].color_attachments[0] = swapchain->views[i];
-	    rndr_sys.fbos.p[i].color_attachments[1] = albedo.p->image_view;
-
-	    rndr_sys.fbos.p[i].depth_attachment = depth.p->image_view;
-
-	    Vulkan_API::init_framebuffer(rndr_pass.p
-					 , swapchain->extent.width
-					 , swapchain->extent.height
-					 , gpu
-					 , &rndr_sys.fbos.p[i]);
-					 }*/
+	rndr_sys.fbos = Vulkan_API::get_object("framebuffer.main_fbo"_hash);
     }
             
     void
@@ -895,7 +838,6 @@ namespace Rendering
 					     , gpu
 					     , &descriptor_pool.p->pool);
 	
-	
 
 	VkDescriptorImageInfo image_infos [3] = {};
 	Vulkan_API::Registered_Image2D albedo_image = Vulkan_API::get_object("image2D.fbo_albedo"_hash);
@@ -913,127 +855,10 @@ namespace Rendering
 
 	Vulkan_API::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{1, descriptor_writes}, gpu);
 
+	
 	// actually create the pipeline
-	rndr_sys.deferred_pipeline = Vulkan_API::register_object("pipeline.deferred_pipeline"_hash
-								 , sizeof(Vulkan_API::Graphics_Pipeline));
-	
-	Vulkan_API::Registered_Graphics_Pipeline &graphics_pipeline = rndr_sys.deferred_pipeline;
-	
-	graphics_pipeline.p->stages = Vulkan_API::Graphics_Pipeline::Shader_Stages_Bits::VERTEX_SHADER_BIT
-	    | Vulkan_API::Graphics_Pipeline::Shader_Stages_Bits::FRAGMENT_SHADER_BIT;
-	graphics_pipeline.p->base_dir_and_name = "../vulkan/shaders/";
-	graphics_pipeline.p->descriptor_set_layout = *rndr_sys.deferred_descriptor_set_layout.p;
-
-	auto set_layout_sb = single_buffer(&graphics_pipeline.p->descriptor_set_layout);
-	auto null_b = null_buffer<VkPushConstantRange>();
-	Vulkan_API::init_pipeline_layout(&set_layout_sb
-					 , &null_b
-					 , gpu
-					 , &graphics_pipeline.p->layout);
-	
-	// create shaders
-	File_Contents vsh_bytecode = read_file("shaders/SPV/deferred_lighting.vert.spv");
-	File_Contents fsh_bytecode = read_file("shaders/SPV/deferred_lighting.frag.spv");
-	
-	VkShaderModule vsh_module;
-	Vulkan_API::init_shader(VK_SHADER_STAGE_VERTEX_BIT, vsh_bytecode.size, vsh_bytecode.content, gpu, &vsh_module);
-	
-	VkShaderModule fsh_module;
-	Vulkan_API::init_shader(VK_SHADER_STAGE_FRAGMENT_BIT, fsh_bytecode.size, fsh_bytecode.content, gpu, &fsh_module);
-
-	VkPipelineShaderStageCreateInfo module_infos[2] = {};
-	Vulkan_API::init_shader_pipeline_info(&vsh_module, VK_SHADER_STAGE_VERTEX_BIT, &module_infos[0]);
-
-	Vulkan_API::init_shader_pipeline_info(&fsh_module, VK_SHADER_STAGE_FRAGMENT_BIT, &module_infos[1]);
-	// init vertex input stuff
-	VkVertexInputBindingDescription binding_description = Vulkan_API::init_binding_description(0, sizeof(f32) * 4, VK_VERTEX_INPUT_RATE_VERTEX);
-	VkVertexInputAttributeDescription attribute_descriptions[] =
-	{
-	    Vulkan_API::init_attribute_description(0, 0, VK_FORMAT_R32G32_SFLOAT, 0),
-	    Vulkan_API::init_attribute_description(0, 1, VK_FORMAT_R32G32_SFLOAT, sizeof(f32) * 2)
-	};
-	
-	VkPipelineVertexInputStateCreateInfo vertex_input_info = Vulkan_API::init_pipeline_vertex_input_info(Memory_Buffer_View<VkVertexInputBindingDescription>{1, &binding_description}
-													     , Memory_Buffer_View<VkVertexInputAttributeDescription>{2, attribute_descriptions});
-
-	// init assembly info
-	VkPipelineInputAssemblyStateCreateInfo assembly_info = {};
-	Vulkan_API::init_pipeline_input_assembly_info(0, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_FALSE, &assembly_info);
-
-	// init viewport info
-	VkViewport viewport = {};
-	Vulkan_API::init_viewport(swapchain->extent.width, swapchain->extent.height, 0.0f, 1.0f, &viewport);
-	VkRect2D scissor = {};
-	Vulkan_API::init_rect_2D(VkOffset2D{}, swapchain->extent, &scissor);
-
-	VkPipelineViewportStateCreateInfo viewport_info = {};
-	Memory_Buffer_View<VkViewport> viewports = {1, &viewport};
-	Memory_Buffer_View<VkRect2D>   scissors = {1, &scissor};
-	Vulkan_API::init_pipeline_viewport_info(&viewports, &scissors, &viewport_info);
-
-	// init rasterization info
-	VkPipelineRasterizationStateCreateInfo rasterization_info = {};
-	Vulkan_API::init_pipeline_rasterization_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, 1.0f, 0, &rasterization_info);
-
-	// init multisample info
-	VkPipelineMultisampleStateCreateInfo multisample_info = {};
-	Vulkan_API::init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multisample_info);
-
-	// init blending info
-	VkPipelineColorBlendAttachmentState blend_attachment = {};
-	Vulkan_API::init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-						, VK_FALSE
-						, VK_BLEND_FACTOR_ONE
-						, VK_BLEND_FACTOR_ZERO
-						, VK_BLEND_OP_ADD
-						, VK_BLEND_FACTOR_ONE
-						, VK_BLEND_FACTOR_ZERO
-						, VK_BLEND_OP_ADD
-						, &blend_attachment);
-	VkPipelineColorBlendStateCreateInfo blending_info = {};
-	Memory_Buffer_View<VkPipelineColorBlendAttachmentState> blend_attachments = {1, &blend_attachment};
-	Vulkan_API::init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, &blend_attachments, &blending_info);
-
-	// init dynamic states info
-	VkDynamicState dynamic_states[]
-	{
-	    VK_DYNAMIC_STATE_VIEWPORT,
-	    VK_DYNAMIC_STATE_LINE_WIDTH
-	};
-	Memory_Buffer_View<VkDynamicState> dynamic_states_ptr = {2, dynamic_states};
-	VkPipelineDynamicStateCreateInfo dynamic_info = {};
-	Vulkan_API::init_pipeline_dynamic_states_info(&dynamic_states_ptr, &dynamic_info);
-
-	// init pipeline layout
-	VkDescriptorSetLayout &descriptor_set_layout = graphics_pipeline.p->descriptor_set_layout;
-	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {1, &
-							     descriptor_set_layout};
-
-	// init depth stencil info
-	VkPipelineDepthStencilStateCreateInfo depth_stencil_info = {};
-	//	Vulkan_API::init_pipeline_depth_stencil_info(VK_TRUE, VK_TRUE, 0.0f, 1.0f, VK_FALSE, &depth_stencil_info);
-	Vulkan_API::init_pipeline_depth_stencil_info(VK_FALSE, VK_FALSE, 0.0f, 1.0f, VK_FALSE, &depth_stencil_info);
-
-	// init pipeline object
-	Vulkan_API::Registered_Render_Pass render_pass = rndr_sys.deferred_rndr_pass;
-	Memory_Buffer_View<VkPipelineShaderStageCreateInfo> modules = {2, module_infos};
-	Vulkan_API::init_graphics_pipeline(&modules
-					   , &vertex_input_info
-					   , &assembly_info
-					   , &viewport_info
-					   , &rasterization_info
-					   , &multisample_info
-					   , &blending_info
-					   , nullptr
-					   , &depth_stencil_info
-					   , &graphics_pipeline.p->layout
-					   , render_pass.p
-					   , 1 // now should be 1
-					   , gpu
-					   , &graphics_pipeline.p->pipeline);
-
-	vkDestroyShaderModule(gpu->logical_device, vsh_module, nullptr);
-	vkDestroyShaderModule(gpu->logical_device, fsh_module, nullptr);
+	load_pipelines_from_json(gpu, swapchain);
+	rndr_sys.deferred_pipeline = Vulkan_API::get_object("pipeline.deferred_pipeline"_hash);
     }
     
     void

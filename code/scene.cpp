@@ -306,6 +306,19 @@ Camera::compute_view(void)
     v_m = glm::lookAt(p, p + d, u);
 }
 
+
+// atmosphere stuff
+internal void
+init_atmosphere_descriptor_set_layout(Vulkan_API::GPU *gpu)
+{
+    Vulkan_API::Registered_Descriptor_Set_Layout atmos_layout = Vulkan_API::register_object("descriptor_set_layout.atmosphere_layout"_hash
+											    , sizeof(VkDescriptorSetLayout));
+    Vulkan_API::init_descriptor_set_layout(null_buffer<VkDescriptorSetLayoutBinding>()
+					   , gpu
+					   , atmos_layout.p);
+}
+
+
 void
 init_scene(Scene *scene
 	   , Window_Data *window
@@ -330,10 +343,23 @@ init_scene(Scene *scene
 
 
     Vulkan_API::Registered_Render_Pass n {};
-    Rendering::init_rendering_system(&vk->swapchain, &vk->gpu, n);
+    Rendering::init_render_passes_from_json(&vk->swapchain, &vk->gpu);
+    Rendering::init_framebuffers_from_json(&vk->swapchain, &vk->gpu);
+    
+    Rendering::init_descriptor_sets_and_layouts(&vk->swapchain, &vk->gpu);
+    // testing atmosphere stuff right now
+    init_atmosphere_descriptor_set_layout(&vk->gpu);
+    
+    Rendering::init_pipelines_from_json(&vk->swapchain, &vk->gpu);
     
     Rendering::init_rendering_state(vk, rnd);
+    Rendering::init_rendering_system(&vk->swapchain
+				     , &vk->gpu
+				     , Vulkan_API::get_object("render_pass.deferred_render_pass"_hash));
 
+    
+
+    
     Rendering::Renderer_Init_Data rndr_d = {};
     rndr_d.rndr_id = "renderer.test_material_renderer"_hash;
     rndr_d.mtrl_max = 3;
@@ -426,17 +452,6 @@ init_scene(Scene *scene
     make_entity_renderable(rev2_ptr
 			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
 			   , "renderer.other_material_renderer"_hash);
-
-
-
-    //    load_pipelines_from_json(&vk->gpu
-    //			     , &vk->swapchain);
-
-    //    load_render_passes_from_json(&vk->gpu
-    //				 , &vk->swapchain);
-    
-    //    load_framebuffers_from_json(&vk->gpu
-    //    				, &vk->swapchain);
 }
 
 internal void
@@ -491,18 +506,7 @@ record_cmd(Rendering::Rendering_State *rnd_objs
     Vulkan_API::begin_command_buffer(cmdbuf, 0, nullptr);
 
     Vulkan_API::Registered_Render_Pass render_pass = rnd_objs->test_render_pass;
-    Vulkan_API::Registered_Graphics_Pipeline pipeline_ptr = rnd_objs->graphics_pipeline;
     Vulkan_API::Registered_Descriptor_Set descriptor_sets = rnd_objs->descriptor_sets;
-    Vulkan_API::Registered_Model model = rnd_objs->test_model;
-
-    VkClearValue clears[2] {Vulkan_API::init_clear_color_color(0, 0, 0, 0), Vulkan_API::init_clear_color_depth(1.0f, 0)};
-		
-    /*Vulkan_API::command_buffer_begin_render_pass(render_pass.p
-						 , fbo.p
-						 , Vulkan_API::init_render_area({0, 0}, vk->swapchain.extent)
-						 , Memory_Buffer_View<VkClearValue>{2, clears}
-						 , VK_SUBPASS_CONTENTS_INLINE
-						 , cmdbuf);*/
 
     Rendering::update_renderers(cmdbuf
 				, vk->swapchain.extent
@@ -510,7 +514,26 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 				, Memory_Buffer_View<VkDescriptorSet>{1, &descriptor_sets.p[image_index].set}
 				, render_pass);
 
-    //    Vulkan_API::command_buffer_end_render_pass(cmdbuf);
+    // render atmosphere stuff
+    VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.0, 0.0, 0)};
+    Vulkan_API::Registered_Render_Pass atmos_pass = Vulkan_API::get_object("render_pass.atmosphere_render_pass"_hash);
+    Vulkan_API::Registered_Framebuffer atmos_fbo = Vulkan_API::get_object("framebuffer.atmosphere_fbo"_hash);
+    Vulkan_API::Registered_Graphics_Pipeline atmos_ppln = Vulkan_API::get_object("pipeline.atmosphere_pipeline"_hash);
+    Vulkan_API::command_buffer_begin_render_pass(atmos_pass.p
+						 , &atmos_fbo.p[image_index]
+						 , Vulkan_API::init_render_area({0, 0}, vk->swapchain.extent)
+						 , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
+						 , VK_SUBPASS_CONTENTS_INLINE
+						 , cmdbuf);
+
+    Vulkan_API::command_buffer_bind_pipeline(atmos_ppln.p
+					     , cmdbuf);
+
+    Vulkan_API::command_buffer_draw(cmdbuf
+				    , 3, 1, 0, 0);
+
+    Vulkan_API::command_buffer_end_render_pass(cmdbuf);
+
     Vulkan_API::end_command_buffer(cmdbuf);
 }
 

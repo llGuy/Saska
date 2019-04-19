@@ -42,6 +42,25 @@ namespace Rendering
 			  , Vulkan_API::GPU *gpu
 			  , Vulkan_API::Registered_Render_Pass rndr_pass);
 
+    // init rendering system actually has to be split in multiple stages
+    // because of descriptor sets and layouts - need a JSON loader for sets and layouts to make this cleaner
+    void
+    init_render_passes_from_json(Vulkan_API::Swapchain *swapchain
+				 , Vulkan_API::GPU *gpu);
+
+    void
+    init_framebuffers_from_json(Vulkan_API::Swapchain *swapchain
+				, Vulkan_API::GPU *gpu);
+
+    // not from JSON yet
+    void
+    init_descriptor_sets_and_layouts(Vulkan_API::Swapchain *swapchain
+				     , Vulkan_API::GPU *gpu);
+    
+    void
+    init_pipelines_from_json(Vulkan_API::Swapchain *swapchain
+			     , Vulkan_API::GPU *gpu);
+
     struct Renderer_Init_Data
     {
 	Constant_String rndr_id;

@@ -23,5 +23,35 @@
 	    "name": "render_pass.deferred_render_pass",
 	    "subpass": 1
 	}
+    },
+    "pipeline.atmosphere_pipeline": {
+	"stages": {
+	    "v": "shaders/SPV/atmosphere.vert.spv",
+	    "f": "shaders/SPV/atmosphere.frag.spv"
+	},
+	"assemble": {
+	    "topology": "l",
+	    "restart": false
+	},
+	"raster": {
+	    "poly_mode": "f",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "descriptor_set_layout": "descriptor_set_layout.atmosphere_layout",
+	    "push_constant": {
+		"stage_flags": "f",
+		"offset": 0,
+		"size": 100
+	    }
+	},
+	"viewport": [0, 0],
+	"blend": ["disable"],
+	"vertex_input": "",
+	"depth": false,
+	"render_pass": {
+	    "name": "render_pass.atmosphere_render_pass",
+	    "subpass": 0
+	}
     }
 }

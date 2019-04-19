@@ -797,30 +797,33 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	if (!width || !height) {width = swapchain->extent.width; height = swapchain->extent.height;};
 	
 	u32 attachment = (insert_swapchain_imgs_at_0 ? 1 : 0);
-	for (auto c = color_attachment_node.value().begin(); c != color_attachment_node.value().end(); ++c, ++attachment)
+	if (color_attachment_node != i.value().end())
 	{
-	    std::string img_name = c.key();
-	    // fetch data from nodes
-	    bool to_create = c.value().find("to_create").value();
-	    u32 index = c.value().find("index").value();
-	    u32 format = c.value().find("format").value();
-	    std::string usage = c.value().find("usage").value();
-
-	    if (to_create)
+	    for (auto c = color_attachment_node.value().begin(); c != color_attachment_node.value().end(); ++c, ++attachment)
 	    {
-		VkFormat f = make_format_from_code(format, swapchain, gpu);
+		std::string img_name = c.key();
+		// fetch data from nodes
+		bool to_create = c.value().find("to_create").value();
+		u32 index = c.value().find("index").value();
+		u32 format = c.value().find("format").value();
+		std::string usage = c.value().find("usage").value();
 
-		VkImageUsageFlags u = create_usage_flags(usage);
-	    
-		// use data from nodes
 		if (to_create)
 		{
-		    color_imgs[attachment] = create_attachment(init_const_str(img_name.c_str(), img_name.length())
-							       , f
-							       , u
-							       , width
-							       , height
-							       , index);
+		    VkFormat f = make_format_from_code(format, swapchain, gpu);
+
+		    VkImageUsageFlags u = create_usage_flags(usage);
+	    
+		    // use data from nodes
+		    if (to_create)
+		    {
+			color_imgs[attachment] = create_attachment(init_const_str(img_name.c_str(), img_name.length())
+								   , f
+								   , u
+								   , width
+								   , height
+								   , index);
+		    }
 		}
 	    }
 	}

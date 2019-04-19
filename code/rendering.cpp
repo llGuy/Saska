@@ -805,8 +805,8 @@ namespace Rendering
     }
             
     void
-    init_deferred_ppln(Vulkan_API::GPU *gpu
-		       , Vulkan_API::Swapchain *swapchain)
+    init_deferred_descriptor_sets(Vulkan_API::GPU *gpu
+				  , Vulkan_API::Swapchain *swapchain)
     {
 	// create descriptor set
 	rndr_sys.deferred_descriptor_set_layout = Vulkan_API::register_object("descriptor_set_layout.deferred_layout"_hash, sizeof(VkDescriptorSetLayout));
@@ -854,10 +854,41 @@ namespace Rendering
 	//	Vulkan_API::init_input_attachment_descriptor_set_write(rndr_sys.deferred_descriptor_set.p, 2, 0, 1, &image_infos[2], &descriptor_writes[2]);
 
 	Vulkan_API::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{1, descriptor_writes}, gpu);
+	//	rndr_sys.deferred_pipeline = Vulkan_API::get_object("pipeline.deferred_pipeline"_hash);
+    }
 
+    void
+    init_render_passes_from_json(Vulkan_API::Swapchain *swapchain
+				 , Vulkan_API::GPU *gpu)
+    {
+	load_render_passes_from_json(gpu, swapchain);
 	
-	// actually create the pipeline
+	rndr_sys.deferred_rndr_pass = Vulkan_API::get_object("render_pass.deferred_render_pass"_hash);	
+    }
+
+    void
+    init_framebuffers_from_json(Vulkan_API::Swapchain *swapchain
+				, Vulkan_API::GPU *gpu)
+    {
+	load_framebuffers_from_json(gpu, swapchain);
+	
+	rndr_sys.fbos = Vulkan_API::get_object("framebuffer.main_fbo"_hash);
+    }
+
+    // not from JSON yet
+    void
+    init_descriptor_sets_and_layouts(Vulkan_API::Swapchain *swapchain
+				     , Vulkan_API::GPU *gpu)
+    {
+	init_deferred_descriptor_sets(gpu, swapchain);
+    }
+    
+    void
+    init_pipelines_from_json(Vulkan_API::Swapchain *swapchain
+			     , Vulkan_API::GPU *gpu)
+    {
 	load_pipelines_from_json(gpu, swapchain);
+
 	rndr_sys.deferred_pipeline = Vulkan_API::get_object("pipeline.deferred_pipeline"_hash);
     }
     
@@ -865,10 +896,6 @@ namespace Rendering
     init_rendering_system(Vulkan_API::Swapchain *swapchain, Vulkan_API::GPU *gpu, Vulkan_API::Registered_Render_Pass rndr_pass)
     {
 	rndr_sys.init_system(swapchain, gpu);
-
-	init_deferred_render_pass(gpu, swapchain);
-	init_deferred_fbos(gpu, swapchain, rndr_sys.deferred_rndr_pass);
-	init_deferred_ppln(gpu, swapchain);
     }
 
     void

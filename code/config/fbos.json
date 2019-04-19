@@ -19,5 +19,12 @@
 	    "index": 3,
 	    "usage": "d"
 	}
-    }
+    },
+    "framebuffer.atmosphere_fbo": {
+	"width": 0,
+	"height": 0,
+	"insert_swapchain_imgs_at_0": true,
+	"color_attachment_count": 1,
+	"compatible_render_pass": "render_pass.atmosphere_render_pass"
+    }    
 }

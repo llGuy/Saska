@@ -536,7 +536,8 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	    {
 	    case 'v': {vk_stage_flags = VK_SHADER_STAGE_VERTEX_BIT; break;}
 	    case 'f': {vk_stage_flags = VK_SHADER_STAGE_FRAGMENT_BIT; break;}
-	    case 'g': case 't': {break;}
+	    case 'g': {vk_stage_flags = VK_SHADER_STAGE_GEOMETRY_BIT; break;}
+	    case 't': {break;}
 	    };
 	    File_Contents bytecode = read_file(std::string(stg.value()).c_str());
 	    Vulkan_API::init_shader(vk_stage_flags, bytecode.size, bytecode.content, gpu, &module_buffer[stg_count]);
@@ -551,7 +552,8 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	{
 	case 'f': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;}
 	case 'l': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;}
-	case 's': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;} 
+	case 's': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;}
+	case 'p': {top = VK_PRIMITIVE_TOPOLOGY_POINT_LIST; break;}
 	}
 	Vulkan_API::init_pipeline_input_assembly_info(0, top, bool(assemble.value().find("restart").value()), &assembly_info);
 
@@ -639,6 +641,8 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	    }
 	    else
 	    {
+		vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		/* ... */
 	    }
 	}
 
@@ -695,7 +699,7 @@ load_renderers_from_json(Vulkan_API::GPU *gpu
 {
     persist const char *rndr_json_filename = "config/rndr.json";
     File_Contents f = read_file(rndr_json_filename, "r");
-    nlohmann::json json = nlohmann::json::parse(f.content);
+    nlohmann::json json = nlohmann::json::parse(std::string((const char *)f.content, f.size));
     for (nlohmann::json::iterator i = json.begin(); i != json.end(); ++i)
     {
 	std::string rndr_name = i.key();
@@ -717,11 +721,12 @@ load_renderers_from_json(Vulkan_API::GPU *gpu
 	    case 'g': {d.mtrl_unique_data_stage_dst |= VK_SHADER_STAGE_GEOMETRY_BIT; break;}
 	    }
 	}
-	std::vector<std::string> descriptor_set_names = i.value().find("descriptor_sets").value();
-	allocate_memory_buffer(d.descriptor_sets, descriptor_set_names.size());
-	for (u32 n = 0; n < descriptor_set_names.size(); ++n)
+	auto descriptor_set_names = i.value().find("descriptor_sets");
+	allocate_memory_buffer(d.descriptor_sets, descriptor_set_names.value().size());
+	u32 index = 0;
+	for (auto n = descriptor_set_names.value().begin(); n !=  descriptor_set_names.value().end(); ++n, ++index)
 	{
-	    d.descriptor_sets[n] = init_const_str(descriptor_set_names[n].c_str(), descriptor_set_names[n].length());
+	    d.descriptor_sets[index] = init_const_str(std::string(n.value()).c_str(), std::string(n.value()).length());
 	}
 
 	Rendering::add_renderer(&d, command_pool, gpu);
@@ -786,6 +791,7 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 		case 'c': {u |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; break;}
 		case 'i': {u |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT; break;}
 		case 'd': {u |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; break;}
+		case 's': {u |= VK_IMAGE_USAGE_SAMPLED_BIT; break;}
 		}
 	    }
 	    return(u);
@@ -824,6 +830,11 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 								   , height
 								   , index);
 		    }
+		}
+		else
+		{
+		    Vulkan_API::Registered_Image2D img = Vulkan_API::get_object(init_const_str(img_name.c_str(), img_name.length()));
+		    color_imgs[attachment] = Attachment{img, index};
 		}
 	    }
 	}

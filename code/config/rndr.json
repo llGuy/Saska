@@ -3,6 +3,8 @@
 	"max": 3,
 	"graphics_pipeline": "pipeline.main_pipeline",
 	"push_data_dst": "vf",
-	"descriptor_sets": ["descriptor_set.test_descriptor_sets"]
+	"descriptor_sets": {
+	    "d0": "descriptor_set.test_descriptor_sets"
+	}
     }
 }

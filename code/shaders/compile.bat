@@ -6,3 +6,4 @@ C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/deferred_lighting.fra
 
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/atmosphere.vert.spv atmosphere.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/atmosphere.frag.spv atmosphere.frag
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/atmosphere.geom.spv atmosphere.geom	

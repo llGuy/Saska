@@ -27,10 +27,11 @@
     "pipeline.atmosphere_pipeline": {
 	"stages": {
 	    "v": "shaders/SPV/atmosphere.vert.spv",
+	    "g": "shaders/SPV/atmosphere.geom.spv",
 	    "f": "shaders/SPV/atmosphere.frag.spv"
 	},
 	"assemble": {
-	    "topology": "l",
+	    "topology": "p",
 	    "restart": false
 	},
 	"raster": {

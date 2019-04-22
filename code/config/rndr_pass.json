@@ -84,7 +84,7 @@
 		"depth_store": "d",
 
 		"initial_layout": "u",
-		"final_layout": "p"
+		"final_layout": "r"
 	    }
 	},
 	"subpasses": {

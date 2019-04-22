@@ -566,8 +566,10 @@ namespace Vulkan_API
 	       , VkImageTiling tiling
 	       , VkImageUsageFlags usage
 	       , VkMemoryPropertyFlags properties
+	       , u32 layers
 	       , GPU *gpu
-	       , Image2D *dest_image)
+	       , Image2D *dest_image
+	       , VkImageCreateFlags flags)
     {
 	VkImageCreateInfo image_info = {};
 	image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -576,13 +578,14 @@ namespace Vulkan_API
 	image_info.extent.height = height;
 	image_info.extent.depth = 1;
 	image_info.mipLevels = 1;
-	image_info.arrayLayers = 1;
+	image_info.arrayLayers = layers;
 	image_info.format = format;
 	image_info.tiling = tiling;
 	image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	image_info.usage = usage;
 	image_info.samples = VK_SAMPLE_COUNT_1_BIT;
 	image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	image_info.flags = flags;
 
 	VK_CHECK(vkCreateImage(gpu->logical_device, &image_info, nullptr, &dest_image->image));
 
@@ -603,18 +606,20 @@ namespace Vulkan_API
 		    , VkFormat format
 		    , VkImageAspectFlags aspect_flags
 		    , GPU *gpu
-		    , VkImageView *dest_image_view)
+		    , VkImageView *dest_image_view
+		    , VkImageViewType type
+		    , u32 layers)
     {
 	VkImageViewCreateInfo view_info			= {};
 	view_info.sType					= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	view_info.image					= *image;
-	view_info.viewType				= VK_IMAGE_VIEW_TYPE_2D;
+	view_info.viewType				= type;
 	view_info.format				= format;
 	view_info.subresourceRange.aspectMask		= aspect_flags;
 	view_info.subresourceRange.baseMipLevel		= 0;
 	view_info.subresourceRange.levelCount		= 1;
 	view_info.subresourceRange.baseArrayLayer	= 0;
-	view_info.subresourceRange.layerCount		= 1;
+	view_info.subresourceRange.layerCount		= layers;
 
 	VK_CHECK(vkCreateImageView(gpu->logical_device, &view_info, nullptr, dest_image_view));
     }
@@ -1016,7 +1021,9 @@ namespace Vulkan_API
 			    , swapchain->format
 			    , VK_IMAGE_ASPECT_COLOR_BIT
 			    , gpu
-			    , &swapchain->views[i]);
+			    , &swapchain->views[i]
+			    , VK_IMAGE_VIEW_TYPE_2D
+			    , 1);
 	}
     }
     
@@ -1194,6 +1201,7 @@ namespace Vulkan_API
 			       , VK_IMAGE_TILING_OPTIMAL
 			       , usage
 			       , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+			       , 1
 			       , gpu
 			       , attachment);
 
@@ -1212,7 +1220,9 @@ namespace Vulkan_API
 				    , format
 				    , aspect_flags
 				    , gpu
-				    , &attachment->image_view);
+				    , &attachment->image_view
+				    , VK_IMAGE_VIEW_TYPE_2D
+				    , 1);
     }
     
     void
@@ -1488,9 +1498,14 @@ namespace Vulkan_API
     {
 	vkDeviceWaitIdle(state->gpu.logical_device);
 
+	vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
+	
 	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
 	
 	destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
+
+	vkDestroyDevice(state->gpu.logical_device, nullptr);
+	
 	vkDestroyInstance(state->instance, nullptr);
     }
 

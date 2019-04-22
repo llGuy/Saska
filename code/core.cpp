@@ -1,7 +1,3 @@
-#include <iostream>
-
-
-
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
@@ -424,6 +420,9 @@ main(s32 argc
 	close_debug_file();
 
 	// destroy rnd and vk
+	destroy_scene(&scene
+		      , &vk
+		      , &rnd);
 	Vulkan_API::destroy_state(&vk);
 	
 	glfwDestroyWindow(window.window);

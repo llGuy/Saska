@@ -55,6 +55,11 @@ update_scene(Scene *scene
 	     , f32 dt);
 
 void
+destroy_scene(Scene *scene
+	      , Vulkan_API::State *vk
+	      , Rendering::Rendering_State *rnd);
+
+void
 handle_input(Scene *scene
 	     ,Window_Data *win
 	     , f32 dt);

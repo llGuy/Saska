@@ -21,10 +21,20 @@
 	}
     },
     "framebuffer.atmosphere_fbo": {
-	"width": 0,
-	"height": 0,
-	"insert_swapchain_imgs_at_0": true,
+	"width": 1000,
+	"height": 1000,
+	"insert_swapchain_imgs_at_0": false,
 	"color_attachment_count": 1,
+
+	"color_attachments": {
+	    "image2D.atmosphere_cubemap": {
+		"to_create": false,
+		"index": 0,
+		"format": 8,
+		"usage": "cs"
+	    }
+	},
+	
 	"compatible_render_pass": "render_pass.atmosphere_render_pass"
-    }    
+    }
 }

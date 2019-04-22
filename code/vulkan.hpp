@@ -338,15 +338,19 @@ namespace Vulkan_API
 	       , VkImageTiling tiling
 	       , VkImageUsageFlags usage
 	       , VkMemoryPropertyFlags properties
+	       , u32 layers
 	       , GPU *gpu
-	       , Image2D *dest_image);
+	       , Image2D *dest_image
+	       , VkImageCreateFlags flags = 0);
 
     void
     init_image_view(VkImage *image
 		    , VkFormat format
 		    , VkImageAspectFlags aspect_flags
 		    , GPU *gpu
-		    , VkImageView *dest_image_view);
+		    , VkImageView *dest_image_view
+		    , VkImageViewType type
+		    , u32 layers);
 
     void
     init_image_sampler(VkFilter mag_filter

@@ -306,7 +306,6 @@ Camera::compute_view(void)
     v_m = glm::lookAt(p, p + d, u);
 }
 
-
 // atmosphere stuff
 internal void
 init_atmosphere_descriptor_set_layout(Vulkan_API::GPU *gpu)
@@ -318,6 +317,55 @@ init_atmosphere_descriptor_set_layout(Vulkan_API::GPU *gpu)
 					   , atmos_layout.p);
 }
 
+internal void
+init_atmosphere_cubemap(Vulkan_API::GPU *gpu)
+{
+    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_WIDTH = 1000;
+    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT = 1000;
+    
+    Vulkan_API::Registered_Image2D cubemap = Vulkan_API::register_object("image2D.atmosphere_cubemap"_hash
+									 , sizeof(Vulkan_API::Image2D));
+
+    Vulkan_API::init_image(ATMOSPHERE_CUBEMAP_IMAGE_WIDTH
+			   , ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT
+			   , VK_FORMAT_R8G8B8A8_UNORM
+			   , VK_IMAGE_TILING_OPTIMAL
+			   , VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+			   , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+			   , 6
+			   , gpu
+			   , cubemap.p
+			   , VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+ 
+    Vulkan_API::init_image_view(&cubemap->image
+				, VK_FORMAT_R8G8B8A8_UNORM
+				, VK_IMAGE_ASPECT_COLOR_BIT
+				, gpu
+				, &cubemap->image_view
+				, VK_IMAGE_VIEW_TYPE_CUBE
+				, 6);
+
+    Vulkan_API::init_image_sampler(VK_FILTER_LINEAR
+				   , VK_FILTER_LINEAR
+				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+				   , VK_TRUE
+				   , 16
+				   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+				   , VK_TRUE
+				   , VK_COMPARE_OP_ALWAYS
+				   , VK_SAMPLER_MIPMAP_MODE_LINEAR
+				   , 0.0f, 0.0f, 0.0f
+				   , gpu
+				   , &cubemap->image_sampler);
+}
+
+internal void
+init_atmosphere(Vulkan_API::GPU *gpu)
+{
+    init_atmosphere_descriptor_set_layout(gpu);
+}
 
 void
 init_scene(Scene *scene
@@ -344,11 +392,15 @@ init_scene(Scene *scene
 
     Vulkan_API::Registered_Render_Pass n {};
     Rendering::init_render_passes_from_json(&vk->swapchain, &vk->gpu);
+
+    // initialize the cubemap that will be used as an attachment by the fbo for rendering the skybox
+    init_atmosphere_cubemap(&vk->gpu);
+    
     Rendering::init_framebuffers_from_json(&vk->swapchain, &vk->gpu);
     
     Rendering::init_descriptor_sets_and_layouts(&vk->swapchain, &vk->gpu);
     // testing atmosphere stuff right now
-    init_atmosphere_descriptor_set_layout(&vk->gpu);
+    init_atmosphere(&vk->gpu);
     
     Rendering::init_pipelines_from_json(&vk->swapchain, &vk->gpu);
     
@@ -362,7 +414,7 @@ init_scene(Scene *scene
     
     Rendering::Renderer_Init_Data rndr_d = {};
     rndr_d.rndr_id = "renderer.test_material_renderer"_hash;
-    rndr_d.mtrl_max = 3;
+    rndr_d.mtrl_max = 5;
     rndr_d.ppln_id = "pipeline.main_pipeline"_hash;
     rndr_d.mtrl_unique_data_stage_dst = VK_SHADER_STAGE_VERTEX_BIT;
 
@@ -373,7 +425,7 @@ init_scene(Scene *scene
 
 
     
-    load_renderers_from_json(&vk->gpu, &scene->cmdpool);
+    //    load_renderers_from_json(&vk->gpu, &scene->cmdpool);
     
     init_scene_graph();
     // add en entity group
@@ -400,7 +452,7 @@ init_scene(Scene *scene
 
     make_entity_renderable(e_ptr
 			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
-			   , "renderer.other_material_renderer"_hash);
+			   , "renderer.test_material_renderer"_hash);
 
     // create entity group that rotates around group test0
     Entity_Group rotate = construct_entity("entity.group.rotate"_hash
@@ -427,7 +479,7 @@ init_scene(Scene *scene
 
     make_entity_renderable(r_ptr
 			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
-			   , "renderer.other_material_renderer"_hash);
+			   , "renderer.test_material_renderer"_hash);
 
     Entity_Group rg2 = construct_entity("entity.group.rotate2"_hash
 					, Entity::Is_Group::IS_GROUP
@@ -451,7 +503,7 @@ init_scene(Scene *scene
     auto *rev2_ptr = get_entity(rev2);
     make_entity_renderable(rev2_ptr
 			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
-			   , "renderer.other_material_renderer"_hash);
+			   , "renderer.test_material_renderer"_hash);
 }
 
 internal void
@@ -496,6 +548,31 @@ update_ubo(u32 current_image
     map.end(gpu);
 }
 
+internal glm::mat4
+test_calculate_view_matrix(const glm::vec3 &eye
+			   , const glm::vec3 &center
+			   , const glm::vec3 &up)
+{
+    glm::vec3 f(normalize(center - eye));
+    glm::vec3 s(normalize(cross(f, up)));
+    glm::vec3 u(cross(s, f));
+
+    glm::mat4 m(1.0f);
+    m[0][0] = s.x;
+    m[1][0] = s.y;
+    m[2][0] = s.z;
+    m[0][1] = u.x;
+    m[1][1] = u.y;
+    m[2][1] = u.z;
+    m[0][2] =-f.x;
+    m[1][2] =-f.y;
+    m[2][2] =-f.z;
+    m[3][0] =-glm::dot(s, eye);
+    m[3][1] =-glm::dot(u, eye);
+    m[3][2] = glm::dot(f, eye);
+    return(m);
+}
+
 internal void
 record_cmd(Rendering::Rendering_State *rnd_objs
 	   , Vulkan_API::State *vk
@@ -520,8 +597,8 @@ record_cmd(Rendering::Rendering_State *rnd_objs
     Vulkan_API::Registered_Framebuffer atmos_fbo = Vulkan_API::get_object("framebuffer.atmosphere_fbo"_hash);
     Vulkan_API::Registered_Graphics_Pipeline atmos_ppln = Vulkan_API::get_object("pipeline.atmosphere_pipeline"_hash);
     Vulkan_API::command_buffer_begin_render_pass(atmos_pass.p
-						 , &atmos_fbo.p[image_index]
-						 , Vulkan_API::init_render_area({0, 0}, vk->swapchain.extent)
+						 , atmos_fbo.p
+						 , Vulkan_API::init_render_area({0, 0}, VkExtent2D{1000, 1000})
 						 , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
 						 , VK_SUBPASS_CONTENTS_INLINE
 						 , cmdbuf);
@@ -529,8 +606,28 @@ record_cmd(Rendering::Rendering_State *rnd_objs
     Vulkan_API::command_buffer_bind_pipeline(atmos_ppln.p
 					     , cmdbuf);
 
+    struct Atmos_Push_K
+    {
+	alignas(16) glm::mat4 inverse_projection;
+	glm::vec4 light_dir;
+	glm::vec2 viewport;
+    } k;
+
+    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 1000.0f);
+    k.inverse_projection = glm::inverse(atmos_proj);
+    k.viewport = glm::vec2(1280.0f, 720.0f);
+
+    k.light_dir = glm::vec4(glm::normalize(glm::vec3(1.0f, -1.0f, 0.0f)), 1.0f);
+    
+    Vulkan_API::command_buffer_push_constant(&k
+					     , sizeof(k)
+					     , 0
+					     , VK_SHADER_STAGE_FRAGMENT_BIT
+					     , atmos_ppln.p
+					     , cmdbuf);
+    
     Vulkan_API::command_buffer_draw(cmdbuf
-				    , 3, 1, 0, 0);
+				    , 1, 1, 0, 0);
 
     Vulkan_API::command_buffer_end_render_pass(cmdbuf);
 
@@ -681,4 +778,28 @@ handle_input(Scene *scene
 
 	scene->user_camera.p += res;
     }
+}
+
+void
+destroy_scene(Scene *scene
+	      , Vulkan_API::State *vk
+	      , Rendering::Rendering_State *rnd)
+{
+    Vulkan_API::free_command_buffer(Memory_Buffer_View<VkCommandBuffer>{1, &scene->cmdbuf}, &scene->cmdpool, &vk->gpu);
+
+    vkDestroyCommandPool(vk->gpu.logical_device
+			 , scene->cmdpool
+			 , nullptr);
+    
+    vkDestroyFence(vk->gpu.logical_device
+		   , scene->cpu_wait
+		   , nullptr);
+
+    vkDestroySemaphore(vk->gpu.logical_device
+		       , scene->rndr_finished
+		       , nullptr);
+    
+    vkDestroySemaphore(vk->gpu.logical_device
+		       , scene->img_ready
+		       , nullptr);
 }

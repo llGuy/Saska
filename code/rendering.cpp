@@ -483,7 +483,7 @@ namespace Rendering
 	    Vulkan_API::init_descriptor_set_buffer_info(&ubos.p[i], 0, &buffer_info);
 
 	    VkDescriptorImageInfo image_info	= {};
-	    Vulkan_API::init_descriptor_set_image_info(image_ptr.p, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_info);
+	    Vulkan_API::init_descriptor_set_image_info(image_ptr.p->image_sampler, image_ptr.p->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_info);
 
 	    VkWriteDescriptorSet descriptor_writes[2] = {};
 
@@ -912,7 +912,7 @@ namespace Rendering
 	//	Vulkan_API::Registered_Image2D position_image = Vulkan_API::get_object("image2D.fbo_position"_hash);
 	//	Vulkan_API::Registered_Image2D normal_image = Vulkan_API::get_object("image2D.fbo_normal"_hash);
 
-	Vulkan_API::init_descriptor_set_image_info(albedo_image.p, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[0]);
+	Vulkan_API::init_descriptor_set_image_info(albedo_image.p->image_sampler, albedo_image.p->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[0]);
 	//	Vulkan_API::init_descriptor_set_image_info(position_image.p, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[1]);
 	//	Vulkan_API::init_descriptor_set_image_info(normal_image.p, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[2]);
 

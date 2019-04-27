@@ -875,6 +875,14 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
 	Vulkan_API::Registered_Framebuffer fbos = Vulkan_API::register_object(init_const_str(fbo_name.c_str(), fbo_name.length())
 									      , sizeof(Vulkan_API::Framebuffer) * fbo_count);
+
+	auto layers_node = i.value().find("layers");
+	u32 layers = 1;
+	if (layers_node != i.value().end())
+	{
+	    layers = layers_node.value();
+	}
+	
 	for (u32 fbo = 0; fbo < fbo_count; ++fbo)
 	{
 	    allocate_memory_buffer(fbos.p[fbo].color_attachments
@@ -896,10 +904,11 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	    {
 		fbos.p[fbo].depth_attachment = depth.img.p->image_view;
 	    }
-	    
+
 	    Vulkan_API::init_framebuffer(compatible_render_pass.p
 					 , width
 					 , height
+					 , layers
 					 , gpu
 					 , &fbos.p[fbo]);
 	}

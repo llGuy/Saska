@@ -380,6 +380,7 @@ namespace Vulkan_API
 	       && (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 	       && gpu->queue_families.complete()
 	       && device_features.geometryShader
+	       && device_features.textureCompressionBC
 	       && device_features.samplerAnisotropy);
     }
 
@@ -1229,6 +1230,7 @@ namespace Vulkan_API
     init_framebuffer(Render_Pass *compatible_render_pass
 		     , u32 width
 		     , u32 height
+		     , u32 layer_count
 		     , GPU *gpu
 		     , Framebuffer *framebuffer)
     {
@@ -1259,8 +1261,7 @@ namespace Vulkan_API
 	fbo_info.pAttachments			= image_view_attachments.buffer;
 	fbo_info.width				= width;
 	fbo_info.height				= height;
-	// for the moment, framebuffer layer count is 1
-	fbo_info.layers				= 1;
+	fbo_info.layers				= layer_count;
 
 	VK_CHECK(vkCreateFramebuffer(gpu->logical_device, &fbo_info, nullptr, &framebuffer->framebuffer));
     }

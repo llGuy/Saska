@@ -1009,6 +1009,7 @@ namespace Vulkan_API
     init_framebuffer(Render_Pass *compatible_render_pass
 		     , u32 width
 		     , u32 height
+		     , u32 layers
 		     , GPU *gpu
 		     , Framebuffer *framebuffer); // need to initialize the attachment handles
 
@@ -1149,13 +1150,14 @@ namespace Vulkan_API
     }
     
     internal void
-    init_descriptor_set_image_info(Image2D *image
+    init_descriptor_set_image_info(VkSampler sampler
+				   , VkImageView image_view
 				   , VkImageLayout expected_layout
 				   , VkDescriptorImageInfo *image_info)
     {
 	image_info->imageLayout = expected_layout;
-	image_info->imageView = image->image_view;
-	image_info->sampler = image->image_sampler;
+	image_info->imageView = image_view;
+	image_info->sampler = sampler;
     }
 
     internal void

@@ -35,6 +35,7 @@
 	    }
 	},
 	
-	"compatible_render_pass": "render_pass.atmosphere_render_pass"
+	"compatible_render_pass": "render_pass.atmosphere_render_pass",
+	"layers": 6
     }
 }

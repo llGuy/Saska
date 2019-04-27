@@ -46,7 +46,7 @@
 		"size": 100
 	    }
 	},
-	"viewport": [0, 0],
+	"viewport": [1000, 1000],
 	"blend": ["disable"],
 	"vertex_input": "",
 	"depth": false,

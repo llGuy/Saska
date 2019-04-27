@@ -342,7 +342,7 @@ init_atmosphere_cubemap(Vulkan_API::GPU *gpu)
 				, VK_IMAGE_ASPECT_COLOR_BIT
 				, gpu
 				, &cubemap->image_view
-				, VK_IMAGE_VIEW_TYPE_CUBE
+				, VK_IMAGE_VIEW_TYPE_2D_ARRAY
 				, 6);
 
     Vulkan_API::init_image_sampler(VK_FILTER_LINEAR
@@ -385,7 +385,7 @@ init_atmosphere_render_descriptor_set(Vulkan_API::GPU *gpu)
     Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::get_object("descriptor_set_layout.render_atmosphere_layout"_hash);
     Vulkan_API::Registered_Descriptor_Pool descriptor_pool = Vulkan_API::get_object("descriptor_pool.test_descriptor_pool"_hash);
     Vulkan_API::Registered_Image2D cubemap_image = Vulkan_API::get_object("image2D.atmosphere_cubemap"_hash);
-    
+     
     // just initialize the combined sampler one
     // the uniform buffer will be already created
     Vulkan_API::Registered_Descriptor_Set cubemap_set = Vulkan_API::register_object("descriptor_set.cubemap"_hash
@@ -397,9 +397,19 @@ init_atmosphere_render_descriptor_set(Vulkan_API::GPU *gpu)
 					 , Memory_Buffer_View<VkDescriptorSetLayout>{1, render_atmos_layout.p}
 					 , gpu
 					 , &descriptor_pool.p->pool);
+
+    VkImageView v;
+    Vulkan_API::init_image_view(&cubemap_image.p->image
+				, VK_FORMAT_R8G8B8A8_UNORM
+				, VK_IMAGE_ASPECT_COLOR_BIT
+				, gpu
+				, &v
+				, VK_IMAGE_VIEW_TYPE_CUBE
+				, 6);
     
     VkDescriptorImageInfo image_info = {};
-    Vulkan_API::init_descriptor_set_image_info(cubemap_image.p
+    Vulkan_API::init_descriptor_set_image_info(cubemap_image.p->image_sampler
+					       , v
 					       , VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 					       , &image_info);
 
@@ -643,7 +653,7 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 						 , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
 						 , VK_SUBPASS_CONTENTS_INLINE
 						 , cmdbuf);
-
+ 
     Vulkan_API::command_buffer_bind_pipeline(atmos_ppln.p
 					     , cmdbuf);
 
@@ -654,11 +664,11 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 	glm::vec2 viewport;
     } k;
 
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 1000.0f);
+    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 1000.0f);
     k.inverse_projection = glm::inverse(atmos_proj);
-    k.viewport = glm::vec2(1280.0f, 720.0f);
+    k.viewport = glm::vec2(1000.0f, 1000.0f);
 
-    k.light_dir = glm::vec4(glm::normalize(glm::vec3(1.0f, -1.0f, 0.0f)), 1.0f);
+    k.light_dir = glm::vec4(glm::normalize(glm::vec3(0.6f, -1.0f, 1.0f)), 1.0f);
     
     Vulkan_API::command_buffer_push_constant(&k
 					     , sizeof(k)

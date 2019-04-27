@@ -13,7 +13,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layout": "descriptor_set_layout.deferred_layout"
+	    "descriptor_set_layouts": ["descriptor_set_layout.deferred_layout"]
 	},
 	"viewport": [0, 0],
 	"blend": ["disable"],
@@ -39,7 +39,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layout": "descriptor_set_layout.atmosphere_layout",
+	    "descriptor_set_layouts": ["descriptor_set_layout.atmosphere_layout"],
 	    "push_constant": {
 		"stage_flags": "f",
 		"offset": 0,
@@ -52,6 +52,36 @@
 	"depth": false,
 	"render_pass": {
 	    "name": "render_pass.atmosphere_render_pass",
+	    "subpass": 0
+	}
+    },
+    "pipeline.render_atmosphere": {
+	"stages": {
+	    "v": "shaders/SPV/render_atmosphere.vert.spv",
+	    "f": "shaders/SPV/render_atmosphere.frag.spv"
+	},
+	"assemble": {
+	    "topology": "f",
+	    "restart": false
+	},
+	"raster": {
+	    "poly_mode": "l",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
+	    "push_constant": {
+		"stage_flags": "f",
+		"offset": 0,
+		"size": 150
+	    }
+	},
+	"viewport": [0, 0],
+	"blend": ["disable"],
+	"vertex_input": "vulkan_model.test_model",
+	"depth": false,
+	"render_pass": {
+	    "name": "render_pass.deferred_render_pass",
 	    "subpass": 0
 	}
     }

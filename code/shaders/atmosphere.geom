@@ -12,7 +12,7 @@ layout(location = 0) out vec3 out_cube_face_direction;
    0: GL_TEXTURE_CUBE_MAP_POSITIVE_Z
    0: GL_TEXTURE_CUBE_MAP_NEGATIVE_Z */
 
-const vec3 PREMADE_DIRECTIONS[] = vec3[] (vec3(+1, 0, 0),
+const vec3 PREMADE_DIRECTIONS[] = vec3[] (vec3(0, +1, 0),
 					  vec3(-1, 0, 0),
 					  vec3(0, +1, 0),
 					  vec3(0, -1, 0),

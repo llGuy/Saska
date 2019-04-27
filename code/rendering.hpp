@@ -81,7 +81,8 @@ namespace Rendering
 		     , VkExtent2D swapchain_extent
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
-		     , Vulkan_API::Registered_Render_Pass rndr_pass);
+		     , Vulkan_API::Registered_Render_Pass rndr_pass
+		     , const glm::vec3 &player_position);
 
     struct Material_Data
     {

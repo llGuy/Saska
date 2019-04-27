@@ -19,6 +19,7 @@ layout(location = 2) in vec2 uvs;
 layout(location = 0) out vec3 frag_final;
 layout(location = 1) out vec2 frag_uvs;
 layout(location = 2) out vec3 frag_position;
+layout(location = 3) out vec3 dir;
 
 void
 main(void)
@@ -30,4 +31,6 @@ main(void)
     frag_uvs = uvs;
 
     frag_position = ws_position.xyz;
+
+    dir = vertex_position;
 }

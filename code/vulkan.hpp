@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include <limits.h>
@@ -233,6 +234,8 @@ namespace Vulkan_API
 	    data.first_index = 0;
 	    data.vertex_offset = offset;
 	    data.first_instance = 0;
+
+	    return(data);
 	}
     };
     
@@ -280,8 +283,6 @@ namespace Vulkan_API
 
 	const char *base_dir_and_name;
 
-	VkDescriptorSetLayout descriptor_set_layout;
-	
 	VkPipelineLayout layout;
 
 	VkPipeline pipeline;

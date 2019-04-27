@@ -52,7 +52,7 @@ namespace Rendering
 	    | Vulkan_API::Graphics_Pipeline::Shader_Stages_Bits::FRAGMENT_SHADER_BIT;
 	graphics_pipeline.p->base_dir_and_name = "../vulkan/shaders/";
 	Vulkan_API::Registered_Descriptor_Set_Layout l = Vulkan_API::get_object("descriptor_set_layout.test_descriptor_set_layout"_hash);
-	graphics_pipeline.p->descriptor_set_layout = *l.p;
+	//	graphics_pipeline.p->descriptor_set_layout = *l.p;
 	
 	// create shaders
 	File_Contents vsh_bytecode = read_file("shaders/SPV/triangle.vert.spv");
@@ -135,8 +135,9 @@ namespace Rendering
 	Vulkan_API::init_pipeline_dynamic_states_info(&dynamic_states_ptr, &dynamic_info);
 
 	// init pipeline layout
-	VkDescriptorSetLayout descriptor_set_layout = graphics_pipeline.p->descriptor_set_layout;
-	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {1, &descriptor_set_layout};
+	Vulkan_API::Registered_Descriptor_Set_Layout atmos = Vulkan_API::get_object("descriptor_set_layout.render_atmosphere_layout"_hash);
+	VkDescriptorSetLayout descriptor_set_layout[] = {*l.p, *atmos.p};
+	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {2, descriptor_set_layout};
 
 	VkPushConstantRange push_k_rng  = {};
 	Vulkan_API::init_push_constant_range(VK_SHADER_STAGE_VERTEX_BIT
@@ -433,9 +434,10 @@ namespace Rendering
 	VkDescriptorPoolSize pool_sizes[2] = {};
 
 	Vulkan_API::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain->imgs.count, &pool_sizes[0]);
-	Vulkan_API::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count, &pool_sizes[1]);
+	Vulkan_API::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count + 3, &pool_sizes[1]);
+
     
-	Vulkan_API::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{2, pool_sizes}, swapchain->imgs.count, gpu, descriptor_pool.p);
+	Vulkan_API::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{2, pool_sizes}, swapchain->imgs.count + 3, gpu, descriptor_pool.p);
     } 
 
     internal void
@@ -629,7 +631,8 @@ namespace Rendering
 	}
 	
 	void
-	update(const Memory_Buffer_View<VkDescriptorSet> &additional_sets)
+	update(const Memory_Buffer_View<VkDescriptorSet> &additional_sets
+	       , VkDescriptorSet cubemap_test)
 	{
 	    Vulkan_API::begin_command_buffer(&rndr_cmdbuf, 0, nullptr);
 	    
@@ -640,8 +643,11 @@ namespace Rendering
 		{
 		    Vulkan_API::command_buffer_bind_pipeline(ppln.p, &rndr_cmdbuf);
 
+		    // testing stuff
+		    VkDescriptorSet sets[] {additional_sets[0], cubemap_test};
+		    
 		    Vulkan_API::command_buffer_bind_descriptor_sets(ppln.p
-								    , additional_sets
+								    , Memory_Buffer_View<VkDescriptorSet>{2, sets}
 								    , &rndr_cmdbuf);
 
 		    for (u32 i = 0; i < mtrl_count; ++i)
@@ -681,6 +687,54 @@ namespace Rendering
 	    Vulkan_API::end_command_buffer(&rndr_cmdbuf);
 	}
     };
+
+    internal void
+    render_skybox(VkCommandBuffer *cmdbuf
+		  , VkDescriptorSet ubuffer
+		  , const glm::vec3 &player_position)
+    {
+	Vulkan_API::Registered_Model cube = Vulkan_API::get_object("vulkan_model.test_model"_hash);
+	Vulkan_API::Registered_Graphics_Pipeline skybox_pipeline = Vulkan_API::get_object("pipeline.render_atmosphere"_hash);
+	Vulkan_API::Registered_Descriptor_Set atmosphere_descriptor_set = Vulkan_API::get_object("descriptor_set.cubemap"_hash);
+
+	Vulkan_API::command_buffer_bind_pipeline(skybox_pipeline.p
+						 , cmdbuf);
+
+	VkDescriptorSet sets[] = {ubuffer, atmosphere_descriptor_set.p->set};
+	
+	Vulkan_API::command_buffer_bind_descriptor_sets(skybox_pipeline.p
+							, Memory_Buffer_View<VkDescriptorSet>{2, sets}
+							, cmdbuf);
+
+	Memory_Buffer_View<VkDeviceSize> offsets;
+	allocate_memory_buffer_tmp(offsets, 1);
+	offsets.zero();
+	Vulkan_API::command_buffer_bind_vbos(cube.p->raw_cache_for_rendering
+					     , offsets
+					     , 0
+					     , cube.p->binding_count
+					     , cmdbuf);
+
+	Vulkan_API::command_buffer_bind_ibo(cube.p->index_data
+					    , cmdbuf);
+
+	struct Skybox_Push_Constant
+	{
+	    glm::mat4 model_matrix;
+	} push_k;
+
+	push_k.model_matrix = glm::translate(player_position);
+
+	Vulkan_API::command_buffer_push_constant(&push_k
+						 , sizeof(push_k)
+						 , 0
+						 , VK_SHADER_STAGE_VERTEX_BIT
+						 , skybox_pipeline.p
+						 , cmdbuf);
+
+	Vulkan_API::command_buffer_draw_indexed(cmdbuf
+						, cube.p->index_data.init_draw_indexed_data(0, 0));
+    }
     
     global_var struct Render_System
     {
@@ -725,7 +779,8 @@ namespace Rendering
 	       , VkExtent2D swapchain_extent
 	       , u32 image_index
 	       , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
-	       , Vulkan_API::Registered_Render_Pass rndr_pass)
+	       , Vulkan_API::Registered_Render_Pass rndr_pass
+	       , const glm::vec3 &player_position)
 	{
 	    VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
 		    , Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
@@ -741,15 +796,25 @@ namespace Rendering
 	    Memory_Buffer_View<VkCommandBuffer> cmds;
 	    allocate_memory_buffer_tmp(cmds, rndr_count);
 	    cmds.zero();
+
+	    Vulkan_API::Registered_Descriptor_Set atmosphere_descriptor_set = Vulkan_API::get_object("descriptor_set.cubemap"_hash);
 	    
 	    for (u32 i = 0; i < rndr_count; ++i)
 	    {
-		rndrs.buffer[i].update(additional_sets);
+		rndrs.buffer[i].update(additional_sets, atmosphere_descriptor_set.p->set);
 		cmds.buffer[i] = rndrs.buffer[i].rndr_cmdbuf;
 	    }
 
 	    Vulkan_API::command_buffer_execute_commands(cmdbuf
 							, cmds);
+
+
+
+	    // render skybox
+	    glm::vec3 p = glm::vec3(4.0f);
+	    render_skybox(cmdbuf, additional_sets[0], p);
+
+
 	    
 	    Vulkan_API::command_buffer_next_subpass(cmdbuf
 						    , VK_SUBPASS_CONTENTS_INLINE);
@@ -912,9 +977,10 @@ namespace Rendering
 		     , VkExtent2D swapchain_extent
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
-		     , Vulkan_API::Registered_Render_Pass rndr_pass)
+		     , Vulkan_API::Registered_Render_Pass rndr_pass
+		     , const glm::vec3 &player_position)
     {
-	rndr_sys.update(cmdbuf, swapchain_extent, image_index, additional_sets, rndr_pass);
+	rndr_sys.update(cmdbuf, swapchain_extent, image_index, additional_sets, rndr_pass, player_position);
     }
 
     Material_Access

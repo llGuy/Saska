@@ -1,10 +1,10 @@
-#include <nlohmann/json.hpp>
 #include <array>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <fstream>
 #include <glm/glm.hpp>
+#include <nlohmann/json.hpp>
 
 #include "load.hpp"
 
@@ -598,10 +598,15 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	Memory_Buffer_View<VkPipelineColorBlendAttachmentState> mbf_states {(u32)states.size(), states.data()};
 	Vulkan_API::init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, &mbf_states, &blending_info);
 
-	auto ppln_lyt =  i.value().find("pipeline_layout");
-	std::string set_lyt = ppln_lyt.value().find("descriptor_set_layout").value();
-	Vulkan_API::Registered_Descriptor_Set_Layout descriptor_set_layout = Vulkan_API::get_object(init_const_str(set_lyt.c_str(), set_lyt.length()));
-	new_ppln->descriptor_set_layout = *descriptor_set_layout.p;
+	auto ppln_lyt = i.value().find("pipeline_layout");
+	std::vector<std::string> set_lyt = ppln_lyt.value().find("descriptor_set_layouts").value();
+
+	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {(u32)set_lyt.size(), ALLOCA_T(VkDescriptorSetLayout, set_lyt.size())};
+	for (u32 i = 0; i < layouts.count; ++i)
+	{
+	    Vulkan_API::Registered_Descriptor_Set_Layout l = Vulkan_API::get_object(init_const_str(set_lyt[i].c_str(), set_lyt[i].length()));
+	    layouts[i] = *l.p;
+	}
 
 	auto push_k = ppln_lyt.value().find("push_constant");
 	VkShaderStageFlags push_k_flags = 0;
@@ -624,7 +629,6 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	    Vulkan_API::init_push_constant_range(push_k_flags, push_k_size, push_k_offset, &k_rng);
 	    ranges = Memory_Buffer_View<VkPushConstantRange>{1, &k_rng};
 	}
-	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {1, &new_ppln->descriptor_set_layout};
 	Vulkan_API::init_pipeline_layout(&layouts, &ranges, gpu, &new_ppln->layout);
 
 	auto vertex_input_info_json = i.value().find("vertex_input");

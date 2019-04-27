@@ -362,9 +362,60 @@ init_atmosphere_cubemap(Vulkan_API::GPU *gpu)
 }
 
 internal void
+init_atmosphere_render_set_layout(Vulkan_API::GPU *gpu)
+{
+    Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::register_object("descriptor_set_layout.render_atmosphere_layout"_hash
+												   , sizeof(VkDescriptorSetLayout));
+
+    VkDescriptorSetLayoutBinding bindings[] {Vulkan_API::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+											    , 0
+											    , 1
+											    , VK_SHADER_STAGE_FRAGMENT_BIT)};
+    
+    Vulkan_API::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{sizeof(bindings) / sizeof(bindings[0]), bindings}
+					   , gpu
+					   , render_atmos_layout.p);
+
+
+}
+
+internal void
+init_atmosphere_render_descriptor_set(Vulkan_API::GPU *gpu)
+{
+    Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::get_object("descriptor_set_layout.render_atmosphere_layout"_hash);
+    Vulkan_API::Registered_Descriptor_Pool descriptor_pool = Vulkan_API::get_object("descriptor_pool.test_descriptor_pool"_hash);
+    Vulkan_API::Registered_Image2D cubemap_image = Vulkan_API::get_object("image2D.atmosphere_cubemap"_hash);
+    
+    // just initialize the combined sampler one
+    // the uniform buffer will be already created
+    Vulkan_API::Registered_Descriptor_Set cubemap_set = Vulkan_API::register_object("descriptor_set.cubemap"_hash
+										    , sizeof(Vulkan_API::Descriptor_Set));
+
+    auto *p = cubemap_set.p;
+    Memory_Buffer_View<Vulkan_API::Descriptor_Set *> sets = {1, &p};
+    Vulkan_API::allocate_descriptor_sets(sets
+					 , Memory_Buffer_View<VkDescriptorSetLayout>{1, render_atmos_layout.p}
+					 , gpu
+					 , &descriptor_pool.p->pool);
+    
+    VkDescriptorImageInfo image_info = {};
+    Vulkan_API::init_descriptor_set_image_info(cubemap_image.p
+					       , VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+					       , &image_info);
+
+    VkWriteDescriptorSet descriptor_write = {};
+    Vulkan_API::init_image_descriptor_set_write(cubemap_set.p, 0, 0, 1, &image_info, &descriptor_write);
+
+    Vulkan_API::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{1, &descriptor_write}
+				       , gpu);
+}
+
+internal void
 init_atmosphere(Vulkan_API::GPU *gpu)
 {
     init_atmosphere_descriptor_set_layout(gpu);
+
+    init_atmosphere_render_set_layout(gpu);
 }
 
 void
@@ -401,16 +452,14 @@ init_scene(Scene *scene
     Rendering::init_descriptor_sets_and_layouts(&vk->swapchain, &vk->gpu);
     // testing atmosphere stuff right now
     init_atmosphere(&vk->gpu);
+    Rendering::init_rendering_state(vk, rnd);
+    init_atmosphere_render_descriptor_set(&vk->gpu);
     
     Rendering::init_pipelines_from_json(&vk->swapchain, &vk->gpu);
     
-    Rendering::init_rendering_state(vk, rnd);
     Rendering::init_rendering_system(&vk->swapchain
 				     , &vk->gpu
 				     , Vulkan_API::get_object("render_pass.deferred_render_pass"_hash));
-
-    
-
     
     Rendering::Renderer_Init_Data rndr_d = {};
     rndr_d.rndr_id = "renderer.test_material_renderer"_hash;
@@ -582,14 +631,6 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 {
     Vulkan_API::begin_command_buffer(cmdbuf, 0, nullptr);
 
-    Vulkan_API::Registered_Render_Pass render_pass = rnd_objs->test_render_pass;
-    Vulkan_API::Registered_Descriptor_Set descriptor_sets = rnd_objs->descriptor_sets;
-
-    Rendering::update_renderers(cmdbuf
-				, vk->swapchain.extent
-				, image_index
-				, Memory_Buffer_View<VkDescriptorSet>{1, &descriptor_sets.p[image_index].set}
-				, render_pass);
 
     // render atmosphere stuff
     VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.0, 0.0, 0)};
@@ -630,6 +671,23 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 				    , 1, 1, 0, 0);
 
     Vulkan_API::command_buffer_end_render_pass(cmdbuf);
+
+
+    // render the scene
+    Vulkan_API::Registered_Render_Pass render_pass = rnd_objs->test_render_pass;
+    Vulkan_API::Registered_Descriptor_Set descriptor_sets = rnd_objs->descriptor_sets;
+
+    Rendering::update_renderers(cmdbuf
+				, vk->swapchain.extent
+				, image_index
+				, Memory_Buffer_View<VkDescriptorSet>{1, &descriptor_sets.p[image_index].set}
+				, render_pass
+				, scene->user_camera.p);
+   
+    
+    
+
+    
 
     Vulkan_API::end_command_buffer(cmdbuf);
 }

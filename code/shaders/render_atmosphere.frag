@@ -14,6 +14,6 @@ main(void)
     out_final = cubemap_color;
     out_albedo = out_albedo;
 
-    out_final = vec4(0);
-    out_albedo = vec4(0);
+    out_final = cubemap_color;
+    out_albedo = cubemap_color;
 }

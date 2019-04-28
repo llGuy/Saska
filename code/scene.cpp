@@ -385,7 +385,7 @@ init_atmosphere_render_descriptor_set(Vulkan_API::GPU *gpu)
     Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::get_object("descriptor_set_layout.render_atmosphere_layout"_hash);
     Vulkan_API::Registered_Descriptor_Pool descriptor_pool = Vulkan_API::get_object("descriptor_pool.test_descriptor_pool"_hash);
     Vulkan_API::Registered_Image2D cubemap_image = Vulkan_API::get_object("image2D.atmosphere_cubemap"_hash);
-     
+    
     // just initialize the combined sampler one
     // the uniform buffer will be already created
     Vulkan_API::Registered_Descriptor_Set cubemap_set = Vulkan_API::register_object("descriptor_set.cubemap"_hash
@@ -671,7 +671,6 @@ record_cmd(Rendering::Rendering_State *rnd_objs
     k.viewport = glm::vec2(1000.0f, 1000.0f);
 
     k.light_dir = glm::vec4(glm::normalize(-light_pos), 1.0f);
-    //    k.light_dir = glm::vec4(glm::normalize(glm::vec3(0.0f, -1.0f, 0.0f)), 1.0f);
     
     Vulkan_API::command_buffer_push_constant(&k
 					     , sizeof(k)

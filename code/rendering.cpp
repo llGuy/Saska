@@ -37,8 +37,6 @@ namespace Rendering
 	binding->push_attribute(2, VK_FORMAT_R32G32_SFLOAT, sizeof(Vertex::uvs));
 
 	binding->end_attributes_creation();
-
-	//	model.p->create_vbo_list();
     }
     
     internal void
@@ -91,7 +89,7 @@ namespace Rendering
 
 	// init rasterization info
 	VkPipelineRasterizationStateCreateInfo rasterization_info = {};
-	Vulkan_API::init_pipeline_rasterization_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, 1.0f, 0, &rasterization_info);
+	Vulkan_API::init_pipeline_rasterization_info(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, 1.0f, 0, &rasterization_info);
 
 	// init multisample info
 	VkPipelineMultisampleStateCreateInfo multisample_info = {};

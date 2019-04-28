@@ -673,8 +673,8 @@ namespace Vulkan_API
 	begin_info.flags = usage_flags;
 	begin_info.pInheritanceInfo = inheritance;
 
-	VK_CHECK(vkBeginCommandBuffer(*command_buffer
-				      , &begin_info));
+	vkBeginCommandBuffer(*command_buffer
+			     , &begin_info);
     }
 
     void

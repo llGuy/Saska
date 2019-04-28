@@ -93,6 +93,10 @@ main(void)
 						    , vec3(0.0f, 1.0f, 0.0f))));
     
     vec2 ds_view_dir = gl_FragCoord.xy / push_k.viewport;
+    if (gl_Layer == 2 || gl_Layer == 3)
+    {
+	ds_view_dir.xy = 1 - ds_view_dir.xy;
+    }
     ds_view_dir.y = 1.0 - ds_view_dir.y;
     ds_view_dir -= vec2(0.5f);
     ds_view_dir *= 2.0f;

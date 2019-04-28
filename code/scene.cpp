@@ -632,6 +632,8 @@ test_calculate_view_matrix(const glm::vec3 &eye
     return(m);
 }
 
+glm::vec3 light_pos = glm::vec3(0.0f, 10.0f, 0.0f);
+
 internal void
 record_cmd(Rendering::Rendering_State *rnd_objs
 	   , Vulkan_API::State *vk
@@ -664,11 +666,12 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 	glm::vec2 viewport;
     } k;
 
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 1000.0f);
+    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 100000.0f);
     k.inverse_projection = glm::inverse(atmos_proj);
     k.viewport = glm::vec2(1000.0f, 1000.0f);
 
-    k.light_dir = glm::vec4(glm::normalize(glm::vec3(0.6f, -1.0f, 1.0f)), 1.0f);
+    k.light_dir = glm::vec4(glm::normalize(-light_pos), 1.0f);
+    //    k.light_dir = glm::vec4(glm::normalize(glm::vec3(0.0f, -1.0f, 0.0f)), 1.0f);
     
     Vulkan_API::command_buffer_push_constant(&k
 					     , sizeof(k)
@@ -839,6 +842,11 @@ handle_input(Scene *scene
     if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, scene->user_camera.u), res);
     if (window->key_map[GLFW_KEY_SPACE]) acc_v(scene->user_camera.u, res);
     if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-scene->user_camera.u, res);
+
+    if (window->key_map[GLFW_KEY_UP]) light_pos += glm::vec3(0.0f, 0.0f, dt) * 5.0f;
+    if (window->key_map[GLFW_KEY_LEFT]) light_pos += glm::vec3(-dt, 0.0f, 0.0f) * 5.0f;
+    if (window->key_map[GLFW_KEY_RIGHT]) light_pos += glm::vec3(dt, 0.0f, 0.0f) * 5.0f;
+    if (window->key_map[GLFW_KEY_DOWN]) light_pos += glm::vec3(0.0f, 0.0f, -dt) * 5.0f;
 
     if (movements > 0)
     {

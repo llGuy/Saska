@@ -1,6 +1,6 @@
 {
     "render_pass.deferred_render_pass": {
-	"attachment_count": 4,
+	"attachment_count": 5,
 
 	"color_attachments": {
 	    "c0": {
@@ -35,6 +35,17 @@
 
 		"initial_layout": "u",
 		"final_layout": "c"
+	    },
+	    "c3": {
+		"format": 8,
+		"color_load": "c",
+		"color_store": "s",
+
+		"depth_load": "d",
+		"depth_store": "d",
+
+		"initial_layout": "u",
+		"final_layout": "c"
 	    }
 	},
 	"depth_attachment": {
@@ -59,10 +70,13 @@
 		    },
 		    "o2": {
 			"index": 2, "layout": "c"
+		    },
+		    "o3": {
+			"index": 3, "layout": "c"
 		    }
 		},
 		"depth_out": {
-		    "index": 3, "layout": "d"
+		    "index": 4, "layout": "d"
 		}
 	    },
 	    "s1": {
@@ -72,6 +86,9 @@
 		    },
 		    "i1": {
 			"index": 2, "layout": "r"
+		    },
+		    "i2": {
+			"index": 3, "layout": "r"
 		    }
 		},
 		"color_out": {

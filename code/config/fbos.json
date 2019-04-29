@@ -3,7 +3,7 @@
 	"width": 0,
 	"height": 0,
 	"insert_swapchain_imgs_at_0": true,
-	"color_attachment_count": 3,
+	"color_attachment_count": 4,
 	"compatible_render_pass": "render_pass.deferred_render_pass",
 	"color_attachments": {
 	    "image2D.fbo_albedo": {
@@ -17,12 +17,18 @@
 		"index": 2,
 		"format": 8,
 		"usage": "ci"
+	    },
+	    "image2D.fbo_normal": {
+		"to_create": true,
+		"index": 3,
+		"format": 8,
+		"usage": "ci"
 	    }
 	},
 	"depth_attachment": {
 	    "name": "image2D.fbo_depth",
 	    "to_create": true,
-	    "index": 3,
+	    "index": 4,
 	    "usage": "d"
 	}
     },

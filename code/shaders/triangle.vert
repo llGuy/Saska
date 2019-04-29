@@ -19,7 +19,7 @@ layout(location = 2) in vec2 uvs;
 layout(location = 0) out vec3 frag_final;
 layout(location = 1) out vec2 frag_uvs;
 layout(location = 2) out vec3 frag_position;
-layout(location = 3) out vec3 dir;
+layout(location = 3) out vec3 frag_normal;
 
 void
 main(void)
@@ -32,5 +32,6 @@ main(void)
 
     frag_position = ws_position.xyz;
 
-    dir = vertex_position;
+    // for the moment, just using this to test lighting
+    frag_normal = vec3(push_k.model * vec4(normalize(vertex_position), 0.0));
 }

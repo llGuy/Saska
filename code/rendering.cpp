@@ -97,7 +97,7 @@ namespace Rendering
 	Vulkan_API::init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multisample_info);
 
 	// init blending info
-	VkPipelineColorBlendAttachmentState blend_attachments[3] = {};
+	VkPipelineColorBlendAttachmentState blend_attachments[4] = {};
 	Vulkan_API::init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 						, VK_FALSE
 						, VK_BLEND_FACTOR_ONE
@@ -127,9 +127,19 @@ namespace Rendering
 						, VK_BLEND_FACTOR_ZERO
 						, VK_BLEND_OP_ADD
 						, &blend_attachments[2]);
+
+	Vulkan_API::init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+						, VK_FALSE
+						, VK_BLEND_FACTOR_ONE
+						, VK_BLEND_FACTOR_ZERO
+						, VK_BLEND_OP_ADD
+						, VK_BLEND_FACTOR_ONE
+						, VK_BLEND_FACTOR_ZERO
+						, VK_BLEND_OP_ADD
+						, &blend_attachments[3]);
 	
 	VkPipelineColorBlendStateCreateInfo blending_info = {};
-	Memory_Buffer_View<VkPipelineColorBlendAttachmentState> blend_attachments_b = {3, blend_attachments};
+	Memory_Buffer_View<VkPipelineColorBlendAttachmentState> blend_attachments_b = {4, blend_attachments};
 	Vulkan_API::init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, &blend_attachments_b, &blending_info);
 
 	// init dynamic states info
@@ -791,6 +801,7 @@ namespace Rendering
 	    VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
 		    , Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
 		    , Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
+		    , Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
 		    , Vulkan_API::init_clear_color_depth(1.0f, 0)};
 	    
 	    Vulkan_API::command_buffer_begin_render_pass(deferred_rndr_pass.p
@@ -890,9 +901,10 @@ namespace Rendering
 	{
 	    Vulkan_API::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 0, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
 	    , Vulkan_API::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
+	    , Vulkan_API::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 2, 1, VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 	
-	Vulkan_API::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{2, bindings}
+	Vulkan_API::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{3, bindings}
 						   , gpu
 						   , rndr_sys.deferred_descriptor_set_layout.p);
 
@@ -901,7 +913,7 @@ namespace Rendering
 
 	VkDescriptorPoolSize pool_sizes[1] = {};
 
-	Vulkan_API::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 3, &pool_sizes[0]);
+	Vulkan_API::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 4, &pool_sizes[0]);
 	Vulkan_API::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{1, pool_sizes}, 1, gpu, descriptor_pool.p);
 
 	Vulkan_API::Descriptor_Set *single_set = rndr_sys.deferred_descriptor_set.p;
@@ -915,18 +927,18 @@ namespace Rendering
 	VkDescriptorImageInfo image_infos [3] = {};
 	R_Mem<Vulkan_API::Image2D> albedo_image = get_memory("image2D.fbo_albedo"_hash);
 	R_Mem<Vulkan_API::Image2D> position_image = get_memory("image2D.fbo_position"_hash);
-	//	Vulkan_API::Registered_Image2D normal_image = Vulkan_API::get_object("image2D.fbo_normal"_hash);
+	R_Mem<Vulkan_API::Image2D> normal_image = get_memory("image2D.fbo_normal"_hash);
 
 	Vulkan_API::init_descriptor_set_image_info(albedo_image.p->image_sampler, albedo_image.p->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[0]);
 	Vulkan_API::init_descriptor_set_image_info(position_image.p->image_sampler, position_image.p->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[1]);
-	//	Vulkan_API::init_descriptor_set_image_info(normal_image.p, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[2]);
+	Vulkan_API::init_descriptor_set_image_info(normal_image.p->image_sampler, normal_image.p->image_view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &image_infos[2]);
 
 	VkWriteDescriptorSet descriptor_writes[3] = {};
 	Vulkan_API::init_input_attachment_descriptor_set_write(rndr_sys.deferred_descriptor_set.p, 0, 0, 1, &image_infos[0], &descriptor_writes[0]);
 	Vulkan_API::init_input_attachment_descriptor_set_write(rndr_sys.deferred_descriptor_set.p, 1, 0, 1, &image_infos[1], &descriptor_writes[1]);
-	//	Vulkan_API::init_input_attachment_descriptor_set_write(rndr_sys.deferred_descriptor_set.p, 2, 0, 1, &image_infos[2], &descriptor_writes[2]);
+	Vulkan_API::init_input_attachment_descriptor_set_write(rndr_sys.deferred_descriptor_set.p, 2, 0, 1, &image_infos[2], &descriptor_writes[2]);
 
-	Vulkan_API::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{2, descriptor_writes}, gpu);
+	Vulkan_API::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{3, descriptor_writes}, gpu);
 	//	rndr_sys.deferred_pipeline = Vulkan_API::get_object("pipeline.deferred_pipeline"_hash);
     }
 

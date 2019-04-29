@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <limits.h>
@@ -11,98 +10,6 @@
 
 namespace Vulkan_API
 {
-
-    void
-    init_manager(void);
-
-    void
-    decrease_shared_count(const Constant_String &id);
-
-    void
-    increase_shared_count(const Constant_String &id);    
-
-    // CPU memory used for allocating vulkan / gpu objects (images, vbos, ...)
-    struct Registered_Object_Base
-    {
-	// if p == nullptr, the object was deleted
-	void *p;
-	Constant_String id;
-
-	u32 size;
-
-	Registered_Object_Base(void) = default;
-	
-	Registered_Object_Base(void *p, const Constant_String &id, u32 size)
-	    : p(p), id(id), size(size) {increase_shared_count(id);}
-
-	~Registered_Object_Base(void) {if (p) {decrease_shared_count(id);}}
-    };
-
-    Registered_Object_Base
-    register_object(const Constant_String &id
-		    , u32 size);
-
-    Registered_Object_Base
-    get_object(const Constant_String &id);
-    
-    void
-    remove_object(const Constant_String &id);
-
-    // basically just a pointer
-    template <typename T> struct Registered_Object
-    {
-	using My_Type = Registered_Object<T>;
-	
-	T *p;
-	Constant_String id;
-
-	u32 size;
-
-	FORCEINLINE void
-	destroy(void) {p = nullptr; decrease_shared_count(id);};
-
-	// to use only if is array
-	FORCEINLINE My_Type
-	extract(u32 i) {return(My_Type(Registered_Object_Base(p + i, id, sizeof(T))));};
-
-	FORCEINLINE Memory_Buffer_View<My_Type>
-	separate(void)
-	{
-	    Memory_Buffer_View<My_Type> view;
-	    allocate_memory_buffer(view, size);
-
-	    for (u32 i = 0; i < size; ++i) view.buffer[i] = extract(i);
-
-	    return(view);
- 	}
-
-	FORCEINLINE T *
-	operator->(void) {return(p);}
-	
-	Registered_Object(void) = default;
-	Registered_Object(void *p, const Constant_String &id, u32 size) = delete;
-	Registered_Object(const My_Type &in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {increase_shared_count(id);};
-	Registered_Object(const Registered_Object_Base &in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {increase_shared_count(id);}
-	Registered_Object(Registered_Object_Base &&in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {in.p = nullptr;}
-	My_Type &operator=(const My_Type &c) {this->p = c.p; this->id = c.id; this->size = c.size; increase_shared_count(id); return(*this);}
-	My_Type &operator=(My_Type &&m)	{this->p = m.p; this->id = m.id; this->size = m.size; m.p = nullptr; return(*this);}
-
-	~Registered_Object(void) {if (p) {decrease_shared_count(id);}}
-    };
-
-    using Registered_Graphics_Pipeline		= Registered_Object<struct Graphics_Pipeline>;
-    using Registered_Render_Pass		= Registered_Object<struct Render_Pass>;
-    using Registered_Buffer			= Registered_Object<struct Buffer>;
-    using Registered_Descriptor_Set_Layout	= Registered_Object<VkDescriptorSetLayout>;
-    using Registered_Descriptor_Pool		= Registered_Object<struct Descriptor_Pool>;
-    using Registered_Descriptor_Set		= Registered_Object<struct Descriptor_Set>;
-    using Registered_Model			= Registered_Object<struct Model>;
-    using Registered_Command_Pool		= Registered_Object<VkCommandPool>;
-    using Registered_Command_Buffer             = Registered_Object<VkCommandBuffer>;
-    using Registered_Framebuffer		= Registered_Object<struct Framebuffer>;
-    using Registered_Image2D			= Registered_Object<struct Image2D>;
-    using Registered_Semaphore                  = Registered_Object<VkSemaphore>;
-    using Registered_Fence                      = Registered_Object<VkFence>;
     
     struct Queue_Families
     {
@@ -119,8 +26,10 @@ namespace Vulkan_API
     struct Swapchain_Details
     {
 	VkSurfaceCapabilitiesKHR capabilities;
+
 	u32 available_formats_count;
 	VkSurfaceFormatKHR *available_formats;
+	
 	u32 available_present_modes_count;
 	VkPresentModeKHR *available_present_modes;
     };
@@ -315,10 +224,10 @@ namespace Vulkan_API
     
     struct Image2D
     {
-	VkImage image = VK_NULL_HANDLE;
-	VkImageView image_view = VK_NULL_HANDLE;
-	VkSampler image_sampler = VK_NULL_HANDLE;
-	VkDeviceMemory device_memory = VK_NULL_HANDLE;
+	VkImage image			= VK_NULL_HANDLE;
+	VkImageView image_view		= VK_NULL_HANDLE;
+	VkSampler image_sampler		= VK_NULL_HANDLE;
+	VkDeviceMemory device_memory	= VK_NULL_HANDLE;
 
 	VkFormat format;
 	
@@ -386,6 +295,8 @@ namespace Vulkan_API
     {
 	VkRenderPass render_pass;
 	u32 subpass_count;
+
+	// some render pass data
     };
 
     internal FORCEINLINE VkAttachmentDescription
@@ -483,7 +394,7 @@ namespace Vulkan_API
     
     void
     command_buffer_begin_render_pass(Render_Pass *render_pass
-				     , Framebuffer *fbo
+				     , struct Framebuffer *fbo
 				     , VkRect2D render_area
 				     , const Memory_Buffer_View<VkClearValue> &clear_colors
 				     , VkSubpassContents subpass_contents

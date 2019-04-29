@@ -15,22 +15,22 @@ namespace Rendering
     
     struct Rendering_State
     {
-	Vulkan_API::Registered_Render_Pass test_render_pass;
-	Vulkan_API::Registered_Descriptor_Set_Layout descriptor_set_layout;
-	Vulkan_API::Registered_Graphics_Pipeline graphics_pipeline;
-	Vulkan_API::Registered_Command_Pool graphics_command_pool;
-	Vulkan_API::Registered_Image2D depth_image;
-	Vulkan_API::Registered_Model test_model;
-	Vulkan_API::Registered_Image2D texture;
+	R_Mem<Vulkan_API::Render_Pass> test_render_pass;
+	R_Mem<VkDescriptorSetLayout> descriptor_set_layout;
+	R_Mem<Vulkan_API::Graphics_Pipeline> graphics_pipeline;
+	R_Mem<VkCommandPool> graphics_command_pool;
+	R_Mem<Vulkan_API::Image2D> depth_image;
+	R_Mem<Vulkan_API::Model> test_model;
+	R_Mem<Vulkan_API::Image2D> texture;
 
-	Vulkan_API::Registered_Buffer uniform_buffers;
-	Vulkan_API::Registered_Descriptor_Set descriptor_sets;
+	R_Mem<Vulkan_API::Buffer> uniform_buffers;
+	R_Mem<Vulkan_API::Descriptor_Set> descriptor_sets;
 
-	Vulkan_API::Registered_Command_Buffer command_buffers;
+	R_Mem<VkCommandBuffer> command_buffers;
 
-	Vulkan_API::Registered_Semaphore image_ready_semaphores;
-	Vulkan_API::Registered_Semaphore render_finished_semaphores;
-	Vulkan_API::Registered_Fence fences;
+	R_Mem<VkSemaphore> image_ready_semaphores;
+	R_Mem<VkSemaphore> render_finished_semaphores;
+	R_Mem<VkFence> fences;
     };
 
     void
@@ -40,7 +40,7 @@ namespace Rendering
     void
     init_rendering_system(Vulkan_API::Swapchain *swapchain
 			  , Vulkan_API::GPU *gpu
-			  , Vulkan_API::Registered_Render_Pass rndr_pass);
+			  , R_Mem<Vulkan_API::Render_Pass> rndr_pass);
 
     // init rendering system actually has to be split in multiple stages
     // because of descriptor sets and layouts - need a JSON loader for sets and layouts to make this cleaner
@@ -81,7 +81,7 @@ namespace Rendering
 		     , VkExtent2D swapchain_extent
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
-		     , Vulkan_API::Registered_Render_Pass rndr_pass
+		     , R_Mem<Vulkan_API::Render_Pass> rndr_pass
 		     , const glm::vec3 &player_position);
 
     struct Material_Data
@@ -89,7 +89,7 @@ namespace Rendering
 	void *data;
 	u32 data_size = 0;
 
-	Vulkan_API::Registered_Model model;
+	R_Mem<Vulkan_API::Model> model;
 	Vulkan_API::Draw_Indexed_Data draw_info;
    };
 

@@ -138,7 +138,7 @@ main(void)
     total_rayleigh = (total_rayleigh * pow(atmosphere_depth_at_dir, 0.5)) / float(SAMPLE_COUNT);
     total_mie = (total_mie * pow(atmosphere_depth_at_dir, 2.4)) / float(SAMPLE_COUNT);
 
-    float spotlight = smoothstep(0.0, 5.0, phase(-difference_light_dir_view_dir, 0.9995))*1.0;
+    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.4;
 
     out_color = (vec4(total_mie.xyzz) * spotlight + vec4(total_mie.xyzz) * mie_scattering_factor + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
 }

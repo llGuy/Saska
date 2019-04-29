@@ -208,7 +208,7 @@ init_scene_graph(void)
 
 internal void
 make_entity_renderable(Entity *e_ptr
-		       , Vulkan_API::Registered_Model model
+		       , R_Mem<Vulkan_API::Model> model
 		       , const Constant_String &e_mtrl_name)
 {
     Rendering::Material_Data mtrl_data = {};
@@ -222,7 +222,7 @@ make_entity_renderable(Entity *e_ptr
 }
 
 internal void
-make_entity_instanced_renderable(Vulkan_API::Registered_Model model
+make_entity_instanced_renderable(R_Mem<Vulkan_API::Model> model
 				 , const Constant_String &e_mtrl_name)
 {
     // TODO(luc) : first need to add support for instance rendering in material renderers.
@@ -310,8 +310,8 @@ Camera::compute_view(void)
 internal void
 init_atmosphere_descriptor_set_layout(Vulkan_API::GPU *gpu)
 {
-    Vulkan_API::Registered_Descriptor_Set_Layout atmos_layout = Vulkan_API::register_object("descriptor_set_layout.atmosphere_layout"_hash
-											    , sizeof(VkDescriptorSetLayout));
+    R_Mem<VkDescriptorSetLayout> atmos_layout = register_memory("descriptor_set_layout.atmosphere_layout"_hash
+								, sizeof(VkDescriptorSetLayout));
     Vulkan_API::init_descriptor_set_layout(null_buffer<VkDescriptorSetLayoutBinding>()
 					   , gpu
 					   , atmos_layout.p);
@@ -323,8 +323,8 @@ init_atmosphere_cubemap(Vulkan_API::GPU *gpu)
     persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_WIDTH = 1000;
     persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT = 1000;
     
-    Vulkan_API::Registered_Image2D cubemap = Vulkan_API::register_object("image2D.atmosphere_cubemap"_hash
-									 , sizeof(Vulkan_API::Image2D));
+    R_Mem<Vulkan_API::Image2D> cubemap = register_memory("image2D.atmosphere_cubemap"_hash
+								     , sizeof(Vulkan_API::Image2D));
 
     Vulkan_API::init_image(ATMOSPHERE_CUBEMAP_IMAGE_WIDTH
 			   , ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT
@@ -364,8 +364,8 @@ init_atmosphere_cubemap(Vulkan_API::GPU *gpu)
 internal void
 init_atmosphere_render_set_layout(Vulkan_API::GPU *gpu)
 {
-    Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::register_object("descriptor_set_layout.render_atmosphere_layout"_hash
-												   , sizeof(VkDescriptorSetLayout));
+    R_Mem<VkDescriptorSetLayout> render_atmos_layout = register_memory("descriptor_set_layout.render_atmosphere_layout"_hash
+								       , sizeof(VkDescriptorSetLayout));
 
     VkDescriptorSetLayoutBinding bindings[] {Vulkan_API::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 											    , 0
@@ -382,14 +382,14 @@ init_atmosphere_render_set_layout(Vulkan_API::GPU *gpu)
 internal void
 init_atmosphere_render_descriptor_set(Vulkan_API::GPU *gpu)
 {
-    Vulkan_API::Registered_Descriptor_Set_Layout render_atmos_layout = Vulkan_API::get_object("descriptor_set_layout.render_atmosphere_layout"_hash);
-    Vulkan_API::Registered_Descriptor_Pool descriptor_pool = Vulkan_API::get_object("descriptor_pool.test_descriptor_pool"_hash);
-    Vulkan_API::Registered_Image2D cubemap_image = Vulkan_API::get_object("image2D.atmosphere_cubemap"_hash);
+    R_Mem<VkDescriptorSetLayout> render_atmos_layout = get_memory("descriptor_set_layout.render_atmosphere_layout"_hash);
+    R_Mem<Vulkan_API::Descriptor_Pool> descriptor_pool = get_memory("descriptor_pool.test_descriptor_pool"_hash);
+    R_Mem<Vulkan_API::Image2D> cubemap_image = get_memory("image2D.atmosphere_cubemap"_hash);
     
     // just initialize the combined sampler one
     // the uniform buffer will be already created
-    Vulkan_API::Registered_Descriptor_Set cubemap_set = Vulkan_API::register_object("descriptor_set.cubemap"_hash
-										    , sizeof(Vulkan_API::Descriptor_Set));
+    R_Mem<Vulkan_API::Descriptor_Set> cubemap_set = register_memory("descriptor_set.cubemap"_hash
+								    , sizeof(Vulkan_API::Descriptor_Set));
 
     auto *p = cubemap_set.p;
     Memory_Buffer_View<Vulkan_API::Descriptor_Set *> sets = {1, &p};
@@ -451,7 +451,7 @@ init_scene(Scene *scene
     Vulkan_API::init_fence(&vk->gpu, VK_FENCE_CREATE_SIGNALED_BIT, &scene->cpu_wait);
 
 
-    Vulkan_API::Registered_Render_Pass n {};
+    R_Mem<Vulkan_API::Render_Pass> n {};
     Rendering::init_render_passes_from_json(&vk->swapchain, &vk->gpu);
 
     // initialize the cubemap that will be used as an attachment by the fbo for rendering the skybox
@@ -469,7 +469,7 @@ init_scene(Scene *scene
     
     Rendering::init_rendering_system(&vk->swapchain
 				     , &vk->gpu
-				     , Vulkan_API::get_object("render_pass.deferred_render_pass"_hash));
+				     , get_memory("render_pass.deferred_render_pass"_hash));
     
     Rendering::Renderer_Init_Data rndr_d = {};
     rndr_d.rndr_id = "renderer.test_material_renderer"_hash;
@@ -510,7 +510,7 @@ init_scene(Scene *scene
     auto *e_ptr = get_entity(ev);
 
     make_entity_renderable(e_ptr
-			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
+			   , get_memory("vulkan_model.test_model"_hash)
 			   , "renderer.test_material_renderer"_hash);
 
     // create entity group that rotates around group test0
@@ -537,7 +537,7 @@ init_scene(Scene *scene
     auto *r_ptr = get_entity(rv);
 
     make_entity_renderable(r_ptr
-			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
+			   , get_memory("vulkan_model.test_model"_hash)
 			   , "renderer.test_material_renderer"_hash);
 
     Entity_Group rg2 = construct_entity("entity.group.rotate2"_hash
@@ -561,7 +561,7 @@ init_scene(Scene *scene
 
     auto *rev2_ptr = get_entity(rev2);
     make_entity_renderable(rev2_ptr
-			   , Vulkan_API::get_object("vulkan_model.test_model"_hash)
+			   , get_memory("vulkan_model.test_model"_hash)
 			   , "renderer.test_material_renderer"_hash);
 }
 
@@ -569,7 +569,7 @@ internal void
 update_ubo(u32 current_image
 	   , Vulkan_API::GPU *gpu
 	   , Vulkan_API::Swapchain *swapchain
-	   , Vulkan_API::Registered_Buffer &uniform_buffers
+	   , R_Mem<Vulkan_API::Buffer> &uniform_buffers
 	   , Scene *scene)
 {
     struct Uniform_Buffer_Object
@@ -646,9 +646,9 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 
     // render atmosphere stuff
     VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.0, 0.0, 0)};
-    Vulkan_API::Registered_Render_Pass atmos_pass = Vulkan_API::get_object("render_pass.atmosphere_render_pass"_hash);
-    Vulkan_API::Registered_Framebuffer atmos_fbo = Vulkan_API::get_object("framebuffer.atmosphere_fbo"_hash);
-    Vulkan_API::Registered_Graphics_Pipeline atmos_ppln = Vulkan_API::get_object("pipeline.atmosphere_pipeline"_hash);
+    R_Mem<Vulkan_API::Render_Pass> atmos_pass = get_memory("render_pass.atmosphere_render_pass"_hash);
+    R_Mem<Vulkan_API::Framebuffer> atmos_fbo = get_memory("framebuffer.atmosphere_fbo"_hash);
+    R_Mem<Vulkan_API::Graphics_Pipeline> atmos_ppln = get_memory("pipeline.atmosphere_pipeline"_hash);
     Vulkan_API::command_buffer_begin_render_pass(atmos_pass.p
 						 , atmos_fbo.p
 						 , Vulkan_API::init_render_area({0, 0}, VkExtent2D{1000, 1000})
@@ -686,8 +686,8 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 
 
     // render the scene
-    Vulkan_API::Registered_Render_Pass render_pass = rnd_objs->test_render_pass;
-    Vulkan_API::Registered_Descriptor_Set descriptor_sets = rnd_objs->descriptor_sets;
+    R_Mem<Vulkan_API::Render_Pass> render_pass = rnd_objs->test_render_pass;
+    R_Mem<Vulkan_API::Descriptor_Set> descriptor_sets = rnd_objs->descriptor_sets;
 
     Rendering::update_renderers(cmdbuf
 				, vk->swapchain.extent

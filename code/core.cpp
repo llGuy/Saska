@@ -81,12 +81,12 @@ allocate_stack(u32 allocation_size
 
     if (allocator->allocation_count == 0) would_be_address = (u8 *)allocator->current + sizeof(Stack_Allocation_Header);
     else would_be_address = (u8 *)allocator->current
-					      + sizeof(Stack_Allocation_Header) * 2 
-	                                      + ((Stack_Allocation_Header *)(allocator->current))->size;
+	     + sizeof(Stack_Allocation_Header) * 2 
+	     + ((Stack_Allocation_Header *)(allocator->current))->size;
     
     // calculate the aligned address that is needed
     u8 alignment_adjustment = get_alignment_adjust(would_be_address
-						      , alignment);
+						   , alignment);
 
     // start address of (header + allocation)
     byte *start_address = (would_be_address + alignment_adjustment) - sizeof(Stack_Allocation_Header);
@@ -110,7 +110,7 @@ allocate_stack(u32 allocation_size
 
 void
 extend_stack_top(u32 extension_size
-	       , Stack_Allocator *allocator)
+		 , Stack_Allocator *allocator)
 {
     Stack_Allocation_Header *current_header = (Stack_Allocation_Header *)allocator->current;
     current_header->size += extension_size;
@@ -133,7 +133,7 @@ pop_stack(Stack_Allocator *allocator)
     else
     {
 	OUTPUT_DEBUG_LOG("poping allocation \"%s\" -> new head is \"%s\"\n", current_header->allocation_name
-		     , ((Stack_Allocation_Header *)(current_header->prev))->allocation_name);
+			 , ((Stack_Allocation_Header *)(current_header->prev))->allocation_name);
     }
 #endif
 
@@ -242,9 +242,9 @@ deallocate_free_list(void *pointer
 	    // if current header is not the head of the list
 	    new_free_block_header->free_block_size = (byte *)((byte *)current_header + current_header->free_block_size) - (byte *)new_free_block_header; 
 	    /*if (previous)
-	    {
-		previous->next_free_block = new_free_block_header;
-		}*/
+	      {
+	      previous->next_free_block = new_free_block_header;
+	      }*/
 	    if (!previous)
 	    {
 		allocator->free_block_head = new_free_block_header;
@@ -283,6 +283,83 @@ deallocate_free_list(void *pointer
 	// at the end of the loop, previous is that last current before current = nullptr
 	previous->next_free_block = new_free_block_header;
     }
+}
+
+struct Memory_Register_Info
+{
+    u32 active_count = 0;
+    void *p; // pointer to the actual object
+    u32 size;
+};
+
+global_var Free_List_Allocator object_allocator;
+global_var Hash_Table_Inline<Memory_Register_Info /* destroyed count */, 20, 4, 4> objects_list("map.object_removed_list");
+
+void
+init_manager(void)
+{
+    object_allocator.start = malloc(megabytes(2));
+    object_allocator.available_bytes = megabytes(2);
+    memset(object_allocator.start, 0, object_allocator.available_bytes);
+	
+    object_allocator.free_block_head = (Free_Block_Header *)object_allocator.start;
+    object_allocator.free_block_head->free_block_size = object_allocator.available_bytes;
+}
+    
+Registered_Memory_Base
+register_memory(const Constant_String &id
+		, u32 bytes_size)
+{
+    void *p = allocate_free_list(bytes_size
+				 , 1
+				 , ""
+				 , &object_allocator);
+
+    Memory_Register_Info register_info {0, p, bytes_size};
+    objects_list.insert(id.hash, register_info, "");
+
+    return(Registered_Memory_Base(p, id, bytes_size));
+}
+
+Registered_Memory_Base
+get_memory(const Constant_String &id)
+{
+    Memory_Register_Info *info = objects_list.get(id.hash);
+
+    if (!info)
+    {
+	OUTPUT_DEBUG_LOG("unable to find element %s\n", id.str);
+    }
+	
+    return(Registered_Memory_Base(info->p, id, info->size));
+}
+
+void
+remove_memory(const Constant_String &id)
+{
+    Memory_Register_Info *info = objects_list.get(id.hash);
+    if (info->active_count == 0)
+    {
+	deallocate_free_list(info->p, &object_allocator);
+    }
+    else
+    {
+	// error, cannot delete object yet
+    }
+}
+
+void
+decrease_shared_count(const Constant_String &id)
+{
+    Memory_Register_Info *ri = objects_list.get(id.hash);
+    --ri->active_count;
+}
+
+void
+increase_shared_count(const Constant_String &id)
+{
+    Memory_Register_Info *ri = objects_list.get(id.hash);
+    ++ri->active_count;
 }
 
 // window procs:
@@ -368,10 +445,10 @@ main(s32 argc
 	window.h = 720;
 	
 	window.window = glfwCreateWindow(window.w
-				  , window.h
-				  , "Vulkan App"
-				  , NULL
-				  , NULL);
+					 , window.h
+					 , "Vulkan App"
+					 , NULL
+					 , NULL);
 
 	glfwSetInputMode(window.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetWindowUserPointer(window.window, &window);

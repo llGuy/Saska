@@ -475,3 +475,84 @@ loop_through_memory(Memory_Buffer_View<T> &memory
 #include <glm/glm.hpp>
 
 const glm::mat4x4 IDENTITY_MAT4X4 = glm::mat4x4(1.0f);
+
+void
+init_manager(void);
+
+void
+decrease_shared_count(const Constant_String &id);
+
+void
+increase_shared_count(const Constant_String &id);    
+
+// CPU memory used for allocating vulkan / gpu objects (images, vbos, ...)
+struct Registered_Memory_Base
+{
+    // if p == nullptr, the object was deleted
+    void *p;
+    Constant_String id;
+
+    u32 size;
+
+    Registered_Memory_Base(void) = default;
+	
+    Registered_Memory_Base(void *p, const Constant_String &id, u32 size)
+	: p(p), id(id), size(size) {increase_shared_count(id);}
+
+    ~Registered_Memory_Base(void) {if (p) {decrease_shared_count(id);}}
+};
+
+Registered_Memory_Base
+register_memory(const Constant_String &id
+		, u32 size);
+
+Registered_Memory_Base
+get_memory(const Constant_String &id);
+    
+void
+deregister_memory(const Constant_String &id);
+
+// basically just a pointer
+template <typename T> struct Registered_Memory
+{
+    using My_Type = Registered_Memory<T>;
+	
+    T *p;
+    Constant_String id;
+
+    u32 size;
+
+    FORCEINLINE void
+    destroy(void) {p = nullptr; decrease_shared_count(id);};
+
+    // to use only if is array
+    FORCEINLINE My_Type
+    extract(u32 i) {return(My_Type(Registered_Memory_Base(p + i, id, sizeof(T))));};
+
+    FORCEINLINE Memory_Buffer_View<My_Type>
+    separate(void)
+    {
+	Memory_Buffer_View<My_Type> view;
+	allocate_memory_buffer(view, size);
+
+	for (u32 i = 0; i < size; ++i) view.buffer[i] = extract(i);
+
+	return(view);
+    }
+
+    FORCEINLINE T *
+    operator->(void) {return(p);}
+	
+    Registered_Memory(void) = default;
+    Registered_Memory(void *p, const Constant_String &id, u32 size) = delete;
+    Registered_Memory(const My_Type &in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {increase_shared_count(id);};
+    Registered_Memory(const Registered_Memory_Base &in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {increase_shared_count(id);}
+    Registered_Memory(Registered_Memory_Base &&in) : p((T *)in.p), id(in.id), size(in.size / sizeof(T)) {in.p = nullptr;}
+    My_Type &operator=(const My_Type &c) {this->p = c.p; this->id = c.id; this->size = c.size; increase_shared_count(id); return(*this);}
+    My_Type &operator=(My_Type &&m)	{this->p = m.p; this->id = m.id; this->size = m.size; m.p = nullptr; return(*this);}
+
+    ~Registered_Memory(void) {if (p) {decrease_shared_count(id);}}
+};
+
+// piece of memory that is registered with a name
+template <typename T> using R_Mem = Registered_Memory<T>;

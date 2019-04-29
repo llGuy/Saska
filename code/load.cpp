@@ -127,10 +127,10 @@ create_model(std::vector<glm::vec3> &vertices
 
     std::string buffer_name = "buffer." + name + ".buffers";
 
-    Vulkan_API::Registered_Buffer buffers = Vulkan_API::register_object(init_const_str(buffer_name.c_str(), buffer_name.length())
-									, sizeof(Vulkan_API::Buffer) * BINDING_AND_ATTRIBUTE_COUNT);
+    R_Mem<Vulkan_API::Buffer> buffers = register_memory(init_const_str(buffer_name.c_str(), buffer_name.length())
+								    , sizeof(Vulkan_API::Buffer) * BINDING_AND_ATTRIBUTE_COUNT);
 
-    Vulkan_API::Registered_Command_Pool command_pool = Vulkan_API::get_object("command_pool.graphics_command_pool"_hash);
+    R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
 	
     Vulkan_API::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)vertices.size(), vertices.data()}
 								  , command_pool.p
@@ -161,8 +161,8 @@ create_model(std::vector<glm::vec3> &vertices
     object->index_data.index_count = indices.size();
     
     std::string ibo_name = "buffer." + name + ".ibo";
-    Vulkan_API::Registered_Buffer ibo = Vulkan_API::register_object(init_const_str(ibo_name.c_str(), ibo_name.length())
-								    , sizeof(Vulkan_API::Buffer));
+    R_Mem<Vulkan_API::Buffer> ibo = register_memory(init_const_str(ibo_name.c_str(), ibo_name.length())
+						    , sizeof(Vulkan_API::Buffer));
     
     Vulkan_API::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{(u32)indices.size() * sizeof(u32), indices.data()}
 								  , command_pool.p
@@ -320,7 +320,7 @@ load_3D_terrain_mesh(u32 width_x
     }
     
     // load data into buffers
-    Vulkan_API::Registered_Command_Pool command_pool = Vulkan_API::get_object("command_pool.graphics_command_pool"_hash);
+    R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
     Vulkan_API::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * 2 * width_x * depth_z, vtx}
 							      , command_pool.p
 							      , mesh_buffer_vbo
@@ -360,7 +360,8 @@ load_3D_terrain_mesh_instance(u32 width_x
     ret.ys = (f32 *)allocate_free_list(sizeof(f32) * width_x * depth_z);
     memset(ret.ys, 0, sizeof(f32) * width_x * depth_z);
     
-    Vulkan_API::Registered_Command_Pool command_pool = Vulkan_API::get_object("command_pool.graphics_command_pool"_hash);    
+    R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
+    
     Vulkan_API::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * width_x * depth_z, ret.ys}
 							      , command_pool.p
 							      , ys_buffer
@@ -518,8 +519,8 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
     {
 	// get name
 	std::string key = i.key();
-	Vulkan_API::Registered_Graphics_Pipeline new_ppln = Vulkan_API::register_object(init_const_str(key.c_str(), key.length())
-											, sizeof(Vulkan_API::Graphics_Pipeline));
+	R_Mem<Vulkan_API::Graphics_Pipeline> new_ppln = register_memory(init_const_str(key.c_str(), key.length())
+									, sizeof(Vulkan_API::Graphics_Pipeline));
 
 	auto stages = i.value().find("stages");
 	u32 stg_count = 0;
@@ -605,7 +606,7 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {(u32)set_lyt.size(), ALLOCA_T(VkDescriptorSetLayout, set_lyt.size())};
 	for (u32 i = 0; i < layouts.count; ++i)
 	{
-	    Vulkan_API::Registered_Descriptor_Set_Layout l = Vulkan_API::get_object(init_const_str(set_lyt[i].c_str(), set_lyt[i].length()));
+	    R_Mem<VkDescriptorSetLayout> l = get_memory(init_const_str(set_lyt[i].c_str(), set_lyt[i].length()));
 	    layouts[i] = *l.p;
 	}
 
@@ -641,7 +642,7 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	    std::string vtx_inp_model = i.value().find("vertex_input").value();
 	    if (vtx_inp_model != "")
 	    {
-		Vulkan_API::Registered_Model model = Vulkan_API::get_object(init_const_str(vtx_inp_model.c_str(), vtx_inp_model.length()));
+		R_Mem<Vulkan_API::Model> model = get_memory(init_const_str(vtx_inp_model.c_str(), vtx_inp_model.length()));
 		Vulkan_API::init_pipeline_vertex_input_info(model.p, &vertex_input_info);
 	    }
 	    else
@@ -677,7 +678,7 @@ load_pipelines_from_json(Vulkan_API::GPU *gpu
 	Memory_Buffer_View<VkPipelineShaderStageCreateInfo> modules = {stg_count, shader_infos};
 	auto render_pass_info = i.value().find("render_pass");
 	std::string render_pass_name = render_pass_info.value().find("name").value();
-	Vulkan_API::Registered_Render_Pass render_pass = Vulkan_API::get_object(init_const_str(render_pass_name.c_str(), render_pass_name.length()));
+	R_Mem<Vulkan_API::Render_Pass> render_pass = get_memory(init_const_str(render_pass_name.c_str(), render_pass_name.length()));
 	u32 subpass = render_pass_info.value().find("subpass").value();
 	Vulkan_API::init_graphics_pipeline(&modules
 					   , &vertex_input_info
@@ -764,7 +765,7 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	bool insert_swapchain_imgs_at_0 = i.value().find("insert_swapchain_imgs_at_0").value();
 	u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
 	// create color attachments and depth attachments
-	struct Attachment {Vulkan_API::Registered_Image2D img; u32 index;};
+	struct Attachment {R_Mem<Vulkan_API::Image2D> img; u32 index;};
 	Memory_Buffer_View<Attachment> color_imgs = {};
 	allocate_memory_buffer(color_imgs, i.value().find("color_attachment_count").value());
 	auto color_attachment_node = i.value().find("color_attachments");
@@ -776,7 +777,7 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 							    , u32 height
 							    , u32 index) -> Attachment
 	{
-	    Vulkan_API::Registered_Image2D img = Vulkan_API::register_object(name, sizeof(Vulkan_API::Image2D));
+	    R_Mem<Vulkan_API::Image2D> img = register_memory(name, sizeof(Vulkan_API::Image2D));
 	    Vulkan_API::init_framebuffer_attachment(width
 						    , height
 						    , format
@@ -838,7 +839,7 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 		}
 		else
 		{
-		    Vulkan_API::Registered_Image2D img = Vulkan_API::get_object(init_const_str(img_name.c_str(), img_name.length()));
+		    R_Mem<Vulkan_API::Image2D> img = get_memory(init_const_str(img_name.c_str(), img_name.length()));
 		    color_imgs[attachment] = Attachment{img, index};
 		}
 	    }
@@ -865,17 +866,17 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	    }
 	    else
 	    {
-		depth.img = Vulkan_API::get_object(init_const_str(depth_att_name.c_str(), depth_att_name.length()));
+		depth.img = get_memory(init_const_str(depth_att_name.c_str(), depth_att_name.length()));
 		depth.index = depth_att_index;
 	    }
 	}
 	
 	std::string compatible_render_pass_name = i.value().find("compatible_render_pass").value();
-	Vulkan_API::Registered_Render_Pass compatible_render_pass = Vulkan_API::get_object(init_const_str(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
+	R_Mem<Vulkan_API::Render_Pass> compatible_render_pass = get_memory(init_const_str(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
 	// actual creation of the FBO
 	u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
-	Vulkan_API::Registered_Framebuffer fbos = Vulkan_API::register_object(init_const_str(fbo_name.c_str(), fbo_name.length())
-									      , sizeof(Vulkan_API::Framebuffer) * fbo_count);
+	R_Mem<Vulkan_API::Framebuffer> fbos = register_memory(init_const_str(fbo_name.c_str(), fbo_name.length())
+									  , sizeof(Vulkan_API::Framebuffer) * fbo_count);
 
 	auto layers_node = i.value().find("layers");
 	u32 layers = 1;
@@ -1157,8 +1158,8 @@ load_render_passes_from_json(Vulkan_API::GPU *gpu
 									  , dst_access_mask
 									  , f);
 	}
-	Vulkan_API::Registered_Render_Pass new_rndr_pass = Vulkan_API::register_object(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length())
-										       , sizeof(Vulkan_API::Render_Pass));
+	R_Mem<Vulkan_API::Render_Pass> new_rndr_pass = register_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length())
+								       , sizeof(Vulkan_API::Render_Pass));
 	Vulkan_API::init_render_pass(Memory_Buffer_View<VkAttachmentDescription>{color_attachment_count, att_descriptions}
 				     , Memory_Buffer_View<VkSubpassDescription>{subpass_count, subpass_descriptions}
 				     , Memory_Buffer_View<VkSubpassDependency>{dependency_count, dependencies}

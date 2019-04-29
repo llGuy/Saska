@@ -291,7 +291,7 @@ Camera::set_default(f32 w, f32 h, f32 m_x, f32 m_y)
     fov = 60.0f;
     asp = w / h;
     n = 0.1f;
-    f = 10000.0f;
+    f = 100000.0f;
 }
 
 void

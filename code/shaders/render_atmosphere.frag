@@ -1,6 +1,7 @@
 #version 450
 
 layout(location = 0) in vec3 in_ms_cubemap_direction;
+layout(location = 1) in vec3 in_test;
 layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
 

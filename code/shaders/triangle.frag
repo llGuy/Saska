@@ -17,7 +17,7 @@ void main(void)
     
     out_final = vec4(frag_color, 1.0);
 
-    out_albedo = vec4(sampled_from_cube.rgb, 1.0);
+    out_albedo = vec4(frag_color, 1.0);
 
     //    out_albedo = vec4(frag_color, 1.0);
 

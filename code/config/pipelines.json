@@ -61,11 +61,11 @@
 	    "f": "shaders/SPV/render_atmosphere.frag.spv"
 	},
 	"assemble": {
-	    "topology": "f",
+	    "topology": "l",
 	    "restart": false
 	},
 	"raster": {
-	    "poly_mode": "l",
+	    "poly_mode": "f",
 	    "cull": "n"
 	},
 	"pipeline_layout": {

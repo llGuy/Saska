@@ -294,8 +294,8 @@ namespace Rendering
     {
 	struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
 
-	glm::vec3 green = glm::vec3(0.0f, 1.0f, 0.0f);
-	glm::vec3 blue = glm::vec3(1.0f, 0.0f, 0.0f);
+	glm::vec3 green = glm::vec3(1.0f, 0, 0);
+	glm::vec3 blue = glm::vec3(0, 1.0f, 0);
 	
 	f32 radius = 2.0f;
 	
@@ -342,14 +342,14 @@ namespace Rendering
 	7, 6, 5,
 	5, 4, 7,
 	    
-	4, 0, 3,
 	3, 7, 4,
+	4, 0, 3,
 	    
 	4, 5, 1,
 	1, 0, 4,
 	    
 	3, 2, 6,
-	6, 7, 3	
+	6, 7, 3,
     };    
 
     internal void
@@ -809,7 +809,7 @@ namespace Rendering
 
 
 	    // render skybox
-	    glm::vec3 p = glm::vec3(4.0f);
+	    glm::vec3 p = {};
 	    render_skybox(cmdbuf, additional_sets[0], p);
 
 

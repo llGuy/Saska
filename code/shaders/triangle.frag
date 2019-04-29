@@ -7,6 +7,7 @@ layout(location = 3) in vec3 dir;
 
 layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
+layout(location = 2) out vec4 out_position;
 
 layout(set = 0, binding = 1) uniform sampler2D texture_sampler;
 layout(set = 1, binding = 0) uniform samplerCube cube_sampler;
@@ -19,9 +20,5 @@ void main(void)
 
     out_albedo = vec4(frag_color, 1.0);
 
-    //    out_albedo = vec4(frag_color, 1.0);
-
-    //    out_position = vec4(1.0f);
-
-    /*out_normal = vec4(frag_position, 1.0f);*/
+    out_position = vec4(frag_position, 1.0);
 }

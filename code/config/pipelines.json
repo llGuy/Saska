@@ -77,7 +77,7 @@
 	    }
 	},
 	"viewport": [0, 0],
-	"blend": ["disable", "disable"],
+	"blend": ["disable", "disable", "disable"],
 	"vertex_input": "vulkan_model.test_model",
 	"depth": true,
 	"render_pass": {

@@ -284,8 +284,8 @@ void
 Camera::set_default(f32 w, f32 h, f32 m_x, f32 m_y)
 {
     mp = glm::vec2(m_x, m_y);
-    p = glm::vec3(10.0f);
-    d = glm::vec3(-1, -1, -1);
+    p = glm::vec3(10.0f, 10.0f, -10.0f);
+    d = glm::vec3(+1, 0.0f, +1);
     u = glm::vec3(0, 1, 0);
 
     fov = 60.0f;

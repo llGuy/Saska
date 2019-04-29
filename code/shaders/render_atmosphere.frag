@@ -4,6 +4,7 @@ layout(location = 0) in vec3 in_ms_cubemap_direction;
 layout(location = 1) in vec3 in_test;
 layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
+layout(location = 2) out vec4 out_position;
 
 layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
@@ -17,4 +18,6 @@ main(void)
 
     out_final = cubemap_color;
     out_albedo = cubemap_color;
+
+    out_position = vec4(-100.0);
 }

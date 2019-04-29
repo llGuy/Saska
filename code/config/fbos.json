@@ -3,12 +3,18 @@
 	"width": 0,
 	"height": 0,
 	"insert_swapchain_imgs_at_0": true,
-	"color_attachment_count": 2,
+	"color_attachment_count": 3,
 	"compatible_render_pass": "render_pass.deferred_render_pass",
 	"color_attachments": {
 	    "image2D.fbo_albedo": {
 		"to_create": true,
 		"index": 1,
+		"format": 8,
+		"usage": "ci"
+	    },
+	    "image2D.fbo_position": {
+		"to_create": true,
+		"index": 2,
 		"format": 8,
 		"usage": "ci"
 	    }

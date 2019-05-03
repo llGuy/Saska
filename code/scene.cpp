@@ -1,5 +1,3 @@
-// TODO: model loading - mesh rendering - sky (realistic) - hit box rendering
-
 #include <chrono>
 #include "scene.hpp"
 #include <glm/glm.hpp>

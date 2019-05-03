@@ -22,5 +22,5 @@ main(void)
     out_albedo = cubemap_color;
 
     out_position = vec4(-100.0);
-    out_normal = vec4(-100.0);
+    out_normal = vec4(100.0);
 }

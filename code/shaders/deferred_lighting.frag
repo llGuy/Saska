@@ -20,5 +20,5 @@ main(void)
     vec3 ws_position = subpassLoad(g_buffer_position).rgb;
     vec3 ws_normal = subpassLoad(g_buffer_normal).rgb;
 
-    out_color = vec4(ws_normal, 1.0);
+    out_color = vec4(ws_position, 1.0);
 }

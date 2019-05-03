@@ -15,13 +15,13 @@
 	    "image2D.fbo_position": {
 		"to_create": true,
 		"index": 2,
-		"format": 8,
+		"format": 16,
 		"usage": "ci"
 	    },
 	    "image2D.fbo_normal": {
 		"to_create": true,
 		"index": 3,
-		"format": 8,
+		"format": 16,
 		"usage": "ci"
 	    }
 	},

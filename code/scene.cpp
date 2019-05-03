@@ -692,7 +692,8 @@ record_cmd(Rendering::Rendering_State *rnd_objs
 				, image_index
 				, Memory_Buffer_View<VkDescriptorSet>{1, &descriptor_sets.p[image_index].set}
 				, render_pass
-				, scene->user_camera.p);
+				, scene->user_camera.p
+				, k.light_dir);
    
     
     

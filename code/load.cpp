@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
@@ -766,8 +767,10 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
 	// create color attachments and depth attachments
 	struct Attachment {R_Mem<Vulkan_API::Image2D> img; u32 index;};
-	Memory_Buffer_View<Attachment> color_imgs = {};
-	allocate_memory_buffer(color_imgs, i.value().find("color_attachment_count").value());
+	//	Memory_Buffer_View<Attachment> color_imgs = {};
+	std::vector<Attachment> color_imgs;
+	color_imgs.resize(i.value().find("color_attachment_count").value());
+	//	allocate_memory_buffer(color_imgs, i.value().find("color_attachment_count").value());
 	auto color_attachment_node = i.value().find("color_attachments");
 
 	persist auto create_attachment = [&gpu, &swapchain](const Constant_String &name
@@ -845,6 +848,10 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	    }
 	}
 
+	std::sort(color_imgs.begin()
+		  , color_imgs.end()
+		  , [](Attachment &a, Attachment &b) {return(a.index < b.index);});
+	
 	Attachment depth = {};
 	bool enable_depth = i.value().find("depth_attachment") != i.value().end();
 	if (enable_depth)
@@ -888,9 +895,9 @@ load_framebuffers_from_json(Vulkan_API::GPU *gpu
 	for (u32 fbo = 0; fbo < fbo_count; ++fbo)
 	{
 	    allocate_memory_buffer(fbos.p[fbo].color_attachments
-				   , color_imgs.count);
+				   , color_imgs.size());
 
-	    for (u32 color = 0; color < color_imgs.count; ++color)
+	    for (u32 color = 0; color < color_imgs.size(); ++color)
 	    {
 		if (insert_swapchain_imgs_at_0 && color == 0)
 		{

@@ -82,7 +82,8 @@ namespace Rendering
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
 		     , R_Mem<Vulkan_API::Render_Pass> rndr_pass
-		     , const glm::vec3 &player_position);
+		     , const glm::vec3 &player_position
+		     , const glm::vec4 &light_position);
 
     struct Material_Data
     {

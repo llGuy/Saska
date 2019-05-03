@@ -13,7 +13,13 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.deferred_layout"]
+	    "descriptor_set_layouts": ["descriptor_set_layout.deferred_layout", "descriptor_set_layout.render_atmosphere_layout"],
+
+	    "push_constant": {
+		"stage_flags": "f",
+		"offset": 0,
+		"size": 100
+	    }
 	},
 	"viewport": [0, 0],
 	"blend": ["disable"],

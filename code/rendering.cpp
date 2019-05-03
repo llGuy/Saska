@@ -796,7 +796,8 @@ namespace Rendering
 	       , u32 image_index
 	       , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
 	       , R_Mem<Vulkan_API::Render_Pass> rndr_pass
-	       , const glm::vec3 &player_position)
+	       , const glm::vec3 &player_position
+	       , const glm::vec4 &light_position)
 	{
 	    VkClearValue clears[] {Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
 		    , Vulkan_API::init_clear_color_color(0, 0.4, 0.7, 0)
@@ -843,6 +844,20 @@ namespace Rendering
 	    Vulkan_API::command_buffer_bind_descriptor_sets(deferred_pipeline.p
 							    , Memory_Buffer_View<VkDescriptorSet>{1, &deferred_descriptor_set.p->set}
 							    , cmdbuf);
+
+	    struct Deferred_Lighting_Push_K
+	    {
+		glm::vec4 light_position;
+	    } deferred_push_k;
+
+	    deferred_push_k.light_position = light_position;
+	    
+	    Vulkan_API::command_buffer_push_constant(&deferred_push_k
+						     , sizeof(deferred_push_k)
+						     , 0
+						     , VK_SHADER_STAGE_FRAGMENT_BIT
+						     , deferred_pipeline.p
+						     , cmdbuf);
 	    
 	    Vulkan_API::command_buffer_draw(cmdbuf
 					    , 3, 1, 0, 0);
@@ -995,9 +1010,10 @@ namespace Rendering
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
 		     , R_Mem<Vulkan_API::Render_Pass> rndr_pass
-		     , const glm::vec3 &player_position)
+		     , const glm::vec3 &player_position
+		     , const glm::vec4 &light_position)
     {
-	rndr_sys.update(cmdbuf, swapchain_extent, image_index, additional_sets, rndr_pass, player_position);
+	rndr_sys.update(cmdbuf, swapchain_extent, image_index, additional_sets, rndr_pass, player_position, light_position);
     }
 
     Material_Access

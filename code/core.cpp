@@ -3,10 +3,11 @@
 
 #include "vulkan.hpp"
 #include "core.hpp"
-#include "scene.hpp"
+#include "world.hpp"
 #include "rendering.hpp"
 #include <stdlib.h>
 
+#include "game.hpp"
 #include "vulkan.hpp"
 
 #define DEBUG_FILE ".debug"
@@ -457,14 +458,18 @@ main(s32 argc
 	glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
 	glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
 
-	Vulkan_API::State vk = {};
+	Vulkan::State vk = {};
 	Rendering::Rendering_State rnd = {};
 
-	Vulkan_API::init_state(&vk, window.window);
+	Vulkan::init_state(&vk, window.window);
 	//	Rendering::init_rendering_state(&vk, &rnd);
+
+	make_game(&vk
+		  , &vk.gpu
+		  , &vk.swapchain
+		  , &window
+		  , &rnd);
 	
-	Scene scene;
-	init_scene(&scene, &window, &vk, &rnd);
 	
 	auto now = std::chrono::high_resolution_clock::now();
 
@@ -473,7 +478,7 @@ main(s32 argc
 	while(!glfwWindowShouldClose(window.window))
 	{
 	    glfwPollEvents();
-	    update_scene(&scene, &window, &rnd, &vk, window.dt);
+	    update_game(&vk.gpu, &vk.swapchain, &window, &rnd, &vk, window.dt);
 	    
 	    auto new_now = std::chrono::high_resolution_clock::now();
 	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
@@ -497,10 +502,9 @@ main(s32 argc
 	close_debug_file();
 
 	// destroy rnd and vk
-	destroy_scene(&scene
-		      , &vk
-		      , &rnd);
-	Vulkan_API::destroy_state(&vk);
+	destroy_game(&vk.gpu);
+	
+	Vulkan::destroy_state(&vk);
 	
 	glfwDestroyWindow(window.window);
 	glfwTerminate();

@@ -15,16 +15,16 @@ namespace Rendering
     
     struct Rendering_State
     {
-	R_Mem<Vulkan_API::Render_Pass> test_render_pass;
+	R_Mem<Vulkan::Render_Pass> test_render_pass;
 	R_Mem<VkDescriptorSetLayout> descriptor_set_layout;
-	R_Mem<Vulkan_API::Graphics_Pipeline> graphics_pipeline;
+	R_Mem<Vulkan::Graphics_Pipeline> graphics_pipeline;
 	R_Mem<VkCommandPool> graphics_command_pool;
-	R_Mem<Vulkan_API::Image2D> depth_image;
-	R_Mem<Vulkan_API::Model> test_model;
-	R_Mem<Vulkan_API::Image2D> texture;
+	R_Mem<Vulkan::Image2D> depth_image;
+	R_Mem<Vulkan::Model> test_model;
+	R_Mem<Vulkan::Image2D> texture;
 
-	R_Mem<Vulkan_API::Buffer> uniform_buffers;
-	R_Mem<Vulkan_API::Descriptor_Set> descriptor_sets;
+	R_Mem<Vulkan::Buffer> uniform_buffers;
+	R_Mem<Vulkan::Descriptor_Set> descriptor_sets;
 
 	R_Mem<VkCommandBuffer> command_buffers;
 
@@ -34,32 +34,32 @@ namespace Rendering
     };
 
     void
-    init_rendering_state(Vulkan_API::State *vulkan_state
+    init_rendering_state(Vulkan::State *vulkan_state
 			 , Rendering_State *cache);
 
     void
-    init_rendering_system(Vulkan_API::Swapchain *swapchain
-			  , Vulkan_API::GPU *gpu
-			  , R_Mem<Vulkan_API::Render_Pass> rndr_pass);
+    init_rendering_system(Vulkan::Swapchain *swapchain
+			  , Vulkan::GPU *gpu
+			  , R_Mem<Vulkan::Render_Pass> rndr_pass);
 
     // init rendering system actually has to be split in multiple stages
     // because of descriptor sets and layouts - need a JSON loader for sets and layouts to make this cleaner
     void
-    init_render_passes_from_json(Vulkan_API::Swapchain *swapchain
-				 , Vulkan_API::GPU *gpu);
+    init_render_passes_from_json(Vulkan::Swapchain *swapchain
+				 , Vulkan::GPU *gpu);
 
     void
-    init_framebuffers_from_json(Vulkan_API::Swapchain *swapchain
-				, Vulkan_API::GPU *gpu);
+    init_framebuffers_from_json(Vulkan::Swapchain *swapchain
+				, Vulkan::GPU *gpu);
 
     // not from JSON yet
     void
-    init_descriptor_sets_and_layouts(Vulkan_API::Swapchain *swapchain
-				     , Vulkan_API::GPU *gpu);
+    init_descriptor_sets_and_layouts(Vulkan::Swapchain *swapchain
+				     , Vulkan::GPU *gpu);
     
     void
-    init_pipelines_from_json(Vulkan_API::Swapchain *swapchain
-			     , Vulkan_API::GPU *gpu);
+    init_pipelines_from_json(Vulkan::Swapchain *swapchain
+			     , Vulkan::GPU *gpu);
 
     struct Renderer_Init_Data
     {
@@ -74,14 +74,14 @@ namespace Rendering
     };
     
     void
-    add_renderer(Renderer_Init_Data *init_data, VkCommandPool *cmdpool, Vulkan_API::GPU *gpu);
+    add_renderer(Renderer_Init_Data *init_data, VkCommandPool *cmdpool, Vulkan::GPU *gpu);
 
     void
     update_renderers(VkCommandBuffer *record_cmd
 		     , VkExtent2D swapchain_extent
 		     , u32 image_index
 		     , const Memory_Buffer_View<VkDescriptorSet> &additional_sets
-		     , R_Mem<Vulkan_API::Render_Pass> rndr_pass
+		     , R_Mem<Vulkan::Render_Pass> rndr_pass
 		     , const glm::vec3 &player_position
 		     , const glm::vec4 &light_position);
 
@@ -90,8 +90,8 @@ namespace Rendering
 	void *data;
 	u32 data_size = 0;
 
-	R_Mem<Vulkan_API::Model> model;
-	Vulkan_API::Draw_Indexed_Data draw_info;
+	R_Mem<Vulkan::Model> model;
+	Vulkan::Draw_Indexed_Data draw_info;
    };
 
     struct Material_Access { s32 rndr_id, mtrl_id; };

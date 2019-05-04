@@ -555,4 +555,4 @@ template <typename T> struct Registered_Memory
 };
 
 // piece of memory that is registered with a name
-template <typename T> using R_Mem = Registered_Memory<T>;
+template <typename T> using R_Mem = Registered_Memory<T>; 

@@ -1,0 +1,18 @@
+{
+    "descriptor_set_layout.render_atmosphere_layout": {
+	"type": "layout",
+
+	"binding_count": 1,
+	"bindings": {
+	    "b0": {
+		"type": "c", "binding": 0, "count": 1, "shader_stages": "f"
+	    }
+	}
+    },
+    "descriptor_set_layout.atmosphere_layout": {
+	"type": "layout",
+
+	"binding_count": 0,
+	"bindings": {}
+    }
+}

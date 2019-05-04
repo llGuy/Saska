@@ -32,7 +32,8 @@ main(void)
     if (ws_normal.x > -10.0 && ws_normal.y > -10.0 && ws_normal.z > -10.0)
     {
 	// calculate lighting (is not on the atmosphere)
-	float alpha = dot(-vec3(push_k.light_direction.xyz), ws_normal);
-	out_color = vec4(alpha * 0.5) + vec4(albedo_color, 1.0);
+	vec4 atmosphere_color = texture(cubemap_sampler, ws_normal);
+	float alpha = clamp(dot(-vec3(push_k.light_direction.xyz), ws_normal), 0, 1);
+	out_color = vec4(alpha * 0.8) * vec4(0.7, 0.6, 0.5, 1.0) + vec4(albedo_color, 1.0);
     }
 }

@@ -30,36 +30,21 @@ struct Camera
     compute_view(void);
 };
 
-struct Scene
-{
-    Camera user_camera;
-
-    VkCommandPool cmdpool;
-    VkCommandBuffer cmdbuf;
-    VkSemaphore rndr_finished;
-    VkSemaphore img_ready;
-    VkFence cpu_wait;
-};
+void
+make_world(Window_Data *window
+	   , Vulkan::State *vk
+	   , Rendering::Rendering_State *rnd
+	   , VkCommandPool *cmdpool);
 
 void
-init_scene(Scene *scene
-	   , Window_Data *window
-	   , Vulkan_API::State *vk
-	   , Rendering::Rendering_State *rnd);
-
-void
-update_scene(Scene *scene
-	     , Window_Data *window
+update_world(Window_Data *window
 	     , Rendering::Rendering_State *rnd
-	     , Vulkan_API::State *vk
-	     , f32 dt);
+	     , Vulkan::State *vk
+	     , f32 dt
+	     , u32 image_index
+	     , u32 current_frame
+	     , VkCommandBuffer *cmdbuf);
 
 void
-destroy_scene(Scene *scene
-	      , Vulkan_API::State *vk
-	      , Rendering::Rendering_State *rnd);
-
-void
-handle_input(Scene *scene
-	     ,Window_Data *win
+handle_input(Window_Data *win
 	     , f32 dt);

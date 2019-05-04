@@ -74,7 +74,7 @@ calculate_atmosphere_depth_at_dir(vec3 ws_camera_position
 
 const float SURFACE_HEIGHT = 0.8;
 const uint SAMPLE_COUNT = 5;
-const vec3 AIR_COLOR = vec3(0.18867780, 0.49784429, 0.6616065);
+const vec3 AIR_COLOR = vec3(0.18867780, 0.49784429, 0.3616065);
 
 vec3
 absorb_light_from_sun_at_ray_position(float ray_distance
@@ -140,5 +140,5 @@ main(void)
 
     float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.4;
 
-    out_color = (vec4(total_mie.xyzz) * spotlight + vec4(total_mie.xyzz) * mie_scattering_factor + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
+    out_color = (vec4(total_mie.xyzz) * spotlight + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
 }

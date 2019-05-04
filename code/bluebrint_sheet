@@ -1,0 +1,25 @@
+#include "vulkan.hpp"
+
+// ----- world code -----
+struct Window_Renderer
+{
+    // ---- sync objects ----
+    VkSemaphore img_ready;
+    VkSemaphore present_finish;
+    VkFence cpu_wait;
+
+    // ---- command buffer stuff ----
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer;
+
+    static constexpr u32 MAX_FBOS = 3;
+    Vulkan::Framebuffer screen_fbos[MAX_FBOS];
+
+    u32 image_index;
+    u32 in_flight_frame;
+};
+
+struct World_Renderer
+{
+    Vulkan::Render_Pass deferred_pass;
+};

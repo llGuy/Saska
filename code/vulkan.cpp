@@ -7,7 +7,7 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-namespace Vulkan_API
+namespace Vulkan
 {
     
     namespace Memory
@@ -840,22 +840,22 @@ namespace Vulkan_API
     {
 	VkDeviceSize buffer_size = items.size;
 	
-	Vulkan_API::Buffer staging_buffer;
+	Vulkan::Buffer staging_buffer;
 	staging_buffer.size = buffer_size;
 
-	Vulkan_API::init_buffer(buffer_size
+	Vulkan::init_buffer(buffer_size
 				, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
 				, VK_SHARING_MODE_EXCLUSIVE
 				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 				, gpu
 				, &staging_buffer);
 
-	Vulkan_API::Mapped_GPU_Memory mapped_memory = staging_buffer.construct_map();
+	Vulkan::Mapped_GPU_Memory mapped_memory = staging_buffer.construct_map();
 	mapped_memory.begin(gpu);
 	mapped_memory.fill(items);
 	mapped_memory.end(gpu);
 
-	Vulkan_API::init_buffer(buffer_size
+	Vulkan::init_buffer(buffer_size
 				, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 				, VK_SHARING_MODE_EXCLUSIVE
 				, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
@@ -863,7 +863,7 @@ namespace Vulkan_API
 				, dst_buffer);
 
 	R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
-	Vulkan_API::copy_buffer(&staging_buffer
+	Vulkan::copy_buffer(&staging_buffer
 				, dst_buffer
 				, command_pool.p
 				, gpu);
@@ -1119,7 +1119,7 @@ namespace Vulkan_API
 				, GPU *gpu
 				, Image2D *attachment)
     {
-	Vulkan_API::init_image(width
+	Vulkan::init_image(width
 			       , height
 			       , format
 			       , VK_IMAGE_TILING_OPTIMAL
@@ -1130,7 +1130,7 @@ namespace Vulkan_API
 			       , attachment);
 
 	/*	VkMemoryRequirements requirements = attachment->get_memory_requirements(gpu);
-	Vulkan_API::Memory::allocate_gpu_memory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	Vulkan::Memory::allocate_gpu_memory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 						, requirements
 						, gpu
 						, &attachment->device_memory);
@@ -1140,7 +1140,7 @@ namespace Vulkan_API
 	if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
 	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 	
-	Vulkan_API::init_image_view(&attachment->image
+	Vulkan::init_image_view(&attachment->image
 				    , format
 				    , aspect_flags
 				    , gpu

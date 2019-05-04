@@ -1,4 +1,5 @@
 {
+    
     "pipeline.deferred_pipeline": {
 	"stages": {
 	    "v": "shaders/SPV/deferred_lighting.vert.spv",

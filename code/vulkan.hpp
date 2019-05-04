@@ -8,7 +8,7 @@
 
 #define MAKE_VK_VIEW_TYPES(VkName) using View_##VkName = VkName; using Real_##VkName = VkName;
 
-namespace Vulkan_API
+namespace Vulkan
 {
     
     struct Queue_Families

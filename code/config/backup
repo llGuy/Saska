@@ -7,3 +7,25 @@
     }
 }
 
+,
+
+    "descriptor_set.test_descriptor_sets": {
+	"new": true,
+	"type": "set",
+	"source_pool": "descriptor_pool.test_descriptor_pool",
+	"count": -1,
+	"layout": "descriptor_set_layout.test_descriptor_set_layout",
+	"bindings": {
+	    
+	    "b0": {
+		"type": "buffer",
+		"buffer": {"name": "buffer.ubos", "at": -1},
+		"binding": 0,
+		"dst_element": 0,
+		"count": 1,
+		"buffer_offset": 0		
+	    }
+	    
+	}
+	
+    }

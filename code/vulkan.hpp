@@ -101,6 +101,16 @@ namespace Vulkan
 	{
 	    return(Mapped_GPU_Memory{0, size, &memory});
 	}
+
+	FORCEINLINE VkDescriptorBufferInfo
+	make_descriptor_info(u32 offset_into_buffer)
+	{
+	    VkDescriptorBufferInfo info = {};
+	    info.buffer = buffer;
+	    info.offset = offset_into_buffer; // for the moment is 0
+	    info.range = size;
+	    return(info);
+	}
     };
 
     struct Draw_Indexed_Data
@@ -231,7 +241,7 @@ namespace Vulkan
 
 	VkFormat format;
 	
-	inline VkMemoryRequirements
+	FORCEINLINE VkMemoryRequirements
 	get_memory_requirements(GPU *gpu)
 	{
 	    VkMemoryRequirements requirements = {};
@@ -239,7 +249,17 @@ namespace Vulkan
 
 	    return(requirements);
 	}
-    };
+
+	FORCEINLINE VkDescriptorImageInfo
+	make_descriptor_info(VkImageLayout expected_layout)
+	{
+	    VkDescriptorImageInfo info = {};
+	    info.imageLayout = expected_layout;
+	    info.imageView = image_view;
+	    info.sampler = image_sampler;
+	    return(info);
+	}
+    }; 
     
     void
     init_image(u32 width
@@ -943,39 +963,12 @@ namespace Vulkan
     init_descriptor_set_layout(const Memory_Buffer_View<VkDescriptorSetLayoutBinding> &bindings
 			       , GPU *gpu
 			       , VkDescriptorSetLayout *dst);
-    
+
     struct Descriptor_Set
     {
 	VkDescriptorSetLayout layouts;
+	
 	VkDescriptorSet set;
-
-	void
-	init_buffer_descriptor_write(u32 binding
-				     , VkDescriptorBufferInfo *buffer_info
-				     , VkWriteDescriptorSet *descriptor_write)
-	{
-	    descriptor_write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	    descriptor_write->dstSet = set;
-	    descriptor_write->dstBinding = binding;
-	    descriptor_write->dstArrayElement = 0;
-	    descriptor_write->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	    descriptor_write->descriptorCount = 1;
-	    descriptor_write->pBufferInfo = buffer_info;
-	}
-
-	void
-	init_image_descriptor_write(u32 binding
-				    , VkDescriptorImageInfo *image_info
-				    , VkWriteDescriptorSet *descriptor_write)
-	{
-	    descriptor_write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	    descriptor_write->dstSet = set;
-	    descriptor_write->dstBinding = binding;
-	    descriptor_write->dstArrayElement = 0;
-	    descriptor_write->descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	    descriptor_write->descriptorCount = 1;
-	    descriptor_write->pImageInfo = image_info;
-	}
     };
 
     internal FORCEINLINE void

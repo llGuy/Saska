@@ -400,10 +400,11 @@ template <typename T
 		     ; ++bucket_item)
 	    {
 		Item *item = &bucket->items[bucket_item];
-		if (item->hash == UNINITIALIZED_HASH)
+		if (item->hash == hash && item->hash != UNINITIALIZED_HASH)
 		{
 		    item->hash = UNINITIALIZED_HASH;
 		    item->value = T();
+		    return;
 		}
 	    }
 	}
@@ -507,10 +508,18 @@ register_memory(const Constant_String &id
 		, u32 size);
 
 Registered_Memory_Base
+register_existing_memory(void *ptr
+			 , const Constant_String &id
+			 , u32 size);
+
+Registered_Memory_Base
 get_memory(const Constant_String &id);
     
 void
 deregister_memory(const Constant_String &id);
+
+void
+deregister_memory_and_deallocate(const Constant_String &id);
 
 // basically just a pointer
 template <typename T> struct Registered_Memory

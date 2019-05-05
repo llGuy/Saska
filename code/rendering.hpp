@@ -13,30 +13,6 @@
 namespace Rendering
 {
     
-    struct Rendering_State
-    {
-	R_Mem<Vulkan::Render_Pass> test_render_pass;
-	R_Mem<VkDescriptorSetLayout> descriptor_set_layout;
-	R_Mem<Vulkan::Graphics_Pipeline> graphics_pipeline;
-	R_Mem<VkCommandPool> graphics_command_pool;
-	R_Mem<Vulkan::Image2D> depth_image;
-	R_Mem<Vulkan::Model> test_model;
-	R_Mem<Vulkan::Image2D> texture;
-
-	R_Mem<Vulkan::Buffer> uniform_buffers;
-	R_Mem<Vulkan::Descriptor_Set> descriptor_sets;
-
-	R_Mem<VkCommandBuffer> command_buffers;
-
-	R_Mem<VkSemaphore> image_ready_semaphores;
-	R_Mem<VkSemaphore> render_finished_semaphores;
-	R_Mem<VkFence> fences;
-    };
-
-    void
-    init_rendering_state(Vulkan::State *vulkan_state
-			 , Rendering_State *cache);
-
     void
     init_rendering_system(Vulkan::Swapchain *swapchain
 			  , Vulkan::GPU *gpu

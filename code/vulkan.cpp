@@ -862,10 +862,9 @@ namespace Vulkan
 				, gpu
 				, dst_buffer);
 
-	R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
 	Vulkan::copy_buffer(&staging_buffer
 				, dst_buffer
-				, command_pool.p
+				, transfer_command_pool
 				, gpu);
 
 	vkDestroyBuffer(gpu->logical_device, staging_buffer.buffer, nullptr);

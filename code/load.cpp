@@ -387,8 +387,20 @@ load_pipelines_from_json(Vulkan::GPU *gpu
     {
 	// get name
 	std::string key = i.key();
-	R_Mem<Vulkan::Graphics_Pipeline> new_ppln = register_memory(init_const_str(key.c_str(), key.length())
-									, sizeof(Vulkan::Graphics_Pipeline));
+
+	bool make_new = i.value().find("new").value();
+	
+	R_Mem<Vulkan::Graphics_Pipeline> new_ppln;
+
+	if (make_new)
+	{
+	    new_ppln = register_memory(init_const_str(key.c_str(), key.length())
+				       , sizeof(Vulkan::Graphics_Pipeline));
+	}
+	else
+	{
+	    new_ppln = get_memory(init_const_str(key.c_str(), key.length()));
+	}
 
 	auto stages = i.value().find("stages");
 	u32 stg_count = 0;
@@ -630,6 +642,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
     for (auto i = json.begin(); i != json.end(); ++i)
     {
 	std::string fbo_name = i.key();
+	
 	bool insert_swapchain_imgs_at_0 = i.value().find("insert_swapchain_imgs_at_0").value();
 	u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
 	// create color attachments and depth attachments
@@ -645,17 +658,28 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 							    , VkImageUsageFlags usage
 							    , u32 width
 							    , u32 height
-							    , u32 index) -> Attachment
-	{
-	    R_Mem<Vulkan::Image2D> img = register_memory(name, sizeof(Vulkan::Image2D));
-	    Vulkan::init_framebuffer_attachment(width
+							    , u32 index
+							    , bool make_new) -> Attachment
+	    {
+		R_Mem<Vulkan::Image2D> img;
+		
+		if (make_new)
+		{
+		    img = register_memory(name, sizeof(Vulkan::Image2D));
+		}
+		else
+		{
+		    img = get_memory(name);
+		}
+
+		Vulkan::init_framebuffer_attachment(width
 						    , height
 						    , format
 						    , usage
 						    , gpu
 						    , img.p);
-	    return(Attachment{img, index});
-	};
+		return(Attachment{img, index});
+	    };
 	
 	persist auto create_usage_flags = [](std::string &s) -> VkImageUsageFlags
 	{
@@ -689,6 +713,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 		u32 index = c.value().find("index").value();
 		u32 format = c.value().find("format").value();
 		std::string usage = c.value().find("usage").value();
+		bool make_new_img = c.value().find("new").value();
 
 		if (to_create)
 		{
@@ -704,7 +729,8 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 								   , u
 								   , width
 								   , height
-								   , index);
+								   , index
+								   , make_new_img);
 		    }
 		}
 		else
@@ -728,6 +754,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	    bool depth_att_to_create = depth_att_info.value().find("to_create").value();
 	    u32 depth_att_index = depth_att_info.value().find("index").value();
 	    std::string depth_att_usage = depth_att_info.value().find("usage").value();
+	    bool make_new_dep = depth_att_info.value().find("new").value();
 
 	    if (depth_att_to_create)
 	    {
@@ -736,7 +763,8 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					  , create_usage_flags(depth_att_usage)
 					  , width
 					  , height
-					  , depth_att_index);
+					  , depth_att_index
+					  , make_new_dep);
 	    }
 	    else
 	    {
@@ -749,8 +777,20 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	R_Mem<Vulkan::Render_Pass> compatible_render_pass = get_memory(init_const_str(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
 	// actual creation of the FBO
 	u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
-	R_Mem<Vulkan::Framebuffer> fbos = register_memory(init_const_str(fbo_name.c_str(), fbo_name.length())
-									  , sizeof(Vulkan::Framebuffer) * fbo_count);
+
+	bool make_new = i.value().find("new").value();
+
+	R_Mem<Vulkan::Framebuffer> fbos;
+	
+	if (make_new)
+	{
+	    fbos = register_memory(init_const_str(fbo_name.c_str(), fbo_name.length())
+				   , sizeof(Vulkan::Framebuffer) * fbo_count);
+	}
+	else
+	{
+	    fbos = get_memory(init_const_str(fbo_name.c_str(), fbo_name.length()));
+	}
 
 	auto layers_node = i.value().find("layers");
 	u32 layers = 1;
@@ -1032,8 +1072,19 @@ load_render_passes_from_json(Vulkan::GPU *gpu
 									  , dst_access_mask
 									  , f);
 	}
-	R_Mem<Vulkan::Render_Pass> new_rndr_pass = register_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length())
-								       , sizeof(Vulkan::Render_Pass));
+
+	bool make_new = i.value().find("new").value();
+	R_Mem<Vulkan::Render_Pass> new_rndr_pass;
+	if (make_new)
+	{
+	    new_rndr_pass = register_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length())
+					    , sizeof(Vulkan::Render_Pass));
+	}
+	else
+	{
+	    new_rndr_pass = get_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length()));
+	}
+	
 	Vulkan::init_render_pass(Memory_Buffer_View<VkAttachmentDescription>{color_attachment_count, att_descriptions}
 				     , Memory_Buffer_View<VkSubpassDescription>{subpass_count, subpass_descriptions}
 				     , Memory_Buffer_View<VkSubpassDependency>{dependency_count, dependencies}
@@ -1049,6 +1100,13 @@ load_descriptors_from_json(Vulkan::GPU *gpu
     persist const char *filename = "config/desc.json";
     File_Contents file = read_file(filename, "r");
     nlohmann::json json = nlohmann::json::parse(file.content);
+
+
+    // ---- caches for descriptor set information ----
+    VkDescriptorImageInfo image_infos_cache [10];
+    VkDescriptorBufferInfo buffer_infos_cache [10];
+    
+    
     for (auto i = json.begin(); i != json.end(); ++i)
     {
 	std::string key = i.key();
@@ -1056,8 +1114,17 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 	if (i.value().find("type").value() == "layout")
 	{
 	    // initialize a descriptor set layout
-	    R_Mem<VkDescriptorSetLayout> new_descriptor_set_layout = register_memory(init_const_str(key.c_str(), key.length())
-										     , sizeof(VkDescriptorSetLayout));
+	    bool make_new = i.value().find("new").value();
+	    R_Mem<VkDescriptorSetLayout> new_descriptor_set_layout;
+	    if (make_new)
+	    {
+		new_descriptor_set_layout = register_memory(init_const_str(key.c_str(), key.length())
+							    , sizeof(VkDescriptorSetLayout));
+	    }
+	    else
+	    {
+		new_descriptor_set_layout = get_memory(init_const_str(key.c_str(), key.length()));
+	    }
 
 	    u32 binding_count = i.value().find("binding_count").value();
 	    VkDescriptorSetLayoutBinding *bindings;
@@ -1102,6 +1169,115 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 
 	    Memory_Buffer_View<VkDescriptorSetLayoutBinding> bindings_mbv {binding_count, bindings};
 	    Vulkan::init_descriptor_set_layout(bindings_mbv, gpu, new_descriptor_set_layout.p);
+	}
+	else if(i.value().find("type").value() == "set")
+	{
+	    std::string pool_name = i.value().find("source_pool").value();
+	    R_Mem<VkDescriptorPool> source_pool = get_memory(init_const_str(pool_name.c_str(), pool_name.length()));
+
+	    s32 count = i.value().find("count").value();
+	    if (count < 0)
+	    {
+		count = swapchain->imgs.count;
+	    }
+
+	    std::string layout_name = i.value().find("layout").value();
+	    R_Mem<VkDescriptorSetLayout> layout = get_memory(init_const_str(layout_name.c_str(), layout_name.length()));
+
+	    VkDescriptorSetLayout *layouts_inline = ALLOCA_T(VkDescriptorSetLayout, count);
+	    for (u32 l = 0; l < count; ++l) 
+	    {
+		layouts_inline[l] = *layout.p;
+	    }
+	    
+	    bool make_new = i.value().find("new").value();
+	    R_Mem<Vulkan::Descriptor_Set> sets = [&make_new, &key, &count]
+	    {
+		if (make_new)
+		{
+		    return(register_memory(init_const_str(key.c_str(), key.length()), sizeof(Vulkan::Descriptor_Set) * count));
+		}
+		else
+		{
+		    return(get_memory(init_const_str(key.c_str(), key.length())));
+		}
+	    }();
+
+	    Vulkan::Descriptor_Set **sets_inline = ALLOCA_T(Vulkan::Descriptor_Set *, count);
+	    for (u32 s = 0; s < count; ++s)
+	    {
+		sets_inline[s] = &sets.p[s];
+	    }
+
+	    Memory_Buffer_View<Vulkan::Descriptor_Set *> separate_sets = {(u32)count, sets_inline};
+	    Vulkan::allocate_descriptor_sets(separate_sets
+					     , Memory_Buffer_View<VkDescriptorSetLayout>{(u32)count, layouts_inline}
+					     , gpu
+					     , source_pool.p);
+	    
+	    
+
+  	    auto bindings_node = i.value().find("bindings");
+
+	    for (u32 set_i = 0; set_i < count; ++set_i)
+	    {
+		VkWriteDescriptorSet *writes = ALLOCA_T(VkWriteDescriptorSet, bindings_node.value().size());
+		u32 write_index = 0;
+
+		u32 buffer_info_cache_index = 0;
+		u32 image_info_cache_index = 0;
+		
+		for (auto binding_desc = bindings_node.value().begin()
+			 ; binding_desc != bindings_node.value().end()
+			 ; ++binding_desc, ++write_index)
+		{
+		    std::string type_str = binding_desc.value().find("type").value();
+		    u32 dst_element = binding_desc.value().find("dst_element").value();
+		    u32 objects_count = binding_desc.value().find("count").value();
+		    u32 binding = binding_desc.value().find("binding").value();
+		
+		    if (type_str == "buffer")
+		    {
+			auto buffer_info = binding_desc.value().find("buffer");
+			std::string buffer_name = buffer_info.value().find("name").value();
+			s32 at = buffer_info.value().find("at").value();
+
+			R_Mem<Vulkan::Buffer> buffers = get_memory(init_const_str(buffer_name.c_str(), buffer_name.length()));
+			Vulkan::Buffer *buffer = [&at, &set_i, &buffers]
+			{
+			    if (at < 0)
+			    {
+				return(&buffers.p[set_i]);
+			    }
+			    else
+			    {
+				return(&buffers.p[at]);
+			    }
+			}();
+
+			u32 buffer_offset = binding_desc.value().find("buffer_offset").value();
+
+			buffer_infos_cache[buffer_info_cache_index] = {};
+			Vulkan::init_descriptor_set_buffer_info(buffer, buffer_offset, &buffer_infos_cache[buffer_info_cache_index]);
+			writes[write_index] = {};
+			Vulkan::init_buffer_descriptor_set_write(&sets.p[set_i]
+								 , binding
+								 , dst_element
+								 , objects_count
+								 , &buffer_infos_cache[buffer_info_cache_index]
+								 , &writes[write_index]);
+
+			++buffer_info_cache_index;
+		    }
+		    else if (type_str == "image")
+		    {
+			/* ... */
+		    }
+		}
+
+		Vulkan::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{(u32)(bindings_node.value().size()), writes}
+					       , gpu);
+	    }	    
 	}
     }
 }

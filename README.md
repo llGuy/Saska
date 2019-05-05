@@ -1,4 +1,7 @@
 # The Game (does not officially have a name quite yet...)
+
+![photo](/screenshot.PNG)
+
 This repo is dedicated to the development of a multiplayer C++ game :
 - the graphics will be done in Vulkan
 - the networking stuff will be done in the Sockets API

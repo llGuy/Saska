@@ -18,7 +18,7 @@ global_var struct Window_Rendering_Data
 } window_rendering;
 
 void
-make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Window_Data *window, Rendering::Rendering_State *cache)
+make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Window_Data *window)
 {
     Vulkan::allocate_command_pool(gpu->queue_families.graphics_family
 				  , gpu
@@ -34,7 +34,7 @@ make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Win
     Vulkan::init_fence(gpu, VK_FENCE_CREATE_SIGNALED_BIT, &window_rendering.cpu_wait);
 
     // ---- initialize game data
-    make_world(window, vk, cache, &window_rendering.command_pool);
+    make_world(window, vk, &window_rendering.command_pool);
 }
 
 void
@@ -53,7 +53,6 @@ void
 update_game(Vulkan::GPU *gpu
 	    , Vulkan::Swapchain *swapchain
 	    , Window_Data *window
-	    , Rendering::Rendering_State *rnd
 	    , Vulkan::State *vk
 	    , f32 dt)
 {
@@ -80,7 +79,7 @@ update_game(Vulkan::GPU *gpu
 
     // ---- begin recording instructions into the command buffers ----
     
-    update_world(window, rnd, vk, dt, next_image_data.image_index, current_frame, &window_rendering.command_buffer);
+    update_world(window, vk, dt, next_image_data.image_index, current_frame, &window_rendering.command_buffer);
     
     // ---- end recording instructions
 

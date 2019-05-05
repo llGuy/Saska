@@ -1,5 +1,7 @@
 {
     "framebuffer.main_fbo": {
+	"new": true,
+	
 	"width": 0,
 	"height": 0,
 	"insert_swapchain_imgs_at_0": true,
@@ -7,18 +9,21 @@
 	"compatible_render_pass": "render_pass.deferred_render_pass",
 	"color_attachments": {
 	    "image2D.fbo_albedo": {
+		"new": true,
 		"to_create": true,
 		"index": 1,
 		"format": 8,
 		"usage": "ci"
 	    },
 	    "image2D.fbo_position": {
+		"new": true,
 		"to_create": true,
 		"index": 2,
 		"format": 16,
 		"usage": "ci"
 	    },
 	    "image2D.fbo_normal": {
+		"new": true,
 		"to_create": true,
 		"index": 3,
 		"format": 16,
@@ -26,6 +31,7 @@
 	    }
 	},
 	"depth_attachment": {
+	    "new": true,
 	    "name": "image2D.fbo_depth",
 	    "to_create": true,
 	    "index": 4,
@@ -33,6 +39,8 @@
 	}
     },
     "framebuffer.atmosphere_fbo": {
+	"new": true,
+	
 	"width": 1000,
 	"height": 1000,
 	"insert_swapchain_imgs_at_0": false,
@@ -40,6 +48,7 @@
 
 	"color_attachments": {
 	    "image2D.atmosphere_cubemap": {
+		"new": true,
 		"to_create": false,
 		"index": 0,
 		"format": 8,

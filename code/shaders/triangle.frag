@@ -10,7 +10,6 @@ layout(location = 1) out vec4 out_albedo;
 layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_normal;
 
-layout(set = 0, binding = 1) uniform sampler2D texture_sampler;
 layout(set = 1, binding = 0) uniform samplerCube cube_sampler;
 
 void main(void)

@@ -33,12 +33,10 @@ struct Camera
 void
 make_world(Window_Data *window
 	   , Vulkan::State *vk
-	   , Rendering::Rendering_State *rnd
 	   , VkCommandPool *cmdpool);
 
 void
 update_world(Window_Data *window
-	     , Rendering::Rendering_State *rnd
 	     , Vulkan::State *vk
 	     , f32 dt
 	     , u32 image_index

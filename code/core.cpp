@@ -323,6 +323,23 @@ register_memory(const Constant_String &id
 }
 
 Registered_Memory_Base
+register_existing_memory(void *p
+			 , const Constant_String &id
+			 , u32 bytes_size)
+{
+    Memory_Register_Info register_info {0, p, bytes_size};
+    objects_list.insert(id.hash, register_info, "");
+
+    return(Registered_Memory_Base(p, id, bytes_size));
+}
+
+void
+deregister_memory(const Constant_String &id)
+{
+    objects_list.remove(id.hash);
+}
+
+Registered_Memory_Base
 get_memory(const Constant_String &id)
 {
     Memory_Register_Info *info = objects_list.get(id.hash);
@@ -407,7 +424,6 @@ glfw_mouse_button_proc(GLFWwindow *win, s32 button, s32 action, s32 mods)
     }
 }
 
-
 #include <chrono>
 
 s32
@@ -459,7 +475,6 @@ main(s32 argc
 	glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
 
 	Vulkan::State vk = {};
-	Rendering::Rendering_State rnd = {};
 
 	Vulkan::init_state(&vk, window.window);
 	//	Rendering::init_rendering_state(&vk, &rnd);
@@ -467,8 +482,7 @@ main(s32 argc
 	make_game(&vk
 		  , &vk.gpu
 		  , &vk.swapchain
-		  , &window
-		  , &rnd);
+		  , &window);
 	
 	
 	auto now = std::chrono::high_resolution_clock::now();
@@ -478,7 +492,7 @@ main(s32 argc
 	while(!glfwWindowShouldClose(window.window))
 	{
 	    glfwPollEvents();
-	    update_game(&vk.gpu, &vk.swapchain, &window, &rnd, &vk, window.dt);
+	    update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);
 	    
 	    auto new_now = std::chrono::high_resolution_clock::now();
 	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();

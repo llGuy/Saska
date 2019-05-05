@@ -1,5 +1,7 @@
 {
     "render_pass.deferred_render_pass": {
+	"new": false,
+	
 	"attachment_count": 5,
 
 	"color_attachments": {
@@ -106,6 +108,8 @@
     },
 
     "render_pass.atmosphere_render_pass": {
+	"new": true,
+	
 	"attachment_count": 1,
 
 	"color_attachments": {

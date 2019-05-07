@@ -514,7 +514,10 @@ register_existing_memory(void *ptr
 
 Registered_Memory_Base
 get_memory(const Constant_String &id);
-    
+
+void
+move_memory(void *p, u32 size, const Constant_String &id);
+
 void
 deregister_memory(const Constant_String &id);
 
@@ -560,6 +563,14 @@ template <typename T> struct Registered_Memory
     My_Type &operator=(const My_Type &c) {this->p = c.p; this->id = c.id; this->size = c.size; increase_shared_count(id); return(*this);}
     My_Type &operator=(My_Type &&m)	{this->p = m.p; this->id = m.id; this->size = m.size; m.p = nullptr; return(*this);}
 
+    T &operator[](u32 i) {return(p[i]);};
+
+    FORCEINLINE Memory_Buffer_View<T>
+    to_memory_buffer_view(void)
+    {
+	return(Memory_Buffer_View<T>{size, p});
+    }
+    
     ~Registered_Memory(void) {if (p) {decrease_shared_count(id);}}
 };
 

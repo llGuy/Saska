@@ -1,10 +1,9 @@
 #include <chrono>
+#include "load.hpp"
 #include "world.hpp"
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
-#include "rendering.hpp"
 #include <glm/gtx/transform.hpp>
-#include "load.hpp"
 #include <glm/gtc/quaternion.hpp>
 
 #define MAX_ENTITIES_UNDER_TOP 10
@@ -16,6 +15,357 @@ global_var struct World
 {
     Camera user_camera;
 } world;
+
+
+
+
+namespace New
+{
+
+    // almost acts like the actual render component object itself
+    struct Material
+    {
+	// ---- push constant information
+	void *push_k_ptr = nullptr;
+	u32 push_k_size = 0;
+	// ---- vbo information
+	Memory_Buffer_View<VkBuffer> vbo_bindings;
+	// ---- for sorting
+	u32 model_id;
+	// ---- ibo information
+	Vulkan::Model_Index_Data index_data;
+	Vulkan::Draw_Indexed_Data draw_index_data;
+    };
+    
+    // ---- todo in the future ----
+    // sort materials out with their models, make renderers handle an array of textures that the user passes in or something if materials use different textures
+    // ----
+    struct Render_Command_Recorder
+    {
+	R_Mem<Vulkan::Graphics_Pipeline> ppln;
+	VkShaderStageFlags push_k_dst;
+	
+	Memory_Buffer_View<Material> mtrls;
+	u32 mtrl_count;
+
+	u32 cmdbuf_index;
+
+	void
+	init(VkCommandBuffer *cmdbufs_pool
+	     , u32 &active_cmdbuf_count
+	     , R_Mem<Vulkan::Graphics_Pipeline> p_ppln
+	     , VkShaderStageFlags pk_dst
+	     , u32 max_mtrls
+	     , VkCommandPool *cmdpool
+	     , Vulkan::GPU *gpu)
+	{
+	    mtrl_count = 0;
+	    allocate_memory_buffer(mtrls, max_mtrls);
+
+	    this->ppln = p_ppln;
+	    push_k_dst = pk_dst;
+
+	    Vulkan::allocate_command_buffers(cmdpool
+					     , VK_COMMAND_BUFFER_LEVEL_SECONDARY
+					     , gpu
+					     , Memory_Buffer_View<VkCommandBuffer>{1, &cmdbufs_pool[cmdbuf_index]});
+
+	    cmdbuf_index = active_cmdbuf_count++;
+	}
+
+	u32 // <---- index of the mtrl in the array
+	add(void *push_k_ptr, u32 push_k_size
+	    , const Memory_Buffer_View<VkBuffer> &vbo_bindings
+	    , const Vulkan::Model_Index_Data &index_data
+	    , const Vulkan::Draw_Indexed_Data &draw_index_data) 
+	{
+	    Material new_mtrl		= {};
+	    new_mtrl.push_k_ptr		= push_k_ptr;
+	    new_mtrl.push_k_size	= push_k_size;
+	    new_mtrl.vbo_bindings	= vbo_bindings;
+	    new_mtrl.index_data		= index_data;
+	    new_mtrl.draw_index_data	= draw_index_data;
+
+	    mtrls[mtrl_count] = new_mtrl;
+
+	    return(mtrl_count++);
+	}
+
+	void
+	update(VkCommandBuffer *cmdbufs_pool, const Memory_Buffer_View<VkDescriptorSet> &sets)
+	{
+	    Vulkan::begin_command_buffer(&cmdbufs_pool[cmdbuf_index], 0, nullptr);
+	    
+	    Vulkan::command_buffer_bind_pipeline(ppln.p, &cmdbufs_pool[cmdbuf_index]);
+
+	    Vulkan::command_buffer_bind_descriptor_sets(ppln.p
+							, sets
+							, &cmdbufs_pool[cmdbuf_index]);
+
+	    for (u32 i = 0; i < mtrl_count; ++i)
+	    {
+		Material *mtrl = &mtrls[i];
+
+		Memory_Buffer_View<VkDeviceSize> offsets;
+		allocate_memory_buffer_tmp(offsets, mtrl->vbo_bindings.count);
+		offsets.zero();
+			
+		Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
+						 , offsets
+						 , 0
+						 , mtrl->vbo_bindings.count
+						 , &cmdbufs_pool[cmdbuf_index]);
+			
+		Vulkan::command_buffer_bind_ibo(mtrl->index_data
+						, &cmdbufs_pool[cmdbuf_index]);
+
+		Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
+						     , mtrl->push_k_size
+						     , 0
+						     , push_k_dst
+						     , ppln.p
+						     , &cmdbufs_pool[cmdbuf_index]);
+
+		Vulkan::command_buffer_draw_indexed(&cmdbufs_pool[cmdbuf_index]
+						    , mtrl->draw_index_data);
+	    }
+	    
+	    Vulkan::end_command_buffer(&cmdbufs_pool[cmdbuf_index]);
+	}
+    };    
+}
+
+
+global_var struct World_Rendering_Master_Data
+{
+    // all the different render passes for the world (e.g. shadow, other post processing stuff...)
+    struct Deferred_Rendering_Data
+    {
+	R_Mem<Vulkan::Render_Pass> render_pass;
+	R_Mem<Vulkan::Graphics_Pipeline> lighting_pipeline;
+	R_Mem<Vulkan::Graphics_Pipeline> main_pipeline;
+	R_Mem<Vulkan::Descriptor_Set> descriptor_set;
+	R_Mem<Vulkan::Framebuffer> fbos;
+    } deferred;
+
+    struct Atmosphere_Data
+    {
+	R_Mem<Vulkan::Render_Pass> make_render_pass;
+	R_Mem<Vulkan::Framebuffer> make_fbo;
+	R_Mem<Vulkan::Graphics_Pipeline> make_pipeline;
+	R_Mem<Vulkan::Graphics_Pipeline> render_pipeline;
+	R_Mem<Vulkan::Descriptor_Set> cubemap_set;
+	R_Mem<VkDescriptorSetLayout> render_layout;
+	R_Mem<VkDescriptorSetLayout> make_layout;
+    } atmosphere;
+
+    struct Camera_Transforms
+    {
+	// ---- buffers containing view matrix and projection matrix - basically data that is common to most shaders ----
+	R_Mem<Vulkan::Buffer> master_ubos;
+    } transforms;
+
+    struct Test
+    {
+	R_Mem<VkDescriptorSetLayout> set_layout;
+	R_Mem<Vulkan::Model> model;
+	R_Mem<Vulkan::Buffer> model_vbo;
+	R_Mem<Vulkan::Buffer> model_ibo;
+	R_Mem<Vulkan::Descriptor_Set> sets;
+    } test;
+
+    struct Descriptors
+    {
+	Vulkan::Descriptor_Pool pool;
+    } desc;
+
+
+    // ---- renderers ----
+    static constexpr u32 MAX_COMMAND_BUFFERS_IN_USE = 10;
+    VkCommandBuffer recording_buffer_pool[MAX_COMMAND_BUFFERS_IN_USE];
+    u32 active_cmdbuf_count;
+    
+    static constexpr u32 MAX_TEST_MTRLS = 10;
+    New::Render_Command_Recorder test_recorder; // <--- value should increment for every renderer the user adds
+} world_rendering;
+
+struct Instanced_Render_Command_Recorder
+{
+    // ---- todo later on when instanced rendering is needed ----
+};
+
+
+// ---- render the skybox ----
+internal void
+render_skybox(const Memory_Buffer_View<VkBuffer> &cube_vbos
+	      , const Memory_Buffer_View<VkDescriptorSet> &sets
+	      , const Vulkan::Model_Index_Data &index_data
+	      , const Vulkan::Draw_Indexed_Data &draw_index_data
+	      , VkCommandBuffer *cmdbuf)
+{
+    glm::vec3 &camera_position = world.user_camera.p;
+
+    Vulkan::command_buffer_bind_pipeline(world_rendering.atmosphere.render_pipeline.p, cmdbuf);
+
+    Vulkan::command_buffer_bind_descriptor_sets(world_rendering.atmosphere.render_pipeline.p, sets, cmdbuf);
+
+    VkDeviceSize zero = 0;
+    Vulkan::command_buffer_bind_vbos(cube_vbos, {1, &zero}, 0, cube_vbos.count, cmdbuf);
+
+    Vulkan::command_buffer_bind_ibo(index_data, cmdbuf);
+
+    struct Skybox_Push_Constant
+    {
+	glm::mat4 model_matrix;
+    } push_k;
+
+    push_k.model_matrix = glm::translate(camera_position);
+
+    Vulkan::command_buffer_push_constant(&push_k
+					 , sizeof(push_k)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , world_rendering.atmosphere.render_pipeline.p
+					 , cmdbuf);
+
+    Vulkan::command_buffer_draw_indexed(cmdbuf
+					, draw_index_data);
+}
+
+
+
+// ---- to orgnise later on ----
+global_var glm::vec3 light_pos = glm::vec3(0.0f, 10.0f, 0.0f);
+
+
+
+
+// ---- update the skybox ----
+internal void
+update_skybox(VkCommandBuffer *cmdbuf)
+{
+    VkClearValue clears[] {Vulkan::init_clear_color_color(0, 0.0, 0.0, 0)};
+    
+    Vulkan::command_buffer_begin_render_pass(world_rendering.atmosphere.make_render_pass.p
+					     , world_rendering.atmosphere.make_fbo.p
+					     , Vulkan::init_render_area({0, 0}, VkExtent2D{1000, 1000})
+					     , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
+					     , VK_SUBPASS_CONTENTS_INLINE
+					     , cmdbuf);
+ 
+    Vulkan::command_buffer_bind_pipeline(world_rendering.atmosphere.make_pipeline.p
+					 , cmdbuf);
+
+    struct Atmos_Push_K
+    {
+	alignas(16) glm::mat4 inverse_projection;
+	glm::vec4 light_dir;
+	glm::vec2 viewport;
+    } k;
+
+    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 100000.0f);
+    k.inverse_projection = glm::inverse(atmos_proj);
+    k.viewport = glm::vec2(1000.0f, 1000.0f);
+
+    k.light_dir = glm::vec4(glm::normalize(-light_pos), 1.0f);
+    
+    Vulkan::command_buffer_push_constant(&k
+					 , sizeof(k)
+					 , 0
+					 , VK_SHADER_STAGE_FRAGMENT_BIT
+					 , world_rendering.atmosphere.make_pipeline.p
+					 , cmdbuf);
+    
+    Vulkan::command_buffer_draw(cmdbuf
+				, 1, 1, 0, 0);
+
+    Vulkan::command_buffer_end_render_pass(cmdbuf);
+}
+
+// ---- rendering of the entire world happens here ----
+internal void
+render_world(Vulkan::State *vk
+	     , u32 image_index
+	     , u32 current_frame
+	     , VkCommandBuffer *cmdbuf)
+{
+    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
+    
+    // ---- update the skybox (in the future, only do when necessary, not every frame) ----
+    update_skybox(cmdbuf);
+    
+    // ---- record command buffer for rendering each different type of entity ----
+    VkDescriptorSet test_sets[2] = {world_rendering.test.sets[image_index].set
+				    , world_rendering.atmosphere.cubemap_set->set};
+    
+    world_rendering.test_recorder.update(world_rendering.recording_buffer_pool, {2, test_sets}); // <--- recording
+    // ---- end of recording command buffers for each different type of entity / material ----
+
+
+
+    // ---- initialize the deferred render pass ... ----
+    VkClearValue deferred_clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+				      , Vulkan::init_clear_color_depth(1.0f, 0)};
+
+    // ---- render using deferred render pass ----
+    Vulkan::command_buffer_begin_render_pass(world_rendering.deferred.render_pass.p
+					     , &world_rendering.deferred.fbos.p[image_index]
+					     , Vulkan::init_render_area({0, 0}, vk->swapchain.extent)
+					     , {sizeof(deferred_clears) / sizeof(deferred_clears[0]), deferred_clears}
+					     , VK_SUBPASS_CONTENTS_INLINE
+					     , cmdbuf);
+
+    // ---- execute the commands that were just recorded (rendering the different types of entities)
+    Vulkan::command_buffer_execute_commands(cmdbuf, {world_rendering.active_cmdbuf_count, world_rendering.recording_buffer_pool});
+    
+    // ---- render skybox ----
+    render_skybox({1, world_rendering.test.model->raw_cache_for_rendering.buffer}
+	  , {2, test_sets}
+	  , world_rendering.test.model->index_data
+	  , world_rendering.test.model->index_data.init_draw_indexed_data(0, 0)
+	  , cmdbuf);
+    
+    // ---- do lighting ----
+    Vulkan::command_buffer_next_subpass(cmdbuf
+					, VK_SUBPASS_CONTENTS_INLINE);
+    
+    Vulkan::command_buffer_bind_pipeline(world_rendering.deferred.lighting_pipeline.p
+					 , cmdbuf);
+    
+    VkDescriptorSet deferred_sets[] = {world_rendering.deferred.descriptor_set.p->set
+				       , world_rendering.atmosphere.cubemap_set.p->set};
+    
+    Vulkan::command_buffer_bind_descriptor_sets(world_rendering.deferred.lighting_pipeline.p
+						, {2, deferred_sets}
+						, cmdbuf);
+    
+    struct Deferred_Lighting_Push_K
+    {
+	glm::vec4 light_position;
+    } deferred_push_k;
+    
+    deferred_push_k.light_position = glm::vec4(glm::normalize(-light_pos), 1.0f);
+    
+    Vulkan::command_buffer_push_constant(&deferred_push_k
+					 , sizeof(deferred_push_k)
+					 , 0
+					 , VK_SHADER_STAGE_FRAGMENT_BIT
+					 , world_rendering.deferred.lighting_pipeline.p
+					 , cmdbuf);
+    
+    Vulkan::command_buffer_draw(cmdbuf
+				, 3, 1, 0, 0);
+    
+    Vulkan::command_buffer_end_render_pass(cmdbuf);
+    // ---- end of deferred render pass ----
+    Vulkan::end_command_buffer(cmdbuf);
+}
+
+
+
 
 
 // index into array
@@ -112,13 +462,6 @@ typedef struct Entity
     
     union
     {
-	// all data for entities that are not entity groups
-	struct
-	{
-	    // for rendering information
-	    Rendering::Material_Access mtrl_access;
-	};
-
 	struct
 	{
 	    u32 below_count;
@@ -263,16 +606,14 @@ init_scene_graph(void)
 internal void
 make_entity_renderable(Entity *e_ptr
 		       , R_Mem<Vulkan::Model> model
-		       , const Constant_String &e_mtrl_name)
+		       , New::Render_Command_Recorder *recorder)
 {
-    Rendering::Material_Data mtrl_data = {};
-    mtrl_data.data = &e_ptr->push_k;
-    mtrl_data.data_size = sizeof(e_ptr->push_k);
-    mtrl_data.model = model;
-
-    mtrl_data.draw_info = Vulkan::init_draw_indexed_data_default(1, model.p->index_data.index_count);
-    
-    Rendering::init_material(e_mtrl_name, &mtrl_data);
+    // ---- adds an entity to the stack of renderables
+    recorder->add(&e_ptr->push_k
+		  , sizeof(e_ptr->push_k)
+		  , model->raw_cache_for_rendering
+		  , model->index_data
+		  , Vulkan::init_draw_indexed_data_default(1, model->index_data.index_count));
 }
 
 internal void
@@ -457,7 +798,7 @@ init_atmosphere_render_descriptor_set(Vulkan::GPU *gpu)
 // TODO organize the ownership of all the JSON loaded objects into these respective containers
 
 
-struct Render_Material
+/*struct Render_Material
 {
     // ---- vbo information ----
     Memory_Buffer_View<VkBuffer> vbo_bindings;
@@ -506,92 +847,8 @@ struct Render_Command_Recorder
 	Vulkan::end_command_buffer(&dst);
 	// ---- end of recording ----
     }
-};
+    };*/
 
-
-global_var struct World_Rendering_Master_Data
-{
-    // all the different render passes for the world (e.g. shadow, other post processing stuff...)
-    struct Deferred_Rendering_Data
-    {
-	R_Mem<Vulkan::Render_Pass> render_pass;
-	R_Mem<Vulkan::Graphics_Pipeline> lighting_pipeline;
-	R_Mem<Vulkan::Graphics_Pipeline> main_pipeline;
-	R_Mem<Vulkan::Descriptor_Set> descriptor_set;
-	R_Mem<Vulkan::Framebuffer> fbos;
-    } deferred;
-
-    struct Atmosphere_Data
-    {
-	R_Mem<Vulkan::Render_Pass> make_render_pass;
-	R_Mem<Vulkan::Framebuffer> make_fbo;
-	R_Mem<Vulkan::Graphics_Pipeline> make_pipeline;
-	R_Mem<Vulkan::Graphics_Pipeline> render_pipeline;
-	R_Mem<Vulkan::Descriptor_Set> cubemap_set;
-	R_Mem<VkDescriptorSetLayout> render_layout;
-	R_Mem<VkDescriptorSetLayout> make_layout;
-    } atmosphere;
-
-    struct Camera_Transforms
-    {
-	// ---- buffers containing view matrix and projection matrix - basically data that is common to most shaders ----
-	R_Mem<Vulkan::Buffer> master_ubos;
-    } transforms;
-
-    struct Test
-    {
-	R_Mem<VkDescriptorSetLayout> set_layout;
-	R_Mem<Vulkan::Model> model;
-	R_Mem<Vulkan::Buffer> model_vbo;
-	R_Mem<Vulkan::Buffer> model_ibo;
-	R_Mem<Vulkan::Descriptor_Set> sets;
-    } test;
-
-    struct Descriptors
-    {
-	Vulkan::Descriptor_Pool pool;
-    } desc;
-
-
-    // ---- renderers ----
-    Render_Command_Recorder test_recorder;
-} world_rendering;
-
-struct Instanced_Render_Command_Recorder
-{
-    // ---- todo later on when instanced rendering is needed ----
-};
-
-
-
-internal void
-render_world(Vulkan::State *vk
-	     , u32 image_index
-	     , u32 current_frame
-	     , VkCommandBuffer *cmdbuf)
-{
-    // ---- record command buffer for rendering each different type of entity ----
-    
-    
-    VkClearValue deferred_clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_depth(1.0f, 0)};
-
-    // ---- render using deferred render pass ----
-    Vulkan::command_buffer_begin_render_pass(world_rendering.deferred.render_pass.p
-					     , &world_rendering.deferred.fbos.p[image_index]
-					     , Vulkan::init_render_area({0, 0}, vk->swapchain.extent)
-					     , Memory_Buffer_View<VkClearValue> {sizeof(deferred_clears) / sizeof(deferred_clears[0]), deferred_clears}
-					     , VK_SUBPASS_CONTENTS_INLINE
-					     , cmdbuf);
-
-    
-    
-    Vulkan::command_buffer_end_render_pass(cmdbuf);
-    // ---- end of deferred render pass ----
-}
 
 
 
@@ -714,13 +971,14 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 
     // ---- make descriptor pool ----
     {
-	VkDescriptorPoolSize pool_sizes[2] = {};
+	VkDescriptorPoolSize pool_sizes[3] = {};
 
 	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain->imgs.count + 5, &pool_sizes[0]);
 	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count + 5, &pool_sizes[1]);
+	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5, &pool_sizes[2]);
 
     
-	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{2, pool_sizes}, swapchain->imgs.count + 5, gpu, &world_rendering.desc.pool);
+	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, swapchain->imgs.count + 10, gpu, &world_rendering.desc.pool);
 
 	register_existing_memory(&world_rendering.desc.pool, "descriptor_pool.test_descriptor_pool"_hash, sizeof(Vulkan::Descriptor_Pool));
     }
@@ -752,30 +1010,27 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 				, &world_rendering.transforms.master_ubos[i]);
 	}
     }
-
-    // ---- prepare the command recorders ----
-    {
-	//	world_rendering.test_recorder.ppln = get_memory("");
-    }
 }
 
 internal void
 get_registered_objects_from_json(void)
 {
-    world_rendering.deferred.render_pass = get_memory("render_pass.deferred_render_pass"_hash);
+    world_rendering.deferred.render_pass	= get_memory("render_pass.deferred_render_pass"_hash);
     world_rendering.atmosphere.make_render_pass = get_memory("render_pass.atmosphere_render_pass"_hash);
 
-    world_rendering.deferred.fbos = get_memory("framebuffer.main_fbo"_hash);
-    world_rendering.atmosphere.make_fbo = get_memory("framebuffer.atmosphere_fbo"_hash);
+    world_rendering.deferred.fbos		= get_memory("framebuffer.main_fbo"_hash);
+    world_rendering.atmosphere.make_fbo		= get_memory("framebuffer.atmosphere_fbo"_hash);
 
-    world_rendering.deferred.main_pipeline = get_memory("pipeline.main_pipeline"_hash);
-    world_rendering.deferred.lighting_pipeline = get_memory("pipeline.deferred_pipeline"_hash);
-    world_rendering.atmosphere.render_pipeline = get_memory("pipeline.render_atmosphere"_hash);
-    world_rendering.atmosphere.make_pipeline = get_memory("pipeline.atmosphere_pipeline"_hash);
+    world_rendering.deferred.main_pipeline	= get_memory("pipeline.main_pipeline"_hash);
+    world_rendering.deferred.lighting_pipeline	= get_memory("pipeline.deferred_pipeline"_hash);
+    world_rendering.atmosphere.render_pipeline	= get_memory("pipeline.render_atmosphere"_hash);
+    world_rendering.atmosphere.make_pipeline	= get_memory("pipeline.atmosphere_pipeline"_hash);
 
-    world_rendering.atmosphere.render_layout = get_memory("descriptor_set_layout.render_atmosphere_layout"_hash);
-    world_rendering.atmosphere.make_layout = get_memory("descriptor_set_layout.atmosphere_layout"_hash);
-    world_rendering.test.sets = get_memory("descriptor_set.test_descriptor_sets"_hash);
+    world_rendering.atmosphere.render_layout	= get_memory("descriptor_set_layout.render_atmosphere_layout"_hash);
+    world_rendering.atmosphere.make_layout	= get_memory("descriptor_set_layout.atmosphere_layout"_hash);
+    world_rendering.test.sets			= get_memory("descriptor_set.test_descriptor_sets"_hash);
+    world_rendering.atmosphere.cubemap_set	= get_memory("descriptor_set.cubemap"_hash);
+    world_rendering.deferred.descriptor_set     = get_memory("descriptor_set.deferred_descriptor_sets"_hash);
 }
 
 
@@ -794,47 +1049,53 @@ make_world(Window_Data *window
 {
     prepare_external_loading_state(&vk->gpu, &vk->swapchain, cmdpool);
 
-
     
     world.user_camera.set_default(window->w, window->h, window->m_x, window->m_y);
 
 
-    R_Mem<Vulkan::Render_Pass> n {};
-    Rendering::init_render_passes_from_json(&vk->swapchain, &vk->gpu);
+    
+    load_render_passes_from_json(&vk->gpu, &vk->swapchain);
 
+    
     // initialize the cubemap that will be used as an attachment by the fbo for rendering the skybox
     init_atmosphere_cubemap(&vk->gpu);
+
+
+
     
-    Rendering::init_framebuffers_from_json(&vk->swapchain, &vk->gpu);
+    load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
     
-    Rendering::init_descriptor_sets_and_layouts(&vk->swapchain, &vk->gpu);
+    
 
 
     
     load_descriptors_from_json(&vk->gpu, &vk->swapchain);
     
+    
     init_atmosphere_render_descriptor_set(&vk->gpu);
     
-    Rendering::init_pipelines_from_json(&vk->swapchain, &vk->gpu);
-    
-    Rendering::init_rendering_system(&vk->swapchain
-				     , &vk->gpu
-				     , get_memory("render_pass.deferred_render_pass"_hash));
-    
-    Rendering::Renderer_Init_Data rndr_d = {};
-    rndr_d.rndr_id = "renderer.test_material_renderer"_hash;
-    rndr_d.mtrl_max = 5;
-    rndr_d.ppln_id = "pipeline.main_pipeline"_hash;
-    rndr_d.mtrl_unique_data_stage_dst = VK_SHADER_STAGE_VERTEX_BIT;
-
-    allocate_memory_buffer(rndr_d.descriptor_sets, 1);
-    rndr_d.descriptor_sets[0] = "descriptor_set.test_descriptor_sets"_hash;
-
-    Rendering::add_renderer(&rndr_d, cmdpool, &vk->gpu);
+    load_pipelines_from_json(&vk->gpu, &vk->swapchain);
 
 
     
-    //    load_renderers_from_json(&vk->gpu, &world->cmdpool);
+    get_registered_objects_from_json();
+
+
+    
+    // ---- prepare the command recorders ----
+    {
+	world_rendering.test_recorder.init(world_rendering.recording_buffer_pool
+					   , world_rendering.active_cmdbuf_count
+					   , world_rendering.deferred.main_pipeline
+					   , VK_SHADER_STAGE_VERTEX_BIT
+					   , 10
+					   , cmdpool
+					   , &vk->gpu);
+    }
+    
+    
+    
+
     
     init_scene_graph();
     // add en entity group
@@ -861,7 +1122,7 @@ make_world(Window_Data *window
 
     make_entity_renderable(e_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , "renderer.test_material_renderer"_hash);
+			   , &world_rendering.test_recorder);
 
     // create entity group that rotates around group test0
     Entity_Group rotate = construct_entity("entity.group.rotate"_hash
@@ -888,7 +1149,7 @@ make_world(Window_Data *window
 
     make_entity_renderable(r_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , "renderer.test_material_renderer"_hash);
+			   , &world_rendering.test_recorder);
 
     Entity_Group rg2 = construct_entity("entity.group.rotate2"_hash
 					, Entity::Is_Group::IS_GROUP
@@ -912,11 +1173,7 @@ make_world(Window_Data *window
     auto *rev2_ptr = get_entity(rev2);
     make_entity_renderable(rev2_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , "renderer.test_material_renderer"_hash);
-
-
-
-    get_registered_objects_from_json();
+			   , &world_rendering.test_recorder);
 }
 
 
@@ -978,65 +1235,6 @@ update_ubo(u32 current_image
 
 
 
-glm::vec3 light_pos = glm::vec3(0.0f, 10.0f, 0.0f);
-
-internal void
-record_cmd(Vulkan::State *vk
-	   , u32 image_index, u32 frame_num
-	   , VkCommandBuffer *cmdbuf)
-{
-    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
-
-
-    // render atmosphere stuff
-    VkClearValue clears[] {Vulkan::init_clear_color_color(0, 0.0, 0.0, 0)};
-    
-    Vulkan::command_buffer_begin_render_pass(world_rendering.atmosphere.make_render_pass.p
-					     , world_rendering.atmosphere.make_fbo.p
-					     , Vulkan::init_render_area({0, 0}, VkExtent2D{1000, 1000})
-					     , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
-					     , VK_SUBPASS_CONTENTS_INLINE
-					     , cmdbuf);
- 
-    Vulkan::command_buffer_bind_pipeline(world_rendering.atmosphere.make_pipeline.p
-					     , cmdbuf);
-
-    struct Atmos_Push_K
-    {
-	alignas(16) glm::mat4 inverse_projection;
-	glm::vec4 light_dir;
-	glm::vec2 viewport;
-    } k;
-
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 100000.0f);
-    k.inverse_projection = glm::inverse(atmos_proj);
-    k.viewport = glm::vec2(1000.0f, 1000.0f);
-
-    k.light_dir = glm::vec4(glm::normalize(-light_pos), 1.0f);
-    
-    Vulkan::command_buffer_push_constant(&k
-					 , sizeof(k)
-					 , 0
-					 , VK_SHADER_STAGE_FRAGMENT_BIT
-					 , world_rendering.atmosphere.make_pipeline.p
-					 , cmdbuf);
-    
-    Vulkan::command_buffer_draw(cmdbuf
-				    , 1, 1, 0, 0);
-
-    Vulkan::command_buffer_end_render_pass(cmdbuf);
-
-    Rendering::update_renderers(cmdbuf
-				, vk->swapchain.extent
-				, image_index
-				, Memory_Buffer_View<VkDescriptorSet>{1, &world_rendering.test.sets[image_index].set}
-				, world_rendering.deferred.render_pass
-				, world.user_camera.p
-				, k.light_dir);
-
-    Vulkan::end_command_buffer(cmdbuf);
-}
-
 internal f32 angle = 0.0f;
 
 internal void
@@ -1053,9 +1251,9 @@ render_frame(Vulkan::State *vulkan_state
 	       , ubo_mbv
 	       , &world);
 
-    record_cmd(vulkan_state, image_index, current_frame, cmdbuf);
-
-    // ---- exit ----    
+    render_world(vulkan_state, image_index, current_frame, cmdbuf);
+    //    record_cmd(vulkan_state, image_index, current_frame, cmdbuf);
+    // ---- exit ----
 }
 
 void

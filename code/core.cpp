@@ -4,7 +4,6 @@
 #include "vulkan.hpp"
 #include "core.hpp"
 #include "world.hpp"
-#include "rendering.hpp"
 #include <stdlib.h>
 
 #include "game.hpp"

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "vulkan.hpp"
-#include "rendering.hpp"
 
 void
 make_game(Vulkan::State *vk

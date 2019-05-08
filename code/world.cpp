@@ -19,121 +19,117 @@ global_var struct World
 
 
 
-namespace New
+// almost acts like the actual render component object itself
+struct Material
 {
+    // ---- push constant information
+    void *push_k_ptr = nullptr;
+    u32 push_k_size = 0;
+    // ---- vbo information
+    Memory_Buffer_View<VkBuffer> vbo_bindings;
+    // ---- for sorting
+    u32 model_id;
+    // ---- ibo information
+    Vulkan::Model_Index_Data index_data;
+    Vulkan::Draw_Indexed_Data draw_index_data;
+};
 
-    // almost acts like the actual render component object itself
-    struct Material
-    {
-	// ---- push constant information
-	void *push_k_ptr = nullptr;
-	u32 push_k_size = 0;
-	// ---- vbo information
-	Memory_Buffer_View<VkBuffer> vbo_bindings;
-	// ---- for sorting
-	u32 model_id;
-	// ---- ibo information
-	Vulkan::Model_Index_Data index_data;
-	Vulkan::Draw_Indexed_Data draw_index_data;
-    };
-    
-    // ---- todo in the future ----
-    // sort materials out with their models, make renderers handle an array of textures that the user passes in or something if materials use different textures
-    // ----
-    struct Render_Command_Recorder
-    {
-	R_Mem<Vulkan::Graphics_Pipeline> ppln;
-	VkShaderStageFlags push_k_dst;
+// ---- todo in the future ----
+// sort materials out with their models, make renderers handle an array of textures that the user passes in or something if materials use different textures
+// ----
+struct Render_Command_Recorder
+{
+    R_Mem<Vulkan::Graphics_Pipeline> ppln;
+    VkShaderStageFlags push_k_dst;
 	
-	Memory_Buffer_View<Material> mtrls;
-	u32 mtrl_count;
+    Memory_Buffer_View<Material> mtrls;
+    u32 mtrl_count;
 
-	u32 cmdbuf_index;
+    u32 cmdbuf_index;
 
-	void
-	init(VkCommandBuffer *cmdbufs_pool
-	     , u32 &active_cmdbuf_count
-	     , R_Mem<Vulkan::Graphics_Pipeline> p_ppln
-	     , VkShaderStageFlags pk_dst
-	     , u32 max_mtrls
-	     , VkCommandPool *cmdpool
-	     , Vulkan::GPU *gpu)
-	{
-	    mtrl_count = 0;
-	    allocate_memory_buffer(mtrls, max_mtrls);
+    void
+    init(VkCommandBuffer *cmdbufs_pool
+	 , u32 &active_cmdbuf_count
+	 , R_Mem<Vulkan::Graphics_Pipeline> p_ppln
+	 , VkShaderStageFlags pk_dst
+	 , u32 max_mtrls
+	 , VkCommandPool *cmdpool
+	 , Vulkan::GPU *gpu)
+    {
+	mtrl_count = 0;
+	allocate_memory_buffer(mtrls, max_mtrls);
 
-	    this->ppln = p_ppln;
-	    push_k_dst = pk_dst;
+	this->ppln = p_ppln;
+	push_k_dst = pk_dst;
 
-	    Vulkan::allocate_command_buffers(cmdpool
-					     , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-					     , gpu
-					     , Memory_Buffer_View<VkCommandBuffer>{1, &cmdbufs_pool[cmdbuf_index]});
+	Vulkan::allocate_command_buffers(cmdpool
+					 , VK_COMMAND_BUFFER_LEVEL_SECONDARY
+					 , gpu
+					 , Memory_Buffer_View<VkCommandBuffer>{1, &cmdbufs_pool[cmdbuf_index]});
 
-	    cmdbuf_index = active_cmdbuf_count++;
-	}
+	cmdbuf_index = active_cmdbuf_count++;
+    }
 
-	u32 // <---- index of the mtrl in the array
-	add(void *push_k_ptr, u32 push_k_size
-	    , const Memory_Buffer_View<VkBuffer> &vbo_bindings
-	    , const Vulkan::Model_Index_Data &index_data
-	    , const Vulkan::Draw_Indexed_Data &draw_index_data) 
-	{
-	    Material new_mtrl		= {};
-	    new_mtrl.push_k_ptr		= push_k_ptr;
-	    new_mtrl.push_k_size	= push_k_size;
-	    new_mtrl.vbo_bindings	= vbo_bindings;
-	    new_mtrl.index_data		= index_data;
-	    new_mtrl.draw_index_data	= draw_index_data;
+    u32 // <---- index of the mtrl in the array
+    add(void *push_k_ptr, u32 push_k_size
+	, const Memory_Buffer_View<VkBuffer> &vbo_bindings
+	, const Vulkan::Model_Index_Data &index_data
+	, const Vulkan::Draw_Indexed_Data &draw_index_data) 
+    {
+	Material new_mtrl		= {};
+	new_mtrl.push_k_ptr		= push_k_ptr;
+	new_mtrl.push_k_size	= push_k_size;
+	new_mtrl.vbo_bindings	= vbo_bindings;
+	new_mtrl.index_data		= index_data;
+	new_mtrl.draw_index_data	= draw_index_data;
 
-	    mtrls[mtrl_count] = new_mtrl;
+	mtrls[mtrl_count] = new_mtrl;
 
-	    return(mtrl_count++);
-	}
+	return(mtrl_count++);
+    }
 
-	void
-	update(VkCommandBuffer *cmdbufs_pool, const Memory_Buffer_View<VkDescriptorSet> &sets)
-	{
-	    Vulkan::begin_command_buffer(&cmdbufs_pool[cmdbuf_index], 0, nullptr);
+    void
+    update(VkCommandBuffer *cmdbufs_pool, const Memory_Buffer_View<VkDescriptorSet> &sets)
+    {
+	Vulkan::begin_command_buffer(&cmdbufs_pool[cmdbuf_index], 0, nullptr);
 	    
-	    Vulkan::command_buffer_bind_pipeline(ppln.p, &cmdbufs_pool[cmdbuf_index]);
+	Vulkan::command_buffer_bind_pipeline(ppln.p, &cmdbufs_pool[cmdbuf_index]);
 
-	    Vulkan::command_buffer_bind_descriptor_sets(ppln.p
-							, sets
-							, &cmdbufs_pool[cmdbuf_index]);
+	Vulkan::command_buffer_bind_descriptor_sets(ppln.p
+						    , sets
+						    , &cmdbufs_pool[cmdbuf_index]);
 
-	    for (u32 i = 0; i < mtrl_count; ++i)
-	    {
-		Material *mtrl = &mtrls[i];
+	for (u32 i = 0; i < mtrl_count; ++i)
+	{
+	    Material *mtrl = &mtrls[i];
 
-		Memory_Buffer_View<VkDeviceSize> offsets;
-		allocate_memory_buffer_tmp(offsets, mtrl->vbo_bindings.count);
-		offsets.zero();
+	    Memory_Buffer_View<VkDeviceSize> offsets;
+	    allocate_memory_buffer_tmp(offsets, mtrl->vbo_bindings.count);
+	    offsets.zero();
 			
-		Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
-						 , offsets
+	    Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
+					     , offsets
+					     , 0
+					     , mtrl->vbo_bindings.count
+					     , &cmdbufs_pool[cmdbuf_index]);
+			
+	    Vulkan::command_buffer_bind_ibo(mtrl->index_data
+					    , &cmdbufs_pool[cmdbuf_index]);
+
+	    Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
+						 , mtrl->push_k_size
 						 , 0
-						 , mtrl->vbo_bindings.count
+						 , push_k_dst
+						 , ppln.p
 						 , &cmdbufs_pool[cmdbuf_index]);
-			
-		Vulkan::command_buffer_bind_ibo(mtrl->index_data
-						, &cmdbufs_pool[cmdbuf_index]);
 
-		Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
-						     , mtrl->push_k_size
-						     , 0
-						     , push_k_dst
-						     , ppln.p
-						     , &cmdbufs_pool[cmdbuf_index]);
-
-		Vulkan::command_buffer_draw_indexed(&cmdbufs_pool[cmdbuf_index]
-						    , mtrl->draw_index_data);
-	    }
-	    
-	    Vulkan::end_command_buffer(&cmdbufs_pool[cmdbuf_index]);
+	    Vulkan::command_buffer_draw_indexed(&cmdbufs_pool[cmdbuf_index]
+						, mtrl->draw_index_data);
 	}
-    };    
-}
+	    
+	Vulkan::end_command_buffer(&cmdbufs_pool[cmdbuf_index]);
+    }
+};    
 
 
 global_var struct World_Rendering_Master_Data
@@ -186,7 +182,7 @@ global_var struct World_Rendering_Master_Data
     u32 active_cmdbuf_count;
     
     static constexpr u32 MAX_TEST_MTRLS = 10;
-    New::Render_Command_Recorder test_recorder; // <--- value should increment for every renderer the user adds
+    Render_Command_Recorder test_recorder; // <--- value should increment for every renderer the user adds
 } world_rendering;
 
 struct Instanced_Render_Command_Recorder
@@ -194,6 +190,186 @@ struct Instanced_Render_Command_Recorder
     // ---- todo later on when instanced rendering is needed ----
 };
 
+
+internal void
+prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool)
+{
+    world_rendering.deferred.render_pass = register_memory("render_pass.deferred_render_pass"_hash, sizeof(Vulkan::Render_Pass));
+
+    // ---- make cube model info ----
+    {
+	world_rendering.test.model = register_memory("vulkan_model.test_model"_hash, sizeof(Vulkan::Model));
+	
+	world_rendering.test.model->attribute_count = 3;
+	world_rendering.test.model->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
+	world_rendering.test.model->binding_count = 1;
+	world_rendering.test.model->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding));
+
+	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
+	
+	// only one binding
+	Vulkan::Model_Binding *binding = world_rendering.test.model->bindings;
+	binding->begin_attributes_creation(world_rendering.test.model->attributes_buffer);
+
+	binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::pos));
+	binding->push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::color));
+	binding->push_attribute(2, VK_FORMAT_R32G32_SFLOAT, sizeof(Vertex::uvs));
+
+	binding->end_attributes_creation();
+    }
+    
+    // ---- make descriptor set layout for rendering the cubes ----
+    {
+	world_rendering.test.set_layout = register_memory("descriptor_set_layout.test_descriptor_set_layout"_hash, sizeof(VkDescriptorSetLayout));
+	
+	VkDescriptorSetLayoutBinding bindings[] =
+	    {
+		Vulkan::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, 1, VK_SHADER_STAGE_VERTEX_BIT)
+	    };
+	
+	Vulkan::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{1, bindings}
+					       , gpu
+					       , world_rendering.test.set_layout.p);
+    }
+
+    // ---- make cube vbo ----
+    {
+	world_rendering.test.model_vbo = register_memory("vbo.test_model_vbo"_hash, sizeof(Vulkan::Buffer));
+	
+	struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
+
+	glm::vec3 gray = glm::vec3(0.2);
+	
+	f32 radius = 2.0f;
+	
+	persist Vertex vertices[]
+	{
+	    {{-radius, -radius, radius	}, gray},
+	    {{radius, -radius, radius	}, gray},
+	    {{radius, radius, radius	}, gray},
+	    {{-radius, radius, radius	}, gray},
+												 
+	    {{-radius, -radius, -radius	}, gray},
+	    {{radius, -radius, -radius	}, gray},
+	    {{radius, radius, -radius	}, gray},
+	    {{-radius, radius, -radius	}, gray}
+	};
+	
+	auto *main_binding = &world_rendering.test.model->bindings[0];
+	    
+	Memory_Byte_Buffer byte_buffer{sizeof(vertices), vertices};
+	
+	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+							      , cmdpool
+							      , world_rendering.test.model_vbo.p
+							      , gpu);
+
+	main_binding->buffer = world_rendering.test.model_vbo->buffer;
+	world_rendering.test.model->create_vbo_list();
+    }
+
+    // ---- make cube ibo ----
+    {
+	world_rendering.test.model_ibo = register_memory("ibo.test_model_ibo"_hash, sizeof(Vulkan::Buffer));
+	
+	persist u32 mesh_indices[] = 
+	{
+	    0, 1, 2,
+	    2, 3, 0,
+
+	    1, 5, 6,
+	    6, 2, 1,
+
+	    7, 6, 5,
+	    5, 4, 7,
+	    
+	    3, 7, 4,
+	    4, 0, 3,
+	    
+	    4, 5, 1,
+	    1, 0, 4,
+	    
+	    3, 2, 6,
+	    6, 7, 3,
+	};
+
+	world_rendering.test.model->index_data.index_type = VK_INDEX_TYPE_UINT32;
+	world_rendering.test.model->index_data.index_offset = 0;
+	world_rendering.test.model->index_data.index_count = sizeof(mesh_indices) / sizeof(mesh_indices[0]);
+
+	Memory_Byte_Buffer byte_buffer{sizeof(mesh_indices), mesh_indices};
+	    
+	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+							      , cmdpool
+							      , world_rendering.test.model_ibo.p
+							      , gpu);
+
+	world_rendering.test.model->index_data.index_buffer = world_rendering.test.model_ibo->buffer;
+    }
+
+    // ---- make descriptor pool ----
+    {
+	VkDescriptorPoolSize pool_sizes[3] = {};
+
+	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain->imgs.count + 5, &pool_sizes[0]);
+	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count + 5, &pool_sizes[1]);
+	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5, &pool_sizes[2]);
+
+    
+	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, swapchain->imgs.count + 10, gpu, &world_rendering.desc.pool);
+
+	register_existing_memory(&world_rendering.desc.pool, "descriptor_pool.test_descriptor_pool"_hash, sizeof(Vulkan::Descriptor_Pool));
+    }
+
+    // ---- make the ubos ----
+    {
+	struct Uniform_Buffer_Object
+	{
+	    alignas(16) glm::mat4 model_matrix;
+	    alignas(16) glm::mat4 view_matrix;
+	    alignas(16) glm::mat4 projection_matrix;
+	};
+	
+	u32 uniform_buffer_count = swapchain->imgs.count;
+	
+	world_rendering.transforms.master_ubos = register_memory("buffer.ubos"_hash, sizeof(Vulkan::Buffer) * uniform_buffer_count);
+
+	VkDeviceSize buffer_size = sizeof(Uniform_Buffer_Object);
+
+	for (u32 i = 0
+		 ; i < uniform_buffer_count
+		 ; ++i)
+	{
+	    Vulkan::init_buffer(buffer_size
+				, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+				, VK_SHARING_MODE_EXCLUSIVE
+				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+				, gpu
+				, &world_rendering.transforms.master_ubos[i]);
+	}
+    }
+}
+
+internal void
+get_registered_objects_from_json(void)
+{
+    world_rendering.deferred.render_pass	= get_memory("render_pass.deferred_render_pass"_hash);
+    world_rendering.atmosphere.make_render_pass = get_memory("render_pass.atmosphere_render_pass"_hash);
+
+    world_rendering.deferred.fbos		= get_memory("framebuffer.main_fbo"_hash);
+    world_rendering.atmosphere.make_fbo		= get_memory("framebuffer.atmosphere_fbo"_hash);
+
+    world_rendering.deferred.main_pipeline	= get_memory("pipeline.main_pipeline"_hash);
+    world_rendering.deferred.lighting_pipeline	= get_memory("pipeline.deferred_pipeline"_hash);
+    world_rendering.atmosphere.render_pipeline	= get_memory("pipeline.render_atmosphere"_hash);
+    world_rendering.atmosphere.make_pipeline	= get_memory("pipeline.atmosphere_pipeline"_hash);
+
+    world_rendering.atmosphere.render_layout	= get_memory("descriptor_set_layout.render_atmosphere_layout"_hash);
+    world_rendering.atmosphere.make_layout	= get_memory("descriptor_set_layout.atmosphere_layout"_hash);
+    world_rendering.test.sets			= get_memory("descriptor_set.test_descriptor_sets"_hash);
+    world_rendering.atmosphere.cubemap_set	= get_memory("descriptor_set.cubemap"_hash);
+    world_rendering.deferred.descriptor_set     = get_memory("descriptor_set.deferred_descriptor_sets"_hash);
+}
 
 // ---- render the skybox ----
 internal void
@@ -368,6 +544,9 @@ render_world(Vulkan::State *vk
 
 
 
+
+
+
 // index into array
 typedef struct Entity_View
 {
@@ -421,14 +600,6 @@ struct Morphable_Terrain_Manager
 	glm::vec3 p;
     };
 };
-
-
-
-
-
-
-
-
 
 #define MAX_ENTITIES 100
 
@@ -606,7 +777,7 @@ init_scene_graph(void)
 internal void
 make_entity_renderable(Entity *e_ptr
 		       , R_Mem<Vulkan::Model> model
-		       , New::Render_Command_Recorder *recorder)
+		       , Render_Command_Recorder *recorder)
 {
     // ---- adds an entity to the stack of renderables
     recorder->add(&e_ptr->push_k
@@ -781,257 +952,6 @@ init_atmosphere_render_descriptor_set(Vulkan::GPU *gpu)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-// ---- rendering code ----
-// struct that holds the vulakn objects for rendering the world (doesn't require any logic - e.g. entities, planets...)
-// TODO organize the ownership of all the JSON loaded objects into these respective containers
-
-
-/*struct Render_Material
-{
-    // ---- vbo information ----
-    Memory_Buffer_View<VkBuffer> vbo_bindings;
-    // ---- ibo information
-    Vulkan::Model_Index_Data index_data;
-    Vulkan::Draw_Indexed_Data draw_index_data;
-    // ---- push constant information ----
-    void *push_k_ptr;
-    u32 push_k_size;
-};
-
-struct Render_Command_Recorder
-{
-    VkCommandBuffer dst;
-    VkShaderStageFlagBits push_k_dst;
-
-    R_Mem<Vulkan::Graphics_Pipeline> ppln;
-
-    void
-    record(const Memory_Buffer_View<VkDescriptorSet> &sets
-	   , const Memory_Buffer_View<Render_Material> &mtrls)
-    {
-	// ---- beginning of recording ----
-	Vulkan::begin_command_buffer(&dst, 0, nullptr);
-
-	Vulkan::command_buffer_bind_pipeline(ppln.p, &dst);
-
-	Vulkan::command_buffer_bind_descriptor_sets(ppln.p, sets, &dst);
-
-	// ---- loop through all the materials ----
-	for (u32 m = 0; m < mtrls.count; ++m)
-	{
-	    Memory_Buffer_View<VkDeviceSize> offsets;
-	    allocate_memory_buffer_tmp(offsets, mtrls[m].vbo_bindings.count);
-	    offsets.zero();
-	    
-	    Vulkan::command_buffer_bind_vbos(mtrls[m].vbo_bindings, offsets, 0, mtrls[m].vbo_bindings.count, &dst);
-	    
-	    Vulkan::command_buffer_bind_ibo(mtrls[m].index_data, &dst);
-	    
-	    Vulkan::command_buffer_push_constant(mtrls[m].push_k_ptr, mtrls[m].push_k_size, 0, push_k_dst, ppln.p, &dst);
-	    
-	    Vulkan::command_buffer_draw_indexed(&dst, mtrls[m].draw_index_data);
-	}
-	
-	Vulkan::end_command_buffer(&dst);
-	// ---- end of recording ----
-    }
-    };*/
-
-
-
-
-
-internal void
-prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool)
-{
-    world_rendering.deferred.render_pass = register_memory("render_pass.deferred_render_pass"_hash, sizeof(Vulkan::Render_Pass));
-
-    // ---- make cube model info ----
-    {
-	world_rendering.test.model = register_memory("vulkan_model.test_model"_hash, sizeof(Vulkan::Model));
-	
-	world_rendering.test.model->attribute_count = 3;
-	world_rendering.test.model->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
-	world_rendering.test.model->binding_count = 1;
-	world_rendering.test.model->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding));
-
-	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
-	
-	// only one binding
-	Vulkan::Model_Binding *binding = world_rendering.test.model->bindings;
-	binding->begin_attributes_creation(world_rendering.test.model->attributes_buffer);
-
-	binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::pos));
-	binding->push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::color));
-	binding->push_attribute(2, VK_FORMAT_R32G32_SFLOAT, sizeof(Vertex::uvs));
-
-	binding->end_attributes_creation();
-    }
-    
-    // ---- make descriptor set layout for rendering the cubes ----
-    {
-	world_rendering.test.set_layout = register_memory("descriptor_set_layout.test_descriptor_set_layout"_hash, sizeof(VkDescriptorSetLayout));
-	
-	VkDescriptorSetLayoutBinding bindings[] =
-        {
-	    Vulkan::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, 1, VK_SHADER_STAGE_VERTEX_BIT)
-	};
-	
-	Vulkan::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{1, bindings}
-					       , gpu
-					       , world_rendering.test.set_layout.p);
-    }
-
-    // ---- make cube vbo ----
-    {
-	world_rendering.test.model_vbo = register_memory("vbo.test_model_vbo"_hash, sizeof(Vulkan::Buffer));
-	
-	struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
-
-	glm::vec3 gray = glm::vec3(0.2);
-	
-	f32 radius = 2.0f;
-	
-	persist Vertex vertices[]
-	{
-	    {{-radius, -radius, radius	}, gray},
-	    {{radius, -radius, radius	}, gray},
-	    {{radius, radius, radius	}, gray},
-	    {{-radius, radius, radius	}, gray},
-												 
-	    {{-radius, -radius, -radius	}, gray},
-	    {{radius, -radius, -radius	}, gray},
-	    {{radius, radius, -radius	}, gray},
-	    {{-radius, radius, -radius	}, gray}
-	};
-	
-	auto *main_binding = &world_rendering.test.model->bindings[0];
-	    
-	Memory_Byte_Buffer byte_buffer{sizeof(vertices), vertices};
-	
-	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
-							      , cmdpool
-							      , world_rendering.test.model_vbo.p
-							      , gpu);
-
-	main_binding->buffer = world_rendering.test.model_vbo->buffer;
-	world_rendering.test.model->create_vbo_list();
-    }
-
-    // ---- make cube ibo ----
-    {
-	world_rendering.test.model_ibo = register_memory("ibo.test_model_ibo"_hash, sizeof(Vulkan::Buffer));
-	
-	persist u32 mesh_indices[] = 
-	{
-	    0, 1, 2,
-	    2, 3, 0,
-
-	    1, 5, 6,
-	    6, 2, 1,
-
-	    7, 6, 5,
-	    5, 4, 7,
-	    
-	    3, 7, 4,
-	    4, 0, 3,
-	    
-	    4, 5, 1,
-	    1, 0, 4,
-	    
-	    3, 2, 6,
-	    6, 7, 3,
-	};
-
-	world_rendering.test.model->index_data.index_type = VK_INDEX_TYPE_UINT32;
-	world_rendering.test.model->index_data.index_offset = 0;
-	world_rendering.test.model->index_data.index_count = sizeof(mesh_indices) / sizeof(mesh_indices[0]);
-
-	Memory_Byte_Buffer byte_buffer{sizeof(mesh_indices), mesh_indices};
-	    
-	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
-							      , cmdpool
-							      , world_rendering.test.model_ibo.p
-							      , gpu);
-
-	world_rendering.test.model->index_data.index_buffer = world_rendering.test.model_ibo->buffer;
-    }
-
-    // ---- make descriptor pool ----
-    {
-	VkDescriptorPoolSize pool_sizes[3] = {};
-
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain->imgs.count + 5, &pool_sizes[0]);
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count + 5, &pool_sizes[1]);
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5, &pool_sizes[2]);
-
-    
-	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, swapchain->imgs.count + 10, gpu, &world_rendering.desc.pool);
-
-	register_existing_memory(&world_rendering.desc.pool, "descriptor_pool.test_descriptor_pool"_hash, sizeof(Vulkan::Descriptor_Pool));
-    }
-
-    // ---- make the ubos ----
-    {
-	struct Uniform_Buffer_Object
-	{
-	    alignas(16) glm::mat4 model_matrix;
-	    alignas(16) glm::mat4 view_matrix;
-	    alignas(16) glm::mat4 projection_matrix;
-	};
-	
-	u32 uniform_buffer_count = swapchain->imgs.count;
-	
-	world_rendering.transforms.master_ubos = register_memory("buffer.ubos"_hash, sizeof(Vulkan::Buffer) * uniform_buffer_count);
-
-	VkDeviceSize buffer_size = sizeof(Uniform_Buffer_Object);
-
-	for (u32 i = 0
-		 ; i < uniform_buffer_count
-		 ; ++i)
-	{
-	    Vulkan::init_buffer(buffer_size
-				, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-				, VK_SHARING_MODE_EXCLUSIVE
-				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-				, gpu
-				, &world_rendering.transforms.master_ubos[i]);
-	}
-    }
-}
-
-internal void
-get_registered_objects_from_json(void)
-{
-    world_rendering.deferred.render_pass	= get_memory("render_pass.deferred_render_pass"_hash);
-    world_rendering.atmosphere.make_render_pass = get_memory("render_pass.atmosphere_render_pass"_hash);
-
-    world_rendering.deferred.fbos		= get_memory("framebuffer.main_fbo"_hash);
-    world_rendering.atmosphere.make_fbo		= get_memory("framebuffer.atmosphere_fbo"_hash);
-
-    world_rendering.deferred.main_pipeline	= get_memory("pipeline.main_pipeline"_hash);
-    world_rendering.deferred.lighting_pipeline	= get_memory("pipeline.deferred_pipeline"_hash);
-    world_rendering.atmosphere.render_pipeline	= get_memory("pipeline.render_atmosphere"_hash);
-    world_rendering.atmosphere.make_pipeline	= get_memory("pipeline.atmosphere_pipeline"_hash);
-
-    world_rendering.atmosphere.render_layout	= get_memory("descriptor_set_layout.render_atmosphere_layout"_hash);
-    world_rendering.atmosphere.make_layout	= get_memory("descriptor_set_layout.atmosphere_layout"_hash);
-    world_rendering.test.sets			= get_memory("descriptor_set.test_descriptor_sets"_hash);
-    world_rendering.atmosphere.cubemap_set	= get_memory("descriptor_set.cubemap"_hash);
-    world_rendering.deferred.descriptor_set     = get_memory("descriptor_set.deferred_descriptor_sets"_hash);
-}
 
 
 

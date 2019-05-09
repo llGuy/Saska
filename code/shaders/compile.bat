@@ -10,3 +10,6 @@ C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/atmosphere.geom.spv a
 
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/render_atmosphere.vert.spv render_atmosphere.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/render_atmosphere.frag.spv render_atmosphere.frag
+
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.vert.spv terrain.vert
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.frag.spv terrain.frag

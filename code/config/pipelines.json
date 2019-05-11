@@ -140,11 +140,11 @@
 	    "f": "shaders/SPV/terrain.frag.spv"
 	},
 	"assemble": {
-	    "topology": "l",
+	    "topology": "f",
 	    "restart": true
 	},
 	"raster": {
-	    "poly_mode": "f",
+	    "poly_mode": "l",
 	    "cull": "n"
 	},
 	"pipeline_layout": {

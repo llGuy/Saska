@@ -32,6 +32,6 @@ main(void)
 
     frag_position = ws_position.xyz;
 
-    // for the moment, just using this to test lighting
     frag_normal = vec3(push_k.model * vec4(normalize(vertex_position), 0.0));
+    // for the moment, just using this to test lighting
 }

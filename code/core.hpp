@@ -217,11 +217,13 @@ read_file(const char *filename
     u32 size = ftell(file);
     rewind(file);
 
-    byte *buffer = (byte *)allocate_stack(size
+    byte *buffer = (byte *)allocate_stack(size + 1
 					  , 1
 					  , filename
 					  , allocator);
     fread(buffer, 1, size, file);
+
+    buffer[size] = '\0';
     
     fclose(file);
 

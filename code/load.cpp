@@ -381,8 +381,19 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 			 , Vulkan::Swapchain *swapchain)
 {
     persist const char *json_file_name = "config/pipelines.json";
-    File_Contents contents = read_file(json_file_name, "r");
-    nlohmann::json j = nlohmann::json::parse(contents.content);
+
+    std::ifstream is (json_file_name);
+    is.seekg(0, is.end);
+    u32 length = is.tellg();
+    is.seekg(0, is.beg);
+
+    char *buffer = new char [sizeof(char) * length];
+    memset(buffer, 0, length * sizeof(char));
+    is.read(buffer, length);
+
+    std::string content = std::string(buffer, length);
+    
+    nlohmann::json j = nlohmann::json::parse(content);
     for (nlohmann::json::iterator i = j.begin(); i != j.end(); ++i)
     {
 	// get name
@@ -448,13 +459,14 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	switch(p_mode_str[0])
 	{
 	case 'f': {p_mode = VK_POLYGON_MODE_FILL; break;};
+	case 'l': {p_mode = VK_POLYGON_MODE_LINE; break;};
 	}
 	switch(c_mode_str[0])
 	{
 	case 'n': {c_mode = VK_CULL_MODE_NONE; break;}
 	case 'b': {c_mode = VK_CULL_MODE_BACK_BIT; break;}
 	}
-	Vulkan::init_pipeline_rasterization_info(p_mode, c_mode, 1.0f, 0, &rasterization_info);
+	Vulkan::init_pipeline_rasterization_info(p_mode, c_mode, 2.0f, 0, &rasterization_info);
 
 	auto blend_stuff = i.value().find("blend");
 	std::vector<std::string> blend_values = blend_stuff.value();
@@ -595,8 +607,20 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 			    , Vulkan::Swapchain *swapchain)
 {
     persist const char *filename = "config/fbos.json";
-    File_Contents file = read_file(filename, "r");
-    nlohmann::json json = nlohmann::json::parse(file.content);
+
+    std::ifstream is (filename);
+    is.seekg(0, is.end);
+    u32 length = is.tellg();
+    is.seekg(0, is.beg);
+
+    char *buffer = new char[sizeof(char) * (length + 1)];
+    memset(buffer, 0, length * sizeof(char));
+    is.read(buffer, length);
+    buffer[length] = '\0';
+
+    std::string content = std::string(buffer, length + 1);
+    
+    nlohmann::json json = nlohmann::json::parse(content);
     for (auto i = json.begin(); i != json.end(); ++i)
     {
 	std::string fbo_name = i.key();
@@ -877,13 +901,26 @@ make_gpu_memory_access_flags_from_code(const char *s, u32 len)
     return(f);
 }
 
+#include <fstream>
+
 void
 load_render_passes_from_json(Vulkan::GPU *gpu
 			     , Vulkan::Swapchain *swapchain)
 {
-    persist const char *filename = "config/rndr_pass.json";
-    File_Contents file = read_file(filename, "r");
-    nlohmann::json json = nlohmann::json::parse(file.content);
+    persist const char *filename = "config/render_passes.json";
+
+    std::ifstream is (filename);
+    is.seekg(0, is.end);
+    u32 length = is.tellg();
+    is.seekg(0, is.beg);
+
+    char *buffer = new char [sizeof(char) * length];
+    memset(buffer, 0, length * sizeof(char));
+    is.read(buffer, length);
+
+    std::string content = std::string(buffer, length);
+    
+    nlohmann::json json = nlohmann::json::parse(content);
     for (auto i = json.begin(); i != json.end(); ++i)
     {
 	std::string rndr_pass_name = i.key();
@@ -1056,9 +1093,20 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			   , Vulkan::Swapchain *swapchain)
 {
     persist const char *filename = "config/desc.json";
-    File_Contents file = read_file(filename, "r");
-    nlohmann::json json = nlohmann::json::parse(file.content);
+    
+    std::ifstream is (filename);
+    is.seekg(0, is.end);
+    u32 length = is.tellg();
+    is.seekg(0, is.beg);
 
+    char *buffer = new char[sizeof(char) * length];
+    memset(buffer, 0, length * sizeof(char));
+    is.read(buffer, length);
+
+    std::string content = std::string(buffer, length);
+    
+    nlohmann::json json = nlohmann::json::parse(content);
+    
 
     // ---- caches for descriptor set information ----
     VkDescriptorImageInfo image_infos_cache [10];

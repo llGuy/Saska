@@ -1,6 +1,9 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
+#include <iostream>
+#include <nlohmann/json.hpp>
+
 #include "vulkan.hpp"
 #include "core.hpp"
 #include "world.hpp"
@@ -298,8 +301,8 @@ global_var Hash_Table_Inline<Memory_Register_Info /* destroyed count */, 20, 4, 
 void
 init_manager(void)
 {
-    object_allocator.start = malloc(megabytes(2));
-    object_allocator.available_bytes = megabytes(2);
+    object_allocator.start = malloc(megabytes(10));
+    object_allocator.available_bytes = megabytes(10);
     memset(object_allocator.start, 0, object_allocator.available_bytes);
 	
     object_allocator.free_block_head = (Free_Block_Header *)object_allocator.start;
@@ -435,13 +438,13 @@ main(s32 argc
 	
 	OUTPUT_DEBUG_LOG("%s\n", "starting session");
 
-	linear_allocator_global.capacity = megabytes(megabytes(4));
+	linear_allocator_global.capacity = megabytes(megabytes(10));
 	linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
 	
-	stack_allocator_global.capacity = megabytes(8);
+	stack_allocator_global.capacity = megabytes(10);
 	stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-	free_list_allocator_global.available_bytes = megabytes(8);
+	free_list_allocator_global.available_bytes = megabytes(10);
 	free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
 	init_free_list_allocator_head(&free_list_allocator_global);
 	
@@ -522,9 +525,9 @@ main(s32 argc
 	glfwDestroyWindow(window.window);
 	glfwTerminate();
     }
-    catch(...)
+    catch(nlohmann::json::parse_error &e)
     {
-	OUTPUT_DEBUG_LOG("%s\n", "CRASH!!!");
+	std::cout << e.what() << " : " << e.id << " : " << e.byte << std::endl;
 	close_debug_file();
     }
     

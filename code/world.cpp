@@ -62,7 +62,7 @@ struct Render_Command_Recorder
 	Vulkan::allocate_command_buffers(cmdpool
 					 , VK_COMMAND_BUFFER_LEVEL_SECONDARY
 					 , gpu
-					 , Memory_Buffer_View<VkCommandBuffer>{1, &cmdbufs_pool[cmdbuf_index]});
+					 , Memory_Buffer_View<VkCommandBuffer>{1, &cmdbufs_pool[active_cmdbuf_count]});
 
 	cmdbuf_index = active_cmdbuf_count++;
     }
@@ -180,7 +180,9 @@ global_var struct World_Rendering_Master_Data
     u32 active_cmdbuf_count;
     
     static constexpr u32 MAX_TEST_MTRLS = 10;
-    Render_Command_Recorder test_recorder; // <--- value should increment for every renderer the user adds
+    Render_Command_Recorder player_recorder; // <--- value should increment for every renderer the user adds
+
+    Render_Command_Recorder terrain_recorder;
 } world_rendering;
 
 struct Instanced_Render_Command_Recorder
@@ -453,7 +455,8 @@ render_world(Vulkan::State *vk
     VkDescriptorSet test_sets[2] = {world_rendering.test.sets[image_index].set
 				    , world_rendering.atmosphere.cubemap_set->set};
     
-    world_rendering.test_recorder.update(world_rendering.recording_buffer_pool, {2, test_sets}); // <--- recording
+    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool, {2, test_sets}); // <--- recording
+    world_rendering.terrain_recorder.update(world_rendering.recording_buffer_pool, {2, test_sets});
     // ---- end of recording command buffers for each different type of entity / material ----
 
 
@@ -559,10 +562,12 @@ struct Morphable_Terrain
     // ---- later on this will be a pointer
     Vulkan::Buffer heights_gpu_buffer;
 
+    VkBuffer vbos[2];
+
     struct Push_K
     {
 	glm::mat4 transform;
-    };
+    } push_k;
 };
 
 struct Planet
@@ -606,7 +611,7 @@ make_3D_terrain_base(u32 width_x
     assert(width_x & 0X1 && depth_z & 0X1);
     
     f32 *vtx = (f32 *)allocate_stack(sizeof(f32) * 2 * width_x * depth_z);
-    u32 *idx = (u32 *)allocate_stack(sizeof(u32) * 10 * (((width_x - 1) * (depth_z - 1)) / 2));
+    u32 *idx = (u32 *)allocate_stack(sizeof(u32) * 11 * (((width_x - 2) * (depth_z - 2)) / 4));
     
     for (u32 z = 0; z < depth_z; ++z)
     {
@@ -634,6 +639,7 @@ make_3D_terrain_base(u32 width_x
 	    idx[crnt_idx++] = get_terrain_index(x + 1, z, depth_z);
 	    idx[crnt_idx++] = get_terrain_index(x + 1, z - 1, depth_z);
 	    idx[crnt_idx++] = get_terrain_index(x, z - 1, depth_z);
+	    idx[crnt_idx++] = get_terrain_index(x - 1, z - 1, depth_z);
 	    // ---- Vulkan API special value for U32 index type ----
 	    idx[crnt_idx++] = 0XFFFFFFFF;
 	}
@@ -644,29 +650,31 @@ make_3D_terrain_base(u32 width_x
 							      , cmdpool
 							      , mesh_xz_values
 							      , gpu);
-    
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(u32) * 8 * (((width_x - 1) * (depth_z - 1)) / 2), vtx}
+
+    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(u32) * 11 * (((width_x - 1) * (depth_z - 1)) / 4), idx} // <--- this is idx, not vtx .... (stupid error)
 							      , cmdpool
 							      , idx_buffer
 							      , gpu);
 
-    model_info->attribute_count = 3;
+    model_info->attribute_count = 2;
     model_info->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model_info->attribute_count);
     model_info->binding_count = 2;
     model_info->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding) * model_info->binding_count);
     enum :u32 {GROUND_BASE_XY_VALUES_BND = 0, HEIGHT_BND = 1, GROUND_BASE_XY_VALUES_ATT = 0, HEIGHT_ATT = 1};
     // buffer that holds only the x-z values of each vertex - the reason is so that we can create multiple terrain meshes without copying the x-z values each time
-    model_info->bindings[GROUND_BASE_XY_VALUES_BND].begin_attributes_creation(model_info->attributes_buffer);
-    model_info->bindings[GROUND_BASE_XY_VALUES_BND].push_attribute(GROUND_BASE_XY_VALUES_ATT, VK_FORMAT_R32G32_SFLOAT, sizeof(f32) * 2);
-    model_info->bindings[GROUND_BASE_XY_VALUES_BND].end_attributes_creation();
+    model_info->bindings[0].binding = 0;
+    model_info->bindings[0].begin_attributes_creation(model_info->attributes_buffer);
+    model_info->bindings[0].push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(f32) * 2);
+    model_info->bindings[0].end_attributes_creation();
     // buffer contains the y-values of each mesh and the colors of each mesh
-    model_info->bindings[HEIGHT_BND].begin_attributes_creation(model_info->attributes_buffer);
-    model_info->bindings[HEIGHT_BND].push_attribute(HEIGHT_ATT, VK_FORMAT_R32_SFLOAT, sizeof(f32));
-    model_info->bindings[HEIGHT_BND].end_attributes_creation();
+    model_info->bindings[1].binding = 1;
+    model_info->bindings[1].begin_attributes_creation(model_info->attributes_buffer);
+    model_info->bindings[1].push_attribute(1, VK_FORMAT_R32_SFLOAT, sizeof(f32));
+    model_info->bindings[1].end_attributes_creation();
 
     model_info->index_data.index_type = VK_INDEX_TYPE_UINT32;
-    model_info->index_data.index_offset = 0;
-    model_info->index_data.index_count = 8 * (((width_x - 1) * (depth_z - 1)) / 2);
+    model_info->index_data.index_offset = 0; 
+    model_info->index_data.index_count = 11 * (((width_x - 1) * (depth_z - 1)) / 4);
     model_info->index_data.index_buffer = idx_buffer->buffer;
     
     pop_stack();
@@ -697,7 +705,7 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
     // ---- register the info of the model for json loader to access ---
     terrain_master.model_info = register_memory("vulkan_model.terrain_base_info"_hash, sizeof(Vulkan::Model));
     
-    make_3D_terrain_base(20, 20
+    make_3D_terrain_base(5, 5
 			 , 1.0f
 			 , &terrain_master.mesh_xz_values
 			 , &terrain_master.idx_buffer
@@ -705,7 +713,7 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
 			 , cmdpool
 			 , gpu);
 
-    make_3D_terrain_mesh_instance(20, 20
+    make_3D_terrain_mesh_instance(5, 5
 				  , terrain_master.test_mesh.heights
 				  , &terrain_master.test_mesh.heights_gpu_buffer
 				  , cmdpool
@@ -1113,6 +1121,7 @@ make_world(Window_Data *window
 
     
     load_render_passes_from_json(&vk->gpu, &vk->swapchain);
+    clear_linear();
 
     
     // initialize the cubemap that will be used as an attachment by the fbo for rendering the skybox
@@ -1122,17 +1131,20 @@ make_world(Window_Data *window
 
     
     load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
+    clear_linear();
     
     
 
 
     
     load_descriptors_from_json(&vk->gpu, &vk->swapchain);
+    clear_linear();
     
     
     init_atmosphere_render_descriptor_set(&vk->gpu);
     
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
+    clear_linear();
 
 
     
@@ -1142,13 +1154,40 @@ make_world(Window_Data *window
     
     // ---- prepare the command recorders ----
     {
-	world_rendering.test_recorder.init(world_rendering.recording_buffer_pool
+	world_rendering.player_recorder.init(world_rendering.recording_buffer_pool
 					   , world_rendering.active_cmdbuf_count
 					   , world_rendering.deferred.main_pipeline
 					   , VK_SHADER_STAGE_VERTEX_BIT
 					   , 10
 					   , cmdpool
 					   , &vk->gpu);
+
+	world_rendering.terrain_recorder.init(world_rendering.recording_buffer_pool
+					      , world_rendering.active_cmdbuf_count
+					      , terrain_master.terrain_ppln
+					      , VK_SHADER_STAGE_VERTEX_BIT
+					      , 10
+					      , cmdpool
+					      , &vk->gpu);
+
+	// ---- add test terrain to the recorder ----
+	terrain_master.test_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
+	terrain_master.test_mesh.vbos[1] = terrain_master.test_mesh.heights_gpu_buffer.buffer;
+	world_rendering.terrain_recorder.add(&terrain_master.test_mesh.push_k
+					     , sizeof(terrain_master.test_mesh.push_k)
+					     , {2, terrain_master.test_mesh.vbos}
+					     , terrain_master.model_info->index_data
+					     , Vulkan::init_draw_indexed_data_default(1, terrain_master.model_info->index_data.index_count));
+
+	terrain_master.test_mesh.push_k.transform = glm::scale(glm::vec3(10.0f));
+
+	/*	world_rendering.terrain_recorder.add(&terrain_master.test_mesh.push_k
+					     , sizeof(terrain_master.test_mesh.push_k)
+					     , world_rendering.test.model->raw_cache_for_rendering
+					     , world_rendering.test.model->index_data
+					     , Vulkan::init_draw_indexed_data_default(1, world_rendering.test.model->index_data.index_count));
+
+					     terrain_master.test_mesh.push_k.transform = glm::scale(glm::vec3(10.0f));*/
     }
     
     
@@ -1180,7 +1219,7 @@ make_world(Window_Data *window
 
     make_entity_renderable(e_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , &world_rendering.test_recorder);
+			   , &world_rendering.player_recorder);
 
     // create entity group that rotates around group test0
     Entity_Group rotate = construct_entity("entity.group.rotate"_hash
@@ -1207,7 +1246,7 @@ make_world(Window_Data *window
 
     make_entity_renderable(r_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , &world_rendering.test_recorder);
+			   , &world_rendering.player_recorder);
 
     Entity_Group rg2 = construct_entity("entity.group.rotate2"_hash
 					, Entity::Is_Group::IS_GROUP
@@ -1231,7 +1270,7 @@ make_world(Window_Data *window
     auto *rev2_ptr = get_entity(rev2);
     make_entity_renderable(rev2_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
-			   , &world_rendering.test_recorder);
+			   , &world_rendering.player_recorder);
 }
 
 
@@ -1310,7 +1349,6 @@ render_frame(Vulkan::State *vulkan_state
 	       , &world);
 
     render_world(vulkan_state, image_index, current_frame, cmdbuf);
-    //    record_cmd(vulkan_state, image_index, current_frame, cmdbuf);
     // ---- exit ----
 }
 

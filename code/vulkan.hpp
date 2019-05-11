@@ -452,20 +452,18 @@ namespace Vulkan
 	VkVertexInputRate input_rate;
 
 	VkVertexInputAttributeDescription *attribute_list = nullptr;
-	u32 attribute_count = 0;
 	u32 stride = 0;
 	
 	void
 	begin_attributes_creation(VkVertexInputAttributeDescription *attribute_list)
 	{
 	    this->attribute_list = attribute_list;
-	    attribute_count = 0;
 	}
 	
 	void
 	push_attribute(u32 location, VkFormat format, u32 size)
 	{
-	    VkVertexInputAttributeDescription *attribute = &attribute_list[attribute_count++];
+	    VkVertexInputAttributeDescription *attribute = &attribute_list[location];
 	    
 	    attribute->binding = binding;
 	    attribute->location = location;
@@ -497,6 +495,12 @@ namespace Vulkan
 	Model_Index_Data index_data;
 
 	Memory_Buffer_View<VkBuffer> raw_cache_for_rendering;
+
+	void
+	prepare_bindings(u32 binding_count)
+	{
+	    
+	}
 	
 	VkVertexInputBindingDescription *
 	create_binding_descriptions(void)

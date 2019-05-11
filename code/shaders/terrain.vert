@@ -1,14 +1,20 @@
 #version 450
 
-layout(binding = 0, location = 0) in vec2 ms_xz;
-layout(binding = 1, location = 1) in float ms_y;
+layout(location = 0) in vec2 ms_xz;
+layout(location = 1) in float ms_y;
 
-layout(location = 0) out vec3 frag_final;
-layout(location = 1) out vec2 frag_uvs;
-layout(location = 2) out vec3 frag_position;
-layout(location = 3) out vec3 frag_normal;
+/*layout(location = 0) in vec3 vertex_position;
+layout(location = 1) in vec3 vertex_color;
+layout(location = 2) in vec2 uvs;*/
 
-layout(binding = 0) uniform Uniform_Buffer_Object
+layout(location = 0) out VS_DATA
+{
+    vec3 color;
+    vec3 ws_position;
+    vec3 ws_normal;
+} vs_out;
+
+layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
 {
     mat4 model;
     mat4 view;
@@ -24,13 +30,12 @@ void
 main(void)
 {
     // ---- create the 3D mesh position ----
-    vec3 ms_position = vec3(ms_xz.x, ms_y, ms_xz.y);
-    vec3 ws_position = push_k.model * vec4(ms_position, 1.0);
+    vec3 ms_position = vec3(ms_xz.x, 0.0, ms_xz.y);
+    vec4 ws_position = push_k.model * vec4(ms_position, 1.0);
 
-    gl_Position = ubo.proj * ubo.view * * vec4(ws_position, 1.0);
+    gl_Position = ubo.proj * ubo.view * ws_position;
 
-    frag_position = ws_position;
-    frag_normal = vec3(0);
-    frag_uvs = vec2(0);
-    frag_final = vec3(0);
+    vs_out.ws_position = ws_position.xyz;
+    vs_out.ws_normal = normalize(ws_position.xyz);
+    vs_out.color = vec3(0);
 }

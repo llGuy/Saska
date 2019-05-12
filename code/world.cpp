@@ -375,7 +375,7 @@ render_skybox(const Memory_Buffer_View<VkBuffer> &cube_vbos
 	glm::mat4 model_matrix;
     } push_k;
 
-    push_k.model_matrix = glm::translate(camera_position);
+    push_k.model_matrix = glm::scale(glm::vec3(1000.0f));
 
     Vulkan::command_buffer_push_constant(&push_k
 					 , sizeof(push_k)
@@ -420,7 +420,7 @@ update_skybox(VkCommandBuffer *cmdbuf)
 	glm::vec2 viewport;
     } k;
 
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 100000.0f);
+    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 10000.0f);
     k.inverse_projection = glm::inverse(atmos_proj);
     k.viewport = glm::vec2(1000.0f, 1000.0f);
 
@@ -705,7 +705,7 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
     // ---- register the info of the model for json loader to access ---
     terrain_master.model_info = register_memory("vulkan_model.terrain_base_info"_hash, sizeof(Vulkan::Model));
     
-    make_3D_terrain_base(5, 5
+    make_3D_terrain_base(21, 21
 			 , 1.0f
 			 , &terrain_master.mesh_xz_values
 			 , &terrain_master.idx_buffer
@@ -713,7 +713,7 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
 			 , cmdpool
 			 , gpu);
 
-    make_3D_terrain_mesh_instance(5, 5
+    make_3D_terrain_mesh_instance(21, 21
 				  , terrain_master.test_mesh.heights
 				  , &terrain_master.test_mesh.heights_gpu_buffer
 				  , cmdpool
@@ -979,7 +979,7 @@ Camera::set_default(f32 w, f32 h, f32 m_x, f32 m_y)
     fov = 60.0f;
     asp = w / h;
     n = 0.1f;
-    f = 100000.0f;
+    f = 10000.0f;
 }
 
 void
@@ -1311,7 +1311,7 @@ update_ubo(u32 current_image
     ubo.projection_matrix = glm::perspective(glm::radians(60.0f)
 					     , (float)swapchain->extent.width / (float)swapchain->extent.height
 					     , 0.1f
-					     , 1000.0f);
+					     , 100000.0f);
 
     ubo.projection_matrix[1][1] *= -1;
 

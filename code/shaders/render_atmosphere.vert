@@ -27,7 +27,7 @@ main(void)
     view_no_translation[3][1] = 0.0;
     view_no_translation[3][2] = 0.0;
     
-    gl_Position = ubo.proj * view_no_translation * vec4(in_ms_position * 100, 1.0);
+    gl_Position = ubo.proj * view_no_translation * push_k.model_matrix * vec4(in_ms_position, 1.0);
     out_ms_cubemap_direction = in_ms_position;
 
     out_test = in_color;

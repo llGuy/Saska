@@ -137,21 +137,22 @@
 	
 	"stages": {
 	    "v": "shaders/SPV/terrain.vert.spv",
+	    "g": "shaders/SPV/terrain.geom.spv",
 	    "f": "shaders/SPV/terrain.frag.spv"
 	},
 	"assemble": {
-	    "topology": "f",
+	    "topology": "fs",
 	    "restart": true
 	},
 	"raster": {
-	    "poly_mode": "l",
+	    "poly_mode": "f",
 	    "cull": "n"
 	},
 	"pipeline_layout": {
 	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
 
 	    "push_constant": {
-		"stage_flags": "v",
+		"stage_flags": "vg",
 		"offset": 0,
 		"size": 150
 	    }

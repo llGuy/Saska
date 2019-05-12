@@ -1,3 +1,4 @@
+#include <iostream>
 #include <chrono>
 #include "load.hpp"
 #include "world.hpp"
@@ -690,7 +691,17 @@ make_3D_terrain_mesh_instance(u32 width_x
 			      , Vulkan::GPU *gpu)
 {
     cpu_side_heights = (f32 *)allocate_free_list(sizeof(f32) * width_x * depth_z);
-    memset(cpu_side_heights, 0, sizeof(f32) * width_x * depth_z);
+    //    memset(cpu_side_heights, 0, sizeof(f32) * width_x * depth_z);
+
+    // ---- testing normal calculation in the geometry shader ----
+    for (u32 z = 0; z < depth_z; ++z)
+    {
+	for (u32 x = 0; x < width_x; ++x)
+	{
+	    u32 index = get_terrain_index(x, z, depth_z);
+	    cpu_side_heights[index] = sin((f32)x / 10.0f) * cos((f32)z / 4.0f) * 3.0f;
+	}
+    }
     
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * width_x * depth_z, cpu_side_heights}
 							      , cmdpool
@@ -1179,7 +1190,7 @@ make_world(Window_Data *window
 					     , terrain_master.model_info->index_data
 					     , Vulkan::init_draw_indexed_data_default(1, terrain_master.model_info->index_data.index_count));
 
-	terrain_master.test_mesh.push_k.transform = glm::scale(glm::vec3(10.0f));
+	terrain_master.test_mesh.push_k.transform = glm::rotate(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)) * glm::scale(glm::vec3(10.0f));
 
 	/*	world_rendering.terrain_recorder.add(&terrain_master.test_mesh.push_k
 					     , sizeof(terrain_master.test_mesh.push_k)
@@ -1271,6 +1282,14 @@ make_world(Window_Data *window
     make_entity_renderable(rev2_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
 			   , &world_rendering.player_recorder);
+
+    {
+	// ---- initialize the skybox ----
+	VkCommandBuffer cmdbuf;
+	Vulkan::init_single_use_command_buffer(cmdpool, &vk->gpu, &cmdbuf);
+	update_skybox(&cmdbuf);
+	Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, &vk->gpu);
+    }
 }
 
 
@@ -1388,6 +1407,9 @@ update_world(Window_Data *window
     render_frame(vk, image_index, current_frame, cmdbuf);
 }
 
+
+#include <glm/gtx/string_cast.hpp>
+
 void
 handle_input(Window_Data *window
 	     , f32 dt)
@@ -1415,14 +1437,18 @@ handle_input(Window_Data *window
     }
 
     u32 movements = 0;
-    auto acc_v = [&movements](const glm::vec3 &d, glm::vec3 &dst){ ++movements; dst += d; };
+    f32 accelerate = 1.0f;
+    
+    auto acc_v = [&movements, &accelerate](const glm::vec3 &d, glm::vec3 &dst){ ++movements; dst += d * accelerate; };
 
     glm::vec3 d = glm::normalize(glm::vec3(world.user_camera.d.x
 					   , 0.0f
 					   , world.user_camera.d.z));
     
     glm::vec3 res = {};
-	    
+
+    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
+    if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
     if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
     if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, world.user_camera.u), res);
     if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);

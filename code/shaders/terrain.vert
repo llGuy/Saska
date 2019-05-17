@@ -24,6 +24,7 @@ layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
 layout(push_constant) uniform Push_Constants
 {
     mat4 model;
+    vec3 color;
 } push_k;
 
 void
@@ -37,5 +38,5 @@ main(void)
 
     vs_out.ws_position = ws_position.xyz;
     vs_out.ws_normal = normalize(ws_position.xyz);
-    vs_out.color = vec3(0.1, 0.6, 0.2) * 0.7;
+    vs_out.color = push_k.color;
 }

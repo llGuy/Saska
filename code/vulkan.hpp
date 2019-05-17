@@ -81,6 +81,17 @@ namespace Vulkan
 	{
 	    memcpy(data, byte_buffer.ptr, size);
 	}
+
+	FORCEINLINE void
+	flush(u32 offset, u32 size, Vulkan::GPU *gpu)
+	{
+	    VkMappedMemoryRange range = {};
+	    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+	    range.memory = *memory;
+	    range.offset = offset;
+	    range.size = size;
+	    vkFlushMappedMemoryRanges(gpu->logical_device, 1, &range);
+	}
 	
 	FORCEINLINE void
 	end(GPU *gpu)
@@ -916,6 +927,7 @@ namespace Vulkan
 
     void
     invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer items
+						  , VkBufferUsageFlags usage
 						  , VkCommandPool *transfer_command_pool
 						  , Buffer *dst_buffer
 						  , GPU *gpu);

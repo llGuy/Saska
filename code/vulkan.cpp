@@ -834,6 +834,7 @@ namespace Vulkan
 
     void
     invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer items
+						  , VkBufferUsageFlags usage
 						  , VkCommandPool *transfer_command_pool
 						  , Buffer *dst_buffer
 						  , GPU *gpu)
@@ -856,7 +857,7 @@ namespace Vulkan
 	mapped_memory.end(gpu);
 
 	Vulkan::init_buffer(buffer_size
-				, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+				, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage
 				, VK_SHARING_MODE_EXCLUSIVE
 				, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 				, gpu

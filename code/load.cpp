@@ -134,18 +134,21 @@ create_model(std::vector<glm::vec3> &vertices
     R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
 	
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)vertices.size(), vertices.data()}
-								  , command_pool.p
-								  , &buffers.p[POSITION]
-								  , gpu);
+							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+							  , command_pool.p
+							  , &buffers.p[POSITION]
+							  , gpu);
     bindings[POSITION].buffer = buffers.p[POSITION].buffer;
     
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)normals.size(), normals.data()}
+							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 								  , command_pool.p
 								  , &buffers.p[NORMAL]
 								  , gpu);
     bindings[NORMAL].buffer = buffers.p[NORMAL].buffer;
     
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec2) * (u32)texture_coords.size(), texture_coords.data()}
+							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 								  , command_pool.p
 								  , &buffers.p[UVS]
 								  , gpu);
@@ -166,6 +169,7 @@ create_model(std::vector<glm::vec3> &vertices
 						    , sizeof(Vulkan::Buffer));
     
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{(u32)indices.size() * sizeof(u32), indices.data()}
+							  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 								  , command_pool.p
 								  , ibo.p
 								  , gpu);
@@ -323,10 +327,12 @@ load_3D_terrain_mesh(u32 width_x
     // load data into buffers
     R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * 2 * width_x * depth_z, vtx}
+							      , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 							      , command_pool.p
 							      , mesh_buffer_vbo
 							      , gpu);
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(u32) * 8 * (((width_x - 1) * (depth_z - 1)) / 2), vtx}
+							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 							      , command_pool.p
 							      , mesh_buffer_ibo
 							      , gpu);
@@ -364,6 +370,7 @@ load_3D_terrain_mesh_instance(u32 width_x
     R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
     
     Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * width_x * depth_z, ret.ys}
+							      , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 							      , command_pool.p
 							      , ys_buffer
 							      , gpu);

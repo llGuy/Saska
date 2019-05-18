@@ -40,6 +40,8 @@ make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Win
 void
 destroy_game(Vulkan::GPU *gpu)
 {
+    vkDeviceWaitIdle(gpu->logical_device);
+    
     Vulkan::free_command_buffer(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer}
 				, &window_rendering.command_pool, gpu);
 

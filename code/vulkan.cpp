@@ -1420,8 +1420,6 @@ namespace Vulkan
     void
     destroy_state(State *state)
     {
-	vkDeviceWaitIdle(state->gpu.logical_device);
-
 	vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
 	
 	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);

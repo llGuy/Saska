@@ -603,10 +603,28 @@ global_var struct Morphable_Terrain_Master
     R_Mem<Vulkan::Graphics_Pipeline> terrain_ppln;
 } terrain_master;
 
-internal u32
+inline u32
 get_terrain_index(u32 x, u32 z, u32 depth_z)
 {
     return(x + z * depth_z);
+}
+
+inline glm::mat4
+compute_ws_to_ts_matrix(Morphable_Terrain *t)
+{
+    glm::mat4 inverse_translate = glm::translate(-(t->ws_p));
+    glm::mat4 inverse_rotate = glm::transpose(glm::mat4_cast(t->gs_r));
+    glm::mat4 inverse_scale = glm::scale(1.0f / t->size);
+    return(inverse_scale * inverse_rotate * inverse_translate);
+}
+
+inline glm::vec3
+transform_from_ws_to_ts(const glm::vec3 &ws_v
+			, Morphable_Terrain *t)
+{
+    glm::vec3 ts_position = compute_ws_to_ts_matrix(t) * glm::vec4(ws_v, 1.0f);
+
+    return(ts_position);
 }
 
 internal bool
@@ -619,19 +637,33 @@ is_on_terrain(const glm::vec3 &ws_position
     f32 min_z = 0.0f;
 
     // ---- change ws_position to the space of the terrain space ----
-    glm::mat4 inverse_translate = glm::translate(-(t->ws_p));
-    glm::mat4 inverse_rotate = glm::transpose(glm::mat4_cast(t->gs_r));
-    glm::mat4 inverse_scale = glm::scale(1.0f / t->size);
-
-    glm::vec4 untranslated = inverse_translate * glm::vec4(ws_position, 1.0f);
-    glm::vec4 unrotated = inverse_rotate * untranslated;
-    glm::vec3 ts_position = glm::vec3(inverse_scale * unrotated);
+    glm::vec3 ts_position = transform_from_ws_to_ts(ws_position, t);
     
     // ---- check if terrain space position is in the xz boundaries ----
     bool is_in_x_boundaries = (ts_position.x > min_x && ts_position.x < max_x);
     bool is_in_z_boundaries = (ts_position.z > min_z && ts_position.z < max_z);
+    bool is_on_top          = (ts_position.y > 0.0f);
 
-    return(is_in_x_boundaries && is_in_z_boundaries);
+    return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
+}
+
+internal glm::ivec2
+get_coord_pointing_at(glm::vec3 ws_ray_p
+		      , const glm::vec3 &ws_d
+		      , Morphable_Terrain *t)
+{
+    persist constexpr u32 MAX_STEPS = 10;
+
+    glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
+    glm::vec3 ts_ray_p = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
+    glm::vec3 ts_ray_d = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 0.0f));
+    
+    for (u32 step = 0
+	     ; step < MAX_STEPS
+	     ; ++step, ts_ray_p += ts_ray_d)
+    {
+	
+    }
 }
 
 internal Morphable_Terrain *
@@ -643,6 +675,9 @@ on_which_terrain(const glm::vec3 &ws_position)
     bool green = is_on_terrain(ws_position, &terrain_master.green_mesh);
     bool red = is_on_terrain(ws_position, &terrain_master.red_mesh);
 
+    if (green) std::cout << "green";
+    if (red) std::cout << "red";
+    
     return(nullptr);
 }
 

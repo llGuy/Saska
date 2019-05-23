@@ -687,7 +687,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 	return(v.x * v.x + v.y * v.y + v.z * v.z);
     };
     
-    persist constexpr f32 MAX_DISTANCE = 5.0f;
+    persist constexpr f32 MAX_DISTANCE = 6.0f;
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
     persist constexpr f32 STEP_SIZE = 0.5f;
 
@@ -712,7 +712,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 
 	    u32 index = get_terrain_index(x, z, t->xz_dim.y);
 
-	    if (ts_ray_step.y < t->heights[index])
+	    if (ts_ray_current_p.y < t->heights[index])
 	    {
 		// ---- hit terrain at this point ----
 		ts_position = glm::ivec2(x, z);

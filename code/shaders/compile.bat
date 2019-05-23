@@ -14,3 +14,6 @@ C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/render_atmosphere.fra
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.vert.spv terrain.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.geom.spv terrain.geom	
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.frag.spv terrain.frag
+
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain_pointer.vert.spv terrain_pointer.vert
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain_pointer.frag.spv terrain_pointer.frag

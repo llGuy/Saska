@@ -465,7 +465,7 @@ main(s32 argc
 	
 	window.window = glfwCreateWindow(window.w
 					 , window.h
-					 , "Vulkan App"
+					 , "Game"
 					 , NULL
 					 , NULL);
 

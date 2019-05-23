@@ -445,6 +445,9 @@ update_skybox(VkCommandBuffer *cmdbuf)
 
 // ---- rendering of the entire world happens here ----
 internal void
+prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set);
+
+internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
@@ -482,6 +485,8 @@ render_world(Vulkan::State *vk
 
     // ---- execute the commands that were just recorded (rendering the different types of entities)
     Vulkan::command_buffer_execute_commands(cmdbuf, {world_rendering.active_cmdbuf_count, world_rendering.recording_buffer_pool});
+
+    prepare_terrain_pointer_for_render(cmdbuf, &world_rendering.test.sets[image_index].set);
     
     // ---- render skybox ----
     render_skybox({1, world_rendering.test.model->raw_cache_for_rendering.buffer}
@@ -601,12 +606,35 @@ global_var struct Morphable_Terrain_Master
     Morphable_Terrain red_mesh;
 
     R_Mem<Vulkan::Graphics_Pipeline> terrain_ppln;
+
+    struct
+    {
+	R_Mem<Vulkan::Graphics_Pipeline> ppln;
+	// ts_position
+	glm::ivec2 ts_position{-1};
+	// will not be a pointer in the future
+	Morphable_Terrain *t;
+    } terrain_pointer;
 } terrain_master;
 
 inline u32
 get_terrain_index(u32 x, u32 z, u32 depth_z)
 {
     return(x + z * depth_z);
+}
+
+inline s32
+get_terrain_index(s32 x, s32 z, s32 width_x, s32 depth_z)
+{
+    if (x >= 0 && x < width_x
+	&& z >= 0 && z < depth_z)
+    {
+	return(x + z * depth_z);
+    }
+    else
+    {
+	return(-1);
+    }
 }
 
 inline glm::mat4
@@ -649,21 +677,63 @@ is_on_terrain(const glm::vec3 &ws_position
 
 internal glm::ivec2
 get_coord_pointing_at(glm::vec3 ws_ray_p
-		      , const glm::vec3 &ws_d
-		      , Morphable_Terrain *t)
+		      , const glm::vec3 &ws_ray_d
+		      , Morphable_Terrain *t
+		      , f32 dt
+		      , Vulkan::GPU *gpu)
 {
-    persist constexpr u32 MAX_STEPS = 10;
+    auto get_distance_squared = [](const glm::vec3 &v)
+    {
+	return(v.x * v.x + v.y * v.y + v.z * v.z);
+    };
+    
+    persist constexpr f32 MAX_DISTANCE = 5.0f;
+    persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
+    persist constexpr f32 STEP_SIZE = 0.5f;
 
     glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
-    glm::vec3 ts_ray_p = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
-    glm::vec3 ts_ray_d = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 0.0f));
+    glm::vec3 ts_ray_p_start = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
+    glm::vec3 ts_ray_d = glm::normalize(glm::vec3(ws_to_ts * glm::vec4(ws_ray_d, 0.0f)));
+    glm::vec3 ts_ray_diff = STEP_SIZE * ts_ray_d;
+
+    glm::ivec2 ts_position = glm::ivec2(-1);
     
-    for (u32 step = 0
-	     ; step < MAX_STEPS
-	     ; ++step, ts_ray_p += ts_ray_d)
+    for (glm::vec3 ts_ray_step = ts_ray_d
+	     ; get_distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED
+	     ; ts_ray_step += ts_ray_diff)
     {
-	
+	glm::vec3 ts_ray_current_p = ts_ray_step + ts_ray_p_start;
+
+	if (ts_ray_current_p.x >= 0.0f && ts_ray_current_p.x < (f32)t->xz_dim.x + 0.000001f
+	    && ts_ray_current_p.z >= 0.0f && ts_ray_current_p.z < (f32)t->xz_dim.y + 0.000001f)
+	{
+	    u32 x = (u32)glm::round(ts_ray_current_p.x / 2.0f) * 2;
+	    u32 z = (u32)glm::round(ts_ray_current_p.z / 2.0f) * 2;
+
+	    u32 index = get_terrain_index(x, z, t->xz_dim.y);
+
+	    if (ts_ray_step.y < t->heights[index])
+	    {
+		// ---- hit terrain at this point ----
+		ts_position = glm::ivec2(x, z);
+		break;
+	    }
+	}
     }
+    t->mapped_gpu_heights.flush(0, t->mapped_gpu_heights.size, gpu);
+
+    return(ts_position);
+}
+
+internal void
+morph_terrain_at(const glm::ivec2 &ts_position
+		 , Morphable_Terrain *t
+		 , f32 dt)
+{
+    // ---- hit terrain at this point ----
+    u32 index = get_terrain_index(ts_position.x, ts_position.y, t->xz_dim.y);
+    f32 *p = (f32 *)t->mapped_gpu_heights.data;
+    p[index] += dt * 3.0f;
 }
 
 internal Morphable_Terrain *
@@ -675,8 +745,8 @@ on_which_terrain(const glm::vec3 &ws_position)
     bool green = is_on_terrain(ws_position, &terrain_master.green_mesh);
     bool red = is_on_terrain(ws_position, &terrain_master.red_mesh);
 
-    if (green) std::cout << "green";
-    if (red) std::cout << "red";
+    //    if (green) std::cout << "green";
+    //    if (red) std::cout << "red";
     
     return(nullptr);
 }
@@ -794,7 +864,7 @@ make_3D_terrain_mesh_instance(u32 width_x
 	    u32 index = get_terrain_index(x, z, depth_z);
 	    cpu_side_heights[index] = sin((f32)x / 10.0f) * cos((f32)z / 4.0f) * 3.0f;
 	}
-	}*/
+    }*/
 
     Vulkan::init_buffer(sizeof(f32) * width_x * depth_z
 			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -807,6 +877,7 @@ make_3D_terrain_mesh_instance(u32 width_x
 
     mapped_gpu_heights->begin(gpu);
     memset(mapped_gpu_heights->data, 0, sizeof(f32) * width_x * depth_z);
+    //    memcpy(mapped_gpu_heights->data, cpu_side_heights, width_x * depth_z * sizeof(f32));
 
     mapped_gpu_heights->flush(0, sizeof(f32) * width_x * depth_z, gpu);
     
@@ -847,6 +918,87 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
 				  , cmdpool
 				  , gpu);
     terrain_master.red_mesh.xz_dim = glm::ivec2(21, 21);
+}
+
+internal void
+make_terrain_pointer(void)
+{
+    terrain_master.terrain_pointer.ppln = get_memory("pipeline.terrain_mesh_pointer_pipeline"_hash);
+    terrain_master.terrain_pointer.t = &terrain_master.red_mesh;
+}
+
+internal void
+prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf
+				   , VkDescriptorSet *ubo_set)
+{
+    // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
+    if (terrain_master.terrain_pointer.ts_position.x >= 0)
+    {
+	Vulkan::command_buffer_bind_pipeline(terrain_master.terrain_pointer.ppln.p
+					     , cmdbuf);
+
+	Vulkan::command_buffer_bind_descriptor_sets(terrain_master.terrain_pointer.ppln.p
+						    , {1, ubo_set}
+						    , cmdbuf);
+
+	struct
+	{
+	    glm::mat4 ts_to_ws_terrain_model;
+	    glm::vec4 color;
+	    glm::vec4 ts_center_position;
+	    // center first
+	    f32 ts_heights[8];
+	} push_k;
+
+	push_k.ts_to_ws_terrain_model = terrain_master.terrain_pointer.t->push_k.transform;
+	push_k.color = glm::vec4(1.0f);
+	push_k.ts_center_position = glm::vec4((f32)terrain_master.terrain_pointer.ts_position.x
+					      , 0.0f
+					      , (f32)terrain_master.terrain_pointer.ts_position.y
+					      , 1.0f);
+
+	u32 x = terrain_master.terrain_pointer.ts_position.x;
+	u32 z = terrain_master.terrain_pointer.ts_position.y;
+	u32 width = terrain_master.terrain_pointer.t->xz_dim.x;
+	u32 depth = terrain_master.terrain_pointer.t->xz_dim.y;
+	f32 *heights = (f32 *)(terrain_master.terrain_pointer.t->mapped_gpu_heights.data);
+
+	auto calculate_height = [width, depth, heights](s32 x, s32 z) -> f32
+	{
+	    s32 i = 0;
+	    if ((i = get_terrain_index(x, z, width, depth)) >= 0)
+	    {
+		return(heights[i]);
+	    }
+	    else
+	    {
+		return(-1.0f);
+	    }
+	};
+	
+	push_k.ts_heights[0] = calculate_height(x, z);
+	push_k.ts_heights[1] = calculate_height(x - 1, z - 1);
+	push_k.ts_heights[2] = calculate_height(x, z);
+	push_k.ts_heights[3] = calculate_height(x + 1, z - 1);
+	push_k.ts_heights[4] = calculate_height(x, z);
+	push_k.ts_heights[5] = calculate_height(x + 1, z + 1);
+	push_k.ts_heights[6] = calculate_height(x, z);
+	push_k.ts_heights[7] = calculate_height(x - 1, z + 1);
+    
+	Vulkan::command_buffer_push_constant(&push_k
+					     , sizeof(push_k)
+					     , 0
+					     , VK_SHADER_STAGE_VERTEX_BIT
+					     , terrain_master.terrain_pointer.ppln.p
+					     , cmdbuf);
+
+	Vulkan::command_buffer_draw(cmdbuf
+				    , 8
+				    , 1
+				    , 0
+				    , 0);
+    }
+    // else don't render the pointer at all
 }
 
 
@@ -1275,6 +1427,8 @@ make_world(Window_Data *window
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
+    make_terrain_pointer();
+
 
     
     get_registered_objects_from_json();
@@ -1515,7 +1669,7 @@ update_world(Window_Data *window
 {
     on_which_terrain(world.user_camera.p);
     
-    handle_input(window, dt);
+    handle_input(window, dt, &vk->gpu);
     world.user_camera.compute_view();
 
 
@@ -1548,7 +1702,8 @@ update_world(Window_Data *window
 
 void
 handle_input(Window_Data *window
-	     , f32 dt)
+	     , f32 dt
+	     , Vulkan::GPU *gpu)
 {
     if (window->m_moved)
     {
@@ -1604,5 +1759,26 @@ handle_input(Window_Data *window
 	world.user_camera.p += res;
     }
 
+
+
+    glm::ivec2 ts_coord = get_coord_pointing_at(world.user_camera.p
+						, world.user_camera.d
+						, &terrain_master.red_mesh
+						, dt
+						, gpu);
+    terrain_master.terrain_pointer.ts_position = ts_coord;
+    
     // ---- modify the terrain ----
+    if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
+    {
+	/*	glm::ivec2 ts_coord = get_coord_pointing_at(world.user_camera.p
+						    , world.user_camera.d
+						    , &terrain_master.red_mesh
+						    , dt
+						    , gpu);*/
+	if (ts_coord.x >= 0)
+	{
+	    morph_terrain_at(ts_coord, &terrain_master.red_mesh, dt);
+	}
+    }
 }

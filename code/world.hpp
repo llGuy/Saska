@@ -44,4 +44,5 @@ update_world(Window_Data *window
 
 void
 handle_input(Window_Data *win
-	     , f32 dt);
+	     , f32 dt
+	     , Vulkan::GPU *gpu);

@@ -29,3 +29,40 @@
 	}
 	
     }
+
+
+
+
+
+,
+    "pipeline.terrain_mesh_pointer_pipeline": {
+	"new": true,
+	
+	"stages": {
+	    "v": "shaders/SPV/terrain_pointer.vert.spv",
+	    "f": "shaders/SPV/terrain_pointer.frag.spv"
+	},
+	"assemble": {
+	    "topology": "q",
+	    "restart": false
+	},
+	"raster": {
+	    "poly_mode": "l",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "push_constant": {
+		"stage_flags": "v",
+		"offset": 0,
+		"size": 150
+	    }
+	},
+	"viewport": [0, 0],
+	"blend": ["disable", "disable", "disable", "disable"],
+	"vertex_input": "vulkan_model.terrain_base_info",
+	"depth": true,
+	"render_pass": {
+	    "name": "render_pass.deferred_render_pass",
+	    "subpass": 0
+	}
+    }

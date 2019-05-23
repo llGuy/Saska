@@ -7,7 +7,6 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-
 #define MAX_ENTITIES_UNDER_TOP 10
 #define MAX_ENTITIES_UNDER_PLANET 150
 
@@ -675,6 +674,12 @@ is_on_terrain(const glm::vec3 &ws_position
     return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
 }
 
+template <typename T> internal f32
+distance_squared(const T &v)
+{
+    return(glm::dot(v, v));
+}
+
 internal glm::ivec2
 get_coord_pointing_at(glm::vec3 ws_ray_p
 		      , const glm::vec3 &ws_ray_d
@@ -682,14 +687,9 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 		      , f32 dt
 		      , Vulkan::GPU *gpu)
 {
-    auto get_distance_squared = [](const glm::vec3 &v)
-    {
-	return(v.x * v.x + v.y * v.y + v.z * v.z);
-    };
-    
     persist constexpr f32 MAX_DISTANCE = 6.0f;
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
-    persist constexpr f32 STEP_SIZE = 0.5f;
+    persist constexpr f32 STEP_SIZE = 0.3f;
 
     glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
     glm::vec3 ts_ray_p_start = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
@@ -699,7 +699,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
     glm::ivec2 ts_position = glm::ivec2(-1);
     
     for (glm::vec3 ts_ray_step = ts_ray_d
-	     ; get_distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED
+	     ; distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED
 	     ; ts_ray_step += ts_ray_diff)
     {
 	glm::vec3 ts_ray_current_p = ts_ray_step + ts_ray_p_start;
@@ -725,15 +725,111 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
     return(ts_position);
 }
 
+internal bool
+in_terrain_bounds(s32 x, s32 z, s32 width, s32 depth)
+{
+    
+}
+
 internal void
 morph_terrain_at(const glm::ivec2 &ts_position
 		 , Morphable_Terrain *t
+		 , f32 morph_zone_radius
 		 , f32 dt)
 {
-    // ---- hit terrain at this point ----
-    u32 index = get_terrain_index(ts_position.x, ts_position.y, t->xz_dim.y);
-    f32 *p = (f32 *)t->mapped_gpu_heights.data;
-    p[index] += dt * 3.0f;
+    u32 morph_quotients_outer_count = (morph_zone_radius - 1) * (morph_zone_radius - 1);
+    u32 morph_quotients_inner_count = morph_zone_radius * 2 - 1;
+    
+    struct Morph_Point
+    {
+	glm::ivec2 xz;
+	f32 quotient;
+    } *morph_quotients_outer_cache = (Morph_Point *)allocate_linear(sizeof(Morph_Point) * morph_quotients_outer_count)
+      , *morph_quotients_inner_cache = (Morph_Point *)allocate_linear(sizeof(Morph_Point) * morph_quotients_inner_count);
+
+    morph_quotients_outer_count = morph_quotients_inner_count = 0;
+    
+    // ---- one quarter of the mound + prototype the mound modifier quotients for the rest of the 3/4 mounds ----
+    for (s32 z = 0; z < morph_zone_radius; ++z)
+    {
+	for (s32 x = 0; x < morph_zone_radius; ++x)
+	{
+	    glm::vec2 f_coord = glm::vec2((f32)x, (f32)z);
+	    f32 squared_d = distance_squared(f_coord);
+	    if (squared_d >= morph_zone_radius * morph_zone_radius
+		&& abs(squared_d - morph_zone_radius * morph_zone_radius) < 0.000001f) // <---- maybe don't check if d is equal...
+	    {
+		break;
+	    }
+	    // ---- morph the terrain ----
+	    s32 ts_p_x = x + ts_position.x;
+	    s32 ts_p_z = z + ts_position.y;
+	    
+	    s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	    
+	    f32 *p = (f32 *)t->mapped_gpu_heights.data;
+	    f32 a = cos(squared_d / (morph_zone_radius * morph_zone_radius));
+	    a = a * a * a;
+
+	    if (index >= 0)
+	    {
+		p[index] += a * dt;
+	    }
+
+	    if (x == 0 || z == 0)
+	    {
+		morph_quotients_inner_cache[morph_quotients_inner_count++] = Morph_Point{glm::ivec2(x, z), a};
+	    }
+	    else
+	    {
+		morph_quotients_outer_cache[morph_quotients_outer_count++] = Morph_Point{glm::ivec2(x, z), a};
+	    }
+	}
+    }
+
+    // ---- do other half of the center cross ----
+    for (u32 inner = 0; inner < morph_quotients_inner_count; ++inner)
+    {
+	s32 x = -morph_quotients_inner_cache[inner].xz.x;
+	s32 z = -morph_quotients_inner_cache[inner].xz.y;
+
+	if (x == 0 && z == 0) continue;
+
+	// ---- morph the terrain ----
+	s32 ts_p_x = x + ts_position.x;
+	s32 ts_p_z = z + ts_position.y;
+	    
+	f32 *p = (f32 *)t->mapped_gpu_heights.data;
+	
+	s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	if (index >= 0)
+	{
+	    p[index] += morph_quotients_inner_cache[inner].quotient * dt;
+	}
+    }
+
+    // ---- do other 3/4 of the "outer" of the mound ----
+    glm::ivec2 mound_quarter_multipliers[] { glm::ivec2(+1, -1), glm::ivec2(-1, -1), glm::ivec2(-1, +1) };
+    for (u32 m = 0; m < 3; ++m)
+    {
+	for (u32 outer = 0; outer < morph_quotients_outer_count; ++outer)
+	{
+	    s32 x = morph_quotients_outer_cache[outer].xz.x * mound_quarter_multipliers[m].x;
+	    s32 z = morph_quotients_outer_cache[outer].xz.y * mound_quarter_multipliers[m].y;
+
+	    // ---- morph the terrain ----
+	    s32 ts_p_x = x + ts_position.x;
+	    s32 ts_p_z = z + ts_position.y;
+	    
+	    s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	    f32 *p = (f32 *)t->mapped_gpu_heights.data;
+
+	    if (index >= 0)
+	    {
+		p[index] += morph_quotients_outer_cache[outer].quotient * dt;
+	    }
+	}
+    }
 }
 
 internal Morphable_Terrain *
@@ -1000,6 +1096,8 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf
     }
     // else don't render the pointer at all
 }
+
+
 
 
 
@@ -1778,7 +1876,7 @@ handle_input(Window_Data *window
 						    , gpu);*/
 	if (ts_coord.x >= 0)
 	{
-	    morph_terrain_at(ts_coord, &terrain_master.red_mesh, dt);
+	    morph_terrain_at(ts_coord, &terrain_master.red_mesh, 3, dt);
 	}
     }
 }

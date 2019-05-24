@@ -27,6 +27,9 @@ struct Camera
 
     void
     compute_view(void);
+
+    void
+    compute_view(struct Entity *e);
 };
 
 void

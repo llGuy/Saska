@@ -7,6 +7,7 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+ 
 #define MAX_ENTITIES_UNDER_TOP 10
 #define MAX_ENTITIES_UNDER_PLANET 150
 

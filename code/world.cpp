@@ -303,10 +303,19 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 }
 
 internal bool
-detect_terrain_collision(const glm::vec3 &v
+detect_terrain_collision(const glm::vec3 &ws_p
 			 , Morphable_Terrain *t)
 {
-    return(true);
+    glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
+
+    glm::vec3 ts_p = glm::vec3(ws_to_ts * glm::vec4(ws_p, 1.0f));
+
+    if (ts_p.y < 0.00000001f)
+    {
+	return(true);
+    }
+
+    return(false);
 }
 
 internal void
@@ -1172,7 +1181,9 @@ update_entity_physics(Entity *e
 
     glm::vec3 total_forces = gravity_force /* + ... + ... */;
     
-    e->ws_v += gravity_force;
+    e->ws_v += (gravity_force) * dt;
+
+    e->ws_p += e->ws_v * dt;
 }
 
 Entity
@@ -1266,6 +1277,8 @@ update_entities(f32 dt)
     {
 	Entity *e = &entities.entity_list[i];
 
+	update_entity_physics(e, dt);
+	
 	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->ws_r);
     }
 }
@@ -1651,8 +1664,7 @@ update_world(Window_Data *window
     handle_input(window, dt, &vk->gpu);
     world.user_camera.compute_view(&entities.entity_list[entities.camera_bound_entity]);
 
-
-    update_entities(0.0f);
+    update_entities(dt);
     
     // ---- actually rendering the frame ----
     render_frame(vk, image_index, current_frame, cmdbuf);
@@ -1720,9 +1732,9 @@ handle_input(Window_Data *window
 
     if (movements > 0)
     {
-	res = res * 15.0f * dt;
+	res = res * 15.0f;
 
-	e_ptr->ws_p += res;
+	e_ptr->ws_v = res;
     }
 
 

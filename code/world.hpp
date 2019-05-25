@@ -49,3 +49,6 @@ void
 handle_input(Window_Data *win
 	     , f32 dt
 	     , Vulkan::GPU *gpu);
+
+void
+destroy_world(Vulkan::GPU *gpu);

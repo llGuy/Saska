@@ -1420,13 +1420,18 @@ namespace Vulkan
     void
     destroy_state(State *state)
     {
+	for (u32 i = 0; i < state->swapchain.views.count; ++i)
+	{
+	    vkDestroyImageView(state->gpu.logical_device, state->swapchain.views[i], nullptr);
+	}
+	
 	vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
 	
-	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
+	vkDestroyDevice(state->gpu.logical_device, nullptr);
 	
 	destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
-
-	vkDestroyDevice(state->gpu.logical_device, nullptr);
+	
+	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
 	
 	vkDestroyInstance(state->instance, nullptr);
     }

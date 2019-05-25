@@ -41,6 +41,9 @@ void
 destroy_game(Vulkan::GPU *gpu)
 {
     vkDeviceWaitIdle(gpu->logical_device);
+
+    // ---- destroy world data ----
+    destroy_world(gpu);
     
     Vulkan::free_command_buffer(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer}
 				, &window_rendering.command_pool, gpu);

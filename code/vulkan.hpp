@@ -216,6 +216,12 @@ namespace Vulkan
 	VkPipelineLayout layout;
 
 	VkPipeline pipeline;
+
+	FORCEINLINE void
+	destroy(Vulkan::GPU *gpu)
+	{
+	    vkDestroyPipeline(gpu->logical_device, pipeline, nullptr);
+	}
     };
     
     internal FORCEINLINE void
@@ -269,6 +275,15 @@ namespace Vulkan
 	    info.imageView = image_view;
 	    info.sampler = image_sampler;
 	    return(info);
+	}
+
+	FORCEINLINE void
+	destroy(Vulkan::GPU *gpu)
+	{
+	    if (image != VK_NULL_HANDLE) vkDestroyImage(gpu->logical_device, image, nullptr);
+	    if (image_view != VK_NULL_HANDLE) vkDestroyImageView(gpu->logical_device, image_view, nullptr);
+	    if (image_sampler != VK_NULL_HANDLE) vkDestroySampler(gpu->logical_device, image_sampler, nullptr);
+	    if (device_memory != VK_NULL_HANDLE) vkFreeMemory(gpu->logical_device, device_memory, nullptr);
 	}
     }; 
     
@@ -327,7 +342,11 @@ namespace Vulkan
 	VkRenderPass render_pass;
 	u32 subpass_count;
 
-	// some render pass data
+	FORCEINLINE void
+	destroy(Vulkan::GPU *gpu)
+	{
+	    vkDestroyRenderPass(gpu->logical_device, render_pass, nullptr);
+	}
     };
 
     internal FORCEINLINE VkAttachmentDescription

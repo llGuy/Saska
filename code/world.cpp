@@ -302,9 +302,10 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 }
 
 internal bool
-in_terrain_bounds(s32 x, s32 z, s32 width, s32 depth)
+detect_terrain_collision(const glm::vec3 &v
+			 , Morphable_Terrain *t)
 {
-    
+    return(true);
 }
 
 internal void
@@ -1116,6 +1117,7 @@ struct Entity_Base
 
 #define MAX_ENTITIES 100
 
+
 typedef struct Entity
 {
     Entity(void) = default;
@@ -1131,6 +1133,8 @@ typedef struct Entity
 
     // for now is a pointer
     Morphable_Terrain *on_t;
+
+    bool obeys_physics;
 
     // push constant stuff for the graphics pipeline
     struct
@@ -1156,6 +1160,25 @@ typedef struct Entity
 	};
     };
 } Entity, Entity_Group;
+
+internal void
+update_entity_physics(Entity *e
+		      , f32 dt)
+{
+    Morphable_Terrain *t = e->on_t;
+
+    glm::vec3 gravity_force = -9.5f * t->ws_n;
+
+    if (detect_terrain_collision(e->gs_p
+				, e->on_t))
+    {
+	gravity_force = glm::vec3(0.0f);
+    }
+
+    glm::vec3 total_forces = gravity_force /* + ... + ... */;
+    
+    e->gs_v += gravity_force;
+}
 
 Entity
 construct_entity(const Constant_String &name
@@ -1918,4 +1941,27 @@ handle_input(Window_Data *window
 	    morph_terrain_at(ts_coord, &terrain_master.red_mesh, 3, dt);
 	}
     }
+}
+
+
+
+void
+destroy_world(Vulkan::GPU *gpu)
+{
+    R_Mem<Vulkan::Image2D> albedo = get_memory("image2D.fbo_albedo"_hash);
+    R_Mem<Vulkan::Image2D> position = get_memory("image2D.fbo_position"_hash);
+    R_Mem<Vulkan::Image2D> normal = get_memory("image2D.fbo_normal"_hash);
+    R_Mem<Vulkan::Image2D> depth = get_memory("image2D.fbo_depth"_hash);
+
+    albedo->destroy(gpu);
+    position->destroy(gpu);
+    normal->destroy(gpu);
+    depth->destroy(gpu);
+
+    for (u32 i = 0; i < world_rendering.deferred.fbos.size; ++i)
+    {
+	vkDestroyFramebuffer(gpu->logical_device, world_rendering.deferred.fbos[i].framebuffer, nullptr);
+    }
+
+    world_rendering.deferred.render_pass->destroy(gpu);
 }

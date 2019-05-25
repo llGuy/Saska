@@ -1082,16 +1082,13 @@ render_world(Vulkan::State *vk
 }
 
 // index into array
-typedef struct Entity_View
+struct Entity_View
 {
     // may have other data in the future in case we create separate arrays for different types of entities
-    s32 id :28;
-    
-    enum Is_Group { IS_NOT_GROUP = false
-		    , IS_GROUP = true } is_group :4;
+    s32 id;
 
-    Entity_View(void) : id(-1), is_group(Is_Group::IS_NOT_GROUP) {}
-} Entity_View, Entity_Group_View;
+    Entity_View(void) : id(-1) {}
+};
 
 
 struct Entity_Base
@@ -1118,18 +1115,15 @@ struct Entity_Base
 #define MAX_ENTITIES 100
 
 
-typedef struct Entity
+struct Entity
 {
     Entity(void) = default;
     
-    enum Is_Group { IS_NOT_GROUP = false
-		    , IS_GROUP = true } is_group{};
-
     Constant_String id {""_hash};
     // position, direction, velocity
     // in above entity group space
-    glm::vec3 gs_p{0.0f}, ws_d{0.0f}, gs_v{0.0f};
-    glm::quat gs_r{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f};
+    glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
 
     // for now is a pointer
     Morphable_Terrain *on_t;
@@ -1144,11 +1138,11 @@ typedef struct Entity
     } push_k;
     
     // always will be a entity group - so, to update all the groups only, will climb UP the ladder
-    Entity_View above;
+    //    Entity_View above;
     Entity_View index;
 
     using Entity_State_Flags = u32;
-    enum {GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT = 1 << 0};
+    //    enum {GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT = 1 << 0};
     Entity_State_Flags flags{};
     
     union
@@ -1159,7 +1153,7 @@ typedef struct Entity
 	    Memory_Buffer_View<Entity_View> below;
 	};
     };
-} Entity, Entity_Group;
+};
 
 internal void
 update_entity_physics(Entity *e
@@ -1169,7 +1163,7 @@ update_entity_physics(Entity *e
 
     glm::vec3 gravity_force = -9.5f * t->ws_n;
 
-    if (detect_terrain_collision(e->gs_p
+    if (detect_terrain_collision(e->ws_p
 				, e->on_t))
     {
 	gravity_force = glm::vec3(0.0f);
@@ -1177,32 +1171,32 @@ update_entity_physics(Entity *e
 
     glm::vec3 total_forces = gravity_force /* + ... + ... */;
     
-    e->gs_v += gravity_force;
+    e->ws_v += gravity_force;
 }
 
 Entity
 construct_entity(const Constant_String &name
-		 , Entity::Is_Group is_group
+		 //		 , Entity::Is_Group is_group
 		 , glm::vec3 gs_p
 		 , glm::vec3 ws_d
 		 , glm::quat gs_r)
 {
     Entity e;
-    e.is_group = is_group;
-    e.gs_p = gs_p;
+    //    e.is_group = is_group;
+    e.ws_p = gs_p;
     e.ws_d = ws_d;
-    e.gs_r = gs_r;
+    e.ws_r = gs_r;
     e.id = name;
     return(e);
 }
 
 global_var struct Entities
 {
-    s32 count_singles = {};
-    Entity list_singles[MAX_ENTITIES] = {};
+    s32 entity_count = {};
+    Entity entity_list[MAX_ENTITIES] = {};
 
-    s32 count_groups = {};
-    Entity_Group list_groups[10] = {};
+    /*    s32 count_groups = {};
+	  Entity_Group list_groups[10] = {};*/
 
     Hash_Table_Inline<Entity_View, 25, 5, 5> name_map{"map.entities"};
 
@@ -1212,108 +1206,36 @@ global_var struct Entities
     // have some sort of stack of REMOVED entities
 } entities;
 
-// contains the top entity / entity_group
-global_var Entity_View scene_graph;
-
 internal Entity *
 get_entity(const Constant_String &name)
 {
     Entity_View v = *entities.name_map.get(name.hash);
-    return(&entities.list_singles[v.id]);
+    return(&entities.entity_list[v.id]);
 }
 
-internal Entity_Group *
+internal Entity *
 get_entity(Entity_View v)
 {
-    return(&entities.list_singles[v.id]);
-}
-
-internal Entity *
-get_entity_group(const Constant_String &name)
-{
-    Entity_View v = *entities.name_map.get(name.hash);
-    return(&entities.list_groups[v.id]);
-}
-
-internal Entity *
-get_entity_group(Entity_Group_View v)
-{
-    return(&entities.list_groups[v.id]);
+    return(&entities.entity_list[v.id]);
 }
 
 internal Entity_View
-add_entity(const Entity &e
-	   , Entity_Group *group_e_belongs_to)
+add_entity(const Entity &e)
+
 {
     Entity_View view;
-    view.id = entities.count_singles;
-    view.is_group = (Entity_View::Is_Group)e.is_group;
+    view.id = entities.entity_count;
+    //    view.is_group = (Entity_View::Is_Group)e.is_group;
 
     entities.name_map.insert(e.id.hash, view);
     
-    entities.list_singles[entities.count_singles++] = e;
+    entities.entity_list[entities.entity_count++] = e;
 
     auto e_ptr = get_entity(view);
 
     e_ptr->index = view;
 
-    if (group_e_belongs_to)
-    {
-	assert(group_e_belongs_to->below_count <= group_e_belongs_to->below.count);
-	
-	e_ptr->above = group_e_belongs_to->index;
-	group_e_belongs_to->below[group_e_belongs_to->below_count++] = e_ptr->index;
-    }
-    else e_ptr->above.id = -1;
-
     return(view);
-}
-
-internal Entity_Group_View
-add_entity_group(const Entity_Group &e
-		 , Entity_Group *group_e_belongs_to
-		 , u32 group_below_max)
-{
-    Entity_Group_View view;
-    view.id = entities.count_groups;
-    view.is_group = (Entity_View::Is_Group)e.is_group;
-
-    entities.name_map.insert(e.id.hash, view);
-    
-    entities.list_groups[entities.count_groups++] = e;
-
-    auto e_ptr = get_entity_group(view);
-
-    e_ptr->index = view;
-
-    if (group_e_belongs_to)
-    {
-	// make sure that the capacity of the below buffer wasn't met
-	assert(group_e_belongs_to->below_count <= group_e_belongs_to->below.count);
-	
-	e_ptr->above = group_e_belongs_to->index;
-	group_e_belongs_to->below.buffer[group_e_belongs_to->below_count++] = e_ptr->index;
-    }
-    else e_ptr->above.id = -1;
-
-    e_ptr->below_count = 0;
-    allocate_memory_buffer(e_ptr->below, group_below_max);
-
-    return(view);
-}
-
-internal void
-init_scene_graph(void)
-{
-    // init first entity group (that will contain all the entities)
-    // everything moves with top (aka the base entitygroup)
-    Entity_Group top = construct_entity("entity.group.top"_hash
-					, Entity::Is_Group::IS_GROUP
-					, glm::vec3(10.0f)
-					, glm::vec3(0.0f)
-					, glm::quat(0.0f, 0.0f, 0.0f, 0.0f));
-    
-    Entity_Group_View top_view = add_entity_group(top, nullptr, MAX_ENTITIES_UNDER_TOP);
 }
 
 internal void
@@ -1336,55 +1258,14 @@ make_entity_instanced_renderable(R_Mem<Vulkan::Model> model
     // TODO(luc) : first need to add support for instance rendering in material renderers.
 }
 
-// problem : rotation doesn't incorporate position
 internal void
-update_entity_group(Entity_Group *g)
+update_entities(f32 dt)
 {
-    if (!(g->flags & Entity::GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT))
+    for (s32 i = 0; i < entities.entity_count; ++i)
     {
-	// update position or whatever + including the position of above groups
-	if (g->above.id != -1) update_entity_group(get_entity_group(g->above));
+	Entity *e = &entities.entity_list[i];
 
-	const glm::mat4x4 *above_ws_t = (g->above.id == -1) ? &IDENTITY_MAT4X4 : &get_entity_group(g->above)->push_k.ws_t;
-	g->push_k.ws_t = glm::translate(g->gs_p) * glm::mat4_cast(g->gs_r);
-	g->push_k.ws_t = *above_ws_t * g->push_k.ws_t;
-
-	g->flags |= Entity_Group::GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT;
-    }
-    else
-    {
-	// do nothing
-    }
-}
-
-internal void
-update_scene_graph(void)
-{
-    // first only update entity groups
-    for (s32 i = 0; i < entities.count_groups; ++i)
-    {
-	Entity_Group *g = &entities.list_groups[i];
-	if (g->flags & Entity_Group::GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT)
-	{
-	    continue;
-	}
-	else
-	{
-	    update_entity_group(g);
-	}
-    }
-
-    for (s32 i = 0; i < entities.count_singles; ++i)
-    {
-	Entity *e = &entities.list_singles[i];
-	e->push_k.ws_t = get_entity_group(e->above)->push_k.ws_t * glm::translate(e->gs_p) * glm::mat4_cast(e->gs_r);
-    }
-
-    for (s32 i = 0; i < entities.count_groups; ++i)
-    {
-	Entity_Group *g = &entities.list_groups[i];
-	g->flags = 0;
-	g->push_k.ws_t = glm::mat4(1.0f);
+	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->ws_r);
     }
 }
 
@@ -1405,7 +1286,7 @@ Camera::set_default(f32 w, f32 h, f32 m_x, f32 m_y)
 void
 Camera::compute_view(Entity *e)
 {
-    v_m = glm::lookAt(e->gs_p, e->gs_p + e->ws_d, e->on_t->ws_n);
+    v_m = glm::lookAt(e->ws_p, e->ws_p + e->ws_d, e->on_t->ws_n);
 }
 
 void
@@ -1638,28 +1519,12 @@ make_world(Window_Data *window
     
     
     
-
-    
-    init_scene_graph();
-    // add en entity group
-    Entity_Group test_g0 = construct_entity("entity.group.test0"_hash
-					   , Entity::Is_Group::IS_GROUP
-					   , glm::vec3(0.0f, 0.0f, 0.0f)
-					   , glm::vec3(0.0f)
-					   , glm::quat(0, 0, 0, 0));
-    add_entity_group(test_g0
-		     , get_entity_group("entity.group.top"_hash)
-		     , MAX_ENTITIES_UNDER_TOP);
-
-    // concrete representation of group test0
     Entity e = construct_entity("entity.bound_group_test0"_hash
-				, Entity::Is_Group::IS_NOT_GROUP
 				, glm::vec3(50.0f, 10.0f, 280.0f)
 				, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))
 				, glm::quat(0, 0, 0, 0));
 
-    Entity_View ev = add_entity(e
-				, get_entity_group("entity.group.test0"_hash));
+    Entity_View ev = add_entity(e);
 
     auto *e_ptr = get_entity(ev);
 
@@ -1670,58 +1535,17 @@ make_world(Window_Data *window
     
     world.user_camera.set_default(window->w, window->h, window->m_x, window->m_y);
 
-    /*make_entity_renderable(e_ptr
-			   , get_memory("vulkan_model.test_model"_hash)
-			   , &world_rendering.player_recorder);*/
-
-    // create entity group that rotates around group test0
-    Entity_Group rotate = construct_entity("entity.group.rotate"_hash
-					   , Entity::Is_Group::IS_GROUP
-					   , glm::vec3(0.0f)
-					   , glm::vec3(0.0f)
-					   , glm::quat(glm::vec3(0.0f))); // quat is going to change every frame
-
-    add_entity_group(rotate
-		     , get_entity_group("entity.group.test0"_hash)
-		     , MAX_ENTITIES_UNDER_TOP);
-
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
-				, Entity::Is_Group::IS_NOT_GROUP
 				, glm::vec3(0.0f, 30.0f, 0.0f)
 				, glm::vec3(0.0f)
 				, glm::quat(0, 0, 0, 0));
 
-    Entity_View rv = add_entity(r
-				, get_entity_group("entity.group.rotate"_hash));
+    Entity_View rv = add_entity(r);
 
     auto *r_ptr = get_entity(rv);
 
     make_entity_renderable(r_ptr
-			   , get_memory("vulkan_model.test_model"_hash)
-			   , &world_rendering.player_recorder);
-
-    Entity_Group rg2 = construct_entity("entity.group.rotate2"_hash
-					, Entity::Is_Group::IS_GROUP
-					, glm::vec3(0.0f, 0.0f, 0.0f)
-					, glm::vec3(0.0f)
-					, glm::quat(glm::vec3(0)));
-
-    Entity_Group_View rg2_view = add_entity_group(rg2
-						  , get_entity_group("entity.group.rotate"_hash)
-						  , 5);
-
-    Entity re2 = construct_entity("entity.rotating2"_hash
-				       , Entity::Is_Group::IS_NOT_GROUP
-				       , glm::vec3(0.0f, 10.0f, 0.0f)
-				       , glm::vec3(0.0f)
-				       , glm::quat(0, 0, 0, 0));
-
-    Entity_View rev2 = add_entity(re2
-				  , get_entity_group("entity.group.rotate2"_hash));
-
-    auto *rev2_ptr = get_entity(rev2);
-    make_entity_renderable(rev2_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
 			   , &world_rendering.player_recorder);
 
@@ -1824,29 +1648,10 @@ update_world(Window_Data *window
     on_which_terrain(world.user_camera.p);
     
     handle_input(window, dt, &vk->gpu);
-    //    world.user_camera.compute_view();
-    world.user_camera.compute_view(&entities.list_singles[entities.camera_bound_entity]);
+    world.user_camera.compute_view(&entities.entity_list[entities.camera_bound_entity]);
 
 
-    // ---- currently testing some updates on the scene graph and stuff ----    
-    // rotate group
-    angle += 0.15f;
-    if (angle > 359.0f)
-    {
-	angle = 0.0f;
-    }
-
-    Entity_Group *rg = get_entity_group("entity.group.rotate"_hash);
-    
-    rg->gs_r = glm::quat(glm::radians(glm::vec3(angle, 0.0f, 0.0f)));
-
-    Entity_Group *rg2 = get_entity_group("entity.group.rotate2"_hash);
-    
-    rg2->gs_r = glm::quat(glm::radians(glm::vec3(angle * 2.0f, angle * 1.0f, 0.0f)));
-
-    update_scene_graph();
-    
-
+    update_entities(0.0f);
     
     // ---- actually rendering the frame ----
     render_frame(vk, image_index, current_frame, cmdbuf);
@@ -1862,7 +1667,7 @@ handle_input(Window_Data *window
 {
     // ---- get bound entity ----
     // TODO make sure to check if camera_bound_entity < 0
-    Entity *e_ptr = &entities.list_singles[entities.camera_bound_entity];
+    Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
     glm::vec3 up = e_ptr->on_t->ws_n;
     
     if (window->m_moved)
@@ -1916,12 +1721,12 @@ handle_input(Window_Data *window
     {
 	res = res * 15.0f * dt;
 
-	e_ptr->gs_p += res;
+	e_ptr->ws_p += res;
     }
 
 
 
-    glm::ivec2 ts_coord = get_coord_pointing_at(e_ptr->gs_p
+    glm::ivec2 ts_coord = get_coord_pointing_at(e_ptr->ws_p
 						, e_ptr->ws_d
 						, &terrain_master.red_mesh
 						, dt

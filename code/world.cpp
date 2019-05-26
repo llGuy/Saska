@@ -154,6 +154,8 @@ struct Morphable_Terrain
 
     VkBuffer vbos[2];
 
+    glm::mat4 inverse_transform;
+    
     struct Push_K
     {
 	glm::mat4 transform;
@@ -222,11 +224,20 @@ compute_ws_to_ts_matrix(Morphable_Terrain *t)
     return(inverse_scale * inverse_rotate * inverse_translate);
 }
 
+inline glm::mat4
+compute_ts_to_ws_matrix(Morphable_Terrain *t)
+{
+    glm::mat4 translate = glm::translate(t->ws_p);
+    glm::mat4 rotate = glm::mat4_cast(t->gs_r);
+    glm::mat4 scale = glm::scale(t->size);
+    return(translate * rotate * scale);
+}
+
 inline glm::vec3
 transform_from_ws_to_ts(const glm::vec3 &ws_v
 			, Morphable_Terrain *t)
 {
-    glm::vec3 ts_position = compute_ws_to_ts_matrix(t) * glm::vec4(ws_v, 1.0f);
+    glm::vec3 ts_position = t->inverse_transform * glm::vec4(ws_v, 1.0f);
 
     return(ts_position);
 }
@@ -268,7 +279,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
     persist constexpr f32 STEP_SIZE = 0.3f;
 
-    glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
+    glm::mat4 ws_to_ts = t->inverse_transform;
     glm::vec3 ts_ray_p_start = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
     glm::vec3 ts_ray_d = glm::normalize(glm::vec3(ws_to_ts * glm::vec4(ws_ray_d, 0.0f)));
     glm::vec3 ts_ray_diff = STEP_SIZE * ts_ray_d;
@@ -302,20 +313,29 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
     return(ts_position);
 }
 
-internal bool
+struct Detected_Collision_Return
+{
+    bool detected; glm::vec3 ws_at;
+};
+
+internal Detected_Collision_Return
 detect_terrain_collision(const glm::vec3 &ws_p
 			 , Morphable_Terrain *t)
 {
-    glm::mat4 ws_to_ts = compute_ws_to_ts_matrix(t);
+    glm::mat4 ws_to_ts = t->inverse_transform;
 
     glm::vec3 ts_p = glm::vec3(ws_to_ts * glm::vec4(ws_p, 1.0f));
 
+    glm::vec3 ts_at = glm::vec3(ts_p.x, 0.0f, ts_p.z);
+
+    glm::vec3 ws_at = glm::vec3(compute_ts_to_ws_matrix(t) * glm::vec4(ts_at, 1.0f));
+    
     if (ts_p.y < 0.00000001f)
     {
-	return(true);
+	return {true, ws_at};
     }
 
-    return(false);
+    return {false};
 }
 
 internal void
@@ -1125,6 +1145,15 @@ struct Entity_Base
 #define MAX_ENTITIES 100
 
 
+struct Physics_Component
+{
+    Entity_View bound_entity;
+    
+    glm::vec3 gravity_force_accumulation = {};
+
+    // other forces (friction...)
+};
+
 struct Entity
 {
     Entity(void) = default;
@@ -1138,7 +1167,7 @@ struct Entity
     // for now is a pointer
     Morphable_Terrain *on_t;
 
-    bool obeys_physics;
+    Physics_Component physics;
 
     // push constant stuff for the graphics pipeline
     struct
@@ -1147,8 +1176,6 @@ struct Entity
 	glm::mat4x4 ws_t{1.0f};
     } push_k;
     
-    // always will be a entity group - so, to update all the groups only, will climb UP the ladder
-    //    Entity_View above;
     Entity_View index;
 
     using Entity_State_Flags = u32;
@@ -1165,26 +1192,6 @@ struct Entity
     };
 };
 
-internal void
-update_entity_physics(Entity *e
-		      , f32 dt)
-{
-    Morphable_Terrain *t = e->on_t;
-
-    glm::vec3 gravity_force = -9.5f * t->ws_n;
-
-    if (detect_terrain_collision(e->ws_p
-				, e->on_t))
-    {
-	gravity_force = glm::vec3(0.0f);
-    }
-
-    glm::vec3 total_forces = gravity_force /* + ... + ... */;
-    
-    e->ws_v += (gravity_force) * dt;
-
-    e->ws_p += e->ws_v * dt;
-}
 
 Entity
 construct_entity(const Constant_String &name
@@ -1207,8 +1214,8 @@ global_var struct Entities
     s32 entity_count = {};
     Entity entity_list[MAX_ENTITIES] = {};
 
-    /*    s32 count_groups = {};
-	  Entity_Group list_groups[10] = {};*/
+    s32 physics_component_count = {};
+    Physics_Component physics_components[MAX_ENTITIES] = {};
 
     Hash_Table_Inline<Entity_View, 25, 5, 5> name_map{"map.entities"};
 
@@ -1229,6 +1236,29 @@ internal Entity *
 get_entity(Entity_View v)
 {
     return(&entities.entity_list[v.id]);
+}
+
+internal void
+update_entity_physics(Entity *e, f32 dt)
+{
+    Physics_Component *p = &e->physics;
+	
+    Morphable_Terrain *t = e->on_t;
+
+    p->gravity_force_accumulation += -9.5f * t->ws_n;
+
+    Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
+    
+    if (ret.detected)
+    {
+	p->gravity_force_accumulation = glm::vec3(0.0f);
+
+	e->ws_p = ret.ws_at;
+    }
+
+    glm::vec3 forces_total = (p->gravity_force_accumulation) * dt;
+    
+    e->ws_p += (e->ws_v + forces_total) * dt;
 }
 
 internal Entity_View
@@ -1300,7 +1330,8 @@ Camera::set_default(f32 w, f32 h, f32 m_x, f32 m_y)
 void
 Camera::compute_view(Entity *e)
 {
-    v_m = glm::lookAt(e->ws_p, e->ws_p + e->ws_d, e->on_t->ws_n);
+    glm::vec3 eye = e->ws_p + e->on_t->ws_n;
+    v_m = glm::lookAt(eye, eye + e->ws_d, e->on_t->ws_n);
 }
 
 void
@@ -1510,6 +1541,7 @@ make_world(Window_Data *window
 	    glm::translate(terrain_master.green_mesh.ws_p)
 	    * glm::mat4_cast(terrain_master.green_mesh.gs_r)
 	    * glm::scale(terrain_master.green_mesh.size);
+	terrain_master.green_mesh.inverse_transform = compute_ws_to_ts_matrix(&terrain_master.green_mesh);
 
 	terrain_master.red_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
 	terrain_master.red_mesh.vbos[1] = terrain_master.red_mesh.heights_gpu_buffer.buffer;
@@ -1527,6 +1559,7 @@ make_world(Window_Data *window
 	    glm::translate(terrain_master.red_mesh.ws_p)
 	    * glm::mat4_cast(terrain_master.red_mesh.gs_r)
 	    * glm::scale(terrain_master.red_mesh.size);
+	terrain_master.red_mesh.inverse_transform = compute_ws_to_ts_matrix(&terrain_master.red_mesh);
 
 	terrain_master.red_mesh.ws_n = glm::vec3(glm::mat4_cast(terrain_master.red_mesh.gs_r) * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
     }
@@ -1705,6 +1738,8 @@ handle_input(Window_Data *window
 	world.user_camera.mp = curr_mp;
     }
 
+    e_ptr->ws_v = glm::vec3(0.0f);
+    
     u32 movements = 0;
     f32 accelerate = 1.0f;
     
@@ -1713,6 +1748,16 @@ handle_input(Window_Data *window
     glm::vec3 d = glm::normalize(glm::vec3(e_ptr->ws_d.x
 					   , e_ptr->ws_d.y
 					   , e_ptr->ws_d.z));
+
+    Morphable_Terrain *t = e_ptr->on_t;
+    glm::mat4 inverse = t->inverse_transform;
+    
+    glm::vec3 ts_d = inverse * glm::vec4(d, 0.0f);
+    
+    ts_d.y = 0.0f;
+
+    d = glm::vec3(t->push_k.transform * glm::vec4(ts_d, 0.0f));
+    d = glm::normalize(d);
     
     glm::vec3 res = {};
 
@@ -1722,7 +1767,15 @@ handle_input(Window_Data *window
     if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
     if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
     if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
-    if (window->key_map[GLFW_KEY_SPACE]) acc_v(up, res);
+    
+    if (window->key_map[GLFW_KEY_SPACE])
+    {
+	if (detect_terrain_collision(e_ptr->ws_p, e_ptr->on_t).detected)
+	{
+	    acc_v(up * 40.0f / 15.0f, res);
+	}
+    }
+    
     if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
 
     if (window->key_map[GLFW_KEY_UP]) light_pos += glm::vec3(0.0f, 0.0f, dt) * 5.0f;

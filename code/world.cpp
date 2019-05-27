@@ -18,7 +18,7 @@ global_var struct World
     Camera user_camera;
 } world;
 
-// almost acts like the actual render component object itself
+// almost acts like the actual render component object itself
 struct Material
 {
     // ---- push constant information
@@ -1161,7 +1161,7 @@ struct Entity
     Constant_String id {""_hash};
     // position, direction, velocity
     // in above entity group space
-    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f};
+    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
     glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
 
     // for now is a pointer
@@ -1245,20 +1245,21 @@ update_entity_physics(Entity *e, f32 dt)
 	
     Morphable_Terrain *t = e->on_t;
 
-    p->gravity_force_accumulation += -9.5f * t->ws_n;
+    glm::vec3 gravity_d = -9.5f * t->ws_n;
 
     Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
     
     if (ret.detected)
     {
-	p->gravity_force_accumulation = glm::vec3(0.0f);
+	gravity_d = glm::vec3(0.0f);
+	e->ws_v = glm::vec3(0.0f);
 
 	e->ws_p = ret.ws_at;
     }
-
-    glm::vec3 forces_total = (p->gravity_force_accumulation) * dt;
     
-    e->ws_p += (e->ws_v + forces_total) * dt;
+    e->ws_v += gravity_d * dt;
+
+    e->ws_p += (e->ws_v + e->ws_input_v) * dt;
 }
 
 internal Entity_View
@@ -1303,11 +1304,11 @@ make_entity_instanced_renderable(R_Mem<Vulkan::Model> model
 internal void
 update_entities(f32 dt)
 {
+    update_entity_physics(&entities.entity_list[0], dt);
+    
     for (s32 i = 0; i < entities.entity_count; ++i)
     {
 	Entity *e = &entities.entity_list[i];
-
-	update_entity_physics(e, dt);
 	
 	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->ws_r);
     }
@@ -1738,7 +1739,7 @@ handle_input(Window_Data *window
 	world.user_camera.mp = curr_mp;
     }
 
-    e_ptr->ws_v = glm::vec3(0.0f);
+    //    e_ptr->ws_v = glm::vec3(0.0f);
     
     u32 movements = 0;
     f32 accelerate = 1.0f;
@@ -1761,6 +1762,10 @@ handle_input(Window_Data *window
     
     glm::vec3 res = {};
 
+    bool detected_collision = detect_terrain_collision(e_ptr->ws_p, e_ptr->on_t).detected;
+    
+    if (detected_collision) e_ptr->ws_v = glm::vec3(0.0f);
+    
     if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
     if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
     if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
@@ -1770,9 +1775,10 @@ handle_input(Window_Data *window
     
     if (window->key_map[GLFW_KEY_SPACE])
     {
-	if (detect_terrain_collision(e_ptr->ws_p, e_ptr->on_t).detected)
+	if (detected_collision)
 	{
-	    acc_v(up * 40.0f / 15.0f, res);
+	    e_ptr->ws_v += up * 5000.0f * dt;
+	    e_ptr->ws_p += e_ptr->ws_v * dt;
 	}
     }
     
@@ -1787,7 +1793,11 @@ handle_input(Window_Data *window
     {
 	res = res * 15.0f;
 
-	e_ptr->ws_v = res;
+	e_ptr->ws_input_v = res;
+    }
+    else
+    {
+	e_ptr->ws_input_v = glm::vec3(0.0f);
     }
 
 

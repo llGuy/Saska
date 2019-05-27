@@ -1147,7 +1147,7 @@ struct Entity_Base
 
 struct Physics_Component
 {
-    Entity_View bound_entity;
+    bool enabled;
     
     glm::vec3 gravity_force_accumulation = {};
 
@@ -1242,24 +1242,31 @@ internal void
 update_entity_physics(Entity *e, f32 dt)
 {
     Physics_Component *p = &e->physics;
-	
-    Morphable_Terrain *t = e->on_t;
 
-    glm::vec3 gravity_d = -9.5f * t->ws_n;
-
-    Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
-    
-    if (ret.detected)
+    if (p->enabled)
     {
-	gravity_d = glm::vec3(0.0f);
-	e->ws_v = glm::vec3(0.0f);
+	Morphable_Terrain *t = e->on_t;
 
-	e->ws_p = ret.ws_at;
-    }
+	glm::vec3 gravity_d = -9.5f * t->ws_n;
+
+	Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
     
-    e->ws_v += gravity_d * dt;
+	if (ret.detected)
+	{
+	    // implement coefficient of restitution
+	    e->ws_v = glm::vec3(0.0f);
+	    gravity_d = glm::vec3(0.0f);
+	    e->ws_p = ret.ws_at;
+	}
+    
+	e->ws_v += gravity_d * dt;
 
-    e->ws_p += (e->ws_v + e->ws_input_v) * dt;
+	e->ws_p += (e->ws_v + e->ws_input_v) * dt;
+    }
+    else
+    {
+	e->ws_p += e->ws_input_v * dt;
+    }
 }
 
 internal Entity_View
@@ -1304,13 +1311,14 @@ make_entity_instanced_renderable(R_Mem<Vulkan::Model> model
 internal void
 update_entities(f32 dt)
 {
-    update_entity_physics(&entities.entity_list[0], dt);
     
     for (s32 i = 0; i < entities.entity_count; ++i)
     {
 	Entity *e = &entities.entity_list[i];
 	
-	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->ws_r);
+	update_entity_physics(&entities.entity_list[i], dt);
+	
+	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r);
     }
 }
 
@@ -1576,6 +1584,8 @@ make_world(Window_Data *window
 
     auto *e_ptr = get_entity(ev);
 
+    e_ptr->physics.enabled = false;
+
     entities.camera_bound_entity = ev.id;
     entities.input_bound_entity = ev.id;
 
@@ -1585,13 +1595,16 @@ make_world(Window_Data *window
 
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
-				, glm::vec3(0.0f, 30.0f, 0.0f)
+				, glm::vec3(50.0f, 10.0f, 280.0f)
 				, glm::vec3(0.0f)
 				, glm::quat(0, 0, 0, 0));
 
     Entity_View rv = add_entity(r);
 
     auto *r_ptr = get_entity(rv);
+
+    r_ptr->on_t = &terrain_master.red_mesh;
+    r_ptr->physics.enabled = true;
 
     make_entity_renderable(r_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
@@ -1775,10 +1788,18 @@ handle_input(Window_Data *window
     
     if (window->key_map[GLFW_KEY_SPACE])
     {
-	if (detected_collision)
+	if (e_ptr->physics.enabled)
 	{
-	    e_ptr->ws_v += up * 5000.0f * dt;
-	    e_ptr->ws_p += e_ptr->ws_v * dt;
+	    if (detected_collision)
+	    {
+		// give some velotity towards the up vector
+		e_ptr->ws_v += up * 5000.0f * dt;
+		e_ptr->ws_p += e_ptr->ws_v * dt;
+	    }
+	}
+	else
+	{
+	    acc_v(up, res);
 	}
     }
     

@@ -7,7 +7,6 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
- 
 #define MAX_ENTITIES_UNDER_TOP 10
 #define MAX_ENTITIES_UNDER_PLANET 150
 
@@ -18,7 +17,7 @@ global_var struct World
     Camera user_camera;
 } world;
 
-// almost acts like the actual render component object itself
+// almost acts like the actual render component object itself
 struct Material
 {
     // ---- push constant information
@@ -326,11 +325,123 @@ detect_terrain_collision(const glm::vec3 &ws_p
 
     glm::vec3 ts_p = glm::vec3(ws_to_ts * glm::vec4(ws_p, 1.0f));
 
-    glm::vec3 ts_at = glm::vec3(ts_p.x, 0.0f, ts_p.z);
+    glm::vec2 ts_p_xz = glm::vec2(ts_p.x, ts_p.z);
+
+    // is outside the terrain
+    if (ts_p_xz.x < 0.0f && ts_p_xz.x > t->xz_dim.x
+	&& ts_p_xz.y < 0.0f && ts_p_xz.y > t->xz_dim.y)
+    {
+	return {false};
+    }
+
+    // position of the player on one tile (square - two triangles)
+    glm::vec2 ts_position_on_tile = glm::vec2(ts_p_xz.x - glm::floor(ts_p_xz.x)
+					      , ts_p_xz.y - glm::floor(ts_p_xz.y));
+
+    // starting from (0, 0)
+    glm::ivec2 ts_tile_corner_position = glm::ivec2(glm::floor(ts_p_xz));
+
+
+    // wrong math probably
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const glm::vec2 &offset_a
+										     , const glm::vec2 &offset_b
+										     , const glm::vec2 &offset_c) -> f32
+    {
+	f32 tl_x = ts_tile_corner_position.x;
+	f32 tl_z = ts_tile_corner_position.y;
+	
+	u32 triangle_indices[3] =
+	{
+	    get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.y)
+	    , get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.y)
+	    , get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.y)
+	};
+
+	f32 *terrain_heights = (f32 *)t->mapped_gpu_heights.data;
+	glm::vec3 a = glm::vec3(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
+	glm::vec3 b = glm::vec3(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
+	glm::vec3 c = glm::vec3(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
+
+	return(barry_centric(a, b, c, ts_position_on_tile));
+    };
+    
+    f32 ts_height;
+    
+    if (ts_tile_corner_position.x % 2 == 0)
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
+						   , glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 1.0f));
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
+						   , glm::vec2(1.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f));
+	    }
+	}
+	else
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f));
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f)
+						   , glm::vec2(0.0f, 0.0f));
+	    }
+	}
+    }
+    else
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f));
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f)
+						   , glm::vec2(0.0f, 0.0f));
+	    }
+	}
+	else
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
+						   , glm::vec2(0.0f, 1.0f)
+						   , glm::vec2(1.0f, 1.0f));
+
+		
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
+						   , glm::vec2(1.0f, 1.0f)
+						   , glm::vec2(1.0f, 0.0f));
+	    }
+	}
+    }
+    
+    // result of the terrain collision in terrain space
+    glm::vec3 ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
 
     glm::vec3 ws_at = glm::vec3(compute_ts_to_ws_matrix(t) * glm::vec4(ts_at, 1.0f));
     
-    if (ts_p.y < 0.00000001f)
+    if (ts_p.y < 0.00000001f + ts_height)
     {
 	return {true, ws_at};
     }
@@ -559,16 +670,6 @@ make_3D_terrain_mesh_instance(u32 width_x
     cpu_side_heights = (f32 *)allocate_free_list(sizeof(f32) * width_x * depth_z);
     memset(cpu_side_heights, 0, sizeof(f32) * width_x * depth_z);
 
-    // ---- testing normal calculation in the geometry shader ----
-    /*    for (u32 z = 0; z < depth_z; ++z)
-    {
-	for (u32 x = 0; x < width_x; ++x)
-	{
-	    u32 index = get_terrain_index(x, z, depth_z);
-	    cpu_side_heights[index] = sin((f32)x / 10.0f) * cos((f32)z / 4.0f) * 3.0f;
-	}
-    }*/
-
     Vulkan::init_buffer(sizeof(f32) * width_x * depth_z
 			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 			, VK_SHARING_MODE_EXCLUSIVE
@@ -580,15 +681,8 @@ make_3D_terrain_mesh_instance(u32 width_x
 
     mapped_gpu_heights->begin(gpu);
     memset(mapped_gpu_heights->data, 0, sizeof(f32) * width_x * depth_z);
-    //    memcpy(mapped_gpu_heights->data, cpu_side_heights, width_x * depth_z * sizeof(f32));
 
     mapped_gpu_heights->flush(0, sizeof(f32) * width_x * depth_z, gpu);
-    
-    /*Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * width_x * depth_z, cpu_side_heights}
-							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-							  , cmdpool
-							  , gpu_side_heights
-							  , gpu);*/
 }
 
 internal void
@@ -1163,6 +1257,7 @@ struct Entity
     // in above entity group space
     glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
     glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 size{1.0f};
 
     // for now is a pointer
     Morphable_Terrain *on_t;
@@ -1318,7 +1413,7 @@ update_entities(f32 dt)
 	
 	update_entity_physics(&entities.entity_list[i], dt);
 	
-	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r);
+	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
     }
 }
 
@@ -1584,7 +1679,7 @@ make_world(Window_Data *window
 
     auto *e_ptr = get_entity(ev);
 
-    e_ptr->physics.enabled = false;
+    e_ptr->physics.enabled = true;
 
     entities.camera_bound_entity = ev.id;
     entities.input_bound_entity = ev.id;
@@ -1595,9 +1690,11 @@ make_world(Window_Data *window
 
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
-				, glm::vec3(50.0f, 10.0f, 280.0f)
+				, glm::vec3(80.0f, 10.0f, 280.0f)
 				, glm::vec3(0.0f)
 				, glm::quat(0, 0, 0, 0));
+
+    r.size = glm::vec3(5.0f);
 
     Entity_View rv = add_entity(r);
 

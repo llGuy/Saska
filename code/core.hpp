@@ -578,3 +578,6 @@ template <typename T> struct Registered_Memory
 
 // piece of memory that is registered with a name
 template <typename T> using R_Mem = Registered_Memory<T>; 
+
+extern f32
+barry_centric(const glm::vec3 &p1, const glm::vec3 &p2, const glm::vec3 &p3, const glm::vec2 &pos);

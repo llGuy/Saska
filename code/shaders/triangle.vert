@@ -16,10 +16,16 @@ layout(location = 0) in vec3 vertex_position;
 layout(location = 1) in vec3 vertex_color;
 layout(location = 2) in vec2 uvs;
 
-layout(location = 0) out vec3 frag_final;
-layout(location = 1) out vec2 frag_uvs;
-layout(location = 2) out vec3 frag_position;
-layout(location = 3) out vec3 frag_normal;
+
+layout(location = 0) out VS_DATA
+{
+
+    vec3 final;
+    vec2 uvs;
+    vec3 position;
+    vec3 normal;
+    
+} vs_out;
 
 void
 main(void)
@@ -27,11 +33,11 @@ main(void)
     vec4 ws_position = push_k.model * vec4(vertex_position, 1.0);
     
     gl_Position = ubo.proj * ubo.view * ws_position;
-    frag_final = vertex_color;
-    frag_uvs = uvs;
+    vs_out.final = vertex_color;
+    vs_out.uvs = uvs;
 
-    frag_position = ws_position.xyz;
+    vs_out.position = ws_position.xyz;
 
-    frag_normal = vec3(push_k.model * vec4(normalize(vertex_position), 0.0));
+    vs_out.normal = vec3(push_k.model * vec4(normalize(vertex_position), 0.0));
     // for the moment, just using this to test lighting
 }

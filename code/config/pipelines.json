@@ -103,6 +103,7 @@
 	
 	"stages": {
 	    "v": "shaders/SPV/triangle.vert.spv",
+	    "g": "shaders/SPV/triangle.geom.spv",
 	    "f": "shaders/SPV/triangle.frag.spv"
 	},
 	"assemble": {

@@ -39,6 +39,6 @@ void main(void)
 
     out_normal = vec4(fs_in.normal, 1.0);
 
-    set_roughness(0.2);
-    set_metalness(0.8);
+    set_roughness(0.6);
+    set_metalness(0.2);
 }

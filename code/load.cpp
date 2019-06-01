@@ -1033,8 +1033,8 @@ load_render_passes_from_json(Vulkan::GPU *gpu
 
 	    // make the subpass description
 	    subpass_descriptions[current_subpass] = Vulkan::init_subpass_description(c
-											 , d.buffer
-											 , i);
+										     , d.buffer
+										     , i);
 	}
 
 	// start making the dependencies

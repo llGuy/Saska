@@ -1,6 +1,9 @@
-C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/triangle.vert.spv triangle.vert
-C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/triangle.geom.spv triangle.geom	
-C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/triangle.frag.spv triangle.frag
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/model.vert.spv model.vert
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/model.geom.spv model.geom	
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/model.frag.spv model.frag
+
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/model_shadow.vert.spv model_shadow.vert
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/model_shadow.frag.spv model_shadow.frag 
 
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/deferred_lighting.vert.spv deferred_lighting.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/deferred_lighting.frag.spv deferred_lighting.frag

@@ -33,6 +33,41 @@
 	    "subpass": 1
 	}
     },
+    
+    "pipeline.model_shadow": {
+	"new": true,
+	
+	"stages": {
+	    "v": "shaders/SPV/model_shadow.vert.spv",
+	    "f": "shaders/SPV/model_shadow.frag.spv"
+	},
+	"assemble": {
+	    "topology": "l",
+	    "restart": false
+	},
+	"raster": {
+	    "poly_mode": "f",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "descriptor_set_layouts": ["descriptor_set_layout.deferred_layout"],
+
+	    "push_constant": {
+		"stage_flags": "f",
+		"offset": 0,
+		"size": 100
+	    }
+	},
+	"viewport": [0, 0],
+	"blend": [],
+	"vertex_input": "vulkan_model.test_model",
+	"depth": true,
+	"render_pass": {
+	    "name": "render_pass.shadow_render_pass",
+	    "subpass": 0
+	}
+    },
+    
     "pipeline.atmosphere_pipeline": {
 	"new": true,
 	
@@ -102,9 +137,9 @@
 	"new": true,
 	
 	"stages": {
-	    "v": "shaders/SPV/triangle.vert.spv",
-	    "g": "shaders/SPV/triangle.geom.spv",
-	    "f": "shaders/SPV/triangle.frag.spv"
+	    "v": "shaders/SPV/model.vert.spv",
+	    "g": "shaders/SPV/model.geom.spv",
+	    "f": "shaders/SPV/model.frag.spv"
 	},
 	"assemble": {
 	    "topology": "l",

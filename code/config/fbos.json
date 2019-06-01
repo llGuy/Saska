@@ -58,5 +58,25 @@
 	
 	"compatible_render_pass": "render_pass.atmosphere_render_pass",
 	"layers": 6
+    },
+
+    "framebuffer.shadow_fbo": {
+	"new": true,
+	
+	"width": 1000,
+	"height": 1000,
+	"insert_swapchain_imgs_at_0": false,
+	"color_attachment_count": 0,
+
+	"depth_attachment": {
+	    "new": true,
+	    "name": "image2D.shadow_map",
+	    "to_create": true,
+	    "index": 0,
+	    "usage": "d"
+	},
+	
+	"compatible_render_pass": "render_pass.shadow_render_pass",
+	"layers": 1
     }
 }

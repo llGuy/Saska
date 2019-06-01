@@ -524,6 +524,8 @@ main(s32 argc
 	OUTPUT_DEBUG_LOG("finished session : FPS : %f\n", fps);
 
 	printf("%f\n", fps);
+
+	std::cout << std::endl;
 	
 	close_debug_file();
 

@@ -34,6 +34,6 @@ main(void)
     out_position = vec4(fs_in.ws_position, 1.0);
     out_normal = vec4(fs_in.ws_normal, 1.0);
 
-    set_roughness(0.5);
-    set_metalness(0.1);
+    set_roughness(0.7);
+    set_metalness(0.3);
 }

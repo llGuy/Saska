@@ -133,6 +133,7 @@ struct Render_Command_Recorder
 
 
 
+
 // ---- terrain code ----
 struct Morphable_Terrain
 {
@@ -1007,6 +1008,11 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 	    alignas(16) glm::mat4 model_matrix;
 	    alignas(16) glm::mat4 view_matrix;
 	    alignas(16) glm::mat4 projection_matrix;
+	    
+	    alignas(16) glm::mat4 shadow_projection_matrix;
+	    alignas(16) glm::mat4 shadow_view_matrix;
+
+	    bool render_to_shadow;
 	};
 	
 	u32 uniform_buffer_count = swapchain->imgs.count;
@@ -1071,6 +1077,43 @@ render_skybox(const Memory_Buffer_View<VkBuffer> &cube_vbos
 // ---- to orgnise later on ----
 global_var glm::vec3 light_pos = glm::vec3(0.0f, 10.0f, 0.0f);
 
+// lighting stuff
+struct Shadow_Data
+{
+    f32 far_width, far_height;
+    f32 near_width, near_height;
+
+    enum Ortho_Corner : s32
+    {
+	flt, flb,
+	frt, frb,
+	nlt, nlb,
+	nrt, nrb
+    };
+
+    f32 x_min, y_min, z_min;
+    f32 x_max, y_max, z_max;
+
+    glm::vec4 vs_corners[8];
+
+    glm::mat4 light_view_matrix;
+    glm::mat4 projection_matrix;
+    glm::mat4 shadow_bias;
+};
+
+void
+make_shadow_map_data(void)
+{
+    
+}
+
+void
+update_shadow_map_bounding_box(void)
+{
+    
+}
+
+
 
 
 
@@ -1125,6 +1168,7 @@ internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
+	     , Memory_Buffer_View<Vulkan::Buffer> &ubos
 	     , VkCommandBuffer *cmdbuf)
 {
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
@@ -1738,6 +1782,11 @@ update_ubo(u32 current_image
 	alignas(16) glm::mat4 model_matrix;
 	alignas(16) glm::mat4 view_matrix;
 	alignas(16) glm::mat4 projection_matrix;
+
+	alignas(16) glm::mat4 shadow_projection_matrix;
+	alignas(16) glm::mat4 shadow_view_matrix;
+
+	bool render_to_shadow;
     };
 	
     persist auto start_time = std::chrono::high_resolution_clock::now();
@@ -1760,6 +1809,8 @@ update_ubo(u32 current_image
 
     ubo.projection_matrix[1][1] *= -1;
 
+    ubo.render_to_shadow = false;
+
     Vulkan::Buffer &current_ubo = uniform_buffers[current_image];
 
     auto map = current_ubo.construct_map();
@@ -1767,7 +1818,6 @@ update_ubo(u32 current_image
     map.fill(Memory_Byte_Buffer{sizeof(ubo), &ubo});
     map.end(gpu);
 }
-
 
 
 
@@ -1793,7 +1843,7 @@ render_frame(Vulkan::State *vulkan_state
 	       , ubo_mbv
 	       , &world);
 
-    render_world(vulkan_state, image_index, current_frame, cmdbuf);
+    render_world(vulkan_state, image_index, current_frame, ubo_mbv, cmdbuf);
     // ---- exit ----
 }
 
@@ -1818,6 +1868,7 @@ update_world(Window_Data *window
 
 
 #include <glm/gtx/string_cast.hpp>
+
 
 void
 handle_input(Window_Data *window

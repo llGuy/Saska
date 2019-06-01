@@ -34,16 +34,18 @@ get_normal(int i1, int i2, int i3)
 {
     vec3 diff_world_pos1 = normalize(gs_in[i2].ws_position - gs_in[i1].ws_position);
     vec3 diff_world_pos2 = normalize(gs_in[i3].ws_position - gs_in[i2].ws_position);
-    return(-normalize(cross(diff_world_pos2, diff_world_pos1)));
+    return(normalize(cross(diff_world_pos2, diff_world_pos1)));
 }
 
 void
 main(void)
 {
+    vec3 normal = vec3(vec4(get_normal(0, 1, 2), 0.0));
+    
     for (int i = 0; i < 3; ++i)
     {
 	gs_out.ws_position = gs_in[i].ws_position;
-	gs_out.ws_normal = get_normal(i, (i + 1) % 3, (i + 2) % 3);
+	gs_out.ws_normal = normal;
 	gs_out.color = gs_in[i].color;
 
 	gl_Position = gl_in[i].gl_Position;

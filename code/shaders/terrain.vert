@@ -33,10 +33,11 @@ main(void)
     // ---- create the 3D mesh position ----
     vec3 ms_position = vec3(ms_xz.x, ms_y, ms_xz.y);
     vec4 ws_position = push_k.model * vec4(ms_position, 1.0);
+    vec4 vs_position = ubo.view * ws_position;
 
-    gl_Position = ubo.proj * ubo.view * ws_position;
+    gl_Position = ubo.proj * vs_position;
 
-    vs_out.ws_position = ws_position.xyz;
-    vs_out.ws_normal = normalize(ws_position.xyz);
+    vs_out.ws_position = vs_position.xyz;
+    vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
 }

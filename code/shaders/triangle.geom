@@ -9,7 +9,6 @@ layout(location = 0) in VS_DATA
     vec3 final;
     vec2 uvs;
     vec3 position;
-    vec3 normal;
     
 } gs_in[];
 
@@ -42,9 +41,9 @@ layout(push_constant) uniform Push_Constants
 vec3
 get_normal(int i1, int i2, int i3)
 {
-    vec3 diff_world_pos1 = normalize(gs_in[i2].position - gs_in[i1].position);
-    vec3 diff_world_pos2 = normalize(gs_in[i3].position - gs_in[i2].position);
-    return(-normalize(cross(diff_world_pos2, diff_world_pos1)));
+    vec3 vs_diff_pos1 = normalize(gs_in[i2].position - gs_in[i1].position);
+    vec3 vs_diff_pos2 = normalize(gs_in[i3].position - gs_in[i2].position);
+    return(normalize(cross(vs_diff_pos2, vs_diff_pos1)));
 }
 
 void

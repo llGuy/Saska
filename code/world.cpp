@@ -328,8 +328,8 @@ detect_terrain_collision(const glm::vec3 &ws_p
     glm::vec2 ts_p_xz = glm::vec2(ts_p.x, ts_p.z);
 
     // is outside the terrain
-    if (ts_p_xz.x < 0.0f && ts_p_xz.x > t->xz_dim.x
-	&& ts_p_xz.y < 0.0f && ts_p_xz.y > t->xz_dim.y)
+    if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
+        ||  ts_p_xz.y < 0.0f || ts_p_xz.y > t->xz_dim.y)
     {
 	return {false};
     }
@@ -901,7 +901,7 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 	
 	VkDescriptorSetLayoutBinding bindings[] =
 	    {
-		Vulkan::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, 1, VK_SHADER_STAGE_VERTEX_BIT)
+		Vulkan::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT)
 	    };
 	
 	Vulkan::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{1, bindings}
@@ -1186,9 +1186,11 @@ render_world(Vulkan::State *vk
     struct Deferred_Lighting_Push_K
     {
 	glm::vec4 light_position;
+	glm::mat4 view_matrix;
     } deferred_push_k;
     
     deferred_push_k.light_position = glm::vec4(glm::normalize(-light_pos), 1.0f);
+    deferred_push_k.view_matrix = world.user_camera.v_m;
     
     Vulkan::command_buffer_push_constant(&deferred_push_k
 					 , sizeof(deferred_push_k)
@@ -1658,7 +1660,7 @@ make_world(Window_Data *window
 	terrain_master.red_mesh.ws_p = glm::vec3(0.0f, 0.0f, 200.0f);
 	terrain_master.red_mesh.gs_r = glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)));
 	terrain_master.red_mesh.size = glm::vec3(15.0f);
-	terrain_master.red_mesh.push_k.color = glm::vec3(0.6, 0.1, 0.2) * 0.7f;
+	terrain_master.red_mesh.push_k.color = glm::vec3(255.0f, 69.0f, 0.0f) / 256.0f;
 	terrain_master.red_mesh.push_k.transform =
 	    glm::translate(terrain_master.red_mesh.ws_p)
 	    * glm::mat4_cast(terrain_master.red_mesh.gs_r)
@@ -1679,7 +1681,7 @@ make_world(Window_Data *window
 
     auto *e_ptr = get_entity(ev);
 
-    e_ptr->physics.enabled = true;
+    e_ptr->physics.enabled = false;
 
     entities.camera_bound_entity = ev.id;
     entities.input_bound_entity = ev.id;
@@ -1690,18 +1692,18 @@ make_world(Window_Data *window
 
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
-				, glm::vec3(80.0f, 10.0f, 280.0f)
+				, glm::vec3(200.0f, -40.0f, 300.0f)
 				, glm::vec3(0.0f)
 				, glm::quat(0, 0, 0, 0));
 
-    r.size = glm::vec3(5.0f);
+    r.size = glm::vec3(10.0f);
 
     Entity_View rv = add_entity(r);
 
     auto *r_ptr = get_entity(rv);
 
     r_ptr->on_t = &terrain_master.red_mesh;
-    r_ptr->physics.enabled = true;
+    r_ptr->physics.enabled = false;
 
     make_entity_renderable(r_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
@@ -1890,7 +1892,7 @@ handle_input(Window_Data *window
 	    if (detected_collision)
 	    {
 		// give some velotity towards the up vector
-		e_ptr->ws_v += up * 5000.0f * dt;
+		e_ptr->ws_v += up * 5.0f;
 		e_ptr->ws_p += e_ptr->ws_v * dt;
 	    }
 	}

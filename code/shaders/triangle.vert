@@ -31,13 +31,12 @@ void
 main(void)
 {
     vec4 ws_position = push_k.model * vec4(vertex_position, 1.0);
+    vec4 vs_position = ubo.view * ws_position;
     
-    gl_Position = ubo.proj * ubo.view * ws_position;
-    vs_out.final = vertex_color;
+    gl_Position = ubo.proj * vs_position;
+    vs_out.final = vec3(0.7, 0.2, 0.3);
+    vs_out.final = vec3(0.0, 69.0, 255.0) / 256.0;
     vs_out.uvs = uvs;
 
-    vs_out.position = ws_position.xyz;
-
-    vs_out.normal = vec3(push_k.model * vec4(normalize(vertex_position), 0.0));
-    // for the moment, just using this to test lighting
+    vs_out.position = vs_position.xyz;
 }

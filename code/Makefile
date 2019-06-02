@@ -29,7 +29,7 @@ $(OBJDIR)%.dep: %.cpp
 clean:
 	rm $(BINDIR)*.exe $(OBJDIR)*.obj $(OBJDIR)*.ilk $(OBJDIR)*.pdb *.dep
 
-run: 
+run: $(BINDIR)$(EXENAME)
 	$(EXENAME)
 
 display:

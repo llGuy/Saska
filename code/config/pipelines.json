@@ -1,4 +1,38 @@
 {
+
+    "pipeline.screen_quad": {
+	"new": true,
+	
+	"stages": {
+	    "v": "shaders/SPV/screen_quad.vert.spv",
+	    "f": "shaders/SPV/screen_quad.frag.spv"
+	},
+	"assemble": {
+	    "topology": "s",
+	    "restart": false
+	},
+	"raster": {
+	    "poly_mode": "f",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "descriptor_set_layouts": ["descriptor_set_layout.2D_sampler_layout"],
+
+	    "push_constant": {
+		"stage_flags": "v",
+		"offset": 0,
+		"size": 100
+	    }
+	},
+	"viewport": [0, 0],
+	"blend": ["disable"],
+	"vertex_input": "",
+	"depth": false,
+	"render_pass": {
+	    "name": "render_pass.deferred_render_pass",
+	    "subpass": 1
+	}
+    },
     
     "pipeline.deferred_pipeline": {
 	"new": true,

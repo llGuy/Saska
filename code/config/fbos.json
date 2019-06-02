@@ -67,16 +67,15 @@
 	"height": 1000,
 	"insert_swapchain_imgs_at_0": false,
 	"color_attachment_count": 0,
-
+	"compatible_render_pass": "render_pass.shadow_render_pass",
+	
 	"depth_attachment": {
 	    "new": true,
 	    "name": "image2D.shadow_map",
 	    "to_create": true,
+	    "sampler": true,
 	    "index": 0,
-	    "usage": "d"
-	},
-	
-	"compatible_render_pass": "render_pass.shadow_render_pass",
-	"layers": 1
+	    "usage": "ds"
+	}
     }
 }

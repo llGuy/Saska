@@ -721,6 +721,25 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 								   , index
 								   , make_new_img);
 		    }
+
+		    bool sampler = c.value().find("sampler") != c.value().end();
+		    if (sampler)
+		    {
+			Vulkan::init_image_sampler(VK_FILTER_LINEAR
+						   , VK_FILTER_LINEAR
+						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+						   , VK_TRUE
+						   , 16
+						   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+						   , VK_TRUE
+						   , VK_COMPARE_OP_ALWAYS
+						   , VK_SAMPLER_MIPMAP_MODE_LINEAR
+						   , 0.0f, 0.0f, 0.0f
+						   , gpu
+						   , &color_imgs[attachment].img->image_sampler);
+		    }
 		}
 		else
 		{
@@ -754,12 +773,33 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					  , height
 					  , depth_att_index
 					  , make_new_dep);
+
+		bool sampler = depth_att_info.value().find("sampler") != depth_att_info.value().end();
+		if (sampler)
+		{
+		    Vulkan::init_image_sampler(VK_FILTER_LINEAR
+					       , VK_FILTER_LINEAR
+					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+					       , VK_TRUE
+					       , 16
+					       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+					       , VK_TRUE
+					       , VK_COMPARE_OP_ALWAYS
+					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
+					       , 0.0f, 0.0f, 0.0f
+					       , gpu
+					       , &depth.img->image_sampler);
+		}
 	    }
 	    else
 	    {
 		depth.img = get_memory(init_const_str(depth_att_name.c_str(), depth_att_name.length()));
 		depth.index = depth_att_index;
 	    }
+
+	    
 	}
 	
 	std::string compatible_render_pass_name = i.value().find("compatible_render_pass").value();
@@ -1306,6 +1346,29 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 									       , binding_desc.value().find("count").value()
 									       , &image_infos_cache[image_info_cache_index]
 									       , &writes[write_index]);
+			    
+			    ++image_info_cache_index;
+			}
+			else if (type_str == "sampler")
+			{
+			    auto image_info = binding_desc.value().find("image");
+			    std::string image_name = image_info.value().find("name").value();
+			    
+			    char layout_code = std::string(image_info.value().find("layout").value())[0];
+			    VkImageLayout layout = make_image_layout_from_code(layout_code);
+			    
+			    R_Mem<Vulkan::Image2D> image = get_memory(init_const_str(image_name.c_str(), image_name.length()));
+
+			    image_infos_cache[image_info_cache_index] = {};
+			    Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
+
+			    writes[write_index] = {};
+			    Vulkan::init_image_descriptor_set_write(&sets.p[set_i]
+								    , binding_desc.value().find("binding").value()
+								    , binding_desc.value().find("dst_element").value()
+								    , binding_desc.value().find("count").value()
+								    , &image_infos_cache[image_info_cache_index]
+								    , &writes[write_index]);
 			    
 			    ++image_info_cache_index;
 			}

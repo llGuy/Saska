@@ -40,7 +40,7 @@ main(void)
     
     gl_Position = ubo.proj * vs_position;
     vs_out.final = vec3(0.7, 0.2, 0.3);
-    vs_out.final = vec3(0.0, 69.0, 255.0) / 256.0;
+    vs_out.final = vec3(0.6, 0.0, 0.6);
     vs_out.uvs = uvs;
 
     vs_out.position = vs_position.xyz;

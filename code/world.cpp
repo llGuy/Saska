@@ -87,13 +87,25 @@ struct Render_Command_Recorder
     }
 
     void
-    update(VkCommandBuffer *cmdbufs_pool, const Memory_Buffer_View<VkDescriptorSet> &sets)
+    execute(VkCommandBuffer *cmdbufs_pool
+	    , VkCommandBuffer *dst)
     {
+	Vulkan::command_buffer_execute_commands(dst
+						, {1, &cmdbufs_pool[cmdbuf_index]});
+    }
+    
+    void
+    update(VkCommandBuffer *cmdbufs_pool
+	   , const Memory_Buffer_View<VkDescriptorSet> &sets
+	   , Vulkan::Graphics_Pipeline *in_ppln = nullptr)
+    {
+	if (!in_ppln) in_ppln = ppln.p;
+	
 	Vulkan::begin_command_buffer(&cmdbufs_pool[cmdbuf_index], 0, nullptr);
 	    
-	Vulkan::command_buffer_bind_pipeline(ppln.p, &cmdbufs_pool[cmdbuf_index]);
+	Vulkan::command_buffer_bind_pipeline(in_ppln, &cmdbufs_pool[cmdbuf_index]);
 
-	Vulkan::command_buffer_bind_descriptor_sets(ppln.p
+	Vulkan::command_buffer_bind_descriptor_sets(in_ppln
 						    , sets
 						    , &cmdbufs_pool[cmdbuf_index]);
 
@@ -118,7 +130,7 @@ struct Render_Command_Recorder
 						 , mtrl->push_k_size
 						 , 0
 						 , push_k_dst
-						 , ppln.p
+						 , in_ppln
 						 , &cmdbufs_pool[cmdbuf_index]);
 
 	    Vulkan::command_buffer_draw_indexed(&cmdbufs_pool[cmdbuf_index]
@@ -849,6 +861,10 @@ global_var struct World_Rendering_Master_Data
 	Vulkan::Descriptor_Pool pool;
     } desc;
 
+    struct Screen_Quad
+    {
+	R_Mem<Vulkan::Graphics_Pipeline> quad_ppln;
+    } screen_quad;
     
 
     // ---- renderers ----
@@ -1075,42 +1091,119 @@ render_skybox(const Memory_Buffer_View<VkBuffer> &cube_vbos
 
 
 // ---- to orgnise later on ----
-global_var glm::vec3 light_pos = glm::vec3(0.0f, 10.0f, 0.0f);
+global_var glm::vec3 light_pos = glm::vec3(0.00000001f, 10.0f, 0.00000001f);
 
 // lighting stuff
-struct Shadow_Data
+global_var struct Shadow_Data
 {
-    f32 far_width, far_height;
-    f32 near_width, near_height;
 
+    R_Mem<Vulkan::Framebuffer> fbo;
+    R_Mem<Vulkan::Render_Pass> pass;
+    R_Mem<Vulkan::Image2D> map;
+    R_Mem<Vulkan::Descriptor_Set> set;
+    
+    R_Mem<Vulkan::Graphics_Pipeline> model_shadow_ppln;
+    R_Mem<Vulkan::Graphics_Pipeline> terrain_shadow_ppln;
+    
+    glm::mat4 light_view_matrix;
+    glm::mat4 projection_matrix;
+    glm::mat4 shadow_bias;
+    
+} shadow_data;
+
+glm::mat4
+make_shadow_bias_base_matrix(void)
+{
+    return glm::mat4(0.5, 0.0, 0.0, 0.0
+		     , 0.0, 0.5, 0.0, 0.0
+		     , 0.0, 0.0, 0.5, 0.0
+		     , 0.5, 0.5, 0.5, 1.0);
+}
+
+void
+make_shadow_map_data(void)
+{
+    glm::vec3 light_pos_normalized = glm::normalize(light_pos);
+    shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+    shadow_data.fbo = get_memory("framebuffer.shadow_fbo"_hash);
+    shadow_data.pass = get_memory("render_pass.shadow_render_pass"_hash);
+    shadow_data.map = get_memory("image2D.shadow_map"_hash);
+    shadow_data.set = get_memory("descriptor_set.shadow_map_set"_hash);
+    shadow_data.model_shadow_ppln = get_memory("pipeline.model_shadow"_hash);
+}
+
+glm::mat4
+update_shadow_map_bounding_box(f32 far
+			       , f32 near
+			       , f32 fov
+			       , f32 aspect
+			       , const glm::vec3 &ws_p
+			       , const glm::vec3 &ws_d
+			       , const glm::vec3 &ws_up)
+{
+    f32 far_width, near_width, far_height, near_height;
+    
+    far_width = 2.0f * far * tan(glm::radians(fov));
+    near_width = 2.0f * near * tan(glm::radians(fov));
+    far_height = far_width / aspect;
+    near_height = near_width / aspect;
+
+    glm::vec3 right_view_ax = glm::normalize(glm::cross(ws_d, ws_up));
+    glm::vec3 up_view_ax = glm::normalize(glm::cross(ws_d, right_view_ax));
+
+    f32 far_width_half = far_width / 2.0f;
+    f32 near_width_half = near_width / 2.0f;
+    f32 far_height_half = far_height / 2.0f;
+    f32 near_height_half = near_height / 2.0f;
+
+    // f = far, n = near, l = left, r = right, t = top, b = bottom
     enum Ortho_Corner : s32
     {
 	flt, flb,
 	frt, frb,
 	nlt, nlb,
 	nrt, nrb
-    };
+    };    
 
-    f32 x_min, y_min, z_min;
-    f32 x_max, y_max, z_max;
+    // light space
+    glm::vec4 ls_corners[8];
 
-    glm::vec4 vs_corners[8];
-
-    glm::mat4 light_view_matrix;
-    glm::mat4 projection_matrix;
-    glm::mat4 shadow_bias;
-};
-
-void
-make_shadow_map_data(void)
-{
+    ls_corners[flt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    ls_corners[flb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-}
-
-void
-update_shadow_map_bounding_box(void)
-{
+    ls_corners[frt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    ls_corners[frb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
+    ls_corners[nlt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    ls_corners[nlb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+
+    ls_corners[nrt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    ls_corners[nrb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+
+    f32 x_min, x_max, y_min, y_max, z_min, z_max;
+
+    x_min = x_max = ls_corners[0].x;
+    y_min = y_max = ls_corners[0].y;
+    z_min = z_max = ls_corners[0].z;
+
+    for (u32 i = 1; i < 8; ++i)
+    {
+	if (x_min > ls_corners[i].x) x_min = ls_corners[i].x;
+	if (x_max < ls_corners[i].x) x_max = ls_corners[i].x;
+
+	if (y_min > ls_corners[i].y) y_min = ls_corners[i].y;
+	if (y_max < ls_corners[i].y) y_max = ls_corners[i].y;
+
+	if (z_min > ls_corners[i].z) z_min = ls_corners[i].z;
+	if (z_max < ls_corners[i].z) z_max = ls_corners[i].z;
+    }
+
+    shadow_data.projection_matrix = glm::ortho<f32>(x_min, x_max, y_min, y_max, z_min, z_max);
+    
+    shadow_data.shadow_bias = make_shadow_bias_base_matrix() * shadow_data.projection_matrix * shadow_data.light_view_matrix;
+
+    return glm::mat4();
 }
 
 
@@ -1165,6 +1258,27 @@ internal void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set);
 
 internal void
+update_shadow_map(VkCommandBuffer *cmdbuf
+		  , VkDescriptorSet *ubo)
+{
+    VkClearValue clears[] = {Vulkan::init_clear_color_depth(1.0f, 0)};
+    Vulkan::command_buffer_begin_render_pass(shadow_data.pass.p
+					     , shadow_data.fbo.p
+					     , Vulkan::init_render_area({0, 0}, {1000, 1000})
+					     , {1, clears}
+					     , VK_SUBPASS_CONTENTS_INLINE
+					     , cmdbuf);
+    
+    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool
+					   , {1, ubo}
+					   , shadow_data.model_shadow_ppln.p);
+
+    world_rendering.player_recorder.execute(world_rendering.recording_buffer_pool, cmdbuf);
+    
+    Vulkan::command_buffer_end_render_pass(cmdbuf);
+}
+
+internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
@@ -1175,6 +1289,9 @@ render_world(Vulkan::State *vk
     
     // ---- update the skybox (in the future, only do when necessary, not every frame) ----
     //    update_skybox(cmdbuf);
+
+    update_shadow_map(cmdbuf
+		      , &world_rendering.test.sets[image_index].set);
     
     // ---- record command buffer for rendering each different type of entity ----
     VkDescriptorSet test_sets[2] = {world_rendering.test.sets[image_index].set
@@ -1244,7 +1361,35 @@ render_world(Vulkan::State *vk
 					 , cmdbuf);
     
     Vulkan::command_buffer_draw(cmdbuf
-				, 3, 1, 0, 0);
+				, 4, 1, 0, 0);
+
+
+    // ---- draw textured quad ----
+    struct Screen_Quad
+    {
+	glm::vec2 scale;
+	glm::vec2 position;
+    } screen_quad_push_k;
+
+    screen_quad_push_k.scale = glm::vec2(0.1f);
+    screen_quad_push_k.position = glm::vec2(-0.8f, +0.5f);
+
+    Vulkan::command_buffer_bind_pipeline(world_rendering.screen_quad.quad_ppln.p, cmdbuf);
+
+    VkDescriptorSet quad_set[] = {shadow_data.set->set};
+    Vulkan::command_buffer_bind_descriptor_sets(world_rendering.screen_quad.quad_ppln.p
+						, {1, quad_set}
+						, cmdbuf);
+
+    Vulkan::command_buffer_push_constant(&screen_quad_push_k
+					 , sizeof(screen_quad_push_k)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , world_rendering.screen_quad.quad_ppln.p
+					 , cmdbuf);
+
+    Vulkan::command_buffer_draw(cmdbuf
+    				, 4, 1, 0, 0);
     
     Vulkan::command_buffer_end_render_pass(cmdbuf);
     // ---- end of deferred render pass ----
@@ -1601,6 +1746,8 @@ get_registered_objects_from_json(void)
     world_rendering.deferred.descriptor_set     = get_memory("descriptor_set.deferred_descriptor_sets"_hash);
 
     terrain_master.terrain_ppln			= get_memory("pipeline.terrain_pipeline"_hash);
+
+    world_rendering.screen_quad.quad_ppln       = get_memory("pipeline.screen_quad"_hash);
 }
 
 
@@ -1621,7 +1768,8 @@ make_world(Window_Data *window
 
 
 
-    
+
+    std::cout << "JSON > loading render passes" << std::endl;
     load_render_passes_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
@@ -1632,19 +1780,21 @@ make_world(Window_Data *window
 
 
     
+    std::cout << "JSON > loading framebuffers" << std::endl;
     load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
     
     
 
 
-    
+    std::cout << "JSON > loading descriptors" << std::endl;
     load_descriptors_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
     
     
     init_atmosphere_render_descriptor_set(&vk->gpu);
-    
+
+    std::cout << "JSON > loading pipelines" << std::endl;
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
@@ -1738,7 +1888,7 @@ make_world(Window_Data *window
     Entity r = construct_entity("entity.rotating"_hash
 				, glm::vec3(200.0f, -40.0f, 300.0f)
 				, glm::vec3(0.0f)
-				, glm::quat(0, 0, 0, 0));
+				, glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
 
     r.size = glm::vec3(10.0f);
 
@@ -1760,6 +1910,9 @@ make_world(Window_Data *window
 	update_skybox(&cmdbuf);
 	Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, &vk->gpu);
     }
+
+
+    make_shadow_map_data();
 }
 
 

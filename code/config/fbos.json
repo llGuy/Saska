@@ -33,6 +33,7 @@
 	"depth_attachment": {
 	    "new": true,
 	    "name": "image2D.fbo_depth",
+	    "sampler": true,
 	    "to_create": true,
 	    "index": 4,
 	    "usage": "d"
@@ -66,15 +67,26 @@
 	"width": 1000,
 	"height": 1000,
 	"insert_swapchain_imgs_at_0": false,
-	"color_attachment_count": 0,
+	"color_attachment_count": 1,
 	"compatible_render_pass": "render_pass.shadow_render_pass",
+
+	"color_attachments": {
+	    "image2D.shadow_test": {
+		"new": true,
+		"to_create": true,
+		"sampler": true,
+		"index": 0,
+		"format": 8,
+		"usage": "cs"
+	    }
+	},
 	
 	"depth_attachment": {
 	    "new": true,
 	    "name": "image2D.shadow_map",
 	    "to_create": true,
 	    "sampler": true,
-	    "index": 0,
+	    "index": 1,
 	    "usage": "ds"
 	}
     }

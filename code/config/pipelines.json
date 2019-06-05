@@ -42,7 +42,7 @@
 	    "f": "shaders/SPV/deferred_lighting.frag.spv"
 	},
 	"assemble": {
-	    "topology": "l",
+	    "topology": "s",
 	    "restart": false
 	},
 	"raster": {
@@ -92,8 +92,8 @@
 		"size": 100
 	    }
 	},
-	"viewport": [0, 0],
-	"blend": [],
+	"viewport": [1000, 1000],
+	"blend": ["disable"],
 	"vertex_input": "vulkan_model.test_model",
 	"depth": true,
 	"render_pass": {

@@ -32,6 +32,7 @@ struct Material
     Vulkan::Draw_Indexed_Data draw_index_data;
 };
 
+
 // ---- todo in the future ----
 // sort materials out with their models, make renderers handle an array of textures that the user passes in or something if materials use different textures
 // ----
@@ -1259,13 +1260,15 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set
 
 internal void
 update_shadow_map(VkCommandBuffer *cmdbuf
-		  , VkDescriptorSet *ubo)
+		  , VkDescriptorSet *ubo
+		  , Vulkan::Swapchain *swapchain)
 {
-    VkClearValue clears[] = {Vulkan::init_clear_color_depth(1.0f, 0)};
+    VkClearValue clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+			     , Vulkan::init_clear_color_depth(1.0f, 0)};
     Vulkan::command_buffer_begin_render_pass(shadow_data.pass.p
 					     , shadow_data.fbo.p
 					     , Vulkan::init_render_area({0, 0}, {1000, 1000})
-					     , {1, clears}
+					     , {2, clears}
 					     , VK_SUBPASS_CONTENTS_INLINE
 					     , cmdbuf);
     
@@ -1291,7 +1294,8 @@ render_world(Vulkan::State *vk
     //    update_skybox(cmdbuf);
 
     update_shadow_map(cmdbuf
-		      , &world_rendering.test.sets[image_index].set);
+		      , &world_rendering.test.sets[image_index].set
+		      , &vk->swapchain);
     
     // ---- record command buffer for rendering each different type of entity ----
     VkDescriptorSet test_sets[2] = {world_rendering.test.sets[image_index].set
@@ -1371,7 +1375,7 @@ render_world(Vulkan::State *vk
 	glm::vec2 position;
     } screen_quad_push_k;
 
-    screen_quad_push_k.scale = glm::vec2(0.1f);
+    screen_quad_push_k.scale = glm::vec2(0.2f);
     screen_quad_push_k.position = glm::vec2(-0.8f, +0.5f);
 
     Vulkan::command_buffer_bind_pipeline(world_rendering.screen_quad.quad_ppln.p, cmdbuf);
@@ -1389,7 +1393,7 @@ render_world(Vulkan::State *vk
 					 , cmdbuf);
 
     Vulkan::command_buffer_draw(cmdbuf
-    				, 4, 1, 0, 0);
+				, 4, 1, 0, 0);
     
     Vulkan::command_buffer_end_render_pass(cmdbuf);
     // ---- end of deferred render pass ----
@@ -1941,7 +1945,17 @@ update_ubo(u32 current_image
 
 	bool render_to_shadow;
     };
-	
+
+    Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
+    
+    glm::mat4 ortho = update_shadow_map_bounding_box(world->user_camera.f
+						     , world->user_camera.n
+						     , world->user_camera.fov
+						     , world->user_camera.asp
+						     , e_ptr->ws_p
+						     , e_ptr->ws_d
+						     , e_ptr->on_t->ws_n);
+    
     persist auto start_time = std::chrono::high_resolution_clock::now();
 
     auto current_time = std::chrono::high_resolution_clock::now();
@@ -1962,6 +1976,9 @@ update_ubo(u32 current_image
 
     ubo.projection_matrix[1][1] *= -1;
 
+    ubo.shadow_projection_matrix = ortho;
+    ubo.shadow_view_matrix = shadow_data.light_view_matrix;
+    
     ubo.render_to_shadow = false;
 
     Vulkan::Buffer &current_ubo = uniform_buffers[current_image];

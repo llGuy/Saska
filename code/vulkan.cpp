@@ -484,6 +484,7 @@ namespace Vulkan
     }
 
     void
+
     init_image(u32 width
 	       , u32 height
 	       , VkFormat format
@@ -1129,16 +1130,9 @@ namespace Vulkan
 			       , gpu
 			       , attachment);
 
-	/*	VkMemoryRequirements requirements = attachment->get_memory_requirements(gpu);
-	Vulkan::Memory::allocate_gpu_memory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-						, requirements
-						, gpu
-						, &attachment->device_memory);
-						vkBindImageMemory(gpu->logical_device, attachment->image, attachment->device_memory, 0);*/
-	
 	VkImageAspectFlags aspect_flags;
 	if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
-	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+	if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
 	
 	Vulkan::init_image_view(&attachment->image
 				    , format

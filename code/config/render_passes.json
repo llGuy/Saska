@@ -143,8 +143,22 @@
     "render_pass.shadow_render_pass": {
 	"new": true,
 
-	"attachment_count": 1,
+	"attachment_count": 2,
 
+	"color_attachments": {
+	    "c0": {
+		"format": 0,
+		"color_load": "c",
+		"color_store": "s",
+
+		"depth_load": "d",
+		"depth_store": "d",
+
+		"initial_layout": "u",
+		"final_layout": "r"
+	    }
+	},
+	
 	"depth_attachment": {
 	    "format": 1,
 	    "color_load": "c",
@@ -154,19 +168,25 @@
 	    "depth_store": "d",
 
 	    "initial_layout": "u",
-	    "final_layout": "d"
+	    "final_layout": "s"
 	},
 
 	"subpasses": {
 	    "s0": {
+		"color_out": {
+		    "o0": {
+			"index": 0, "layout": "c"
+		    }
+		},
+		
 		"depth_out": {
-		    "index": 0, "layout": "d"
+		    "index": 1, "layout": "d"
 		}
 	    }
 	},
 	"dependencies": {
-	    "d0": { "src": -1, "dst": 0, "src_stage": "b", "src_access": "mr", "dst_stage": "o", "dst_access": "crw", "flags": "r" },
-	    "d1": { "src": 0, "dst": -1, "src_stage": "o", "src_access": "crw", "dst_stage": "b", "dst_access": "mr", "flags": "r" }
+	    "d0": { "src": -1, "dst": 0, "src_stage": "f", "src_access": "s", "dst_stage": "e", "dst_access": "d", "flags": "r" },
+	    "d1": { "src": 0, "dst": -1, "src_stage": "l", "src_access": "d", "dst_stage": "f", "dst_access": "s", "flags": "r" }
 	}
     }
 }

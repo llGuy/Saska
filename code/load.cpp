@@ -602,7 +602,7 @@ make_format_from_code(u32 code, Vulkan::Swapchain *swapchain, Vulkan::GPU *gpu)
     switch(code)
     {
     case 0: {return(swapchain->format);}
-    case 1: {return(gpu->supported_depth_format);}
+    case 1: {return(VK_FORMAT_D16_UNORM);}
     case 8: {return(VK_FORMAT_R8G8B8A8_UNORM);}
     case 16: {return(VK_FORMAT_R16G16B16A16_SFLOAT);}
     default: {return((VkFormat)0);};
@@ -784,7 +784,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_TRUE
 					       , 16
-					       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+					       , VK_BORDER_COLOR_INT_OPAQUE_WHITE
 					       , VK_TRUE
 					       , VK_COMPARE_OP_ALWAYS
 					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
@@ -892,6 +892,7 @@ make_image_layout_from_code(char code)
     case 'c': {return(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);}
     case 'd': {return(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);}
     case 'r': {return(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);}
+    case 's': {return(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);}
     default: {return((VkImageLayout)0);}
     }
 }
@@ -907,6 +908,8 @@ make_pipeline_stage_flags_from_code(const char *s, u32 len)
 	case 'b': {f = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT; break;}
 	case 'o': {f = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT; break;}
 	case 'f': {f = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT; break;}
+	case 'e': {f = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT; break;}
+	case 'l': {f = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; break;}
 	}
     }
     return(f);
@@ -932,6 +935,7 @@ make_gpu_memory_access_flags_from_code(const char *s, u32 len)
 	switch(type)
 	{
 	case 'c': {f |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; break;}
+	case 'd': {f |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT; break;}
 	case 's': {f |= VK_ACCESS_SHADER_WRITE_BIT; break;}
 	case 'm': {f |= VK_ACCESS_MEMORY_WRITE_BIT; break;}
 	}

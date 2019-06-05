@@ -504,18 +504,18 @@ main(s32 argc
 	while(!glfwWindowShouldClose(window.window))
 	{
 	    glfwPollEvents();
-	    update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);
-	    
-	    auto new_now = std::chrono::high_resolution_clock::now();
-	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
-	    now = new_now;
+	    update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
 
 	    if (glfwGetKey(window.window, GLFW_KEY_R))
 	    {
-		fps = 1.0f / window.dt;
+		printf("%f\n", 1.0f / window.dt);
 	    }
 	    
 	    clear_linear();
+
+	    auto new_now = std::chrono::high_resolution_clock::now();
+	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
+	    now = new_now;
 	}
 
 	OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);
@@ -523,7 +523,7 @@ main(s32 argc
 	
 	OUTPUT_DEBUG_LOG("finished session : FPS : %f\n", fps);
 
-	printf("%f\n", fps);
+	//	printf("%f\n", fps);
 
 	std::cout << std::endl;
 	

@@ -68,7 +68,7 @@
 	    
 	    "b0": {
 		"type": "sampler",
-		"image": {"name": "image2D.shadow_map", "layout": "r", "at": 0},
+		"image": {"name": "image2D.shadow_map", "layout": "s", "at": 0},
 		"binding": 0,
 		"dst_element": 0,
 		"count": 1

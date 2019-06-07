@@ -1988,7 +1988,7 @@ update_ubo(u32 current_image
     ubo.view_matrix = world->user_camera.v_m;
     ubo.projection_matrix = glm::perspective(glm::radians(60.0f)
 					     , (float)swapchain->extent.width / (float)swapchain->extent.height
-					     , 0.1f
+					     , 1.0f
 					     , 100000.0f);
 
     ubo.projection_matrix[1][1] *= -1;

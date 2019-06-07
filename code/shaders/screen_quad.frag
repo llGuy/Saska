@@ -8,11 +8,10 @@ layout(set = 0, binding = 0) uniform sampler2D tex;
 
 float linearize_depth(float depth)
 {
-    const float NEAR = 0.1;
-    const float FAR = 100000.0f;
-
-    float linear = NEAR * FAR / (FAR + depth * (NEAR - FAR));
-    return(linear);
+    float n = 1.0; // camera z near
+    float f = 100000.0; // camera z far
+    float z = depth;
+    return (2.0 * n) / (f + n - depth * (f - n));	
 }
 
 void
@@ -20,6 +19,7 @@ main(void)
 {
     float d = texture(tex, in_uvs).r;
 
-    final_color = vec4(d);
+    final_color = vec4(linearize_depth(d));
 //    final_color = vec4(1 - d) * 10;
 }
+,

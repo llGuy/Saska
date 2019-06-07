@@ -6,8 +6,20 @@ layout(location = 0) in vec2 in_uvs;
 
 layout(set = 0, binding = 0) uniform sampler2D tex;
 
+float linearize_depth(float depth)
+{
+    const float NEAR = 0.1;
+    const float FAR = 100000.0f;
+
+    float linear = NEAR * FAR / (FAR + depth * (NEAR - FAR));
+    return(linear);
+}
+
 void
 main(void)
 {
-    final_color = vec4(texture(tex, in_uvs).r);
+    float d = texture(tex, in_uvs).r;
+
+    final_color = vec4(d);
+//    final_color = vec4(1 - d) * 10;
 }

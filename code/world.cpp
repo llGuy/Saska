@@ -1464,6 +1464,7 @@ struct Entity
     {
 	// in world space
 	glm::mat4x4 ws_t{1.0f};
+	glm::vec4 color;
     } push_k;
     
     Entity_View index;
@@ -1899,11 +1900,27 @@ make_world(Window_Data *window
     Entity_View rv = add_entity(r);
 
     auto *r_ptr = get_entity(rv);
-
+    
+    r_ptr->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
     r_ptr->on_t = &terrain_master.red_mesh;
     r_ptr->physics.enabled = false;
 
     make_entity_renderable(r_ptr
+			   , get_memory("vulkan_model.test_model"_hash)
+			   , &world_rendering.player_recorder);
+
+    Entity r2 = construct_entity("entity.rotating2"_hash
+				 , glm::vec3(250.0f, -40.0f, 350.0f)
+				 , glm::vec3(0.0f)
+				 , glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    r2.size = glm::vec3(10.0f);
+    Entity_View rv2 = add_entity(r2);
+    auto *r2_ptr = get_entity(rv2);
+    r2_ptr->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
+    r2_ptr->on_t = &terrain_master.red_mesh;
+    r2_ptr->physics.enabled = false;
+    make_entity_renderable(r2_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
 			   , &world_rendering.player_recorder);
 

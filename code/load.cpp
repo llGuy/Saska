@@ -730,11 +730,11 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-						   , VK_TRUE
+						   , 0
 						   , 16
 						   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
 						   , VK_TRUE
-						   , VK_COMPARE_OP_ALWAYS
+						   , (VkCompareOp)0
 						   , VK_SAMPLER_MIPMAP_MODE_LINEAR
 						   , 0.0f, 0.0f, 0.0f
 						   , gpu
@@ -782,13 +782,13 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-					       , VK_TRUE
-					       , 16
+					       , VK_FALSE
+					       , 1
 					       , VK_BORDER_COLOR_INT_OPAQUE_WHITE
-					       , VK_TRUE
-					       , VK_COMPARE_OP_ALWAYS
+					       , VK_FALSE
+					       , (VkCompareOp)0
 					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
-					       , 0.0f, 0.0f, 0.0f
+					       , 0.0f, 0.0f, 1.0f
 					       , gpu
 					       , &depth.img->image_sampler);
 		}

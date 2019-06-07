@@ -462,7 +462,7 @@ main(s32 argc
     
 	if (!glfwInit())
 	{
-	    return(0);
+	    return(-1);
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -478,6 +478,12 @@ main(s32 argc
 					 , "Game"
 					 , NULL
 					 , NULL);
+
+	if (!window.window)
+	{
+	    glfwTerminate();
+	    return(-1);
+	}
 
 	glfwSetInputMode(window.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetWindowUserPointer(window.window, &window);
@@ -508,7 +514,7 @@ main(s32 argc
 
 	    if (glfwGetKey(window.window, GLFW_KEY_R))
 	    {
-		printf("%f\n", 1.0f / window.dt);
+		//		printf("%f\n", 1.0f / window.dt);
 	    }
 	    
 	    clear_linear();

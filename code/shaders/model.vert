@@ -15,6 +15,7 @@ layout(binding = 0) uniform Uniform_Buffer_Object
 layout(push_constant) uniform Push_Constants
 {
     mat4 model;
+    vec4 color;
 } push_k;
 
 layout(location = 0) in vec3 vertex_position;
@@ -39,8 +40,7 @@ main(void)
     vec4 vs_position = ubo.view * ws_position;
     
     gl_Position = ubo.proj * vs_position;
-    vs_out.final = vec3(0.7, 0.2, 0.3);
-    vs_out.final = vec3(0.6, 0.0, 0.6);
+    vs_out.final = push_k.color.rgb;
     vs_out.uvs = uvs;
 
     vs_out.position = vs_position.xyz;

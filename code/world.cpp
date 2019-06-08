@@ -87,28 +87,48 @@ struct Render_Command_Recorder
 	return(mtrl_count++);
     }
 
+    VkCommandBuffer *
+    get_command_buffer(VkCommandBuffer *pool)
+    {
+	return(&pool[cmdbuf_index]);
+    }
+
     void
     execute(VkCommandBuffer *cmdbufs_pool
-	    , VkCommandBuffer *dst)
+	    , VkCommandBuffer *dst
+	    , VkCommandBuffer *secondary_cmdbuf = nullptr)
     {
+	if (!secondary_cmdbuf)
+	{
+	    secondary_cmdbuf = &cmdbufs_pool[cmdbuf_index];
+	}
+	
 	Vulkan::command_buffer_execute_commands(dst
-						, {1, &cmdbufs_pool[cmdbuf_index]});
+						, {1, secondary_cmdbuf});
     }
     
     void
     update(VkCommandBuffer *cmdbufs_pool
 	   , const Memory_Buffer_View<VkDescriptorSet> &sets
-	   , Vulkan::Graphics_Pipeline *in_ppln = nullptr)
+	   , Vulkan::Graphics_Pipeline *in_ppln = nullptr
+	   , VkCommandBuffer *cmdbuf = nullptr)
     {
-	if (!in_ppln) in_ppln = ppln.p;
+	if (!in_ppln)
+	{
+	    in_ppln = ppln.p;
+	}
+	if (!cmdbuf)
+	{
+	    cmdbuf = &cmdbufs_pool[cmdbuf_index];
+	}
 	
-	Vulkan::begin_command_buffer(&cmdbufs_pool[cmdbuf_index], 0, nullptr);
+	Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
 	    
-	Vulkan::command_buffer_bind_pipeline(in_ppln, &cmdbufs_pool[cmdbuf_index]);
+	Vulkan::command_buffer_bind_pipeline(in_ppln, cmdbuf);
 
 	Vulkan::command_buffer_bind_descriptor_sets(in_ppln
 						    , sets
-						    , &cmdbufs_pool[cmdbuf_index]);
+						    , cmdbuf);
 
 	for (u32 i = 0; i < mtrl_count; ++i)
 	{
@@ -122,23 +142,23 @@ struct Render_Command_Recorder
 					     , offsets
 					     , 0
 					     , mtrl->vbo_bindings.count
-					     , &cmdbufs_pool[cmdbuf_index]);
+					     , cmdbuf);
 			
 	    Vulkan::command_buffer_bind_ibo(mtrl->index_data
-					    , &cmdbufs_pool[cmdbuf_index]);
+					    , cmdbuf);
 
 	    Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
 						 , mtrl->push_k_size
 						 , 0
 						 , push_k_dst
 						 , in_ppln
-						 , &cmdbufs_pool[cmdbuf_index]);
+						 , cmdbuf);
 
-	    Vulkan::command_buffer_draw_indexed(&cmdbufs_pool[cmdbuf_index]
+	    Vulkan::command_buffer_draw_indexed(cmdbuf
 						, mtrl->draw_index_data);
 	}
 	    
-	Vulkan::end_command_buffer(&cmdbufs_pool[cmdbuf_index]);
+	Vulkan::end_command_buffer(cmdbuf);
     }
 };    
 
@@ -1125,7 +1145,7 @@ void
 make_shadow_map_data(void)
 {
     glm::vec3 light_pos_normalized = glm::normalize(light_pos);
-    shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -light_pos_normalized, glm::vec3(0.0f, 1.0f, 0.0f));
 
     shadow_data.fbo = get_memory("framebuffer.shadow_fbo"_hash);
     shadow_data.pass = get_memory("render_pass.shadow_render_pass"_hash);
@@ -1204,7 +1224,7 @@ update_shadow_map_bounding_box(f32 far
     
     shadow_data.shadow_bias = make_shadow_bias_base_matrix() * shadow_data.projection_matrix * shadow_data.light_view_matrix;
 
-    return glm::mat4();
+    return(shadow_data.projection_matrix);
 }
 
 
@@ -1263,7 +1283,11 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 		  , VkDescriptorSet *ubo
 		  , Vulkan::Swapchain *swapchain)
 {
-    VkClearValue clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
+    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool
+					   , {1, ubo}
+					   , shadow_data.model_shadow_ppln.p);
+    
+    VkClearValue clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.4, 0)
 			     , Vulkan::init_clear_color_depth(1.0f, 0)};
     Vulkan::command_buffer_begin_render_pass(shadow_data.pass.p
 					     , shadow_data.fbo.p
@@ -1271,11 +1295,45 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 					     , {2, clears}
 					     , VK_SUBPASS_CONTENTS_INLINE
 					     , cmdbuf);
-    
-    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool
-					   , {1, ubo}
-					   , shadow_data.model_shadow_ppln.p);
 
+    /*    Vulkan::Graphics_Pipeline *ppln = shadow_data.model_shadow_ppln.p;
+    
+    Memory_Buffer_View<Material> mtrls = world_rendering.player_recorder.mtrls;
+
+    Vulkan::command_buffer_bind_pipeline(ppln, cmdbuf);
+
+    Vulkan::command_buffer_bind_descriptor_sets(ppln
+						, {1, ubo}
+						, cmdbuf);
+    
+    for (u32 i = 0; i < world_rendering.player_recorder.mtrl_count; ++i)
+    {
+	Material *mtrl = &mtrls[i];
+
+	Memory_Buffer_View<VkDeviceSize> offsets;
+	allocate_memory_buffer_tmp(offsets, mtrl->vbo_bindings.count);
+	offsets.zero();
+			
+	Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
+					 , offsets
+					 , 0
+					 , mtrl->vbo_bindings.count
+					 , cmdbuf);
+			
+	Vulkan::command_buffer_bind_ibo(mtrl->index_data
+					, cmdbuf);
+
+	Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
+					     , mtrl->push_k_size
+					     , 0
+					     , VK_SHADER_STAGE_VERTEX_BIT
+					     , ppln
+					     , cmdbuf);
+
+	Vulkan::command_buffer_draw_indexed(cmdbuf
+					    , mtrl->draw_index_data);
+    }*/
+    
     world_rendering.player_recorder.execute(world_rendering.recording_buffer_pool, cmdbuf);
     
     Vulkan::command_buffer_end_render_pass(cmdbuf);
@@ -1291,11 +1349,11 @@ render_world(Vulkan::State *vk
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
     
     // ---- update the skybox (in the future, only do when necessary, not every frame) ----
-    //    update_skybox(cmdbuf);
+        update_skybox(cmdbuf);
 
-    update_shadow_map(cmdbuf
-		      , &world_rendering.test.sets[image_index].set
-		      , &vk->swapchain);
+	update_shadow_map(cmdbuf
+			  , &world_rendering.test.sets[image_index].set
+			  , &vk->swapchain);
     
     // ---- record command buffer for rendering each different type of entity ----
     VkDescriptorSet test_sets[2] = {world_rendering.test.sets[image_index].set
@@ -1903,7 +1961,7 @@ make_world(Window_Data *window
     
     r_ptr->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
     r_ptr->on_t = &terrain_master.red_mesh;
-    r_ptr->physics.enabled = false;
+    r_ptr->physics.enabled = true;
 
     make_entity_renderable(r_ptr
 			   , get_memory("vulkan_model.test_model"_hash)
@@ -1965,10 +2023,10 @@ update_ubo(u32 current_image
 
     Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
     
-    glm::mat4 ortho = update_shadow_map_bounding_box(world->user_camera.f
-						     , world->user_camera.n
-						     , world->user_camera.fov
-						     , world->user_camera.asp
+    glm::mat4 ortho = update_shadow_map_bounding_box(100.0f
+						     , 1.0f
+						     , glm::radians(60.0f)
+						     , (float)swapchain->extent.width / (float)swapchain->extent.height
 						     , e_ptr->ws_p
 						     , e_ptr->ws_d
 						     , e_ptr->on_t->ws_n);
@@ -2023,7 +2081,7 @@ render_frame(Vulkan::State *vulkan_state
 	     , VkCommandBuffer *cmdbuf)
 {
     Memory_Buffer_View<Vulkan::Buffer> ubo_mbv = world_rendering.transforms.master_ubos.to_memory_buffer_view();
-    
+
     update_ubo(image_index
 	       , &vulkan_state->gpu
 	       , &vulkan_state->swapchain

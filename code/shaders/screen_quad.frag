@@ -20,6 +20,7 @@ main(void)
     float d = texture(tex, in_uvs).r;
 
     final_color = vec4(linearize_depth(d));
+    //    final_color = d;
 //    final_color = vec4(1 - d) * 10;
 }
-,
+

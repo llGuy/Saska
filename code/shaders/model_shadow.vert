@@ -24,5 +24,6 @@ layout(push_constant) uniform Push_Constants
 void
 main(void)
 {
-    gl_Position = ubo.shadow_proj * ubo.shadow_view * ubo.model * vec4(vertex_position, 1.0);
+    //    gl_Position = ubo.shadow_proj * ubo.shadow_view * ubo.model * vec4(vertex_position, 1.0);
+    gl_Position = ubo.proj * ubo.view * push_k.model * vec4(vertex_position, 1.0);
 }

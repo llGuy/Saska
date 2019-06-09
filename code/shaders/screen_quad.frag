@@ -9,7 +9,7 @@ layout(set = 0, binding = 0) uniform sampler2D tex;
 float linearize_depth(float depth)
 {
     float n = 1.0; // camera z near
-    float f = 100000.0; // camera z far
+    float f = 100.0; // camera z far
     float z = depth;
     return (2.0 * n) / (f + n - depth * (f - n));	
 }

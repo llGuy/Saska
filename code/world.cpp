@@ -77,8 +77,8 @@ struct Render_Command_Recorder
     {
 	Material new_mtrl		= {};
 	new_mtrl.push_k_ptr		= push_k_ptr;
-	new_mtrl.push_k_size	= push_k_size;
-	new_mtrl.vbo_bindings	= vbo_bindings;
+	new_mtrl.push_k_size	        = push_k_size;
+	new_mtrl.vbo_bindings	        = vbo_bindings;
 	new_mtrl.index_data		= index_data;
 	new_mtrl.draw_index_data	= draw_index_data;
 
@@ -1142,10 +1142,10 @@ make_shadow_bias_base_matrix(void)
 }
 
 void
-make_shadow_map_data(void)
+make_shadow_map_data(const glm::vec3 &up)
 {
     glm::vec3 light_pos_normalized = glm::normalize(light_pos);
-    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -light_pos_normalized, glm::vec3(0.0f, 1.0f, 0.0f));
+    shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
     shadow_data.fbo = get_memory("framebuffer.shadow_fbo"_hash);
     shadow_data.pass = get_memory("render_pass.shadow_render_pass"_hash);
@@ -1165,8 +1165,8 @@ update_shadow_map_bounding_box(f32 far
 {
     f32 far_width, near_width, far_height, near_height;
     
-    far_width = 2.0f * far * tan(glm::radians(fov));
-    near_width = 2.0f * near * tan(glm::radians(fov));
+    far_width = 2.0f * far * tan(fov);
+    near_width = 2.0f * near * tan(fov);
     far_height = far_width / aspect;
     near_height = near_width / aspect;
 
@@ -1283,9 +1283,9 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 		  , VkDescriptorSet *ubo
 		  , Vulkan::Swapchain *swapchain)
 {
-    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool
-					   , {1, ubo}
-					   , shadow_data.model_shadow_ppln.p);
+//    world_rendering.player_recorder.update(world_rendering.recording_buffer_pool
+//					   , {1, ubo}
+//					   , shadow_data.model_shadow_ppln.p);
     
     VkClearValue clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.4, 0)
 			     , Vulkan::init_clear_color_depth(1.0f, 0)};
@@ -1296,7 +1296,7 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 					     , VK_SUBPASS_CONTENTS_INLINE
 					     , cmdbuf);
 
-    /*    Vulkan::Graphics_Pipeline *ppln = shadow_data.model_shadow_ppln.p;
+    Vulkan::Graphics_Pipeline *ppln = shadow_data.model_shadow_ppln.p;
     
     Memory_Buffer_View<Material> mtrls = world_rendering.player_recorder.mtrls;
 
@@ -1332,9 +1332,9 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 
 	Vulkan::command_buffer_draw_indexed(cmdbuf
 					    , mtrl->draw_index_data);
-    }*/
+    }
     
-    world_rendering.player_recorder.execute(world_rendering.recording_buffer_pool, cmdbuf);
+    //    world_rendering.player_recorder.execute(world_rendering.recording_buffer_pool, cmdbuf);
     
     Vulkan::command_buffer_end_render_pass(cmdbuf);
 }
@@ -1991,7 +1991,7 @@ make_world(Window_Data *window
     }
 
 
-    make_shadow_map_data();
+    make_shadow_map_data(e_ptr->on_t->ws_n);
 }
 
 

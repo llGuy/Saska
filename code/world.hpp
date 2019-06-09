@@ -16,6 +16,9 @@ struct Camera
     f32 asp; // aspect ratio
     f32 n, f; // near and far planes
 
+    glm::vec4 captured_frustum_corners[8] {};
+    glm::vec4 captured_shadow_corners[8] {};
+
     glm::mat4 p_m;
     glm::mat4 v_m;
 

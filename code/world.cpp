@@ -1125,10 +1125,15 @@ global_var struct Shadow_Data
     
     R_Mem<Vulkan::Graphics_Pipeline> model_shadow_ppln;
     R_Mem<Vulkan::Graphics_Pipeline> terrain_shadow_ppln;
+    R_Mem<Vulkan::Graphics_Pipeline> debug_frustum_ppln;
     
     glm::mat4 light_view_matrix;
     glm::mat4 projection_matrix;
     glm::mat4 shadow_bias;
+    glm::mat4 inverse_light_view;
+
+    glm::vec4 ls_corners[8];
+    f32 x_min, x_max, y_min, y_max, z_min, z_max;
     
 } shadow_data;
 
@@ -1146,7 +1151,8 @@ make_shadow_map_data(const glm::vec3 &up)
 {
     glm::vec3 light_pos_normalized = glm::normalize(light_pos);
     shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-
+    shadow_data.inverse_light_view = glm::inverse(shadow_data.light_view_matrix);
+    
     shadow_data.fbo = get_memory("framebuffer.shadow_fbo"_hash);
     shadow_data.pass = get_memory("render_pass.shadow_render_pass"_hash);
     shadow_data.map = get_memory("image2D.shadow_map"_hash);
@@ -1188,37 +1194,45 @@ update_shadow_map_bounding_box(f32 far
     };    
 
     // light space
-    glm::vec4 ls_corners[8];
 
-    ls_corners[flt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    ls_corners[flb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    shadow_data.ls_corners[flt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    shadow_data.ls_corners[flb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    ls_corners[frt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    ls_corners[frb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    shadow_data.ls_corners[frt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    shadow_data.ls_corners[frb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    ls_corners[nlt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    ls_corners[nlb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    shadow_data.ls_corners[nlt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    shadow_data.ls_corners[nlb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
-    ls_corners[nrt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    ls_corners[nrb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    shadow_data.ls_corners[nrt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    shadow_data.ls_corners[nrb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
     f32 x_min, x_max, y_min, y_max, z_min, z_max;
 
-    x_min = x_max = ls_corners[0].x;
-    y_min = y_max = ls_corners[0].y;
-    z_min = z_max = ls_corners[0].z;
+    x_min = x_max = shadow_data.ls_corners[0].x;
+    y_min = y_max = shadow_data.ls_corners[0].y;
+    z_min = z_max = shadow_data.ls_corners[0].z;
 
     for (u32 i = 1; i < 8; ++i)
     {
-	if (x_min > ls_corners[i].x) x_min = ls_corners[i].x;
-	if (x_max < ls_corners[i].x) x_max = ls_corners[i].x;
+	if (x_min > shadow_data.ls_corners[i].x) x_min = shadow_data.ls_corners[i].x;
+	if (x_max < shadow_data.ls_corners[i].x) x_max = shadow_data.ls_corners[i].x;
 
-	if (y_min > ls_corners[i].y) y_min = ls_corners[i].y;
-	if (y_max < ls_corners[i].y) y_max = ls_corners[i].y;
+	if (y_min > shadow_data.ls_corners[i].y) y_min = shadow_data.ls_corners[i].y;
+	if (y_max < shadow_data.ls_corners[i].y) y_max = shadow_data.ls_corners[i].y;
 
-	if (z_min > ls_corners[i].z) z_min = ls_corners[i].z;
-	if (z_max < ls_corners[i].z) z_max = ls_corners[i].z;
+	if (z_min > shadow_data.ls_corners[i].z) z_min = shadow_data.ls_corners[i].z;
+	if (z_max < shadow_data.ls_corners[i].z) z_max = shadow_data.ls_corners[i].z;
     }
+
+    shadow_data.x_min = x_min;
+    shadow_data.x_min = x_min;
+    
+    shadow_data.y_min = y_min;
+    shadow_data.y_min = y_min;
+    
+    shadow_data.z_min = z_min;
+    shadow_data.z_min = z_min;
 
     shadow_data.projection_matrix = glm::ortho<f32>(x_min, x_max, y_min, y_max, z_min, z_max);
     
@@ -1340,6 +1354,72 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 }
 
 internal void
+calculate_ws_frustum_corners(glm::vec4 *corners
+			     , glm::vec4 *shadow_corners)
+{
+    corners[0] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[0];
+    corners[1] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[1];
+    corners[3] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[2];
+    corners[2] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[3];
+    
+    corners[4] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[4];
+    corners[5] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[5];
+    corners[7] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[6];
+    corners[6] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[7];
+
+    shadow_corners[0] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[0];
+    shadow_corners[1] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[1];
+    shadow_corners[2] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[2];
+    shadow_corners[3] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[3];
+    
+    shadow_corners[4] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[4];
+    shadow_corners[5] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[5];
+    shadow_corners[6] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[6];
+    shadow_corners[7] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[7];
+}
+
+internal void
+render_debug_frustum(VkDescriptorSet ubo
+		     , VkCommandBuffer *cmdbuf
+		     , Vulkan::GPU *gpu)
+{
+    Vulkan::command_buffer_bind_pipeline(shadow_data.debug_frustum_ppln.p, cmdbuf);
+
+    Vulkan::command_buffer_bind_descriptor_sets(shadow_data.debug_frustum_ppln.p
+						, {1, &ubo}
+						, cmdbuf);
+
+    struct Push_K
+    {
+	alignas(16) glm::vec4 positions[8];
+	alignas(16) glm::vec4 color;
+    } push_k1, push_k2;
+
+    calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
+
+    push_k1.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    push_k2.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    
+    Vulkan::command_buffer_push_constant(&push_k1
+					 , sizeof(push_k1)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , shadow_data.debug_frustum_ppln.p
+					 , cmdbuf);
+    
+    Vulkan::command_buffer_draw(cmdbuf, 24, 1, 0, 0);
+
+    Vulkan::command_buffer_push_constant(&push_k2
+					 , sizeof(push_k2)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , shadow_data.debug_frustum_ppln.p
+					 , cmdbuf);
+    
+    Vulkan::command_buffer_draw(cmdbuf, 24, 1, 0, 0);
+}
+
+internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
@@ -1384,6 +1464,8 @@ render_world(Vulkan::State *vk
     Vulkan::command_buffer_execute_commands(cmdbuf, {world_rendering.active_cmdbuf_count, world_rendering.recording_buffer_pool});
 
     prepare_terrain_pointer_for_render(cmdbuf, &world_rendering.test.sets[image_index].set);
+
+    render_debug_frustum(world_rendering.test.sets[image_index].set, cmdbuf, &vk->gpu);
     
     // ---- render skybox ----
     render_skybox({1, world_rendering.test.model->raw_cache_for_rendering.buffer}
@@ -1811,6 +1893,8 @@ get_registered_objects_from_json(void)
     terrain_master.terrain_ppln			= get_memory("pipeline.terrain_pipeline"_hash);
 
     world_rendering.screen_quad.quad_ppln       = get_memory("pipeline.screen_quad"_hash);
+
+    shadow_data.debug_frustum_ppln = get_memory("pipeline.debug_frustum"_hash);
 }
 
 
@@ -2204,6 +2288,24 @@ handle_input(Window_Data *window
     if (window->key_map[GLFW_KEY_LEFT]) light_pos += glm::vec3(-dt, 0.0f, 0.0f) * 5.0f;
     if (window->key_map[GLFW_KEY_RIGHT]) light_pos += glm::vec3(dt, 0.0f, 0.0f) * 5.0f;
     if (window->key_map[GLFW_KEY_DOWN]) light_pos += glm::vec3(0.0f, 0.0f, -dt) * 5.0f;
+
+    if (window->key_map[GLFW_KEY_C])
+    {
+	for (u32 i = 0; i < 8; ++i)
+	{
+	    world.user_camera.captured_frustum_corners[i] = shadow_data.ls_corners[i];
+	}
+
+	world.user_camera.captured_shadow_corners[0] = glm::vec4(shadow_data.x_min, shadow_data.y_max, shadow_data.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[1] = glm::vec4(shadow_data.x_max, shadow_data.y_max, shadow_data.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[2] = glm::vec4(shadow_data.x_max, shadow_data.y_min, shadow_data.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[3] = glm::vec4(shadow_data.x_min, shadow_data.y_min, shadow_data.z_min, 1.0f);
+
+	world.user_camera.captured_shadow_corners[4] = glm::vec4(shadow_data.x_min, shadow_data.y_max, shadow_data.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[5] = glm::vec4(shadow_data.x_max, shadow_data.y_max, shadow_data.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[6] = glm::vec4(shadow_data.x_max, shadow_data.y_min, shadow_data.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[7] = glm::vec4(shadow_data.x_min, shadow_data.y_min, shadow_data.z_max, 1.0f);
+    }
 
     if (movements > 0)
     {

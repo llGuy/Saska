@@ -22,5 +22,8 @@ C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain.frag.spv terr
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain_pointer.vert.spv terrain_pointer.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/terrain_pointer.frag.spv terrain_pointer.frag
 
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/debug_frustum.vert.spv debug_frustum.vert
+C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/debug_frustum.frag.spv debug_frustum.frag
+
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/screen_quad.vert.spv screen_quad.vert
 C:/VulkanSDK/1.1.70.1/Bin32/glslangValidator.exe -V -o SPV/screen_quad.frag.spv screen_quad.frag

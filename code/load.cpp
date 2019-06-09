@@ -450,6 +450,7 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	switch(top_str[0])
 	{
 	case 'q': {top = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;}
+	case 'c': {top = VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;}
 	case 'f': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;}
 	case 'l': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;}
 	case 's': {top = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;}

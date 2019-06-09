@@ -1150,7 +1150,7 @@ void
 make_shadow_map_data(const glm::vec3 &up)
 {
     glm::vec3 light_pos_normalized = glm::normalize(light_pos);
-    shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -light_pos_normalized, glm::vec3(0.0f, 1.0f, 0.0f));
     shadow_data.inverse_light_view = glm::inverse(shadow_data.light_view_matrix);
     
     shadow_data.fbo = get_memory("framebuffer.shadow_fbo"_hash);
@@ -1226,13 +1226,13 @@ update_shadow_map_bounding_box(f32 far
     }
 
     shadow_data.x_min = x_min;
-    shadow_data.x_min = x_min;
+    shadow_data.x_max = x_max;
     
     shadow_data.y_min = y_min;
-    shadow_data.y_min = y_min;
+    shadow_data.y_max = y_max;
     
     shadow_data.z_min = z_min;
-    shadow_data.z_min = z_min;
+    shadow_data.z_max = z_max;
 
     shadow_data.projection_matrix = glm::ortho<f32>(x_min, x_max, y_min, y_max, z_min, z_max);
     
@@ -1301,12 +1301,11 @@ update_shadow_map(VkCommandBuffer *cmdbuf
 //					   , {1, ubo}
 //					   , shadow_data.model_shadow_ppln.p);
     
-    VkClearValue clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.4, 0)
-			     , Vulkan::init_clear_color_depth(1.0f, 0)};
+    VkClearValue clears[] = {Vulkan::init_clear_color_depth(1.0f, 0)};
     Vulkan::command_buffer_begin_render_pass(shadow_data.pass.p
 					     , shadow_data.fbo.p
-					     , Vulkan::init_render_area({0, 0}, {1000, 1000})
-					     , {2, clears}
+					     , Vulkan::init_render_area({0, 0}, {4000, 4000})
+					     , {1, clears}
 					     , VK_SUBPASS_CONTENTS_INLINE
 					     , cmdbuf);
 
@@ -2107,7 +2106,7 @@ update_ubo(u32 current_image
 
     Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
     
-    glm::mat4 ortho = update_shadow_map_bounding_box(100.0f
+    glm::mat4 ortho = update_shadow_map_bounding_box(300.0f
 						     , 1.0f
 						     , glm::radians(60.0f)
 						     , (float)swapchain->extent.width / (float)swapchain->extent.height

@@ -64,22 +64,11 @@
     "framebuffer.shadow_fbo": {
 	"new": true,
 	
-	"width": 1000,
-	"height": 1000,
+	"width": 4000,
+	"height": 4000,
 	"insert_swapchain_imgs_at_0": false,
-	"color_attachment_count": 1,
+	"color_attachment_count": 0,
 	"compatible_render_pass": "render_pass.shadow_render_pass",
-
-	"color_attachments": {
-	    "image2D.shadow_test": {
-		"new": true,
-		"to_create": true,
-		"sampler": true,
-		"index": 0,
-		"format": 8,
-		"usage": "cs"
-	    }
-	},
 	
 	"depth_attachment": {
 	    "new": true,

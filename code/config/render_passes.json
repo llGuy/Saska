@@ -143,21 +143,7 @@
     "render_pass.shadow_render_pass": {
 	"new": true,
 
-	"attachment_count": 2,
-
-	"color_attachments": {
-	    "c0": {
-		"format": 0,
-		"color_load": "c",
-		"color_store": "s",
-
-		"depth_load": "d",
-		"depth_store": "d",
-
-		"initial_layout": "u",
-		"final_layout": "r"
-	    }
-	},
+	"attachment_count": 1,
 	
 	"depth_attachment": {
 	    "format": 1,
@@ -173,14 +159,8 @@
 
 	"subpasses": {
 	    "s0": {
-		"color_out": {
-		    "o0": {
-			"index": 0, "layout": "c"
-		    }
-		},
-		
 		"depth_out": {
-		    "index": 1, "layout": "d"
+		    "index": 0, "layout": "d"
 		}
 	    }
 	},

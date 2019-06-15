@@ -12,7 +12,7 @@ BINDIR := ./
 CPPS := $(wildcard *.cpp)
 OBJS := $(patsubst %,$(OBJDIR)%,$(CPPS:.cpp=.obj))
 DEPFILES := $(patsubst %,$(OBJDIR)%,$(CPPS:.cpp=.dep))
-EXENAME := game.exe
+EXENAME := saska.exe
 
 $(BINDIR)$(EXENAME): $(OBJS) TAGS
 	$(CC) $(CFLAGS) /DEBUG:FULL /Fe$@ $(DEF) $(INCS) $(OBJS) $(LIBS)

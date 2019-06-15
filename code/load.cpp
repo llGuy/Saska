@@ -893,7 +893,7 @@ make_image_layout_from_code(char code)
     case 'c': {return(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);}
     case 'd': {return(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);}
     case 'r': {return(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);}
-    case 's': {return(VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL);}
+    case 's': {return(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);}
     default: {return((VkImageLayout)0);}
     }
 }
@@ -1253,11 +1253,11 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 		}
 		
 		bool make_new = i.value().find("new").value();
-		R_Mem<Vulkan::Descriptor_Set> sets = [&make_new, &key, &count]
+		R_Mem<VkDescriptorSet> sets = [&make_new, &key, &count]
 		    {
 			if (make_new)
 			{
-			    return(register_memory(init_const_str(key.c_str(), key.length()), sizeof(Vulkan::Descriptor_Set) * count));
+			    return(register_memory(init_const_str(key.c_str(), key.length()), sizeof(VkDescriptorSet) * count));
 			}
 			else
 			{
@@ -1265,13 +1265,7 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			}
 		    }();
 		
-		Vulkan::Descriptor_Set **sets_inline = ALLOCA_T(Vulkan::Descriptor_Set *, count);
-		for (u32 s = 0; s < count; ++s)
-		{
-		    sets_inline[s] = &sets.p[s];
-		}
-		
-		Memory_Buffer_View<Vulkan::Descriptor_Set *> separate_sets = {(u32)count, sets_inline};
+		Memory_Buffer_View<VkDescriptorSet> separate_sets = {(u32)count, sets.p};
 		Vulkan::allocate_descriptor_sets(separate_sets
 						 , Memory_Buffer_View<VkDescriptorSetLayout>{(u32)count, layouts_inline}
 						 , gpu

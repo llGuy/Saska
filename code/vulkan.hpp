@@ -999,13 +999,6 @@ namespace Vulkan
 			       , GPU *gpu
 			       , VkDescriptorSetLayout *dst);
 
-    struct Descriptor_Set
-    {
-	VkDescriptorSetLayout layouts;
-	
-	VkDescriptorSet set;
-    };
-
     internal FORCEINLINE void
     command_buffer_bind_descriptor_sets(Graphics_Pipeline *pipeline
 					, const Memory_Buffer_View<VkDescriptorSet> &sets
@@ -1022,10 +1015,15 @@ namespace Vulkan
     }
     
     void
-    allocate_descriptor_sets(Memory_Buffer_View<Descriptor_Set *> &descriptor_sets
+    allocate_descriptor_sets(Memory_Buffer_View<VkDescriptorSet> &descriptor_sets
 			     , const Memory_Buffer_View<VkDescriptorSetLayout> &layouts
 			     , GPU *gpu
 			     , VkDescriptorPool *descriptor_pool);
+
+    VkDescriptorSet
+    allocate_descriptor_set(VkDescriptorSetLayout *layout
+			    , GPU *gpu
+			    , VkDescriptorPool *descriptor_pool);
     
     internal void
     init_descriptor_set_buffer_info(Buffer *buffer
@@ -1038,7 +1036,7 @@ namespace Vulkan
     }
 
     internal void
-    init_buffer_descriptor_set_write(Descriptor_Set *set
+    init_buffer_descriptor_set_write(VkDescriptorSet *set
 				     , u32 binding
 				     , u32 dst_array_element
 				     , u32 count
@@ -1046,7 +1044,7 @@ namespace Vulkan
 				     , VkWriteDescriptorSet *write)
     {
 	write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write->dstSet = set->set;
+	write->dstSet = *set;
 	write->dstBinding = binding;
 	write->dstArrayElement = dst_array_element;
 	write->descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1055,7 +1053,7 @@ namespace Vulkan
     }
 
     internal void
-    init_input_attachment_descriptor_set_write(Descriptor_Set *set
+    init_input_attachment_descriptor_set_write(VkDescriptorSet *set
 				    , u32 binding
 				    , u32 dst_array_element
 				    , u32 count
@@ -1063,7 +1061,7 @@ namespace Vulkan
 				    , VkWriteDescriptorSet *write)
     {
 	write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write->dstSet = set->set;
+	write->dstSet = *set;
 	write->dstBinding = binding;
 	write->dstArrayElement = dst_array_element;
 	write->descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
@@ -1072,7 +1070,7 @@ namespace Vulkan
     }
     
     internal void
-    init_image_descriptor_set_write(Descriptor_Set *set
+    init_image_descriptor_set_write(VkDescriptorSet *set
 				    , u32 binding
 				    , u32 dst_array_element
 				    , u32 count
@@ -1080,7 +1078,7 @@ namespace Vulkan
 				    , VkWriteDescriptorSet *write)
     {
 	write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	write->dstSet = set->set;
+	write->dstSet = *set;
 	write->dstBinding = binding;
 	write->dstArrayElement = dst_array_element;
 	write->descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;

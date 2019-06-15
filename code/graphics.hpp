@@ -3,170 +3,134 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 
-struct Material
+// Later when maybe introducing new APIs, might be something different
+// Clearer name for people reading code
+using GPU_Command_Queue = VkCommandBuffer;
+using GPU_Command_Queue_Pool = VkCommandPool;
+// Submit level of a Material Submission Queue Manager which will either submit to a secondary queue or directly into the main queue
+using Submit_Level = VkCommandBufferLevel;
+
+GPU_Command_Queue
+make_command_queue(VkCommandPool *pool, Submit_Level level, Vulkan::GPU *gpu);
+
+void
+begin_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu);
+    
+void
+end_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu);
+
+// --------------------- Uniform stuff ---------------------
+// Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
+using Uniform_Binding = VkDescriptorSetLayoutBinding;
+
+Uniform_Binding
+make_uniform_binding_s(u32 count
+		       , u32 binding
+		       , VkDescriptorType uniform_type
+		       , VkShaderStageFlags shader_flags);
+
+// Layout depends on uniform bindings --> almost like a prototype for making uniform groups
+// Separate Uniform_Layout_Info (list of binding structs) from Uniform_Layout (API struct) for optimisation reasons
+struct Uniform_Layout_Info // --> VkDescriptorSetLayout
+{
+    Memory_Buffer_View<Uniform_Binding> bindings;
+    u32 stack_ptr {0};
+
+    void
+    allocate(u32 binding_count);
+
+    void
+    free(void);
+    
+    void
+    push(const Uniform_Binding &binding_info);
+
+    void
+    push(u32 count
+	 , u32 binding
+	 , VkDescriptorType uniform_type
+	 , VkShaderStageFlags shader_flags);
+};
+
+using Uniform_Layout = VkDescriptorSetLayout;
+
+Uniform_Layout
+make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu);
+
+// Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
+using Uniform_Group = VkDescriptorSet;
+
+Uniform_Group
+make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *gpu);
+
+VkWriteDescriptorSet
+update_texture(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+VkWriteDescriptorSet
+update_buffer(Uniform_Group *group, Vulkan::Buffer &ubo, u32 binding, u32 dst_element, u32 count, u32 offset_into_buffer = 0);
+
+// Use : update_binding_from_group( { update_texture(...), update_texture(...), update_buffer(...)... } ...)
+void
+update_binding_from_group(const Memory_Buffer_View<VkWriteDescriptorSet> &writes, Vulkan::GPU *gpu);
+
+// Update_Struct should always be VkWriteDescriptorSet
+// Function for compile time stuff (however, most of it will be runtime from JSON - or whatever file format is currently being used)
+template <typename ...Update_Struct> void
+update_binding_from_group(Vulkan::GPU *gpu, Update_Struct &&...updates)
+{
+    constexpr u32 UPDATES_COUNT = sizeof...(Update_Struct);
+    VkWriteDescriptorSet tmp_updates[UPDATES_COUNT] = { updates... };
+    Vulkan::update_descriptor_sets({UPDATES_COUNT, tmp_updates}, gpu);
+}
+
+// --------------------- Rendering stuff ---------------------
+// Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render
+struct Material 
 {
     // ---- push constant information
     void *push_k_ptr = nullptr;
     u32 push_k_size = 0;
     // ---- vbo information
     Memory_Buffer_View<VkBuffer> vbo_bindings;
-    // ---- for sorting (later)
+    // ---- for sorting
     u32 model_id;
     // ---- ibo information
     Vulkan::Model_Index_Data index_data;
     Vulkan::Draw_Indexed_Data draw_index_data;
 };
 
-struct Cached_Render_Submissions_Manager
+// Queue of materials to be submitted
+struct GPU_Material_Submission_Queue
 {
-    static constexpr u32 MAX_COMMAND_BUFFERS = 10;
-
-    u32 active_cmdbuf_count;
-    VkCommandBuffer cache_cmdbufs[MAX_COMMAND_BUFFERS];
-};
-
-struct Render_Submission_Queue
-{
-    R_Mem<Vulkan::Graphics_Pipeline> ppln;
-    VkShaderStageFlags push_k_dst;
-	
-    Memory_Buffer_View<Material> mtrls;
     u32 mtrl_count;
+    Memory_Buffer_View<Material> mtrls;
+    
+    VkShaderStageFlags push_k_dst;
 
-    // optional
-    s32 cmdbuf_index {-1};
+    // for multi-threaded rendering in the future when needed
+    s32 cmdbuf_index{-1};
 
-    // ---- methods ----
-
-    Render_Submission_Queue(const R_Mem<Vulkan::Graphics_Pipeline> &p_ppln
-			    , VkShaderStageFlags pk_dst
-			    , u32 max_mtrls);
-
-    u32 // <---- index of the mtrl in the array
+    u32
     push_material(void *push_k_ptr, u32 push_k_size
-	 , const Memory_Buffer_View<VkBuffer> &vbo_bindings
-	 , const Vulkan::Model_Index_Data &index_data
-	 , const Vulkan::Draw_Indexed_Data &draw_index_data) 
-    {
-	Material new_mtrl		= {};
-	new_mtrl.push_k_ptr		= push_k_ptr;
-	new_mtrl.push_k_size	= push_k_size;
-	new_mtrl.vbo_bindings	= vbo_bindings;
-	new_mtrl.index_data		= index_data;
-	new_mtrl.draw_index_data	= draw_index_data;
+		  , const Memory_Buffer_View<VkBuffer> &vbo_bindings
+		  , const Vulkan::Model_Index_Data &index_data
+		  , const Vulkan::Draw_Indexed_Data &draw_index_data);
 
-	mtrls[mtrl_count] = new_mtrl;
-
-	return(mtrl_count++);
-    }
-
-    VkCommandBuffer *
-    get_cache_command_buffer(Cached_Render_Submissions_Manager *manager)
-    {
-	if (cmdbuf_index == -1)
-	{
-	    return(nullptr);
-	}
-	else
-	{
-	    return(&pool[cmdbuf_index]);
-	}
-    }
-
-    void
-    execute_cached_cmdbuf(VkCommandBuffer *cmdbufs_pool
-			  , VkCommandBuffer *dst)
-    {
-	if (cmdbuf_index != -1)
-	{
-	    Vulkan::command_buffer_execute_commands(dst
-						    , {1, get_cache_command_buffer(cmdbufs_pool)});
-	}
-    }
-
-    enum Send_Commands { CACHE_QUEUE, FLUSH_QUEUE };
+    GPU_Command_Queue *
+    get_command_buffer(GPU_Command_Queue *queue = nullptr);
     
     void
-    send_commands(Send_Commands after_send
-		  , VkCommandBuffer *primary_cmdbuf
-		  , Cached_Render_Submissions_Manager *cached_manager
-		  , const Memory_Buffer_View<VkDescriptorSet> &sets
-		  , Vulkan::Graphics_Pipeline *in_ppln = nullptr)
-    {
-	VkCommandBuffer *dst = [primary_cmdbuf, cached_manager](u32 cmdbuf_index) -> VkCommandBuffer *
-	{
-	    if (cmdbuf_index == -1)
-	    {
-		return(primary_cmdbuf);
-	    }
-	    else
-	    {
-		Vulkan::begin_command_buffer(&cached_manager->cache_cmdbufs[cmdbuf_index], 0, nullptr);
-		return(&cached_manager->cache_cmdbufs[cmdbuf_index]);
-	    }
-	}(cmdbuf_index);
+    submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
+			    , Vulkan::Graphics_Pipeline *graphics_pipeline
+			    , GPU_Command_Queue *main_queue);
 
-	Vulkan::Graphics_Pipeline *used_ppln = [this, in_ppln]() -> Vulkan::Graphics_Pipeline *
-	{
-	    if (!in_ppln)
-	    {
-		return(ppln.p);
-	    }
-	    else
-	    {
-		return(in_ppln);
-	    }		
-	}();
-	
-	update();
-    }
-    
     void
-    update(VkCommandBuffer *cmdbuf
-	   , const Memory_Buffer_View<VkDescriptorSet> &sets
-	   , Vulkan::Graphics_Pipeline *in_ppln = nullptr)
-    {
-	if (!in_ppln)
-	{
-	    in_ppln = ppln.p;
-	}
-
-	Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
-	    
-	Vulkan::command_buffer_bind_pipeline(in_ppln, cmdbuf);
-
-	Vulkan::command_buffer_bind_descriptor_sets(in_ppln
-						    , sets
-						    , cmdbuf);
-
-	for (u32 i = 0; i < mtrl_count; ++i)
-	{
-	    Material *mtrl = &mtrls[i];
-
-	    Memory_Buffer_View<VkDeviceSize> offsets;
-	    allocate_memory_buffer_tmp(offsets, mtrl->vbo_bindings.count);
-	    offsets.zero();
-			
-	    Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
-					     , offsets
-					     , 0
-					     , mtrl->vbo_bindings.count
-					     , cmdbuf);
-			
-	    Vulkan::command_buffer_bind_ibo(mtrl->index_data
-					    , cmdbuf);
-
-	    Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
-						 , mtrl->push_k_size
-						 , 0
-						 , push_k_dst
-						 , in_ppln
-						 , cmdbuf);
-
-	    Vulkan::command_buffer_draw_indexed(cmdbuf
-						, mtrl->draw_index_data);
-	}
-	    
-	Vulkan::end_command_buffer(cmdbuf);
-    }
+    flush_queue(void);
 };
+
+GPU_Material_Submission_Queue
+make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
+				   , Submit_Level level, GPU_Command_Queue_Pool *pool, Vulkan::GPU *gpu);
+
+void
+submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);

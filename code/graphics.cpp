@@ -169,16 +169,34 @@ GPU_Material_Submission_Queue::get_command_buffer(GPU_Command_Queue *queue)
 void
 GPU_Material_Submission_Queue::submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
 						       , Vulkan::Graphics_Pipeline *graphics_pipeline
-						       , GPU_Command_Queue *main_queue)
+						       , VkViewport *viewport
+						       , Vulkan::Render_Pass *render_pass
+						       , Vulkan::Framebuffer *fbo
+						       , u32 subpass
+						       , GPU_Command_Queue *main_queue
+						       , Submit_Level level)
 {
+    // Depends on the cmdbuf_index var, not on the submit level that is given
     GPU_Command_Queue *dst_command_queue = get_command_buffer(main_queue);
+    // Now depends also on the submit level
+    if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) dst_command_queue = main_queue;
 
-    if (cmdbuf_index >= 0)
+    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
-	Vulkan::begin_command_buffer(dst_command_queue, 0, nullptr);
+	VkCommandBufferInheritanceInfo inheritance_info = {};
+	inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+	inheritance_info.renderPass = render_pass->render_pass;
+	inheritance_info.subpass = subpass;
+	inheritance_info.framebuffer = fbo->framebuffer;
+	
+	Vulkan::begin_command_buffer(dst_command_queue
+				     , VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT
+				     , &inheritance_info);
     }
 	    
     Vulkan::command_buffer_bind_pipeline(graphics_pipeline, dst_command_queue);
+
+    vkCmdSetViewport(*dst_command_queue, 0, 1, viewport);    
 
     Vulkan::command_buffer_bind_descriptor_sets(graphics_pipeline
 						, uniform_groups
@@ -212,7 +230,7 @@ GPU_Material_Submission_Queue::submit_queued_materials(const Memory_Buffer_View<
 					    , mtrl->draw_index_data);
     }
 
-    if (cmdbuf_index >= 0)
+    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
 	Vulkan::end_command_buffer(dst_command_queue);
     }
@@ -222,6 +240,12 @@ void
 GPU_Material_Submission_Queue::flush_queue(void)
 {
     mtrl_count = 0;
+}
+
+void
+GPU_Material_Submission_Queue::submit_to_cmdbuf(GPU_Command_Queue *queue)
+{
+    Vulkan::command_buffer_execute_commands(queue, {1, get_command_buffer(nullptr)});
 }
 
 GPU_Material_Submission_Queue

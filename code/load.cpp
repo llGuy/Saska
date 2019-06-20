@@ -580,6 +580,17 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	std::string render_pass_name = render_pass_info.value().find("name").value();
 	R_Mem<Vulkan::Render_Pass> render_pass = get_memory(init_const_str(render_pass_name.c_str(), render_pass_name.length()));
 	u32 subpass = render_pass_info.value().find("subpass").value();
+
+
+
+	// NEED TO SET VIEWPORT IF IS DYNAMIC !! --> FIX ASAP
+	VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH };
+	VkPipelineDynamicStateCreateInfo dynamic_state_info = {};
+	dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamic_state_info.dynamicStateCount = sizeof(dynamic_states) / sizeof(dynamic_states[0]);
+	dynamic_state_info.pDynamicStates = dynamic_states;
+	
+	
 	Vulkan::init_graphics_pipeline(&modules
 					   , &vertex_input_info
 					   , &assembly_info
@@ -587,7 +598,7 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 					   , &rasterization_info
 					   , &multisample_info
 					   , &blending_info
-					   , nullptr
+					   , &dynamic_state_info
 					   , &depth_stencil_info
 					   , &new_ppln.p->layout
 					   , render_pass.p
@@ -603,7 +614,7 @@ make_format_from_code(u32 code, Vulkan::Swapchain *swapchain, Vulkan::GPU *gpu)
     switch(code)
     {
     case 0: {return(swapchain->format);}
-    case 1: {return(VK_FORMAT_D16_UNORM);}
+    case 1: {return(gpu->supported_depth_format);}
     case 8: {return(VK_FORMAT_R8G8B8A8_UNORM);}
     case 16: {return(VK_FORMAT_R16G16B16A16_SFLOAT);}
     default: {return((VkFormat)0);};
@@ -778,18 +789,18 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 		bool sampler = depth_att_info.value().find("sampler") != depth_att_info.value().end();
 		if (sampler)
 		{
-		    Vulkan::init_image_sampler(VK_FILTER_LINEAR
-					       , VK_FILTER_LINEAR
+		    Vulkan::init_image_sampler(VK_FILTER_NEAREST
+					       , VK_FILTER_NEAREST
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_FALSE
 					       , 1
 					       , VK_BORDER_COLOR_INT_OPAQUE_WHITE
-					       , VK_FALSE
+					       , VK_FALSE 
 					       , (VkCompareOp)0
 					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
-					       , 0.0f, 0.0f, 1.0f
+					       , 0.0f, 0.0f, 1.0f 
 					       , gpu
 					       , &depth.img->image_sampler);
 		}
@@ -857,6 +868,8 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					 , layers
 					 , gpu
 					 , &fbos.p[fbo]);
+
+	    fbos.p[fbo].extent = VkExtent2D{ width, height };
 	}
     }
 }

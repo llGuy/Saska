@@ -173,7 +173,9 @@ namespace Vulkan
 		      , void *user_data)
     {
 	//	OUTPUT_DEBUG_LOG("validation layer - %s\n", message_data->pMessage);
-	std::cout << "VALIDATION LAYER STUFF!!!!!!! - " << message_data->pMessage << std::endl;
+	//	std::cout << "validation layer - " << message_data->pMessage << std::endl;
+
+	OUTPUT_DEBUG_LOG_VALIDATION("Validation Layer > %s\n", message_data->pMessage);
 
 	return(VK_FALSE);
     }
@@ -303,8 +305,10 @@ namespace Vulkan
 	       && (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 	       && gpu->queue_families.complete()
 	       && device_features.geometryShader
+	       && device_features.wideLines
 	       && device_features.textureCompressionBC
-	       && device_features.samplerAnisotropy);
+	       && device_features.samplerAnisotropy
+	       && device_features.fillModeNonSolid);
     }
 
     internal void
@@ -340,6 +344,9 @@ namespace Vulkan
 						     , &gpu))
 	    {
 		*gpu_result = gpu;
+
+		vkGetPhysicalDeviceProperties(gpu.hardware, &gpu_result->properties);
+		
 		break;
 	    }
 	}
@@ -395,7 +402,10 @@ namespace Vulkan
 
 	VkPhysicalDeviceFeatures device_features = {};
 	device_features.samplerAnisotropy = VK_TRUE;
-
+	device_features.wideLines = VK_TRUE;
+	device_features.geometryShader = VK_TRUE;
+	device_features.fillModeNonSolid = VK_TRUE;
+	
 	VkDeviceCreateInfo device_info = {};
 	device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	device_info.pQueueCreateInfos = unique_queue_infos;
@@ -1107,7 +1117,7 @@ namespace Vulkan
 	VkCommandPoolCreateInfo pool_info = {};
 	pool_info.sType			= VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	pool_info.queueFamilyIndex	= queue_family_index;
-	pool_info.flags			= 0;
+	pool_info.flags			= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 	VK_CHECK(vkCreateCommandPool(gpu->logical_device, &pool_info, nullptr, command_pool));
     }

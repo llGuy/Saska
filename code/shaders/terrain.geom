@@ -8,6 +8,9 @@ layout(location = 0) in VS_DATA
     vec3 color;
     vec3 ws_position;
     vec3 ws_normal;
+
+    vec3 vs_position;
+    vec4 shadow_coord;
 } gs_in[];
 
 layout(location = 0) out GS_DATA
@@ -15,6 +18,9 @@ layout(location = 0) out GS_DATA
     vec3 color;
     vec3 ws_position;
     vec3 ws_normal;
+
+    vec3 vs_position;
+    vec4 shadow_coord;
 } gs_out;
 
 layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
@@ -23,11 +29,6 @@ layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
     mat4 view;
     mat4 proj;
 } ubo;
-
-layout(push_constant) uniform Push_Constants
-{
-    mat4 model;
-} push_k;
 
 vec3
 get_normal(int i1, int i2, int i3)
@@ -47,6 +48,9 @@ main(void)
 	gs_out.ws_position = gs_in[i].ws_position;
 	gs_out.ws_normal = normal;
 	gs_out.color = gs_in[i].color;
+	
+	gs_out.vs_position = gs_in[i].vs_position;
+	gs_out.shadow_coord = gs_in[i].shadow_coord;
 
 	gl_Position = gl_in[i].gl_Position;
 	

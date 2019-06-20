@@ -21,7 +21,7 @@
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -55,7 +55,7 @@
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
-		"size": 100
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -89,7 +89,7 @@
 	    "push_constant": {
 		"stage_flags": "f",
 		"offset": 0,
-		"size": 100
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -99,6 +99,40 @@
 	"render_pass": {
 	    "name": "render_pass.deferred_render_pass",
 	    "subpass": 1
+	}
+    },
+
+    "pipeline.terrain_shadow": {
+	"new": true,
+	
+	"stages": {
+	    "v": "shaders/SPV/terrain_shadow.vert.spv",
+	    "f": "shaders/SPV/terrain_shadow.frag.spv"
+	},
+	"assemble": {
+	    "topology": "fs",
+	    "restart": true
+	},
+	"raster": {
+	    "poly_mode": "f",
+	    "cull": "n"
+	},
+	"pipeline_layout": {
+	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout"],
+
+	    "push_constant": {
+		"stage_flags": "v",
+		"offset": 0,
+		"size": 160
+	    }
+	},
+	"viewport": [4000, 4000],
+	"blend": [],
+	"vertex_input": "vulkan_model.terrain_base_info",
+	"depth": true,
+	"render_pass": {
+	    "name": "render_pass.shadow_render_pass",
+	    "subpass": 0
 	}
     },
     
@@ -123,7 +157,7 @@
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [4000, 4000],
@@ -157,7 +191,7 @@
 	    "push_constant": {
 		"stage_flags": "f",
 		"offset": 0,
-		"size": 100
+		"size": 160
 	    }
 	},
 	"viewport": [1000, 1000],
@@ -187,9 +221,9 @@
 	"pipeline_layout": {
 	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
 	    "push_constant": {
-		"stage_flags": "f",
+		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -218,12 +252,12 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
+	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout", "descriptor_set_layout.2D_sampler_layout"],
 
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -253,12 +287,12 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
+	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout", "descriptor_set_layout.2D_sampler_layout"],
 
 	    "push_constant": {
-		"stage_flags": "vg",
+		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
@@ -292,12 +326,12 @@
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
-		"size": 150
+		"size": 160
 	    }
 	},
 	"viewport": [0, 0],
 	"blend": ["disable", "disable", "disable", "disable"],
-	"vertex_input": "vulkan_model.terrain_base_info",
+	"vertex_input": "",
 	"depth": true,
 	"render_pass": {
 	    "name": "render_pass.deferred_render_pass",

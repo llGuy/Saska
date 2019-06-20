@@ -28,7 +28,7 @@
 		"final_layout": "c"
 	    },
 	    "c2": {
-		"format": 8,
+		"format": 16,
 		"color_load": "c",
 		"color_store": "s",
 
@@ -39,7 +39,7 @@
 		"final_layout": "c"
 	    },
 	    "c3": {
-		"format": 8,
+		"format": 16,
 		"color_load": "c",
 		"color_store": "s",
 
@@ -114,7 +114,7 @@
 
 	"color_attachments": {
 	    "c0": {
-		"format": 0,
+		"format": 8,
 		"color_load": "c",
 		"color_store": "s",
 

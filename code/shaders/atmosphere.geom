@@ -4,7 +4,6 @@ layout(points) in;
 layout(triangle_strip, max_vertices = 24) out;
 
 layout(location = 0) out vec3 out_cube_face_direction;
-layout(location = 1) out int out_layer;
 
 /* 0: GL_TEXTURE_CUBE_MAP_POSITIVE_X
    0: GL_TEXTURE_CUBE_MAP_NEGATIVE_X

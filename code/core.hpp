@@ -17,15 +17,11 @@
 #define ALLOCA_B(s) alloca(s)
 
 #define VK_CHECK(f, ...) \
-    if (f != VK_SUCCESS) \
+        if (f != VK_SUCCESS)			\
     { \
 	fprintf(output_file.fp, "[%s:%d] error : %s - ", __FILE__, __LINE__, #f); \
      assert(false);	  \
-     } \
-    else\
-    { \
-	fprintf(output_file.fp, "[%s:%d] success : %s\n", __FILE__, __LINE__, #f);	\
-    }
+     } 
 
 inline constexpr u32
 left_shift(u32 n)

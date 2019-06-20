@@ -35,10 +35,12 @@ extern struct Debug_Output
     FILE *fp;
 } output_file; // defined in core.cpp but going to move in the future to a more suitable place
 
-#define OUTPUT_DEBUG_LOG(str, ...)					\
+#define OUTPUT_DEBUG_LOG_VALIDATION(str, ...)					\
     fprintf(output_file.fp, "[%s:%d] log: ", __FILE__, __LINE__);	\
     fprintf(output_file.fp, str, __VA_ARGS__);				\
     fflush(output_file.fp);
+
+#define OUTPUT_DEBUG_LOG(str, ...)
 
 struct Constant_String
 {

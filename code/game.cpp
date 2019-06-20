@@ -66,11 +66,14 @@ update_game(Vulkan::GPU *gpu
     persist constexpr u32 MAX_FRAMES_IN_FLIGHT = 2;
     
     Vulkan::wait_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait});
+    Vulkan::reset_fences(gpu, {1, &window_rendering.cpu_wait});
 
+    VkFence null_fence = VK_NULL_HANDLE;
+    
     auto next_image_data = Vulkan::acquire_next_image(swapchain
 						      , gpu
 						      , &window_rendering.img_ready
-						      , &window_rendering.cpu_wait);
+						      , &null_fence);
     
     if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -90,7 +93,6 @@ update_game(Vulkan::GPU *gpu
 
     VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
 	    
-    Vulkan::reset_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait});
     Vulkan::submit(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.img_ready}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.render_finish}

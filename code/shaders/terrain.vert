@@ -12,6 +12,9 @@ layout(location = 0) out VS_DATA
     vec3 color;
     vec3 ws_position;
     vec3 ws_normal;
+
+    vec3 vs_position;
+    vec4 shadow_coord;
 } vs_out;
 
 layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
@@ -19,6 +22,11 @@ layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
     mat4 model;
     mat4 view;
     mat4 proj;
+
+    mat4 shadow_proj;
+    mat4 shadow_view;
+
+    mat4 shadow_bias;
 } ubo;
 
 layout(push_constant) uniform Push_Constants
@@ -40,4 +48,7 @@ main(void)
     vs_out.ws_position = vs_position.xyz;
     vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
+
+    vs_out.shadow_coord = ubo.shadow_bias * ws_position;
+    vs_out.vs_position = vs_position.xyz;
 }

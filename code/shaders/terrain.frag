@@ -5,6 +5,9 @@ layout(location = 0) in VS_DATA
     vec3 color;
     vec3 ws_position;
     vec3 ws_normal;
+
+    vec3 vs_position;
+    vec4 shadow_coord;
 } fs_in;
 
 layout(location = 0) out vec4 out_final;
@@ -13,6 +16,7 @@ layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_normal;
 
 layout(set = 1, binding = 0) uniform samplerCube cube_sampler;
+layout(set = 2, binding = 0) uniform sampler2D shadow_map;
 
 void
 set_roughness(float v)
@@ -26,11 +30,64 @@ set_metalness(float v)
     out_position.a = v;
 }
 
+
+// will move this in the future to the deferred rendering section
+const float MAP_SIZE = 4000.0;
+const float PCF_COUNT = 2.0;
+const float TRANSITION_DISTANCE = 0.0;
+const float SHADOW_DISTANCE = 1000.0;
+
+float get_shadow_light_factor(float dist, in vec4 shadow_coord)
+{
+    float total_texels = (PCF_COUNT * 2.0f + 1.0f) * (PCF_COUNT * 2.0f + 1.0f);
+
+    dist = dist - (SHADOW_DISTANCE - TRANSITION_DISTANCE);
+    dist = dist / TRANSITION_DISTANCE;
+    dist = clamp(1.0 - dist, 0.0, 1.0);
+
+    float texel_size = 1.0f / MAP_SIZE;
+    float total = 0.0f;
+
+    if (shadow_coord.x <= 1.0f && shadow_coord.y <= 1.0f && shadow_coord.z <= 1.0f)
+    {
+	for (int x = int(-PCF_COUNT); x <= int(PCF_COUNT); ++x)
+	{
+	    for (int y = int(-PCF_COUNT); y <= int(PCF_COUNT); ++y)
+	    {
+		float object_nearest_light = texture(shadow_map, shadow_coord.xy + vec2(x, y) * texel_size).x;
+		if (shadow_coord.z - 0.1> object_nearest_light)
+		{
+		    total += 0.8f;
+		}
+	    }
+	}
+	total /= total_texels;
+    }
+
+    float light_factor = 1.0f - (total * dist);
+
+    /*    float light_factor = 1.0;
+    
+    if (shadow_coord.x <= 1.0 && shadow_coord.y <= 1.0 && shadow_coord.z <= 1.0
+	&& shadow_coord.x >= 0.0 && shadow_coord.y >= 0.0 && shadow_coord.z >= 0.0)
+    {
+	float object_nearest_light_z = texture(shadow_map, shadow_coord.xy).x;
+	if (shadow_coord.z > object_nearest_light_z + 0.1)
+	{
+	    light_factor = 0.2;
+	}
+	}*/
+
+    return light_factor;
+}
+
 void
 main(void)
 {
+    float shadow_factor = get_shadow_light_factor(length(fs_in.vs_position), fs_in.shadow_coord);
+    
     out_final = vec4(fs_in.color, 1.0);
-    out_albedo = vec4(fs_in.color, 1.0);
+    out_albedo = vec4(fs_in.color, shadow_factor);
     out_position = vec4(fs_in.ws_position, 1.0);
     out_normal = vec4(fs_in.ws_normal, 1.0);
 

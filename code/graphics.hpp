@@ -122,10 +122,18 @@ struct GPU_Material_Submission_Queue
     void
     submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
 			    , Vulkan::Graphics_Pipeline *graphics_pipeline
-			    , GPU_Command_Queue *main_queue);
-
+			    , VkViewport *viewport
+			    , Vulkan::Render_Pass *render_pass
+			    , Vulkan::Framebuffer *fbo
+			    , u32 subpass
+			    , GPU_Command_Queue *main_queue
+			    , Submit_Level level);
+	
     void
     flush_queue(void);
+
+    void
+    submit_to_cmdbuf(GPU_Command_Queue *queue);
 };
 
 GPU_Material_Submission_Queue

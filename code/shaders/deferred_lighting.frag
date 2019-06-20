@@ -71,6 +71,7 @@ vec4
 pbr(void)
 {
     vec4 albedo = subpassLoad(g_buffer_albedo);
+    float shadow_factor = albedo.a;
     albedo.xyz = pow(albedo.xyz, vec3(2.2));
     vec4 gposition = subpassLoad(g_buffer_position);
     vec3 vs_position = gposition.xyz;
@@ -104,7 +105,7 @@ pbr(void)
     vec3 kd = vec3(1.0) - ks;
     kd *= 1.0 - metallic;
 
-    vec3 result = (kd * vec3(albedo) / PI + spec) * radiance * n_dot_l;
+    vec3 result = (shadow_factor * kd * vec3(albedo) / PI + shadow_factor * spec) * radiance * n_dot_l;
 
     vec3 ambient = vec3(0.03) * vec3(albedo);
     result += ambient;

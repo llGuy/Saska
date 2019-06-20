@@ -40,6 +40,7 @@ namespace Vulkan
 	VkDevice logical_device;
 
 	VkPhysicalDeviceMemoryProperties memory_properties;
+	VkPhysicalDeviceProperties properties;
 
 	Queue_Families queue_families;
 	VkQueue graphics_queue;
@@ -958,6 +959,8 @@ namespace Vulkan
     {
 	VkFramebuffer framebuffer;
 
+	VkExtent2D extent;
+
 	// for color attachments only
 	Memory_Buffer_View<VkImageView> color_attachments;
 	VkImageView depth_attachment;
@@ -1189,6 +1192,18 @@ namespace Vulkan
 		 , const Memory_Buffer_View<VkFence> &fences)
     {
 	vkResetFences(gpu->logical_device, fences.count, fences.buffer);
+    }
+
+    internal FORCEINLINE u32
+    adjust_memory_size_for_gpu_alignment(u32 size
+					 , Vulkan::GPU *gpu)
+    {
+	u32 alignment = gpu->properties.limits.nonCoherentAtomSize;
+
+	u32 mod = size % alignment;
+	
+	if (mod == 0) return size;
+	else return size + alignment - mod;
     }
     
     struct State

@@ -5,36 +5,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-struct Camera
-{
-    glm::vec2 mp;
-    glm::vec3 p; // position
-    glm::vec3 d; // direction
-    glm::vec3 u; // up
-
-    f32 fov;
-    f32 asp; // aspect ratio
-    f32 n, f; // near and far planes
-
-    glm::vec4 captured_frustum_corners[8] {};
-    glm::vec4 captured_shadow_corners[8] {};
-
-    glm::mat4 p_m;
-    glm::mat4 v_m;
-
-    void
-    set_default(f32 w, f32 h, f32 m_x, f32 m_y);
-    
-    void
-    compute_projection(void);
-
-    void
-    compute_view(void);
-
-    void
-    compute_view(struct Entity *e);
-};
-
 void
 make_world(Window_Data *window
 	   , Vulkan::State *vk

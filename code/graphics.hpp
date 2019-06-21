@@ -3,6 +3,64 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 
+using Handle = u32;
+
+struct GPU_Buffer_Info
+{
+    VkDeviceMemory memory;
+    VkDeviceSize   size;
+};
+
+struct Image_Info
+{
+    VkFormat       format;
+    
+    VkImageView    view    = VK_NULL_HANDLE;
+    VkSampler      sampler = VK_NULL_HANDLE;
+    VkDeviceMemory memory  = VK_NULL_HANDLE;
+};
+
+struct Framebuffer_Info
+{
+    static constexpr u32 MAX_COLOR_ATTACHMENTS;
+    
+    VkExtent2D extent;
+    Handle     depth_attachment;
+
+    u32        color_attachment_count {0};
+    Handle     color_attachments[ MAX_COLOR_ATTACHMENTS ];
+};
+
+struct Render_Pass_Info
+{
+    // Contains only this for now
+    
+    u32 subpass_count;
+};
+
+struct Pipeline_Info
+{
+    // Nothing for now
+};
+
+template <typename T, typename Object_Info, u32 Max> struct Object_Manager
+{
+    using Type = T;
+    using Object_Info_Type = Object_Info;
+    
+    T           objects[ Max ];
+    Object_Info object_infos[ Max ];
+};
+
+using GPU_Buffer_Manager = Object_Manager<VkBuffer, GPU_Buffer_Info, 20>;
+using Image_Manager = Object_Manager<VkImage, Image_Info, 20>;
+using Framebuffer_Manager = Object_Manager<VkFramebuffer, Framebuffer_Info, 20>;
+using Render_Pass_Manager = Object_Manager<VkRenderPass, Render_Pass_Info, 20>;
+using Pipeline_Manager = Object_Manager<VkPipeline, Pipeline_Info, 20>;
+// Uniform manager defined under
+
+
+
 // Later when maybe introducing new APIs, might be something different
 // Clearer name for people reading code
 using GPU_Command_Queue = VkCommandBuffer;
@@ -82,6 +140,18 @@ update_binding_from_group(Vulkan::GPU *gpu, Update_Struct &&...updates)
     VkWriteDescriptorSet tmp_updates[UPDATES_COUNT] = { updates... };
     Vulkan::update_descriptor_sets({UPDATES_COUNT, tmp_updates}, gpu);
 }
+
+struct Uniform_Manager
+{
+    static constexpr u32 MAX_LAYOUTS = 20;
+    Uniform_Layout      layouts[ MAX_LAYOUTS ];
+    Uniform_Layout_Info layout_infos[ MAX_LAYOUTS ];
+
+    static constexpr u32 MAX_GROUPS = 30;
+    Uniform_Group groups[ MAX_GROUPS ];
+};
+
+
 
 // --------------------- Rendering stuff ---------------------
 // Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render

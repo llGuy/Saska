@@ -58,4 +58,5 @@ load_render_passes_from_json(Vulkan::GPU *gpu
 
 void
 load_descriptors_from_json(Vulkan::GPU *gpu
-			   , Vulkan::Swapchain *swapchain);
+			   , Vulkan::Swapchain *swapchain
+			   , VkDescriptorPool *pool);

@@ -4,60 +4,86 @@
 #include "vulkan.hpp"
 
 using Handle = u32;
+using GPU_Buffer_Handle = Handle;
+using Image_Handle = Handle;
+using Framebuffer_Handle = Handle;
+using Render_Pass_Handle = Handle;
+using Pipeline_Handle = Handle;
+using Model_Handle = Handle;
 
-struct GPU_Buffer_Info
-{
-    VkDeviceMemory memory;
-    VkDeviceSize   size;
-};
-
-struct Image_Info
-{
-    VkFormat       format;
-    
-    VkImageView    view    = VK_NULL_HANDLE;
-    VkSampler      sampler = VK_NULL_HANDLE;
-    VkDeviceMemory memory  = VK_NULL_HANDLE;
-};
-
-struct Framebuffer_Info
-{
-    static constexpr u32 MAX_COLOR_ATTACHMENTS;
-    
-    VkExtent2D extent;
-    Handle     depth_attachment;
-
-    u32        color_attachment_count {0};
-    Handle     color_attachments[ MAX_COLOR_ATTACHMENTS ];
-};
-
-struct Render_Pass_Info
-{
-    // Contains only this for now
-    
-    u32 subpass_count;
-};
-
-struct Pipeline_Info
-{
-    // Nothing for now
-};
-
-template <typename T, typename Object_Info, u32 Max> struct Object_Manager
+template <typename T, u32 Max = 40> struct Object_Manager
 {
     using Type = T;
-    using Object_Info_Type = Object_Info;
     
-    T           objects[ Max ];
-    Object_Info object_infos[ Max ];
+    u32 count {0};
+    T   objects[ Max ];
+
+    // To be used only in initialization of program.
+    Hash_Table_Inline<u32, Max, 4, 4> object_name_map {""};
+
+    Handle
+    add(const Constant_String &name, u32 allocation_count = 1)
+    {
+	object_name_map.insert(name.hash, count);
+
+	u32 prev = count;
+	count += allocation_count;
+	
+	return(prev);
+    }
+
+    Handle
+    get_handle(const Constant_String &name)
+    {
+	return(*object_name_map.get(name.hash));
+    }
+    
+    T *
+    get(Handle handle)
+    {
+	return(&objects[handle]);
+    }
+
+    // To use for convenience, not for performance
+    T *
+    get(const Constant_String &name)
+    {
+	return(&objects[ *object_name_map.get(name.hash) ]);
+    }
+
+    void
+    clean_up(Vulkan::GPU *gpu)
+    {
+	for (u32 i = 0; i < count; ++i)
+	{
+	    objects[i].destroy(gpu);
+	}
+    }
 };
 
-using GPU_Buffer_Manager = Object_Manager<VkBuffer, GPU_Buffer_Info, 20>;
-using Image_Manager = Object_Manager<VkImage, Image_Info, 20>;
-using Framebuffer_Manager = Object_Manager<VkFramebuffer, Framebuffer_Info, 20>;
-using Render_Pass_Manager = Object_Manager<VkRenderPass, Render_Pass_Info, 20>;
-using Pipeline_Manager = Object_Manager<VkPipeline, Pipeline_Info, 20>;
-// Uniform manager defined under
+using GPU_Buffer_Manager = Object_Manager<Vulkan::Buffer>;
+using Image_Manager = Object_Manager<Vulkan::Image2D>;
+using Framebuffer_Manager = Object_Manager<Vulkan::Framebuffer>;
+using Render_Pass_Manager = Object_Manager<Vulkan::Render_Pass>;
+using Pipeline_Manager = Object_Manager<Vulkan::Graphics_Pipeline>;
+using Model_Manager = Object_Manager<Vulkan::Model>;
+// For now, defined descriptor manager structs here:
+
+// Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
+using Uniform_Group = VkDescriptorSet;
+using Uniform_Layout = VkDescriptorSetLayout;
+
+using Uniform_Layout_Manager = Object_Manager<Uniform_Layout>;
+using Uniform_Group_Manager = Object_Manager<Uniform_Group>;
+
+extern GPU_Buffer_Manager g_gpu_buffer_manager;
+extern Image_Manager g_image_manager;
+extern Framebuffer_Manager g_framebuffer_manager;
+extern Render_Pass_Manager g_render_pass_manager;
+extern Pipeline_Manager g_pipeline_manager;
+extern Uniform_Layout_Manager g_uniform_layout_manager;
+extern Uniform_Group_Manager g_uniform_group_manager;
+extern Model_Manager g_model_manager;
 
 
 
@@ -110,13 +136,12 @@ struct Uniform_Layout_Info // --> VkDescriptorSetLayout
 	 , VkShaderStageFlags shader_flags);
 };
 
-using Uniform_Layout = VkDescriptorSetLayout;
+
 
 Uniform_Layout
 make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu);
 
-// Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
-using Uniform_Group = VkDescriptorSet;
+
 
 Uniform_Group
 make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *gpu);
@@ -141,15 +166,10 @@ update_binding_from_group(Vulkan::GPU *gpu, Update_Struct &&...updates)
     Vulkan::update_descriptor_sets({UPDATES_COUNT, tmp_updates}, gpu);
 }
 
-struct Uniform_Manager
-{
-    static constexpr u32 MAX_LAYOUTS = 20;
-    Uniform_Layout      layouts[ MAX_LAYOUTS ];
-    Uniform_Layout_Info layout_infos[ MAX_LAYOUTS ];
+using Uniform_Layout_Handle = Handle;
+using Uniform_Group_Handle = Handle;
 
-    static constexpr u32 MAX_GROUPS = 30;
-    Uniform_Group groups[ MAX_GROUPS ];
-};
+
 
 
 

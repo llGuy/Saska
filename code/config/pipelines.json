@@ -130,6 +130,7 @@
 	"blend": [],
 	"vertex_input": "vulkan_model.terrain_base_info",
 	"depth": true,
+	"dynamic_depth_bias": true,
 	"render_pass": {
 	    "name": "render_pass.shadow_render_pass",
 	    "subpass": 0
@@ -164,6 +165,7 @@
 	"blend": [],
 	"vertex_input": "vulkan_model.test_model",
 	"depth": true,
+	"dynamic_depth_bias": true,
 	"render_pass": {
 	    "name": "render_pass.shadow_render_pass",
 	    "subpass": 0

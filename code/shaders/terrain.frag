@@ -33,10 +33,18 @@ set_metalness(float v)
 
 // will move this in the future to the deferred rendering section
 const float MAP_SIZE = 4000.0;
-const float PCF_COUNT = 2.0;
-const float TRANSITION_DISTANCE = 0.0;
+const float PCF_COUNT = 1.0;
+const float TRANSITION_DISTANCE = 20.0;
 const float SHADOW_DISTANCE = 1000.0;
 
+float linearize_depth(float d,float zNear,float zFar)
+{
+    float z_n = 2.0 * d - 1.0;
+    return 2.0 * zNear * zFar / (zFar + zNear - z_n * (zFar - zNear));
+}
+
+
+// Maybe in future, add possibility to move this to the deferred section
 float get_shadow_light_factor(float dist, in vec4 shadow_coord)
 {
     float total_texels = (PCF_COUNT * 2.0f + 1.0f) * (PCF_COUNT * 2.0f + 1.0f);
@@ -48,14 +56,19 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
     float texel_size = 1.0f / MAP_SIZE;
     float total = 0.0f;
 
-    if (shadow_coord.x <= 1.0f && shadow_coord.y <= 1.0f && shadow_coord.z <= 1.0f)
+    vec3 shadow_space_pos = shadow_coord.xyz / shadow_coord.w;
+    shadow_space_pos.xy = shadow_space_pos.xy * 0.5 + 0.5;
+    
+    if (shadow_space_pos.z > -1.0 && shadow_space_pos.z < 1.0
+	&& shadow_space_pos.x > 0.0 && shadow_space_pos.x < 1.0
+	&& shadow_space_pos.y > 0.0 && shadow_space_pos.y < 1.0)
     {
 	for (int x = int(-PCF_COUNT); x <= int(PCF_COUNT); ++x)
 	{
 	    for (int y = int(-PCF_COUNT); y <= int(PCF_COUNT); ++y)
 	    {
-		float object_nearest_light = texture(shadow_map, shadow_coord.xy + vec2(x, y) * texel_size).x;
-		if (shadow_coord.z - 0.1> object_nearest_light)
+		float object_nearest_light = texture(shadow_map, shadow_space_pos.xy + vec2(x, y) * texel_size).x;
+		if (shadow_space_pos.z - 0.005 > object_nearest_light)
 		{
 		    total += 0.8f;
 		}
@@ -65,18 +78,6 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
     }
 
     float light_factor = 1.0f - (total * dist);
-
-    /*    float light_factor = 1.0;
-    
-    if (shadow_coord.x <= 1.0 && shadow_coord.y <= 1.0 && shadow_coord.z <= 1.0
-	&& shadow_coord.x >= 0.0 && shadow_coord.y >= 0.0 && shadow_coord.z >= 0.0)
-    {
-	float object_nearest_light_z = texture(shadow_map, shadow_coord.xy).x;
-	if (shadow_coord.z > object_nearest_light_z + 0.1)
-	{
-	    light_factor = 0.2;
-	}
-	}*/
 
     return light_factor;
 }

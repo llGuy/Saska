@@ -7,274 +7,11 @@
 #include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 
+#include "graphics.hpp"
+
 #include "load.hpp"
 
-void
-process_vertex(std::vector<std::string> const & vertex_data,
-	       std::vector<u32> & indices, std::vector<glm::vec2> const & raw_textures,
-	       std::vector<glm::vec3> const & raw_normals,
-	       std::vector<glm::vec2> & textures, std::vector<glm::vec3> & normals
-	       , u32 & triangle_vertex)
-{
-    s32 current_vertex = std::stoi(vertex_data[0]) - 1;
-    indices.push_back(current_vertex);
-
-    if (raw_textures.size() > 0)
-    {
-	glm::vec2 current_tex = raw_textures[std::stoi(vertex_data[1]) - 1];
-	textures[current_vertex] = current_tex;
-    }
-
-    if (raw_normals.size() > 0)
-    {
-	glm::vec3 current_normal = raw_normals[std::stoi(vertex_data[2]) - 1];
-	f32 normal_y = current_normal.y;
-	f32 normal_z = current_normal.z;
-	
-	normals[current_vertex] = current_normal;
-    }
-
-    triangle_vertex = current_vertex;
-}
-
-std::vector<std::string>
-split(std::string const & str, char const splitter)
-{
-    std::vector<std::string> words;
-    std::string current;
-    std::istringstream iss(str);
-    while (std::getline(iss, current, splitter)) words.push_back(current);
-
-    return words;
-}
-    
-void
-break_face_line(const std::vector<std::string> &face_line_words,
-		std::vector<u32> &indices, const std::vector<glm::vec2> &raw_textures,
-		std::vector<glm::vec3> const &raw_normals,
-		std::vector<glm::vec2> &textures, std::vector<glm::vec3> &normals,
-		std::vector<glm::vec3> &tangents, std::vector<f32> &tangent_amounts,
-		std::vector<glm::vec3> &vertices)
-{
-    std::array<std::vector<std::string>, 3> face_indices;
-
-    std::array<u32, 3> triangle_vertices;
-
-    for (u32 i = 0; i < 3; ++i)
-    {
-	face_indices[i] = split(face_line_words[i + 1], '/');
-	process_vertex(face_indices[i], indices, raw_textures, raw_normals, textures, normals, triangle_vertices[i]);
-    }
-
-    glm::vec3 delta_pos1 = vertices[triangle_vertices[1]] - vertices[triangle_vertices[0]];
-    glm::vec3 delta_pos2 = vertices[triangle_vertices[2]] - vertices[triangle_vertices[0]];
-
-    glm::vec2 delta_uv1 = textures[triangle_vertices[1]] - textures[triangle_vertices[0]];
-    glm::vec2 delta_uv2 = textures[triangle_vertices[2]] - textures[triangle_vertices[0]];
-
-    f32 r = 1.0f / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-    delta_pos1 *= delta_uv2.y;
-    delta_pos2 *= delta_uv1.y;
-    glm::vec3 tangent = delta_pos1 - delta_pos2;
-    tangent *= r;
-
-    tangents[triangle_vertices[0]] = tangent;
-    tangents[triangle_vertices[1]] = tangent;
-    tangents[triangle_vertices[2]] = tangent;
-
-    ++tangent_amounts[triangle_vertices[0]];
-    ++tangent_amounts[triangle_vertices[1]];
-    ++tangent_amounts[triangle_vertices[2]];
-}
-
-void
-create_model(std::vector<glm::vec3> &vertices
-	     , std::vector<glm::vec3> &normals
-	     , std::vector<glm::vec2> &texture_coords
-	     , std::vector<u32> &indices
-	     , std::vector<glm::vec3> &tangents
-	     , Vulkan::Model *object
-	     , const std::string &name
-	     , Vulkan::GPU *gpu)
-{
-    enum :u32 {POSITION, NORMAL, UVS, TANGENT};
-    
-    persist constexpr u32 BINDING_AND_ATTRIBUTE_COUNT = 3;
-    
-    object->attribute_count = BINDING_AND_ATTRIBUTE_COUNT;
-    object->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * object->attribute_count
-											, Alignment(1));
-
-    object->binding_count = BINDING_AND_ATTRIBUTE_COUNT;
-    object->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding) * object->binding_count
-								       , Alignment(1));
-
-    Vulkan::Model_Binding *bindings = object->bindings;
-    bindings[POSITION].begin_attributes_creation(object->attributes_buffer);
-    bindings[POSITION].push_attribute(POSITION, VK_FORMAT_R32G32B32_SFLOAT, sizeof(glm::vec3));
-    bindings[POSITION].end_attributes_creation();
-
-    bindings[NORMAL].begin_attributes_creation(object->attributes_buffer);
-    bindings[NORMAL].push_attribute(NORMAL, VK_FORMAT_R32G32B32_SFLOAT, sizeof(glm::vec3));
-    bindings[NORMAL].end_attributes_creation();
-
-    bindings[UVS].begin_attributes_creation(object->attributes_buffer);
-    bindings[UVS].push_attribute(UVS, VK_FORMAT_R32G32_SFLOAT, sizeof(glm::vec2));
-    bindings[UVS].end_attributes_creation();
-    /*
-    bindings[TANGENT].begin_attributes_creation(object->attributes_buffer);
-    bindings[TANGENT].push_attribute(TANGENT, VK_FORMAT_R32G32B32_SFLOAT, sizeof(glm::vec3));
-    bindings[TANGENT].end_attributes_creation();*/
-
-    std::string buffer_name = "buffer." + name + ".buffers";
-
-    R_Mem<Vulkan::Buffer> buffers = register_memory(init_const_str(buffer_name.c_str(), buffer_name.length())
-								    , sizeof(Vulkan::Buffer) * BINDING_AND_ATTRIBUTE_COUNT);
-
-    R_Mem<VkCommandPool> command_pool = get_memory("command_pool.graphics_command_pool"_hash);
-	
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)vertices.size(), vertices.data()}
-							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-							  , command_pool.p
-							  , &buffers.p[POSITION]
-							  , gpu);
-    bindings[POSITION].buffer = buffers.p[POSITION].buffer;
-    
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)normals.size(), normals.data()}
-							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-								  , command_pool.p
-								  , &buffers.p[NORMAL]
-								  , gpu);
-    bindings[NORMAL].buffer = buffers.p[NORMAL].buffer;
-    
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec2) * (u32)texture_coords.size(), texture_coords.data()}
-							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-								  , command_pool.p
-								  , &buffers.p[UVS]
-								  , gpu);
-    bindings[UVS].buffer = buffers.p[UVS].buffer;
-    
-    /*	Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(glm::vec3) * (u32)tangents.size(), tangents.data()}
-	, command_pool.p
-	, &buffers.p[TANGENT]
-	, gpu);
-	bindings[TANGENT].buffer = buffers.p[TANGENT].buffer;*/
-    
-    object->index_data.index_type = VK_INDEX_TYPE_UINT32;
-    object->index_data.index_offset = 0;
-    object->index_data.index_count = indices.size();
-    
-    std::string ibo_name = "buffer." + name + ".ibo";
-    R_Mem<Vulkan::Buffer> ibo = register_memory(init_const_str(ibo_name.c_str(), ibo_name.length())
-						    , sizeof(Vulkan::Buffer));
-    
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{(u32)indices.size() * sizeof(u32), indices.data()}
-							  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-								  , command_pool.p
-								  , ibo.p
-								  , gpu);
-    
-    object->index_data.index_buffer = ibo.p->buffer;
-    
-    object->create_vbo_list();
-}
-    
-void
-load_model_from_obj(const char *filename
-		    , Vulkan::Model *dst
-		    , const char *model_name
-		    , Vulkan::GPU *gpu)
-{
-    std::ifstream file(filename);
-
-    std::vector<glm::vec3> normals;
-    std::vector<glm::vec3> vertices;
-    std::vector<glm::vec2> texture_coords;
-    std::vector<glm::vec3> tangents;
-    std::vector<f32> tangent_amounts;
-
-    /* won't be in the  correct order */
-    std::vector<glm::vec2> raw_texture_coords;
-    std::vector<glm::vec3> raw_normals;
-    std::vector<u32> indices;
-
-    std::string line;
-    while (std::getline(file, line))
-    {
-	std::vector<std::string> words = split(line, ' ');
-
-	if (words[0] == "v")
-	{
-	    glm::vec3 vertex;
-	    for (u32 i = 0; i < 3; ++i) vertex[i] = std::stof(words[i + 1]);
-	    vertices.push_back(vertex);
-	}
-	else if (words[0] == "vt")
-	{
-	    glm::vec2 texture_coord;
-	    for (u32 i = 0; i < 2; ++i) texture_coord[i] = std::stof(words[i + 1]);
-	    raw_texture_coords.push_back(glm::vec2(texture_coord.x, 1.0f - texture_coord.y));
-	}
-	else if (words[0] == "vn")
-	{
-	    glm::vec3 normal;
-	    for (u32 i = 0; i < 3; ++i) normal[i] = std::stof(words[i + 1]);
-	    raw_normals.push_back(normal);
-	}
-	else if (words[0] == "f")
-	{
-	    tangents.resize(vertices.size());
-	    tangent_amounts.resize(vertices.size());
-	    normals.resize(vertices.size());
-	    texture_coords.resize(vertices.size());
-
-	    break_face_line(words
-			    , indices
-			    , raw_texture_coords
-			    , raw_normals
-			    , texture_coords
-			    , normals
-			    , tangents
-			    , tangent_amounts
-			    , vertices);
-
-	    break;
-	}
-    }
-
-    while (std::getline(file, line))
-    {
-	std::vector<std::string> words = split(line, ' ');
-	if (words[0] == "f")
-	{
-	    break_face_line(words
-			    , indices
-			    , raw_texture_coords
-			    , raw_normals
-			    , texture_coords
-			    , normals
-			    , tangents
-			    , tangent_amounts
-			    , vertices);
-	}
-    }
-
-    for (u32 i = 0; i < tangents.size(); ++i)
-    {
-	tangents[i] /= tangent_amounts[i];
-    }
-
-    create_model(vertices
-		 , normals
-		 , texture_coords
-		 , indices
-		 , tangents
-		 , dst
-		 , model_name
-		 , gpu);
-}
-
-internal u32
+/*internal u32
 get_terrain_index(u32 x, u32 z, u32 depth_z)
 {
     return(x + z * depth_z);
@@ -287,6 +24,7 @@ load_3D_terrain_mesh(u32 width_x
 		     , Vulkan::Model *terrain_mesh_base_model_info
 		     , Vulkan::Buffer *mesh_buffer_vbo
 		     , Vulkan::Buffer *mesh_buffer_ibo
+		     , VkCommandPool
 		     , Vulkan::GPU *gpu)
 {
     assert(width_x & 0X1 && depth_z & 0X1);
@@ -380,7 +118,7 @@ load_3D_terrain_mesh_instance(u32 width_x
 
     ret.model.create_vbo_list();
     return(ret);
-}
+}*/
 
 // later on will use proprietary binary file format
 void
@@ -408,16 +146,17 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 
 	bool make_new = i.value().find("new").value();
 	
-	R_Mem<Vulkan::Graphics_Pipeline> new_ppln;
+	Vulkan::Graphics_Pipeline *new_ppln;
 
 	if (make_new)
 	{
-	    new_ppln = register_memory(init_const_str(key.c_str(), key.length())
-				       , sizeof(Vulkan::Graphics_Pipeline));
+	    Pipeline_Handle new_ppln_handle = g_pipeline_manager.add(make_constant_string(key.c_str(), key.length()));
+	    new_ppln = g_pipeline_manager.get(new_ppln_handle);
 	}
 	else
 	{
-	    new_ppln = get_memory(init_const_str(key.c_str(), key.length()));
+	    Pipeline_Handle new_ppln_handle = g_pipeline_manager.add(make_constant_string(key.c_str(), key.length()));
+	    new_ppln = g_pipeline_manager.get(new_ppln_handle);
 	}
 
 	auto stages = i.value().find("stages");
@@ -474,7 +213,8 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	case 'n': {c_mode = VK_CULL_MODE_NONE; break;}
 	case 'b': {c_mode = VK_CULL_MODE_BACK_BIT; break;}
 	}
-	Vulkan::init_pipeline_rasterization_info(p_mode, c_mode, 2.0f, 0, &rasterization_info);
+        bool depth_bias = i.value().find("dynamic_depth_bias") != i.value().end();
+	Vulkan::init_pipeline_rasterization_info(p_mode, c_mode, 2.0f, 0, &rasterization_info, depth_bias);
 
 	auto blend_stuff = i.value().find("blend");
 	std::vector<std::string> blend_values = blend_stuff.value();
@@ -503,11 +243,12 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	auto ppln_lyt = i.value().find("pipeline_layout");
 	std::vector<std::string> set_lyt = ppln_lyt.value().find("descriptor_set_layouts").value();
 
-	Memory_Buffer_View<VkDescriptorSetLayout> layouts = {(u32)set_lyt.size(), ALLOCA_T(VkDescriptorSetLayout, set_lyt.size())};
+	Memory_Buffer_View<Uniform_Layout> layouts = {(u32)set_lyt.size(), ALLOCA_T(Uniform_Layout, set_lyt.size())};
 	for (u32 i = 0; i < layouts.count; ++i)
 	{
-	    R_Mem<VkDescriptorSetLayout> l = get_memory(init_const_str(set_lyt[i].c_str(), set_lyt[i].length()));
-	    layouts[i] = *l.p;
+	    Uniform_Layout *layout = g_uniform_layout_manager.get(make_constant_string(set_lyt[i].c_str(), set_lyt[i].length()));
+	    
+	    layouts[i] = *layout;
 	}
 
 	auto push_k = ppln_lyt.value().find("push_constant");
@@ -542,8 +283,8 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	    std::string vtx_inp_model = i.value().find("vertex_input").value();
 	    if (vtx_inp_model != "")
 	    {
-		R_Mem<Vulkan::Model> model = get_memory(init_const_str(vtx_inp_model.c_str(), vtx_inp_model.length()));
-		Vulkan::init_pipeline_vertex_input_info(model.p, &vertex_input_info);
+		Vulkan::Model *model = g_model_manager.get(make_constant_string(vtx_inp_model.c_str(), vtx_inp_model.length()));
+		Vulkan::init_pipeline_vertex_input_info(model, &vertex_input_info);
 	    }
 	    else
 	    {
@@ -578,16 +319,17 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 	Memory_Buffer_View<VkPipelineShaderStageCreateInfo> modules = {stg_count, shader_infos};
 	auto render_pass_info = i.value().find("render_pass");
 	std::string render_pass_name = render_pass_info.value().find("name").value();
-	R_Mem<Vulkan::Render_Pass> render_pass = get_memory(init_const_str(render_pass_name.c_str(), render_pass_name.length()));
+	Vulkan::Render_Pass *render_pass = g_render_pass_manager.get(make_constant_string(render_pass_name.c_str(), render_pass_name.length()));
 	u32 subpass = render_pass_info.value().find("subpass").value();
 
 
 
 	// NEED TO SET VIEWPORT IF IS DYNAMIC !! --> FIX ASAP
-	VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH };
+
+	VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH };
 	VkPipelineDynamicStateCreateInfo dynamic_state_info = {};
 	dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamic_state_info.dynamicStateCount = sizeof(dynamic_states) / sizeof(dynamic_states[0]);
+	dynamic_state_info.dynamicStateCount = 3;
 	dynamic_state_info.pDynamicStates = dynamic_states;
 	
 	
@@ -600,11 +342,16 @@ load_pipelines_from_json(Vulkan::GPU *gpu
 					   , &blending_info
 					   , &dynamic_state_info
 					   , &depth_stencil_info
-					   , &new_ppln.p->layout
-					   , render_pass.p
+					   , &new_ppln->layout
+					   , render_pass
 					   , subpass
 					   , gpu
-					   , &new_ppln.p->pipeline);
+					   , &new_ppln->pipeline);
+
+	for (u32 i = 0; i < stg_count; ++i)
+	{
+	    vkDestroyShaderModule(gpu->logical_device, module_buffer[i], nullptr);
+	}
     }
 }
 
@@ -647,7 +394,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	bool insert_swapchain_imgs_at_0 = i.value().find("insert_swapchain_imgs_at_0").value();
 	u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
 	// create color attachments and depth attachments
-	struct Attachment {R_Mem<Vulkan::Image2D> img; u32 index;};
+	struct Attachment {Vulkan::Image2D *img; u32 index;};
 	//	Memory_Buffer_View<Attachment> color_imgs = {};
 	std::vector<Attachment> color_imgs;
 	color_imgs.resize(i.value().find("color_attachment_count").value());
@@ -662,15 +409,16 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 							    , u32 index
 							    , bool make_new) -> Attachment
 	    {
-		R_Mem<Vulkan::Image2D> img;
+		Vulkan::Image2D *img;
 		
 		if (make_new)
 		{
-		    img = register_memory(name, sizeof(Vulkan::Image2D));
+		    Image_Handle img_handle = g_image_manager.add(name);
+		    img = g_image_manager.get(img_handle);
 		}
 		else
 		{
-		    img = get_memory(name);
+		    img = g_image_manager.get(name);
 		}
 
 		Vulkan::init_framebuffer_attachment(width
@@ -678,7 +426,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 						    , format
 						    , usage
 						    , gpu
-						    , img.p);
+						    , img);
 		return(Attachment{img, index});
 	    };
 	
@@ -755,7 +503,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 		}
 		else
 		{
-		    R_Mem<Vulkan::Image2D> img = get_memory(init_const_str(img_name.c_str(), img_name.length()));
+		    Vulkan::Image2D *img = g_image_manager.get(make_constant_string(img_name.c_str(), img_name.length()));
 		    color_imgs[attachment] = Attachment{img, index};
 		}
 	    }
@@ -778,7 +526,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 
 	    if (depth_att_to_create)
 	    {
-		depth = create_attachment(init_const_str(depth_att_name.c_str(), depth_att_name.length())
+		depth = create_attachment(make_constant_string(depth_att_name.c_str(), depth_att_name.length())
 					  , gpu->supported_depth_format
 					  , create_usage_flags(depth_att_usage)
 					  , width
@@ -807,7 +555,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	    }
 	    else
 	    {
-		depth.img = get_memory(init_const_str(depth_att_name.c_str(), depth_att_name.length()));
+		depth.img = g_image_manager.get(make_constant_string(depth_att_name.c_str(), depth_att_name.length()));
 		depth.index = depth_att_index;
 	    }
 
@@ -815,22 +563,23 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	}
 	
 	std::string compatible_render_pass_name = i.value().find("compatible_render_pass").value();
-	R_Mem<Vulkan::Render_Pass> compatible_render_pass = get_memory(init_const_str(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
+	Vulkan::Render_Pass *compatible_render_pass = g_render_pass_manager.get(make_constant_string(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
 	// actual creation of the FBO
 	u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
 
 	bool make_new = i.value().find("new").value();
 
-	R_Mem<Vulkan::Framebuffer> fbos;
+	Vulkan::Framebuffer *fbos;
 	
 	if (make_new)
 	{
-	    fbos = register_memory(init_const_str(fbo_name.c_str(), fbo_name.length())
-				   , sizeof(Vulkan::Framebuffer) * fbo_count);
+	    Framebuffer_Handle fbos_handle = g_framebuffer_manager.add(make_constant_string(fbo_name.c_str(), fbo_name.length())
+									 , fbo_count);
+	    fbos = g_framebuffer_manager.get(fbos_handle);
 	}
 	else
 	{
-	    fbos = get_memory(init_const_str(fbo_name.c_str(), fbo_name.length()));
+	    fbos = g_framebuffer_manager.get(make_constant_string(fbo_name.c_str(), fbo_name.length()));
 	}
 
 	auto layers_node = i.value().find("layers");
@@ -842,34 +591,34 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	
 	for (u32 fbo = 0; fbo < fbo_count; ++fbo)
 	{
-	    allocate_memory_buffer(fbos.p[fbo].color_attachments
+	    allocate_memory_buffer(fbos[fbo].color_attachments
 				   , color_imgs.size());
 
 	    for (u32 color = 0; color < color_imgs.size(); ++color)
 	    {
 		if (insert_swapchain_imgs_at_0 && color == 0)
 		{
-		    fbos.p[fbo].color_attachments[color] = swapchain->views[fbo];
+		    fbos[fbo].color_attachments[color] = swapchain->views[fbo];
 		}
 		else
 		{
-		    fbos.p[fbo].color_attachments[color] = color_imgs[color].img.p->image_view;
+		    fbos[fbo].color_attachments[color] = color_imgs[color].img->image_view;
 		}
 	    }
 
 	    if (enable_depth)
 	    {
-		fbos.p[fbo].depth_attachment = depth.img.p->image_view;
+		fbos[fbo].depth_attachment = depth.img->image_view;
 	    }
 
-	    Vulkan::init_framebuffer(compatible_render_pass.p
+	    Vulkan::init_framebuffer(compatible_render_pass
 					 , width
 					 , height
 					 , layers
 					 , gpu
-					 , &fbos.p[fbo]);
+					 , &fbos[fbo]);
 
-	    fbos.p[fbo].extent = VkExtent2D{ width, height };
+	    fbos[fbo].extent = VkExtent2D{ width, height };
 	}
     }
 }
@@ -1134,28 +883,29 @@ load_render_passes_from_json(Vulkan::GPU *gpu
 	}
 
 	bool make_new = i.value().find("new").value();
-	R_Mem<Vulkan::Render_Pass> new_rndr_pass;
+	Vulkan::Render_Pass *new_rndr_pass;
 	if (make_new)
 	{
-	    new_rndr_pass = register_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length())
-					    , sizeof(Vulkan::Render_Pass));
+	    Render_Pass_Handle new_rndr_pass_handle = g_render_pass_manager.add(make_constant_string(rndr_pass_name.c_str(), rndr_pass_name.length()));
+	    new_rndr_pass = g_render_pass_manager.get(new_rndr_pass_handle);
 	}
 	else
 	{
-	    new_rndr_pass = get_memory(init_const_str(rndr_pass_name.c_str(), rndr_pass_name.length()));
+	    new_rndr_pass = g_render_pass_manager.get(make_constant_string(rndr_pass_name.c_str(), rndr_pass_name.length()));
 	}
 	
 	Vulkan::init_render_pass(Memory_Buffer_View<VkAttachmentDescription>{color_attachment_count, att_descriptions}
 				     , Memory_Buffer_View<VkSubpassDescription>{subpass_count, subpass_descriptions}
 				     , Memory_Buffer_View<VkSubpassDependency>{dependency_count, dependencies}
 				     , gpu
-				     , new_rndr_pass.p);
+				     , new_rndr_pass);
     }
 }
 
 void
 load_descriptors_from_json(Vulkan::GPU *gpu
-			   , Vulkan::Swapchain *swapchain)
+			   , Vulkan::Swapchain *swapchain
+			   , VkDescriptorPool *source_pool)
 {
     persist const char *filename = "config/desc.json";
     
@@ -1189,15 +939,15 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 	    {
 		// initialize a descriptor set layout
 		bool make_new = i.value().find("new").value();
-		R_Mem<VkDescriptorSetLayout> new_descriptor_set_layout;
+		Uniform_Layout *new_uniform_layout;
 		if (make_new)
 		{
-		    new_descriptor_set_layout = register_memory(init_const_str(key.c_str(), key.length())
-								, sizeof(VkDescriptorSetLayout));
+		    Uniform_Layout_Handle new_uniform_layout_handle = g_uniform_layout_manager.add(make_constant_string(key.c_str(), key.length()));
+		    new_uniform_layout = g_uniform_layout_manager.get(new_uniform_layout_handle);
 		}
 		else
 		{
-		    new_descriptor_set_layout = get_memory(init_const_str(key.c_str(), key.length()));
+		    new_uniform_layout = g_uniform_layout_manager.get(make_constant_string(key.c_str(), key.length()));
 		}
 		
 		u32 binding_count = i.value().find("binding_count").value();
@@ -1243,13 +993,10 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 		}
 		
 		Memory_Buffer_View<VkDescriptorSetLayoutBinding> bindings_mbv {binding_count, bindings};
-		Vulkan::init_descriptor_set_layout(bindings_mbv, gpu, new_descriptor_set_layout.p);
+		Vulkan::init_descriptor_set_layout(bindings_mbv, gpu, new_uniform_layout);
 	    }
 	    else if(i.value().find("type").value() == "set" && set_or_layout[sol] == "set")
 	    {
-		std::string pool_name = i.value().find("source_pool").value();
-		R_Mem<VkDescriptorPool> source_pool = get_memory(init_const_str(pool_name.c_str(), pool_name.length()));
-
 		s32 count = i.value().find("count").value();
 		if (count < 0)
 		{
@@ -1257,32 +1004,33 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 		}
 		
 		std::string layout_name = i.value().find("layout").value();
-		R_Mem<VkDescriptorSetLayout> layout = get_memory(init_const_str(layout_name.c_str(), layout_name.length()));
+		Uniform_Layout *layout = g_uniform_layout_manager.get(make_constant_string(layout_name.c_str(), layout_name.length()));
 		
 		VkDescriptorSetLayout *layouts_inline = ALLOCA_T(VkDescriptorSetLayout, count);
 		for (u32 l = 0; l < count; ++l) 
 		{
-		    layouts_inline[l] = *layout.p;
+		    layouts_inline[l] = *layout;
 		}
 		
 		bool make_new = i.value().find("new").value();
-		R_Mem<VkDescriptorSet> sets = [&make_new, &key, &count]
+		Uniform_Group *sets = [&make_new, &key, &count]
 		    {
 			if (make_new)
 			{
-			    return(register_memory(init_const_str(key.c_str(), key.length()), sizeof(VkDescriptorSet) * count));
+			    Uniform_Group_Handle uniform_group_handle = g_uniform_group_manager.add(make_constant_string(key.c_str(), key.length()), count);
+			    return(g_uniform_group_manager.get(uniform_group_handle));
 			}
 			else
 			{
-			    return(get_memory(init_const_str(key.c_str(), key.length())));
+			    return(g_uniform_group_manager.get(make_constant_string(key.c_str(), key.length())));
 			}
 		    }();
 		
-		Memory_Buffer_View<VkDescriptorSet> separate_sets = {(u32)count, sets.p};
+		Memory_Buffer_View<VkDescriptorSet> separate_sets = {(u32)count, sets};
 		Vulkan::allocate_descriptor_sets(separate_sets
 						 , Memory_Buffer_View<VkDescriptorSetLayout>{(u32)count, layouts_inline}
 						 , gpu
-						 , source_pool.p);
+						 , source_pool);
 	    
 		
 		
@@ -1311,16 +1059,16 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			    std::string buffer_name = buffer_info.value().find("name").value();
 			    s32 at = buffer_info.value().find("at").value();
 			    
-			    R_Mem<Vulkan::Buffer> buffers = get_memory(init_const_str(buffer_name.c_str(), buffer_name.length()));
+			    Vulkan::Buffer *buffers = g_gpu_buffer_manager.get(make_constant_string(buffer_name.c_str(), buffer_name.length()));
 			    Vulkan::Buffer *buffer = [&at, &set_i, &buffers]
 				{
 				    if (at < 0)
 				    {
-					return(&buffers.p[set_i]);
+					return(&buffers[set_i]);
 				    }
 				    else
 				    {
-					return(&buffers.p[at]);
+					return(&buffers[at]);
 				    }
 				}();
 			    
@@ -1329,7 +1077,7 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			    buffer_infos_cache[buffer_info_cache_index] = {};
 			    Vulkan::init_descriptor_set_buffer_info(buffer, buffer_offset, &buffer_infos_cache[buffer_info_cache_index]);
 			    writes[write_index] = {};
-			    Vulkan::init_buffer_descriptor_set_write(&sets.p[set_i]
+			    Vulkan::init_buffer_descriptor_set_write(&sets[set_i]
 								     , binding
 								     , dst_element
 								     , objects_count
@@ -1346,13 +1094,13 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			    char layout_code = std::string(image_info.value().find("layout").value())[0];
 			    VkImageLayout layout = make_image_layout_from_code(layout_code);
 			    
-			    R_Mem<Vulkan::Image2D> image = get_memory(init_const_str(image_name.c_str(), image_name.length()));
+			    Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
 
 			    image_infos_cache[image_info_cache_index] = {};
 			    Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
 
 			    writes[write_index] = {};
-			    Vulkan::init_input_attachment_descriptor_set_write(&sets.p[set_i]
+			    Vulkan::init_input_attachment_descriptor_set_write(&sets[set_i]
 									       , binding_desc.value().find("binding").value()
 									       , binding_desc.value().find("dst_element").value()
 									       , binding_desc.value().find("count").value()
@@ -1369,13 +1117,13 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 			    char layout_code = std::string(image_info.value().find("layout").value())[0];
 			    VkImageLayout layout = make_image_layout_from_code(layout_code);
 			    
-			    R_Mem<Vulkan::Image2D> image = get_memory(init_const_str(image_name.c_str(), image_name.length()));
+			    Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
 
 			    image_infos_cache[image_info_cache_index] = {};
 			    Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
 
 			    writes[write_index] = {};
-			    Vulkan::init_image_descriptor_set_write(&sets.p[set_i]
+			    Vulkan::init_image_descriptor_set_write(&sets[set_i]
 								    , binding_desc.value().find("binding").value()
 								    , binding_desc.value().find("dst_element").value()
 								    , binding_desc.value().find("count").value()

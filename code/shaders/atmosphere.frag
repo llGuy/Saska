@@ -158,6 +158,9 @@ main(void)
     out_color = (vec4(total_mie.xyzz) * spotlight * 0.6 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
 
     out_color = mix(out_color, vec4(0.0), vec4(test));
+
+    out_color = pow(out_color, vec4(1.0 / 2.2));
+    //    out_color = clamp(out_color, vec3(0.0), out_color(1.0));
     //    out_color = vec4(gray_out_bottom);
     //    out_color = vec4(test);
     

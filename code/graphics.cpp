@@ -3,6 +3,16 @@
 
 #include "graphics.hpp"
 
+// Declared in header
+GPU_Buffer_Manager g_gpu_buffer_manager;
+Image_Manager g_image_manager;
+Framebuffer_Manager g_framebuffer_manager;
+Render_Pass_Manager g_render_pass_manager;
+Pipeline_Manager g_pipeline_manager;
+Uniform_Layout_Manager g_uniform_layout_manager;
+Uniform_Group_Manager g_uniform_group_manager;
+Model_Manager g_model_manager;
+
 // Later when maybe introducing new APIs, might be something different
 // Clearer name for people reading code
 using GPU_Command_Queue = VkCommandBuffer;

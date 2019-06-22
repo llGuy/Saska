@@ -14,12 +14,18 @@ float linearize_depth(float depth)
     return (2.0 * n) / (f + n - depth * (f - n));	
 }
 
+float linearize(float d,float zNear,float zFar)
+{
+    float z_n = 2.0 * d - 1.0;
+    return 2.0 * zNear * zFar / (zFar + zNear - z_n * (zFar - zNear));
+}
+
 void
 main(void)
 {
     float d = texture(tex, in_uvs).r;
 
-    final_color = vec4(linearize_depth(d));
+    final_color = vec4(d);
     //    final_color = d;
 //    final_color = vec4(1 - d) * 10;
 }

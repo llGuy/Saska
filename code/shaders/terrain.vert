@@ -49,6 +49,6 @@ main(void)
     vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
 
-    vs_out.shadow_coord = ubo.shadow_bias * ws_position;
+    vs_out.shadow_coord = ubo.shadow_proj * ubo.shadow_view * ws_position;
     vs_out.vs_position = vs_position.xyz;
 }

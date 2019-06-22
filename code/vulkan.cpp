@@ -173,9 +173,9 @@ namespace Vulkan
 		      , void *user_data)
     {
 	//	OUTPUT_DEBUG_LOG("validation layer - %s\n", message_data->pMessage);
-	//	std::cout << "validation layer - " << message_data->pMessage << std::endl;
+        std::cout << "validation layer - " << message_data->pMessage << std::endl;
 
-	OUTPUT_DEBUG_LOG_VALIDATION("Validation Layer > %s\n", message_data->pMessage);
+	//	OUTPUT_DEBUG_LOG_VALIDATION("Validation Layer > %s\n", message_data->pMessage);
 
 	return(VK_FALSE);
     }
@@ -1443,10 +1443,9 @@ namespace Vulkan
 	
 	vkDestroyDevice(state->gpu.logical_device, nullptr);
 	
-	destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
-	
 	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
 	
+	destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
 	vkDestroyInstance(state->instance, nullptr);
     }
 

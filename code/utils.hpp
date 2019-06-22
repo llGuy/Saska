@@ -65,6 +65,12 @@ operator""_hash(const char *string, size_t size)
 }
 
 inline Constant_String
+make_constant_string(const char *str, u32 count)
+{
+    return(Constant_String{str, count, compile_hash(str, count)});
+}
+
+inline Constant_String
 init_const_str(const char *str, u32 count)
 {
     return(Constant_String{str, count, compile_hash(str, count)});

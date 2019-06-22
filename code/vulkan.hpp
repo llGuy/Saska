@@ -123,6 +123,13 @@ namespace Vulkan
 	    info.range = size;
 	    return(info);
 	}
+
+	void
+	destroy(Vulkan::GPU *gpu)
+	{
+	    vkDestroyBuffer(gpu->logical_device, buffer, nullptr);
+	    vkFreeMemory(gpu->logical_device, memory, nullptr);
+	}
     };
 
     struct Draw_Indexed_Data
@@ -221,6 +228,7 @@ namespace Vulkan
 	FORCEINLINE void
 	destroy(Vulkan::GPU *gpu)
 	{
+	    vkDestroyPipelineLayout(gpu->logical_device, layout, nullptr);
 	    vkDestroyPipeline(gpu->logical_device, pipeline, nullptr);
 	}
     };
@@ -733,14 +741,16 @@ namespace Vulkan
 	info->scissorCount = scissors->count;
 	info->pScissors = scissors->buffer;;
     }
-				
     
     internal FORCEINLINE void
     init_pipeline_rasterization_info(VkPolygonMode polygon_mode
 				     , VkCullModeFlags cull_flags
 				     , f32 line_width
 				     , VkPipelineRasterizationStateCreateFlags flags
-				     , VkPipelineRasterizationStateCreateInfo *info)
+				     , VkPipelineRasterizationStateCreateInfo *info
+                                     , VkBool32 enable_depth_bias = VK_FALSE
+                                     , f32 bias_constant = 0.0f
+                                     , f32 bias_slope = 0.0f)
     {
 	info->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	info->depthClampEnable = VK_FALSE;
@@ -749,10 +759,10 @@ namespace Vulkan
 	info->lineWidth = line_width;
 	info->cullMode = cull_flags;
 	info->frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-	info->depthBiasEnable = VK_FALSE;
-	info->depthBiasConstantFactor = 0.0f;
+	info->depthBiasEnable = enable_depth_bias;
+	info->depthBiasConstantFactor = bias_constant;
 	info->depthBiasClamp = 0.0f;
-	info->depthBiasSlopeFactor = 0.0f;
+	info->depthBiasSlopeFactor = bias_slope;
 	info->flags = flags;
     }
     
@@ -964,6 +974,12 @@ namespace Vulkan
 	// for color attachments only
 	Memory_Buffer_View<VkImageView> color_attachments;
 	VkImageView depth_attachment;
+
+	void
+	destroy(Vulkan::GPU *gpu)
+	{
+	    vkDestroyFramebuffer(gpu->logical_device, framebuffer, nullptr);
+	}
     };
 
     void

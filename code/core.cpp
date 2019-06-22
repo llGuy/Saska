@@ -171,7 +171,7 @@ main(s32 argc
 	Vulkan::State vk = {};
 
 	Vulkan::init_state(&vk, window.window);
-	//	Rendering::init_rendering_state(&vk, &rnd);
+
 
 	make_game(&vk
 		  , &vk.gpu

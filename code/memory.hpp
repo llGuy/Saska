@@ -126,7 +126,7 @@ struct Registered_Memory_Base
 
     ~Registered_Memory_Base(void) {if (p) {decrease_shared_count(id);}}
 };
-
+/*
 Registered_Memory_Base
 register_memory(const Constant_String &id
 		, u32 size);
@@ -147,6 +147,7 @@ deregister_memory(const Constant_String &id);
 
 void
 deregister_memory_and_deallocate(const Constant_String &id);
+*/
 
 // basically just a pointer
 template <typename T> struct Registered_Memory
@@ -199,4 +200,4 @@ template <typename T> struct Registered_Memory
 };
 
 // piece of memory that is registered with a name
-template <typename T> using R_Mem = Registered_Memory<T>; 
+//template <typename T> using R_Mem = Registered_Memory<T>; 

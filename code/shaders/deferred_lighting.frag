@@ -105,7 +105,10 @@ pbr(void)
     vec3 kd = vec3(1.0) - ks;
     kd *= 1.0 - metallic;
 
-    vec3 result = (shadow_factor * kd * vec3(albedo) / PI + shadow_factor * spec) * radiance * n_dot_l;
+    float substitute_shadow_factor = 1.0;
+    if (n_dot_l < 0.6) substitute_shadow_factor = shadow_factor;
+    
+    vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * radiance * n_dot_l;
 
     vec3 ambient = vec3(0.03) * vec3(albedo);
     result += ambient;
@@ -117,7 +120,7 @@ pbr(void)
 
     result = clamp(result, ambient, vec3(1.0));
 
-    return vec4(result, 1.0);
+    return vec4(result * shadow_factor, 1.0);
 }
 
 void

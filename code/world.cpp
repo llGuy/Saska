@@ -14,20 +14,6 @@
 
 constexpr f32 PI = 3.14159265359f;
 
-// To refactor
-struct Atmosphere
-{
-    Render_Pass_Handle make_render_pass;
-    Framebuffer_Handle make_fbo;
-    
-    Pipeline_Handle make_pipeline;
-    Pipeline_Handle render_pipeline;
-    
-    Uniform_Group_Handle cubemap_set;
-    Uniform_Layout_Handle render_layout;
-    Uniform_Layout_Handle make_layout;
-};
-
 struct Cube // to get rid of later on
 {
     Uniform_Layout_Handle set_layout;
@@ -109,7 +95,7 @@ global_var struct World
 
     Deferred_Rendering_Data deferred;
 
-    Atmosphere atmosphere;
+    //    Atmosphere atmosphere;
     Camera user_camera;
     Cube test;
 
@@ -126,6 +112,10 @@ global_var struct World
     {
 	Vulkan::Descriptor_Pool pool;
     } desc;
+
+    Pipeline_Handle model_shadow_ppln;
+    Pipeline_Handle terrain_shadow_ppln;
+    Pipeline_Handle debug_frustum_ppln;
     
 } world;
 
@@ -134,7 +124,6 @@ global_var struct World
 struct Morphable_Terrain
 {
     glm::ivec2 xz_dim;
-    
     // ---- up vector of the terrain ----
     glm::vec3 ws_n;
     f32 *heights;
@@ -986,295 +975,19 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
     }
 }
 
-// ---- render the skybox ----
-internal void
-render_skybox(const Memory_Buffer_View<VkBuffer> &cube_vbos
-	      , const Memory_Buffer_View<VkDescriptorSet> &sets
-	      , const Vulkan::Model_Index_Data &index_data
-	      , const Vulkan::Draw_Indexed_Data &draw_index_data
-	      , Vulkan::Framebuffer *dst_fbo
-	      , VkCommandBuffer *cmdbuf)
-{
-    glm::vec3 &camera_position = world.user_camera.p;
-
-    auto *render_pipeline = g_pipeline_manager.get(world.atmosphere.render_pipeline);
-    Vulkan::command_buffer_bind_pipeline(render_pipeline, cmdbuf);
-
-    Vulkan::command_buffer_bind_descriptor_sets(render_pipeline, sets, cmdbuf);
-
-    VkDeviceSize zero = 0;
-    Vulkan::command_buffer_bind_vbos(cube_vbos, {1, &zero}, 0, cube_vbos.count, cmdbuf);
-
-    Vulkan::command_buffer_bind_ibo(index_data, cmdbuf);
-
-    struct Skybox_Push_Constant
-    {
-	glm::mat4 model_matrix;
-    } push_k;
-
-    push_k.model_matrix = glm::scale(glm::vec3(1000.0f));
-
-    Vulkan::command_buffer_push_constant(&push_k
-					 , sizeof(push_k)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , render_pipeline
-					 , cmdbuf);
-
-    Vulkan::command_buffer_draw_indexed(cmdbuf
-					, draw_index_data);
-}
-
-
-
 // ---- to orgnise later on ----
 global_var glm::vec3 light_pos = glm::vec3(0.00000001f, 10.0f, 0.00000001f);
-
-// lighting stuff
-global_var struct Shadow_Data
-{
-
-    Framebuffer_Handle fbo;
-    Render_Pass_Handle pass;
-    Image_Handle map;
-    Uniform_Group_Handle set;
-    
-    Pipeline_Handle model_shadow_ppln;
-    Pipeline_Handle terrain_shadow_ppln;
-    Pipeline_Handle debug_frustum_ppln;
-    
-    glm::mat4 light_view_matrix;
-    glm::mat4 projection_matrix;
-    glm::mat4 shadow_bias;
-    glm::mat4 inverse_light_view;
-
-    glm::vec4 ls_corners[8];
-    f32 x_min, x_max, y_min, y_max, z_min, z_max;
-    
-} shadow_data;
-
-glm::mat4
-make_shadow_bias_base_matrix(void)
-{
-    return glm::mat4(0.5, 0.0, 0.0, 0.0
-		     , 0.0, 0.5, 0.0, 0.0
-		     , 0.0, 0.0, 0.5, 0.0
-		     , 0.5, 0.5, 0.5, 1.0);
-}
-
-void
-make_shadow_map_data(const glm::vec3 &up)
-{
-    glm::vec3 light_pos_normalized = glm::normalize(light_pos);
-    shadow_data.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    shadow_data.inverse_light_view = glm::inverse(shadow_data.light_view_matrix);
-    
-    shadow_data.fbo = g_framebuffer_manager.get_handle("framebuffer.shadow_fbo"_hash);
-    shadow_data.pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
-    shadow_data.map = g_image_manager.get_handle("image2D.shadow_map"_hash);
-    shadow_data.set = g_uniform_group_manager.get_handle("descriptor_set.shadow_map_set"_hash);
-    shadow_data.model_shadow_ppln = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
-    shadow_data.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
-}
-
-glm::mat4
-update_shadow_map_bounding_box(f32 far
-			       , f32 near
-			       , f32 fov
-			       , f32 aspect
-			       , const glm::vec3 &ws_p
-			       , const glm::vec3 &ws_d
-			       , const glm::vec3 &ws_up)
-{
-    f32 far_width, near_width, far_height, near_height;
-    
-    far_width = 2.0f * far * tan(fov);
-    near_width = 2.0f * near * tan(fov);
-    far_height = far_width / aspect;
-    near_height = near_width / aspect;
-
-    glm::vec3 right_view_ax = glm::normalize(glm::cross(ws_d, ws_up));
-    glm::vec3 up_view_ax = glm::normalize(glm::cross(ws_d, right_view_ax));
-
-    f32 far_width_half = far_width / 2.0f;
-    f32 near_width_half = near_width / 2.0f;
-    f32 far_height_half = far_height / 2.0f;
-    f32 near_height_half = near_height / 2.0f;
-
-    // f = far, n = near, l = left, r = right, t = top, b = bottom
-    enum Ortho_Corner : s32
-    {
-	flt, flb,
-	frt, frb,
-	nlt, nlb,
-	nrt, nrb
-    };    
-
-    // light space
-
-    shadow_data.ls_corners[flt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    shadow_data.ls_corners[flb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
-    
-    shadow_data.ls_corners[frt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    shadow_data.ls_corners[frb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
-    
-    shadow_data.ls_corners[nlt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    shadow_data.ls_corners[nlb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
-
-    shadow_data.ls_corners[nrt] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    shadow_data.ls_corners[nrb] = shadow_data.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
-
-    f32 x_min, x_max, y_min, y_max, z_min, z_max;
-
-    x_min = x_max = shadow_data.ls_corners[0].x;
-    y_min = y_max = shadow_data.ls_corners[0].y;
-    z_min = z_max = shadow_data.ls_corners[0].z;
-
-    for (u32 i = 1; i < 8; ++i)
-    {
-	if (x_min > shadow_data.ls_corners[i].x) x_min = shadow_data.ls_corners[i].x;
-	if (x_max < shadow_data.ls_corners[i].x) x_max = shadow_data.ls_corners[i].x;
-
-	if (y_min > shadow_data.ls_corners[i].y) y_min = shadow_data.ls_corners[i].y;
-	if (y_max < shadow_data.ls_corners[i].y) y_max = shadow_data.ls_corners[i].y;
-
-	if (z_min > shadow_data.ls_corners[i].z) z_min = shadow_data.ls_corners[i].z;
-	if (z_max < shadow_data.ls_corners[i].z) z_max = shadow_data.ls_corners[i].z;
-    }
-
-    shadow_data.x_min = x_min;
-    shadow_data.x_max = x_max;
-    
-    shadow_data.y_min = y_min;
-    shadow_data.y_max = y_max;
-    
-    shadow_data.z_min = z_min;
-    shadow_data.z_max = z_max;
-
-    shadow_data.projection_matrix = glm::ortho<f32>(x_min, x_max, y_min, y_max, z_min, z_max);
-
-    /*    shadow_data.projection_matrix = glm::transpose(glm::mat4( 2.0f / (x_max - x_min), 0.0f, 0.0f, -(x_max + x_min) / (x_max - x_min)
-					       , 0.0f, 2.0f / (y_max - y_min), 0.0f, -(y_max + y_min) / (y_max - y_min)
-					       , 0.0f, 0.0f, 2.0f / (z_max - z_min), -(z_max + z_min) / (z_max - z_min)
-							      , 0.0f, 0.0f, 0.0f, 1.0f));
-    */
-    shadow_data.shadow_bias = make_shadow_bias_base_matrix() * shadow_data.projection_matrix * shadow_data.light_view_matrix;
-    
-    return(shadow_data.projection_matrix);
-}
-
-
-
-
-
-
-// ---- update the skybox ----
-internal void
-update_skybox(VkCommandBuffer *cmdbuf)
-{
-    VkClearValue clears[] {Vulkan::init_clear_color_color(0, 0.0, 0.0, 0)};
-
-    auto *update_skybox_pass = g_render_pass_manager.get(world.atmosphere.make_render_pass);
-    auto *skybox_fbo = g_framebuffer_manager.get(world.atmosphere.make_fbo);
-    
-    Vulkan::command_buffer_begin_render_pass(update_skybox_pass
-					     , skybox_fbo
-					     , Vulkan::init_render_area({0, 0}, VkExtent2D{1000, 1000})
-					     , Memory_Buffer_View<VkClearValue>{sizeof(clears) / sizeof(clears[0]), clears}
-					     , VK_SUBPASS_CONTENTS_INLINE 
-					     , cmdbuf);
-
-    VkViewport viewport;
-    Vulkan::init_viewport(1000, 1000, 0.0f, 1.0f, &viewport);
-    vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);    
-
-    auto *make_ppln = g_pipeline_manager.get(world.atmosphere.make_pipeline);
-    
-    Vulkan::command_buffer_bind_pipeline(make_ppln
-					 , cmdbuf);
-
-    struct Atmos_Push_K
-    {
-	alignas(16) glm::mat4 inverse_projection;
-	glm::vec4 light_dir;
-	glm::vec2 viewport;
-    } k;
-
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 10000.0f);
-    k.inverse_projection = glm::inverse(atmos_proj);
-    k.viewport = glm::vec2(1000.0f, 1000.0f);
-
-    k.light_dir = glm::vec4(glm::normalize(-light_pos), 1.0f);
-    
-    Vulkan::command_buffer_push_constant(&k
-					 , sizeof(k)
-					 , 0
-					 , VK_SHADER_STAGE_FRAGMENT_BIT
-					 , make_ppln
-					 , cmdbuf);
-    
-    Vulkan::command_buffer_draw(cmdbuf
-				, 1, 1, 0, 0);
-
-    Vulkan::command_buffer_end_render_pass(cmdbuf);
-}
 
 // ---- rendering of the entire world happens here ----
 internal void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, Vulkan::Framebuffer *fbo);
 
 internal void
-update_shadow_map(VkCommandBuffer *cmdbuf
-		  , VkDescriptorSet *ubo
-		  , Vulkan::Swapchain *swapchain)
-{
-
-    VkClearValue clears[] = {Vulkan::init_clear_color_depth(1.0f, 0)};
-
-    auto *shadow_pass = g_render_pass_manager.get(shadow_data.pass);
-    auto *shadow_fbo = g_framebuffer_manager.get(shadow_data.fbo);
-    
-    Vulkan::command_buffer_begin_render_pass(shadow_pass
-					     , shadow_fbo
-					     , Vulkan::init_render_area({0, 0}, {4000, 4000})
-					     , {1, clears}
-					     , VK_SUBPASS_CONTENTS_INLINE
-					     , cmdbuf);
-
-    VkViewport viewport = {};
-
-    Vulkan::init_viewport(4000, 4000, 0.0f, 1.0f, &viewport);
-    vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);
-
-    vkCmdSetDepthBias(*cmdbuf, 1.25f, 0.0f, 1.75f);
-
-    auto *model_ppln = g_pipeline_manager.get(shadow_data.model_shadow_ppln);
-
-    world.entity_render_queue.submit_queued_materials({1, ubo}, model_ppln
-						      , &viewport
-						      , shadow_pass
-						      , shadow_fbo
-						      , 0
-						      , cmdbuf
-						      , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-    auto *terrain_ppln = g_pipeline_manager.get(shadow_data.terrain_shadow_ppln);    
-    
-    world.terrain_render_queue.submit_queued_materials({1, ubo}, terrain_ppln
-    						       , &viewport
-    						       , shadow_pass
-    						       , shadow_fbo
-    						       , 0
-    						       , cmdbuf
-    						       , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-    Vulkan::command_buffer_end_render_pass(cmdbuf);
-}
-
-internal void
 calculate_ws_frustum_corners(glm::vec4 *corners
 			     , glm::vec4 *shadow_corners)
 {
+    Shadow_Matrices shadow_data = get_shadow_matrices();
+    
     corners[0] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[0];
     corners[1] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[1];
     corners[3] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[2];
@@ -1302,7 +1015,7 @@ render_debug_frustum(VkDescriptorSet ubo
 		     , Vulkan::Framebuffer *dst_fbo
 		     , Vulkan::GPU *gpu)
 {
-    auto *debug_frustum_ppln = g_pipeline_manager.get(shadow_data.debug_frustum_ppln);
+    auto *debug_frustum_ppln = g_pipeline_manager.get(world.debug_frustum_ppln);
     Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, cmdbuf);
 
     VkViewport viewport = {};
@@ -1344,129 +1057,9 @@ render_debug_frustum(VkDescriptorSet ubo
 }
 
 internal void
-render_world(Vulkan::State *vk
-	     , u32 image_index
-	     , u32 current_frame
-	     , Memory_Buffer_View<Vulkan::Buffer> &ubos
-	     , VkCommandBuffer *cmdbuf)
+draw_2D_quad_debug(VkCommandBuffer *cmdbuf
+                   , Uniform_Group *shadow_map_uniform_group)
 {
-    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
-    
-    // ---- update the skybox (in the future, only do when necessary, not every frame) ----
-    update_skybox(cmdbuf);
-
-    auto *test_uniform_groups = g_uniform_group_manager.get(world.test.sets);
-    
-    update_shadow_map(cmdbuf
-		      , &test_uniform_groups[image_index]
-		      , &vk->swapchain);
-   
-    // ---- execute the commands that were just recorded (rendering the different types of entities)
-    // ---- record command buffer for rendering each different type of entity ----
-    auto *shadow_map_uniform_group = g_uniform_group_manager.get(shadow_data.set);
-    auto *skybox_sampler_uniform_group = g_uniform_group_manager.get(world.atmosphere.cubemap_set);
-    VkDescriptorSet test_sets[3] = {test_uniform_groups[image_index]
-				    , *skybox_sampler_uniform_group
-				    , *shadow_map_uniform_group};
-
-    VkViewport deferred_lighting_viewport = {};
-    Vulkan::init_viewport(vk->swapchain.extent.width, vk->swapchain.extent.height, 0.0f, 1.0f, &deferred_lighting_viewport);
-   
-    // ---- end of recording command buffers for each different type of entity / material ----
-
-
-    // ---- initialize the deferred render pass ... ----
-    VkClearValue deferred_clears[] = {Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-				      , Vulkan::init_clear_color_depth(1.0f, 0)};
-
-    // ---- render using deferred render pass ----
-    auto *deferred_pass = g_render_pass_manager.get(world.deferred.render_pass);
-    auto *deferred_fbos = g_framebuffer_manager.get(world.deferred.fbos);
-    Vulkan::command_buffer_begin_render_pass(deferred_pass
-					     , &deferred_fbos[image_index]
-					     , Vulkan::init_render_area({0, 0}, vk->swapchain.extent)
-					     , {sizeof(deferred_clears) / sizeof(deferred_clears[0]), deferred_clears}
-					     , VK_SUBPASS_CONTENTS_INLINE
-					     , cmdbuf);
-
-    vkCmdSetViewport(*cmdbuf, 0, 1, &deferred_lighting_viewport);
-
-    auto *entity_ppln = g_pipeline_manager.get(world.deferred.main_pipeline);
-    auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_ppln);    
-    
-    world.entity_render_queue.submit_queued_materials({3, test_sets}, entity_ppln
-						      , &deferred_lighting_viewport
-						      , deferred_pass
-						      , &deferred_fbos[image_index]
-						      , 0
-						      , cmdbuf
-						      , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-    world.terrain_render_queue.submit_queued_materials({3, test_sets}, terrain_ppln
-						       , &deferred_lighting_viewport
-						       , deferred_pass
-						       , &deferred_fbos[image_index]
-						       , 0
-						       , cmdbuf
-						       , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-    // ----
-
-    vkCmdSetLineWidth(*cmdbuf, 2.0f);
-    
-    prepare_terrain_pointer_for_render(cmdbuf, &test_uniform_groups[image_index], &deferred_fbos[image_index]);
-
-    render_debug_frustum(test_uniform_groups[image_index], cmdbuf, &deferred_fbos[image_index], &vk->gpu);
-    
-    // ---- render skybox ----
-    auto *cube_model = g_model_manager.get(world.test.model);
-    render_skybox({1, cube_model->raw_cache_for_rendering.buffer}
-	  , {2, test_sets}
-	  , cube_model->index_data
-	  , cube_model->index_data.init_draw_indexed_data(0, 0)
-          , &deferred_fbos[image_index]
-	  , cmdbuf);
-    
-    // ---- do lighting ----
-    Vulkan::command_buffer_next_subpass(cmdbuf
-					, VK_SUBPASS_CONTENTS_INLINE);
-
-    auto *lighting_ppln = g_pipeline_manager.get(world.deferred.lighting_pipeline);
-    
-    Vulkan::command_buffer_bind_pipeline(lighting_ppln
-					 , cmdbuf);
-    
-    auto *deferred_uniform_group = g_uniform_group_manager.get(world.deferred.descriptor_set);
-    VkDescriptorSet deferred_sets[] = {*deferred_uniform_group
-				       , *skybox_sampler_uniform_group};
-    
-    Vulkan::command_buffer_bind_descriptor_sets(lighting_ppln
-						, {2, deferred_sets}
-						, cmdbuf);
-    
-    struct Deferred_Lighting_Push_K
-    {
-	glm::vec4 light_position;
-	glm::mat4 view_matrix;
-    } deferred_push_k;
-    
-    deferred_push_k.light_position = glm::vec4(glm::normalize(-light_pos), 1.0f);
-    deferred_push_k.view_matrix = world.user_camera.v_m;
-    
-    Vulkan::command_buffer_push_constant(&deferred_push_k
-					 , sizeof(deferred_push_k)
-					 , 0
-					 , VK_SHADER_STAGE_FRAGMENT_BIT
-					 , lighting_ppln
-					 , cmdbuf);
-    
-    Vulkan::command_buffer_draw(cmdbuf
-				, 4, 1, 0, 0);
-
-
-    // ---- draw textured quad ----
     struct Screen_Quad
     {
 	glm::vec2 scale;
@@ -1493,10 +1086,67 @@ render_world(Vulkan::State *vk
 					 , cmdbuf);
 
     Vulkan::command_buffer_draw(cmdbuf
-				, 4, 1, 0, 0);
+                                , 4, 1, 0, 0);
+}
+
+internal void
+render_world(Vulkan::State *vk
+	     , u32 image_index
+	     , u32 current_frame
+	     , Memory_Buffer_View<Vulkan::Buffer> &ubos
+	     , VkCommandBuffer *cmdbuf)
+{
+    // Fetch some data needed to render
+    auto *test_uniform_groups = g_uniform_group_manager.get(world.test.sets);
+    Shadow_Display shadow_display_data = get_shadow_display();
+    VkDescriptorSet test_sets[2] = {test_uniform_groups[image_index], shadow_display_data.texture};
+
+
+    // Start the rendering    
+    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
     
-    Vulkan::command_buffer_end_render_pass(cmdbuf);
-    // ---- end of deferred render pass ----
+    GPU_Command_Queue queue {*cmdbuf};
+    
+    begin_shadow_offscreen(4000, 4000, &queue);
+    {
+        auto *model_ppln = g_pipeline_manager.get(world.model_shadow_ppln);
+
+        world.entity_render_queue.submit_queued_materials({1, &test_uniform_groups[image_index]}, model_ppln
+                                                          , &queue
+                                                          , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+        auto *terrain_ppln = g_pipeline_manager.get(world.terrain_shadow_ppln);    
+    
+        world.terrain_render_queue.submit_queued_materials({1, &test_uniform_groups[image_index]}, terrain_ppln
+                                                           , &queue
+                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    }
+    end_shadow_offscreen(&queue);
+    
+    begin_deferred_rendering(image_index, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &queue);
+    {
+        auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_ppln);    
+        auto *entity_ppln = g_pipeline_manager.get(world.deferred.main_pipeline);
+    
+        world.terrain_render_queue.submit_queued_materials({2, test_sets}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        world.entity_render_queue.submit_queued_materials({2, test_sets}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        
+        vkCmdSetLineWidth(*cmdbuf, 2.0f);
+
+        auto *deferred_pass = g_render_pass_manager.get(world.deferred.render_pass);
+        auto *deferred_fbos = g_framebuffer_manager.get(world.deferred.fbos);
+
+        for (u32 i = 0; i < 10; ++i)
+        {
+            prepare_terrain_pointer_for_render(cmdbuf, &test_uniform_groups[image_index], &deferred_fbos[image_index]);
+            render_debug_frustum(test_uniform_groups[image_index], cmdbuf, &deferred_fbos[image_index], &vk->gpu);
+        
+            // ---- render skybox ----
+            render_atmosphere({1, test_sets}, world.user_camera.p, g_model_manager.get(world.test.model), &queue);
+        }
+    }
+    end_deferred_rendering(world.user_camera.v_m, &queue);
+
     Vulkan::end_command_buffer(cmdbuf);
 }
 
@@ -1709,8 +1359,15 @@ update_entities(f32 dt)
 	Entity *e = &entities.entity_list[i];
 	
 	update_entity_physics(&entities.entity_list[i], dt);
-	
-	e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
+
+        if (e->on_t)
+        {
+            e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
+        }
+        else
+        {
+            e->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
+        }
     }
 }
 
@@ -1804,28 +1461,31 @@ internal void
 get_registered_objects_from_json(void)
 {
     world.deferred.render_pass		= g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-    world.atmosphere.make_render_pass	= g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
+    //world.atmosphere.make_render_pass	= g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
 
     world.deferred.fbos			= g_framebuffer_manager.get_handle("framebuffer.main_fbo"_hash);
-    world.atmosphere.make_fbo		= g_framebuffer_manager.get_handle("framebuffer.atmosphere_fbo"_hash);
+    //    world.atmosphere.make_fbo		= g_framebuffer_manager.get_handle("framebuffer.atmosphere_fbo"_hash);
 
     world.deferred.main_pipeline	= g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
     world.deferred.lighting_pipeline	= g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
-    world.atmosphere.render_pipeline	= g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
-    world.atmosphere.make_pipeline	= g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
+    //    world.atmosphere.render_pipeline	= g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
+    //    world.atmosphere.make_pipeline	= g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
 
-    world.atmosphere.render_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
-    world.atmosphere.make_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.atmosphere_layout"_hash);
+    //    world.atmosphere.render_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
+    //    world.atmosphere.make_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.atmosphere_layout"_hash);
     
     world.test.sets			= g_uniform_group_manager.get_handle("descriptor_set.test_descriptor_sets"_hash);
-    world.atmosphere.cubemap_set	= g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
+    //    world.atmosphere.cubemap_set	= g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
     world.deferred.descriptor_set	= g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
 
     terrain_master.terrain_ppln		= g_pipeline_manager.get_handle("pipeline.terrain_pipeline"_hash);
 
     world.screen_quad.quad_ppln		= g_pipeline_manager.get_handle("pipeline.screen_quad"_hash);
 
-    shadow_data.debug_frustum_ppln	= g_pipeline_manager.get_handle("pipeline.debug_frustum"_hash);
+    world.debug_frustum_ppln	= g_pipeline_manager.get_handle("pipeline.debug_frustum"_hash);
+
+    world.model_shadow_ppln = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
+    world.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
 }
 
 
@@ -1882,13 +1542,15 @@ make_world(Window_Data *window
     
     get_registered_objects_from_json();
 
+    make_rendering_pipeline_data(&vk->gpu, &world.desc.pool.pool, cmdpool);
+
 
     
     // ---- prepare the command recorders ----
     {
 	auto *model_info = g_model_manager.get(terrain_master.model_info);
 	
-	world.entity_render_queue = make_gpu_material_submission_queue(10
+	world.entity_render_queue = make_gpu_material_submission_queue(20
 								       , VK_SHADER_STAGE_VERTEX_BIT
 								       , VK_COMMAND_BUFFER_LEVEL_SECONDARY
 								       , cmdpool
@@ -1924,7 +1586,7 @@ make_world(Window_Data *window
 	world.terrain_render_queue.push_material(&terrain_master.red_mesh.push_k
 						       , sizeof(terrain_master.red_mesh.push_k)
 						       , {2, terrain_master.red_mesh.vbos}
-						       , model_info->index_data
+ , model_info->index_data
 						       , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
 
 	terrain_master.red_mesh.ws_p = glm::vec3(0.0f, 0.0f, 200.0f);
@@ -1995,16 +1657,25 @@ make_world(Window_Data *window
 			   , g_model_manager.get_handle("vulkan_model.test_model"_hash)
 			   , &world.entity_render_queue);
 
+    for (u32 i = 0; i < 10; ++i)
     {
-	// ---- initialize the skybox ----
-	VkCommandBuffer cmdbuf;
-	Vulkan::init_single_use_command_buffer(cmdpool, &vk->gpu, &cmdbuf);
-	update_skybox(&cmdbuf);
-	Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, &vk->gpu);
+        Entity new_entity = construct_entity("entity"_hash
+                                             , glm::vec3((f32)i * 15.0f + 60.0f)
+                                             , glm::vec3(0.0f)
+                                             , glm::quat(glm::radians(30.0f), glm::vec3(1.0f, 1.0f, 1.0f)));
+
+        new_entity.size = glm::vec3(5.0f);
+
+        Entity_View v = add_entity(new_entity);
+
+        auto *ptr = get_entity(v);
+
+        ptr->push_k.color = glm::vec4(0.5f, 0.2f, 0.9f, 1.0f);
+        ptr->on_t = nullptr;
+        ptr->physics.enabled = false;
+
+        make_entity_renderable(ptr, g_model_manager.get_handle("vulkan_model.test_model"_hash), &world.entity_render_queue);
     }
-
-
-    make_shadow_map_data(e_ptr->on_t->ws_n);
 }
 
 
@@ -2038,14 +1709,16 @@ update_ubo(u32 current_image
 
     Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
     
-    glm::mat4 ortho = update_shadow_map_bounding_box(1000.0f
-						     , 1.0f
-						     , glm::radians(60.0f)
-						     , (float)swapchain->extent.width / (float)swapchain->extent.height
-						     , e_ptr->ws_p
-						     , e_ptr->ws_d
-						     , e_ptr->on_t->ws_n);
-    
+    update_shadows(1000.0f
+                   , 1.0f
+                   , glm::radians(60.0f)
+                   , (float)swapchain->extent.width / (float)swapchain->extent.height
+                   , e_ptr->ws_p
+                   , e_ptr->ws_d
+                   , e_ptr->on_t->ws_n);
+
+    Shadow_Matrices shadow_data = get_shadow_matrices();
+
     persist auto start_time = std::chrono::high_resolution_clock::now();
 
     auto current_time = std::chrono::high_resolution_clock::now();
@@ -2066,11 +1739,9 @@ update_ubo(u32 current_image
 
     ubo.projection_matrix[1][1] *= -1;
 
-    ubo.shadow_projection_matrix = ortho;
+    ubo.shadow_projection_matrix = shadow_data.projection_matrix;
     ubo.shadow_view_matrix = shadow_data.light_view_matrix;
 
-    ubo.shadow_map_bias = shadow_data.shadow_bias;
-    
     ubo.render_to_shadow = false;
 
     Vulkan::Buffer &current_ubo = uniform_buffers[current_image];
@@ -2227,24 +1898,27 @@ handle_input(Window_Data *window
     if (window->key_map[GLFW_KEY_RIGHT]) light_pos += glm::vec3(dt, 0.0f, 0.0f) * 5.0f;
     if (window->key_map[GLFW_KEY_DOWN]) light_pos += glm::vec3(0.0f, 0.0f, -dt) * 5.0f;
 
+    Shadow_Matrices shadow_data = get_shadow_matrices();
+    Shadow_Debug    shadow_debug = get_shadow_debug();
+    
     shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -glm::normalize(light_pos), glm::vec3(0.0f, 1.0f, 0.0f));
 
     if (window->key_map[GLFW_KEY_C])
     {
 	for (u32 i = 0; i < 8; ++i)
 	{
-	    world.user_camera.captured_frustum_corners[i] = shadow_data.ls_corners[i];
+	    world.user_camera.captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
 	}
 
-	world.user_camera.captured_shadow_corners[0] = glm::vec4(shadow_data.x_min, shadow_data.y_max, shadow_data.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[1] = glm::vec4(shadow_data.x_max, shadow_data.y_max, shadow_data.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[2] = glm::vec4(shadow_data.x_max, shadow_data.y_min, shadow_data.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[3] = glm::vec4(shadow_data.x_min, shadow_data.y_min, shadow_data.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[0] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[1] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[2] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+	world.user_camera.captured_shadow_corners[3] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
 
-	world.user_camera.captured_shadow_corners[4] = glm::vec4(shadow_data.x_min, shadow_data.y_max, shadow_data.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[5] = glm::vec4(shadow_data.x_max, shadow_data.y_max, shadow_data.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[6] = glm::vec4(shadow_data.x_max, shadow_data.y_min, shadow_data.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[7] = glm::vec4(shadow_data.x_min, shadow_data.y_min, shadow_data.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[4] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[5] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[6] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+	world.user_camera.captured_shadow_corners[7] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
     }
 
     if (movements > 0)

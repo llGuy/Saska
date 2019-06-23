@@ -13,7 +13,7 @@ layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput g_
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput g_buffer_position;
 layout(input_attachment_index = 2, set = 0, binding = 2) uniform subpassInput g_buffer_normal;
 
-layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
+//layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
 layout(push_constant) uniform Push_K
 {

@@ -722,6 +722,15 @@ namespace Vulkan
     }
 
     internal FORCEINLINE void
+    command_buffer_set_viewport(u32 width, u32 height, f32 depth_min, f32 depth_max, VkCommandBuffer *cmdbuf)
+    {
+        VkViewport viewport = {};
+        Vulkan::init_viewport(width, height, depth_min, depth_max, &viewport);
+   
+        vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);
+    }
+
+    internal FORCEINLINE void
     init_rect_2D(VkOffset2D offset
 		 , VkExtent2D extent
 		 , VkRect2D *rect)
@@ -1177,7 +1186,7 @@ namespace Vulkan
 			, fences.count
 			, fences.buffer
 			, VK_TRUE
-			, UINT_MAX);
+			, std::numeric_limits<uint64_t>::max());
     }
 
     struct Next_Image_Return {VkResult result; u32 image_index;};
@@ -1190,7 +1199,7 @@ namespace Vulkan
 	u32 image_index = 0;
 	VkResult result = vkAcquireNextImageKHR(gpu->logical_device
 						, swapchain->swapchain
-						, UINT_MAX
+						, std::numeric_limits<uint64_t>::max()
 						, *semaphore
 						, *fence
 						, &image_index);
@@ -1236,6 +1245,9 @@ namespace Vulkan
     init_state(State *state
 	       , GLFWwindow *window);
 
+    void
+    destroy_swapchain(State *state);
+    
     void
     destroy_state(State *state);
 

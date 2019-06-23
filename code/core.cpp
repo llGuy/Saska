@@ -1,3 +1,5 @@
+#define GLFW_INCLUDE_VULKAN
+
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
@@ -186,7 +188,7 @@ main(s32 argc
 	while(!glfwWindowShouldClose(window.window))
 	{
 	    glfwPollEvents();
-	    update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
+            update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
 
 	    if (glfwGetKey(window.window, GLFW_KEY_R))
 	    {
@@ -212,6 +214,8 @@ main(s32 argc
 	close_debug_file();
 
 	// destroy rnd and vk
+        vkDeviceWaitIdle(vk.gpu.logical_device);
+        Vulkan::destroy_swapchain(&vk);
 	destroy_game(&vk.gpu);
 	
 	Vulkan::destroy_state(&vk);

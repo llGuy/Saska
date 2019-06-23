@@ -15,8 +15,7 @@ layout(location = 1) out vec4 out_albedo;
 layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_normal;
 
-layout(set = 1, binding = 0) uniform samplerCube cube_sampler;
-layout(set = 2, binding = 0) uniform sampler2D shadow_map;
+layout(set = 1, binding = 0) uniform sampler2D shadow_map;
 
 void
 set_roughness(float v)

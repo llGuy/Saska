@@ -476,7 +476,7 @@ namespace Vulkan
     choose_swapchain_extent(GLFWwindow *window
 			    , const VkSurfaceCapabilitiesKHR *capabilities)
     {
-	if (capabilities->currentExtent.width != UINT_MAX)
+	if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
 	{
 	    return(capabilities->currentExtent);
 	}
@@ -901,8 +901,8 @@ namespace Vulkan
 	    image_count = swapchain_details->capabilities.maxImageCount;
 	}
 
-	VkSwapchainCreateInfoKHR swapchain_info = {};
-	swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	VkSwapchainCreateInfoKHR swapchain_info;
+        swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	swapchain_info.surface = *surface;
 	swapchain_info.minImageCount = image_count;
 	swapchain_info.imageFormat = surface_format.format;
@@ -1433,20 +1433,24 @@ namespace Vulkan
     
     void
     destroy_state(State *state)
-    {
-	for (u32 i = 0; i < state->swapchain.views.count; ++i)
-	{
-	    vkDestroyImageView(state->gpu.logical_device, state->swapchain.views[i], nullptr);
-	}
-	
-	vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
-	
+    {	
 	vkDestroyDevice(state->gpu.logical_device, nullptr);
 	
 	vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
 	
 	destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
 	vkDestroyInstance(state->instance, nullptr);
+    }
+
+    void
+    destroy_swapchain(State *state)
+    {
+        for (u32 i = 0; i < state->swapchain.views.count; ++i)
+	{
+	    vkDestroyImageView(state->gpu.logical_device, state->swapchain.views[i], nullptr);
+	}
+	
+        vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
     }
 
 }

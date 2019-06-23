@@ -3,13 +3,15 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 
-using Handle = u32;
+using Handle = s32;
 using GPU_Buffer_Handle = Handle;
 using Image_Handle = Handle;
 using Framebuffer_Handle = Handle;
 using Render_Pass_Handle = Handle;
 using Pipeline_Handle = Handle;
 using Model_Handle = Handle;
+
+enum {INVALID_HANDLE = -1};
 
 template <typename T, u32 Max = 40> struct Object_Manager
 {
@@ -89,7 +91,60 @@ extern Model_Manager g_model_manager;
 
 // Later when maybe introducing new APIs, might be something different
 // Clearer name for people reading code
-using GPU_Command_Queue = VkCommandBuffer;
+//using GPU_Command_Queue = VkCommandBuffer;
+
+struct GPU_Command_Queue
+{
+    VkCommandBuffer q{VK_NULL_HANDLE};
+
+    s32 subpass{-1};
+    Render_Pass_Handle current_pass_handle{INVALID_HANDLE};
+    Framebuffer_Handle fbo_handle{INVALID_HANDLE};
+
+    void
+    invalidate(void)
+    {
+        subpass = -1;
+        current_pass_handle = INVALID_HANDLE;
+        fbo_handle = INVALID_HANDLE;
+    }
+
+    template <typename ...Clears> void begin_render_pass(Render_Pass_Handle pass
+                                                         , Framebuffer_Handle fbo
+                                                         , VkSubpassContents contents
+                                                         , const Clears &...clear_values)
+    {
+        subpass = 0;
+
+        current_pass_handle = pass;
+        fbo_handle = fbo;
+
+        VkClearValue clears[] = {clear_values...};
+
+        auto *fbo_object = g_framebuffer_manager.get(fbo);
+        Vulkan::command_buffer_begin_render_pass(g_render_pass_manager.get(pass), fbo_object
+                                                 , Vulkan::init_render_area({0, 0}, fbo_object->extent)
+                                                 , {sizeof...(clear_values), clears}
+                                                 , contents
+                                                 , &q);
+    }
+
+    void
+    next_subpass(VkSubpassContents contents)
+    {
+        Vulkan::command_buffer_next_subpass(&q, contents);
+
+        ++subpass;
+    }
+
+    void
+    end_render_pass()
+    {
+        Vulkan::command_buffer_end_render_pass(&q);
+        invalidate();
+    }
+};
+
 using GPU_Command_Queue_Pool = VkCommandPool;
 // Submit level of a Material Submission Queue Manager which will either submit to a secondary queue or directly into the main queue
 using Submit_Level = VkCommandBufferLevel;
@@ -212,10 +267,6 @@ struct GPU_Material_Submission_Queue
     void
     submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
 			    , Vulkan::Graphics_Pipeline *graphics_pipeline
-			    , VkViewport *viewport
-			    , Vulkan::Render_Pass *render_pass
-			    , Vulkan::Framebuffer *fbo
-			    , u32 subpass
 			    , GPU_Command_Queue *main_queue
 			    , Submit_Level level);
 	
@@ -232,3 +283,76 @@ make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_
 
 void
 submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);
+
+
+
+// Rendering pipeline
+void
+make_rendering_pipeline_data(Vulkan::GPU *gpu
+                             , VkDescriptorPool *pool
+                             , VkCommandPool *cmdpool);
+
+struct Shadow_Matrices
+{
+    glm::mat4 projection_matrix;
+    glm::mat4 light_view_matrix;
+    glm::mat4 inverse_light_view;
+};
+
+struct Shadow_Debug
+{
+    // For debugging the frustum
+    union
+    {
+        struct {f32 x_min, x_max, y_min, y_max, z_min, z_max;};
+        f32 corner_values[6];
+    };
+
+    glm::vec4 frustum_corners[8];
+};
+
+struct Shadow_Display
+{
+    Uniform_Group texture;
+};
+
+Shadow_Matrices
+get_shadow_matrices(void);
+
+Shadow_Debug
+get_shadow_debug(void);
+
+Shadow_Display
+get_shadow_display(void);
+
+void
+update_shadows(f32 far, f32 near, f32 fov, f32 aspect
+               // Later to replace with a Camera structure
+               , const glm::vec3 &ws_p
+               , const glm::vec3 &ws_d
+               , const glm::vec3 &ws_up);
+
+void
+begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
+                       , GPU_Command_Queue *queue);
+
+void
+end_shadow_offscreen(GPU_Command_Queue *queue);
+
+void
+begin_deferred_rendering(u32 image_index /* To remove in the future */
+                         , const VkRect2D &render_area
+                         , GPU_Command_Queue *queue);
+
+void
+end_deferred_rendering(const glm::mat4 &view_matrix
+                       , GPU_Command_Queue *queue);
+
+void
+render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
+                  , const glm::vec3 &camera_position // To change to camera structure
+                  , Vulkan::Model *cube
+                  , GPU_Command_Queue *queue);
+
+void
+update_atmosphere(GPU_Command_Queue *queue);

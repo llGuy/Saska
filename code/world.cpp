@@ -1136,14 +1136,11 @@ render_world(Vulkan::State *vk
         auto *deferred_pass = g_render_pass_manager.get(world.deferred.render_pass);
         auto *deferred_fbos = g_framebuffer_manager.get(world.deferred.fbos);
 
-        for (u32 i = 0; i < 10; ++i)
-        {
-            prepare_terrain_pointer_for_render(cmdbuf, &test_uniform_groups[image_index], &deferred_fbos[image_index]);
-            render_debug_frustum(test_uniform_groups[image_index], cmdbuf, &deferred_fbos[image_index], &vk->gpu);
+        prepare_terrain_pointer_for_render(cmdbuf, &test_uniform_groups[image_index], &deferred_fbos[image_index]);
+        render_debug_frustum(test_uniform_groups[image_index], cmdbuf, &deferred_fbos[image_index], &vk->gpu);
         
-            // ---- render skybox ----
-            render_atmosphere({1, test_sets}, world.user_camera.p, g_model_manager.get(world.test.model), &queue);
-        }
+        // ---- render skybox ----
+        render_atmosphere({1, test_sets}, world.user_camera.p, g_model_manager.get(world.test.model), &queue);
     }
     end_deferred_rendering(world.user_camera.v_m, &queue);
 
@@ -1656,26 +1653,6 @@ make_world(Window_Data *window
     make_entity_renderable(r2_ptr
 			   , g_model_manager.get_handle("vulkan_model.test_model"_hash)
 			   , &world.entity_render_queue);
-
-    for (u32 i = 0; i < 10; ++i)
-    {
-        Entity new_entity = construct_entity("entity"_hash
-                                             , glm::vec3((f32)i * 15.0f + 60.0f)
-                                             , glm::vec3(0.0f)
-                                             , glm::quat(glm::radians(30.0f), glm::vec3(1.0f, 1.0f, 1.0f)));
-
-        new_entity.size = glm::vec3(5.0f);
-
-        Entity_View v = add_entity(new_entity);
-
-        auto *ptr = get_entity(v);
-
-        ptr->push_k.color = glm::vec4(0.5f, 0.2f, 0.9f, 1.0f);
-        ptr->on_t = nullptr;
-        ptr->physics.enabled = false;
-
-        make_entity_renderable(ptr, g_model_manager.get_handle("vulkan_model.test_model"_hash), &world.entity_render_queue);
-    }
 }
 
 

@@ -407,7 +407,9 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 							    , u32 width
 							    , u32 height
 							    , u32 index
-							    , bool make_new) -> Attachment
+							    , bool make_new
+                                                            , bool is_cubemap
+                                                            , u32 layers) -> Attachment
 	    {
 		Vulkan::Image2D *img;
 		
@@ -426,7 +428,10 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 						    , format
 						    , usage
 						    , gpu
-						    , img);
+						    , img
+                                                    , layers
+                                                    , is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0
+                                                    , is_cubemap ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D);
 		return(Attachment{img, index});
 	    };
 	
@@ -452,6 +457,14 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	if (!width || !height) {width = swapchain->extent.width; height = swapchain->extent.height;};
 	
 	u32 attachment = (insert_swapchain_imgs_at_0 ? 1 : 0);
+
+        auto layers_node = i.value().find("layers");
+	u32 layers = 1;
+	if (layers_node != i.value().end())
+	{
+	    layers = layers_node.value();
+	}
+        
 	if (color_attachment_node != i.value().end())
 	{
 	    for (auto c = color_attachment_node.value().begin(); c != color_attachment_node.value().end(); ++c, ++attachment)
@@ -463,6 +476,7 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 		u32 format = c.value().find("format").value();
 		std::string usage = c.value().find("usage").value();
 		bool make_new_img = c.value().find("new").value();
+                bool is_cubemap = (c.value().find("is_cubemap") != c.value().end()) ? (bool)c.value().find("is_cubemap").value() : false;
 
 		if (to_create)
 		{
@@ -479,7 +493,9 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 								   , width
 								   , height
 								   , index
-								   , make_new_img);
+								   , make_new_img
+                                                                   , is_cubemap
+                                                                   , layers);
 		    }
 
 		    bool sampler = c.value().find("sampler") != c.value().end();
@@ -532,7 +548,9 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					  , width
 					  , height
 					  , depth_att_index
-					  , make_new_dep);
+					  , make_new_dep
+                                          , false
+                                          , layers);
 
 		bool sampler = depth_att_info.value().find("sampler") != depth_att_info.value().end();
 		if (sampler)
@@ -580,13 +598,6 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 	else
 	{
 	    fbos = g_framebuffer_manager.get(make_constant_string(fbo_name.c_str(), fbo_name.length()));
-	}
-
-	auto layers_node = i.value().find("layers");
-	u32 layers = 1;
-	if (layers_node != i.value().end())
-	{
-	    layers = layers_node.value();
 	}
 	
 	for (u32 fbo = 0; fbo < fbo_count; ++fbo)

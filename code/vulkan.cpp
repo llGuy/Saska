@@ -1128,17 +1128,22 @@ namespace Vulkan
 				, VkFormat format
 				, VkImageUsageFlags usage
 				, GPU *gpu
-				, Image2D *attachment)
+				, Image2D *attachment
+                                // For cubemap targets
+                                , u32 layers
+                                , VkImageCreateFlags create_flags
+                                , VkImageViewType image_view_type)
     {
 	Vulkan::init_image(width
-			       , height
-			       , format
-			       , VK_IMAGE_TILING_OPTIMAL
-			       , usage
-			       , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			       , 1
-			       , gpu
-			       , attachment);
+                           , height
+                           , format
+                           , VK_IMAGE_TILING_OPTIMAL
+                           , usage
+                           , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                           , layers
+                           , gpu
+                           , attachment
+                           , create_flags);
 
 	VkImageAspectFlags aspect_flags;
 	if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1149,8 +1154,8 @@ namespace Vulkan
 				    , aspect_flags
 				    , gpu
 				    , &attachment->image_view
-				    , VK_IMAGE_VIEW_TYPE_2D
-				    , 1);
+				    , image_view_type
+				    , layers);
     }
     
     void

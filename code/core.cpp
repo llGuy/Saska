@@ -222,6 +222,8 @@ main(s32 argc
 	
 	glfwDestroyWindow(window.window);
 	glfwTerminate();
+
+        std::cout << "Finished session" << std::endl;
     }
     catch(nlohmann::json::parse_error &e)
     {

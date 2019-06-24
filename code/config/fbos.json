@@ -50,10 +50,18 @@
 	"color_attachments": {
 	    "image2D.atmosphere_cubemap": {
 		"new": true,
-		"to_create": false,
+		
+		"to_create": true,
+		
 		"index": 0,
+
+		"sampler": true,
+		
 		"format": 8,
-		"usage": "cs"
+		
+		"usage": "cs",
+		
+		"is_cubemap": true
 	    }
 	},
 	

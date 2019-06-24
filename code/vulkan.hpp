@@ -731,6 +731,12 @@ namespace Vulkan
     }
 
     internal FORCEINLINE void
+    command_buffer_set_line_width(f32 width, VkCommandBuffer *cmdbuf)
+    {
+        vkCmdSetLineWidth(*cmdbuf, width);
+    }
+
+    internal FORCEINLINE void
     init_rect_2D(VkOffset2D offset
 		 , VkExtent2D extent
 		 , VkRect2D *rect)
@@ -997,7 +1003,11 @@ namespace Vulkan
 				, VkFormat format
 				, VkImageUsageFlags usage
 				, GPU *gpu
-				, Image2D *attachment);
+				, Image2D *attachment
+                                // For cubemap targets
+                                , u32 layers = 1
+                                , VkImageCreateFlags create_flags = 0
+                                , VkImageViewType image_view_type = VK_IMAGE_VIEW_TYPE_2D);
     
     void
     init_framebuffer(Render_Pass *compatible_render_pass

@@ -302,6 +302,7 @@ struct Deferred_Rendering
     Uniform_Group_Handle dfr_subpass_group;
 } g_dfr_rendering;
 
+// TODO : Need to organise this in the future
 struct Lighting
 {
     // Default value
@@ -438,78 +439,15 @@ make_atmosphere_data(Vulkan::GPU *gpu
     g_atmosphere.make_pipeline         = g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
     g_atmosphere.cubemap_uniform_group = g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
 
-    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_WIDTH = 1000;
-    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT = 1000;
+    {
+        VkCommandBuffer cmdbuf;
+        Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
+
+        GPU_Command_Queue queue{cmdbuf};
+        update_atmosphere(&queue);
     
-    Image_Handle cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
-    auto *cubemap = g_image_manager.get(cubemap_handle);
-
-    Vulkan::init_image(ATMOSPHERE_CUBEMAP_IMAGE_WIDTH
-                       , ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT
-                       , VK_FORMAT_R8G8B8A8_UNORM
-                       , VK_IMAGE_TILING_OPTIMAL
-                       , VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                       , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-                       , 6
-                       , gpu
-                       , cubemap
-                       , VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
- 
-    Vulkan::init_image_view(&cubemap->image
-                            , VK_FORMAT_R8G8B8A8_UNORM
-                            , VK_IMAGE_ASPECT_COLOR_BIT
-                            , gpu
-                            , &cubemap->image_view
-                            , VK_IMAGE_VIEW_TYPE_CUBE
-                            , 6);
-
-    Vulkan::init_image_sampler(VK_FILTER_LINEAR
-                               , VK_FILTER_LINEAR
-                               , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                               , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                               , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                               , VK_TRUE
-                               , 16
-                               , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-                               , VK_TRUE
-                               , VK_COMPARE_OP_ALWAYS
-                               , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                               , 0.0f, 0.0f, 0.0f
-                               , gpu
-                               , &cubemap->image_sampler);
-
-    Uniform_Layout_Handle render_atmos_layout_handle = g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
-    Image_Handle cubemap_image_handle = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
-
-    auto *render_atmos_layout = g_uniform_layout_manager.get(render_atmos_layout_handle);
-    auto *cubemap_image = g_image_manager.get(cubemap_image_handle);
-    
-    // just initialize the combined sampler one
-    // the uniform buffer will be already created
-    Uniform_Group_Handle cubemap_set_handle = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
-    auto *cubemap_set = g_uniform_group_manager.get(cubemap_set_handle);
-
-    Memory_Buffer_View<VkDescriptorSet> sets = {1, cubemap_set};
-    Vulkan::allocate_descriptor_sets(sets
-				     , Memory_Buffer_View<VkDescriptorSetLayout>{1, render_atmos_layout}
-				     , gpu
-				     , pool);
-    
-    VkDescriptorImageInfo image_info = cubemap_image->make_descriptor_info(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    VkWriteDescriptorSet descriptor_write = {};
-    Vulkan::init_image_descriptor_set_write(cubemap_set, 0, 0, 1, &image_info, &descriptor_write);
-
-    Vulkan::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{1, &descriptor_write}
-				       , gpu);
-
-    VkCommandBuffer cmdbuf;
-    Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
-
-    GPU_Command_Queue queue{cmdbuf};
-    update_atmosphere(&queue);
-    
-    Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
+        Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
+    }
 }
 
 internal void
@@ -689,6 +627,7 @@ begin_deferred_rendering(u32 image_index /* To remove in the future */
                              , Vulkan::init_clear_color_depth(1.0f, 0));
 
     Vulkan::command_buffer_set_viewport(render_area.extent.width, render_area.extent.height, 0.0f, 1.0f, &queue->q);
+    Vulkan::command_buffer_set_line_width(2.0f, &queue->q);
 
     // User renders what is needed ...
 }    

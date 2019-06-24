@@ -66,12 +66,6 @@ struct Camera
     {
 	p_m = glm::perspective(fov, asp, n, f);
     }
-
-    void
-    compute_view(void)
-    {
-	v_m = glm::lookAt(p, p + d, u);
-    }
 };
 
 // should not be in this file in the future
@@ -95,8 +89,10 @@ global_var struct World
 
     Deferred_Rendering_Data deferred;
 
-    //    Atmosphere atmosphere;
-    Camera user_camera;
+    static constexpr u32 MAX_CAMERAS = 10;
+    u32 camera_count {0};
+    Camera cameras [ MAX_CAMERAS ];
+
     Cube test;
 
     Camera_UBO_Transforms transforms;
@@ -118,6 +114,14 @@ global_var struct World
     Pipeline_Handle debug_frustum_ppln;
     
 } world;
+
+s32
+push_camera(Window_Data *window)
+{
+    world.cameras[world.camera_count++].set_default(window->w, window->h, window->m_x, window->m_y);
+
+    return(world.camera_count - 1);
+}
 
 
 // ---- terrain code ----
@@ -723,20 +727,19 @@ make_terrain_pointer(void)
 }
 
 internal void
-prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf
-				   , VkDescriptorSet *ubo_set
-				   , Vulkan::Framebuffer *dst_fbo)
+prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
+				   , VkDescriptorSet *ubo_set)
 {
     // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
     if (terrain_master.terrain_pointer.ts_position.x >= 0)
     {
 	auto *ppln = g_pipeline_manager.get(terrain_master.terrain_pointer.ppln);
 	Vulkan::command_buffer_bind_pipeline(ppln
-					     , cmdbuf);
+					     , &queue->q);
 
 	Vulkan::command_buffer_bind_descriptor_sets(ppln
 						    , {1, ubo_set}
-						    , cmdbuf);
+						    , &queue->q);
 
 	struct
 	{
@@ -787,15 +790,273 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf
 					     , 0
 					     , VK_SHADER_STAGE_VERTEX_BIT
 					     , ppln
-					     , cmdbuf);
+					     , &queue->q);
 
-	Vulkan::command_buffer_draw(cmdbuf
+	Vulkan::command_buffer_draw(&queue->q
 				    , 8
 				    , 1
 				    , 0
 				    , 0);
     }
     // else don't render the pointer at all
+}
+
+// index into array
+struct Entity_View
+{
+    // may have other data in the future in case we create separate arrays for different types of entities
+    s32 id;
+
+    Entity_View(void) : id(-1) {}
+};
+
+
+struct Entity_Base
+{
+    // position
+    glm::vec3 gs_p {0.0f};
+    // direction (world space)
+    glm::vec3 ws_d {0.0f};
+    // velocity
+    glm::vec3 gs_v {0.0f};
+    // rotation
+    glm::quat gs_r {0.0f, 0.0f, 0.0f, 0.0f};
+};
+
+
+
+
+
+
+
+
+#define MAX_ENTITIES 100
+
+
+struct Physics_Component
+{
+    bool enabled;
+    
+    glm::vec3 gravity_force_accumulation = {};
+
+    // other forces (friction...)
+};
+
+struct Camera_Component
+{
+    // Can be set to -1, in that case, there is no camera bound
+    s32 camera{-1};
+
+    // Maybe some other variables to do with 3rd person / first person configs ...
+};
+
+struct Entity
+{
+    Entity(void) = default;
+    
+    Constant_String id {""_hash};
+    // position, direction, velocity
+    // in above entity group space
+    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
+    glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 size{1.0f};
+
+    // for now is a pointer
+    Morphable_Terrain *on_t;
+
+
+    
+    Physics_Component physics;
+    // May not be enabled for every entity...
+    Camera_Component  camera;
+
+    
+    
+
+    // push constant stuff for the graphics pipeline
+    struct
+    {
+	// in world space
+	glm::mat4x4 ws_t{1.0f};
+	glm::vec4 color;
+    } push_k;
+    
+    Entity_View index;
+
+    union
+    {
+	struct
+	{
+	    u32 below_count;
+	    Memory_Buffer_View<Entity_View> below;
+	};
+    };
+};
+
+global_var struct Entities
+{
+    s32 entity_count = {};
+    Entity entity_list[MAX_ENTITIES] = {};
+
+    s32 physics_component_count = {};
+    Physics_Component physics_components[MAX_ENTITIES] = {};
+
+    Hash_Table_Inline<Entity_View, 25, 5, 5> name_map{"map.entities"};
+
+    // For now:
+    u32 main_entity;
+    
+    // have some sort of stack of REMOVED entities
+} entities;
+
+Entity
+construct_entity(const Constant_String &name
+		 //		 , Entity::Is_Group is_group
+		 , glm::vec3 gs_p
+		 , glm::vec3 ws_d
+		 , glm::quat gs_r)
+{
+    Entity e;
+    //    e.is_group = is_group;
+    e.ws_p = gs_p;
+    e.ws_d = ws_d;
+    e.ws_r = gs_r;
+    e.id = name;
+    return(e);
+}
+
+internal Entity *
+get_entity(const Constant_String &name)
+{
+    Entity_View v = *entities.name_map.get(name.hash);
+    return(&entities.entity_list[v.id]);
+}
+
+internal Entity *
+get_entity(Entity_View v)
+{
+    return(&entities.entity_list[v.id]);
+}
+
+void
+attach_camera_to_entity(Entity *e
+                        , s32 camera_index)
+{
+    e->camera = Camera_Component{camera_index};
+}
+
+// TODO : Completely refactor the component system
+internal void
+update_entity_camera(Entity *e, f32 dt)
+{
+    // If the entity has a camera bound to it
+    if (e->camera.camera >= 0)
+    {
+        Camera *camera = &world.cameras[ e->camera.camera ];
+
+        camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n
+                                  , e->ws_p + e->on_t->ws_n + e->ws_d
+                                  , e->on_t->ws_n);
+
+        camera->compute_projection();
+
+        camera->p = e->ws_p;
+        camera->d = e->ws_d;
+        camera->u = e->on_t->ws_n;
+    }
+}
+
+internal void
+update_entity_physics(Entity *e, f32 dt)
+{
+    Physics_Component *p = &e->physics;
+
+    if (p->enabled)
+    {
+	Morphable_Terrain *t = e->on_t;
+
+	glm::vec3 gravity_d = -9.5f * t->ws_n;
+
+	Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
+    
+	if (ret.detected)
+	{
+	    // implement coefficient of restitution
+	    e->ws_v = glm::vec3(0.0f);
+	    gravity_d = glm::vec3(0.0f);
+	    e->ws_p = ret.ws_at;
+	}
+    
+	e->ws_v += gravity_d * dt;
+
+	e->ws_p += (e->ws_v + e->ws_input_v) * dt;
+    }
+    else
+    {
+	e->ws_p += e->ws_input_v * dt;
+    }
+}
+
+internal Entity_View
+add_entity(const Entity &e)
+
+{
+    Entity_View view;
+    view.id = entities.entity_count;
+    //    view.is_group = (Entity_View::Is_Group)e.is_group;
+
+    entities.name_map.insert(e.id.hash, view);
+    
+    entities.entity_list[entities.entity_count++] = e;
+
+    auto e_ptr = get_entity(view);
+
+    e_ptr->index = view;
+
+    return(view);
+}
+
+internal void
+make_entity_renderable(Entity *e_ptr
+		       , Model_Handle model_handle
+		       , GPU_Material_Submission_Queue *queue)
+{
+    // ---- adds an entity to the stack of renderables
+    auto *model = g_model_manager.get(model_handle);
+    queue->push_material(&e_ptr->push_k
+			 , sizeof(e_ptr->push_k)
+			 , model->raw_cache_for_rendering
+			 , model->index_data
+			 , Vulkan::init_draw_indexed_data_default(1, model->index_data.index_count));
+}
+
+internal void
+make_entity_instanced_renderable(Model_Handle model_handle
+				 , const Constant_String &e_mtrl_name)
+{
+    // TODO(luc) : first need to add support for instance rendering in material renderers.
+}
+
+internal void
+update_entities(f32 dt)
+{
+    
+    for (s32 i = 0; i < entities.entity_count; ++i)
+    {
+	Entity *e = &entities.entity_list[i];
+	
+	update_entity_physics(&entities.entity_list[i], dt);
+        update_entity_camera(&entities.entity_list[i], dt);
+
+        if (e->on_t)
+        {
+            e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
+        }
+        else
+        {
+            e->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
+        }
+    }
 }
 
 
@@ -987,44 +1248,41 @@ calculate_ws_frustum_corners(glm::vec4 *corners
 			     , glm::vec4 *shadow_corners)
 {
     Shadow_Matrices shadow_data = get_shadow_matrices();
-    
-    corners[0] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[0];
-    corners[1] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[1];
-    corners[3] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[2];
-    corners[2] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[3];
-    
-    corners[4] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[4];
-    corners[5] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[5];
-    corners[7] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[6];
-    corners[6] = shadow_data.inverse_light_view * world.user_camera.captured_frustum_corners[7];
 
-    shadow_corners[0] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[0];
-    shadow_corners[1] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[1];
-    shadow_corners[2] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[2];
-    shadow_corners[3] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[3];
+    Entity *main = &entities.entity_list[entities.main_entity];
+    Camera *camera = &world.cameras[main->camera.camera];
     
-    shadow_corners[4] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[4];
-    shadow_corners[5] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[5];
-    shadow_corners[6] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[6];
-    shadow_corners[7] = shadow_data.inverse_light_view * world.user_camera.captured_shadow_corners[7];
+    corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
+    corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
+    corners[3] = shadow_data.inverse_light_view * camera->captured_frustum_corners[2];
+    corners[2] = shadow_data.inverse_light_view * camera->captured_frustum_corners[3];
+    
+    corners[4] = shadow_data.inverse_light_view * camera->captured_frustum_corners[4];
+    corners[5] = shadow_data.inverse_light_view * camera->captured_frustum_corners[5];
+    corners[7] = shadow_data.inverse_light_view * camera->captured_frustum_corners[6];
+    corners[6] = shadow_data.inverse_light_view * camera->captured_frustum_corners[7];
+
+    shadow_corners[0] = shadow_data.inverse_light_view * camera->captured_shadow_corners[0];
+    shadow_corners[1] = shadow_data.inverse_light_view * camera->captured_shadow_corners[1];
+    shadow_corners[2] = shadow_data.inverse_light_view * camera->captured_shadow_corners[2];
+    shadow_corners[3] = shadow_data.inverse_light_view * camera->captured_shadow_corners[3];
+    
+    shadow_corners[4] = shadow_data.inverse_light_view * camera->captured_shadow_corners[4];
+    shadow_corners[5] = shadow_data.inverse_light_view * camera->captured_shadow_corners[5];
+    shadow_corners[6] = shadow_data.inverse_light_view * camera->captured_shadow_corners[6];
+    shadow_corners[7] = shadow_data.inverse_light_view * camera->captured_shadow_corners[7];
 }
 
 internal void
-render_debug_frustum(VkDescriptorSet ubo
-		     , VkCommandBuffer *cmdbuf
-		     , Vulkan::Framebuffer *dst_fbo
-		     , Vulkan::GPU *gpu)
+render_debug_frustum(GPU_Command_Queue *queue
+                     , VkDescriptorSet ubo)
 {
     auto *debug_frustum_ppln = g_pipeline_manager.get(world.debug_frustum_ppln);
-    Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, cmdbuf);
-
-    VkViewport viewport = {};
-    Vulkan::init_viewport(dst_fbo->extent.width, dst_fbo->extent.height, 0.0f, 1.0f, &viewport);
-    vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);    
+    Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
 
     Vulkan::command_buffer_bind_descriptor_sets(debug_frustum_ppln
 						, {1, &ubo}
-						, cmdbuf);
+						, &queue->q);
 
     struct Push_K
     {
@@ -1042,18 +1300,18 @@ render_debug_frustum(VkDescriptorSet ubo
 					 , 0
 					 , VK_SHADER_STAGE_VERTEX_BIT
 					 , debug_frustum_ppln
-					 , cmdbuf);
+					 , &queue->q);
     
-    Vulkan::command_buffer_draw(cmdbuf, 24, 1, 0, 0);
+    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
 
     Vulkan::command_buffer_push_constant(&push_k2
 					 , sizeof(push_k2)
 					 , 0
 					 , VK_SHADER_STAGE_VERTEX_BIT
 					 , debug_frustum_ppln
-					 , cmdbuf);
+					 , &queue->q);
     
-    Vulkan::command_buffer_draw(cmdbuf, 24, 1, 0, 0);
+    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
 }
 
 internal void
@@ -1097,354 +1355,62 @@ render_world(Vulkan::State *vk
 	     , VkCommandBuffer *cmdbuf)
 {
     // Fetch some data needed to render
-    auto *test_uniform_groups = g_uniform_group_manager.get(world.test.sets);
+    auto *transforms_ubo_uniform_groups = g_uniform_group_manager.get(world.test.sets);
     Shadow_Display shadow_display_data = get_shadow_display();
-    VkDescriptorSet test_sets[2] = {test_uniform_groups[image_index], shadow_display_data.texture};
+    
+    Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
-
+    Entity *e = &entities.entity_list[entities.main_entity];
+    Camera *camera = &world.cameras[e->camera.camera];
+    
     // Start the rendering    
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
     
     GPU_Command_Queue queue {*cmdbuf};
-    
+
+    // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, &queue);
     {
         auto *model_ppln = g_pipeline_manager.get(world.model_shadow_ppln);
 
-        world.entity_render_queue.submit_queued_materials({1, &test_uniform_groups[image_index]}, model_ppln
+        world.entity_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
                                                           , &queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         auto *terrain_ppln = g_pipeline_manager.get(world.terrain_shadow_ppln);    
     
-        world.terrain_render_queue.submit_queued_materials({1, &test_uniform_groups[image_index]}, terrain_ppln
+        world.terrain_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
                                                            , &queue
                                                            , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
     end_shadow_offscreen(&queue);
-    
+
+    // Rendering the scene with lighting and everything
     begin_deferred_rendering(image_index, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &queue);
     {
         auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_ppln);    
         auto *entity_ppln = g_pipeline_manager.get(world.deferred.main_pipeline);
     
-        world.terrain_render_queue.submit_queued_materials({2, test_sets}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        world.entity_render_queue.submit_queued_materials({2, test_sets}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        
-        vkCmdSetLineWidth(*cmdbuf, 2.0f);
+        world.terrain_render_queue.submit_queued_materials({2, uniform_groups}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        world.entity_render_queue.submit_queued_materials({2, uniform_groups}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *deferred_pass = g_render_pass_manager.get(world.deferred.render_pass);
-        auto *deferred_fbos = g_framebuffer_manager.get(world.deferred.fbos);
-
-        prepare_terrain_pointer_for_render(cmdbuf, &test_uniform_groups[image_index], &deferred_fbos[image_index]);
-        render_debug_frustum(test_uniform_groups[image_index], cmdbuf, &deferred_fbos[image_index], &vk->gpu);
+        prepare_terrain_pointer_for_render(&queue, &transforms_ubo_uniform_groups[image_index]);
+        render_debug_frustum(&queue, transforms_ubo_uniform_groups[image_index]);
         
         // ---- render skybox ----
-        render_atmosphere({1, test_sets}, world.user_camera.p, g_model_manager.get(world.test.model), &queue);
+        render_atmosphere({1, uniform_groups}, camera->p, g_model_manager.get(world.test.model), &queue);
     }
-    end_deferred_rendering(world.user_camera.v_m, &queue);
+    end_deferred_rendering(camera->v_m, &queue);
 
     Vulkan::end_command_buffer(cmdbuf);
 }
 
-// index into array
-struct Entity_View
-{
-    // may have other data in the future in case we create separate arrays for different types of entities
-    s32 id;
-
-    Entity_View(void) : id(-1) {}
-};
-
-
-struct Entity_Base
-{
-    // position
-    glm::vec3 gs_p {0.0f};
-    // direction (world space)
-    glm::vec3 ws_d {0.0f};
-    // velocity
-    glm::vec3 gs_v {0.0f};
-    // rotation
-    glm::quat gs_r {0.0f, 0.0f, 0.0f, 0.0f};
-
-    
-};
 
 
 
 
 
 
-
-
-#define MAX_ENTITIES 100
-
-
-struct Physics_Component
-{
-    bool enabled;
-    
-    glm::vec3 gravity_force_accumulation = {};
-
-    // other forces (friction...)
-};
-
-struct Entity
-{
-    Entity(void) = default;
-    
-    Constant_String id {""_hash};
-    // position, direction, velocity
-    // in above entity group space
-    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
-    glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 size{1.0f};
-
-    // for now is a pointer
-    Morphable_Terrain *on_t;
-
-    Physics_Component physics;
-
-    // push constant stuff for the graphics pipeline
-    struct
-    {
-	// in world space
-	glm::mat4x4 ws_t{1.0f};
-	glm::vec4 color;
-    } push_k;
-    
-    Entity_View index;
-
-    using Entity_State_Flags = u32;
-    //    enum {GROUP_PHYSICS_INFO_HAS_BEEN_UPDATED_BIT = 1 << 0};
-    Entity_State_Flags flags{};
-    
-    union
-    {
-	struct
-	{
-	    u32 below_count;
-	    Memory_Buffer_View<Entity_View> below;
-	};
-    };
-};
-
-
-Entity
-construct_entity(const Constant_String &name
-		 //		 , Entity::Is_Group is_group
-		 , glm::vec3 gs_p
-		 , glm::vec3 ws_d
-		 , glm::quat gs_r)
-{
-    Entity e;
-    //    e.is_group = is_group;
-    e.ws_p = gs_p;
-    e.ws_d = ws_d;
-    e.ws_r = gs_r;
-    e.id = name;
-    return(e);
-}
-
-global_var struct Entities
-{
-    s32 entity_count = {};
-    Entity entity_list[MAX_ENTITIES] = {};
-
-    s32 physics_component_count = {};
-    Physics_Component physics_components[MAX_ENTITIES] = {};
-
-    Hash_Table_Inline<Entity_View, 25, 5, 5> name_map{"map.entities"};
-
-    s32 camera_bound_entity {-1};
-    s32 input_bound_entity {-1};
-    
-    // have some sort of stack of REMOVED entities
-} entities;
-
-internal Entity *
-get_entity(const Constant_String &name)
-{
-    Entity_View v = *entities.name_map.get(name.hash);
-    return(&entities.entity_list[v.id]);
-}
-
-internal Entity *
-get_entity(Entity_View v)
-{
-    return(&entities.entity_list[v.id]);
-}
-
-internal void
-update_entity_physics(Entity *e, f32 dt)
-{
-    Physics_Component *p = &e->physics;
-
-    if (p->enabled)
-    {
-	Morphable_Terrain *t = e->on_t;
-
-	glm::vec3 gravity_d = -9.5f * t->ws_n;
-
-	Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
-    
-	if (ret.detected)
-	{
-	    // implement coefficient of restitution
-	    e->ws_v = glm::vec3(0.0f);
-	    gravity_d = glm::vec3(0.0f);
-	    e->ws_p = ret.ws_at;
-	}
-    
-	e->ws_v += gravity_d * dt;
-
-	e->ws_p += (e->ws_v + e->ws_input_v) * dt;
-    }
-    else
-    {
-	e->ws_p += e->ws_input_v * dt;
-    }
-}
-
-internal Entity_View
-add_entity(const Entity &e)
-
-{
-    Entity_View view;
-    view.id = entities.entity_count;
-    //    view.is_group = (Entity_View::Is_Group)e.is_group;
-
-    entities.name_map.insert(e.id.hash, view);
-    
-    entities.entity_list[entities.entity_count++] = e;
-
-    auto e_ptr = get_entity(view);
-
-    e_ptr->index = view;
-
-    return(view);
-}
-
-internal void
-make_entity_renderable(Entity *e_ptr
-		       , Model_Handle model_handle
-		       , GPU_Material_Submission_Queue *queue)
-{
-    // ---- adds an entity to the stack of renderables
-    auto *model = g_model_manager.get(model_handle);
-    queue->push_material(&e_ptr->push_k
-			 , sizeof(e_ptr->push_k)
-			 , model->raw_cache_for_rendering
-			 , model->index_data
-			 , Vulkan::init_draw_indexed_data_default(1, model->index_data.index_count));
-}
-
-internal void
-make_entity_instanced_renderable(Model_Handle model_handle
-				 , const Constant_String &e_mtrl_name)
-{
-    // TODO(luc) : first need to add support for instance rendering in material renderers.
-}
-
-internal void
-update_entities(f32 dt)
-{
-    
-    for (s32 i = 0; i < entities.entity_count; ++i)
-    {
-	Entity *e = &entities.entity_list[i];
-	
-	update_entity_physics(&entities.entity_list[i], dt);
-
-        if (e->on_t)
-        {
-            e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
-        }
-        else
-        {
-            e->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
-        }
-    }
-}
-
-
-
-
-
-internal void
-init_atmosphere_cubemap(Vulkan::GPU *gpu)
-{
-    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_WIDTH = 1000;
-    persist constexpr u32 ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT = 1000;
-    
-    Image_Handle cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
-    auto *cubemap = g_image_manager.get(cubemap_handle);
-
-    Vulkan::init_image(ATMOSPHERE_CUBEMAP_IMAGE_WIDTH
-			   , ATMOSPHERE_CUBEMAP_IMAGE_HEIGHT
-			   , VK_FORMAT_R8G8B8A8_UNORM
-			   , VK_IMAGE_TILING_OPTIMAL
-			   , VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-			   , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			   , 6
-			   , gpu
-			   , cubemap
-			   , VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
- 
-    Vulkan::init_image_view(&cubemap->image
-				, VK_FORMAT_R8G8B8A8_UNORM
-				, VK_IMAGE_ASPECT_COLOR_BIT
-				, gpu
-				, &cubemap->image_view
-				, VK_IMAGE_VIEW_TYPE_CUBE
-				, 6);
-
-    Vulkan::init_image_sampler(VK_FILTER_LINEAR
-				   , VK_FILTER_LINEAR
-				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-				   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-				   , VK_TRUE
-				   , 16
-				   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-				   , VK_TRUE
-				   , VK_COMPARE_OP_ALWAYS
-				   , VK_SAMPLER_MIPMAP_MODE_LINEAR
-				   , 0.0f, 0.0f, 0.0f
-				   , gpu
-				   , &cubemap->image_sampler);
-}
-
-internal void
-init_atmosphere_render_descriptor_set(Vulkan::GPU *gpu
-				      , VkDescriptorPool *pool)
-{
-    Uniform_Layout_Handle render_atmos_layout_handle = g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
-    Image_Handle cubemap_image_handle = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
-
-    auto *render_atmos_layout = g_uniform_layout_manager.get(render_atmos_layout_handle);
-    auto *cubemap_image = g_image_manager.get(cubemap_image_handle);
-    
-    // just initialize the combined sampler one
-    // the uniform buffer will be already created
-    Uniform_Group_Handle cubemap_set_handle = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
-    auto *cubemap_set = g_uniform_group_manager.get(cubemap_set_handle);
-
-    Memory_Buffer_View<VkDescriptorSet> sets = {1, cubemap_set};
-    Vulkan::allocate_descriptor_sets(sets
-				     , Memory_Buffer_View<VkDescriptorSetLayout>{1, render_atmos_layout}
-				     , gpu
-				     , pool);
-    
-    VkDescriptorImageInfo image_info = cubemap_image->make_descriptor_info(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    VkWriteDescriptorSet descriptor_write = {};
-    Vulkan::init_image_descriptor_set_write(cubemap_set, 0, 0, 1, &image_info, &descriptor_write);
-
-    Vulkan::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{1, &descriptor_write}
-				       , gpu);
-}
 
 
 
@@ -1458,21 +1424,13 @@ internal void
 get_registered_objects_from_json(void)
 {
     world.deferred.render_pass		= g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-    //world.atmosphere.make_render_pass	= g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
 
     world.deferred.fbos			= g_framebuffer_manager.get_handle("framebuffer.main_fbo"_hash);
-    //    world.atmosphere.make_fbo		= g_framebuffer_manager.get_handle("framebuffer.atmosphere_fbo"_hash);
 
     world.deferred.main_pipeline	= g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
     world.deferred.lighting_pipeline	= g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
-    //    world.atmosphere.render_pipeline	= g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
-    //    world.atmosphere.make_pipeline	= g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
-
-    //    world.atmosphere.render_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
-    //    world.atmosphere.make_layout	= g_uniform_layout_manager.get_handle("descriptor_set_layout.atmosphere_layout"_hash);
     
     world.test.sets			= g_uniform_group_manager.get_handle("descriptor_set.test_descriptor_sets"_hash);
-    //    world.atmosphere.cubemap_set	= g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
     world.deferred.descriptor_set	= g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
 
     terrain_master.terrain_ppln		= g_pipeline_manager.get_handle("pipeline.terrain_pipeline"_hash);
@@ -1499,43 +1457,23 @@ make_world(Window_Data *window
     prepare_external_loading_state(&vk->gpu, &vk->swapchain, cmdpool);
     make_morphable_terrain_master(cmdpool, &vk->gpu);
     
-    
-
-
-
-
     std::cout << "JSON > loading render passes" << std::endl;
     load_render_passes_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
-    
-    // initialize the cubemap that will be used as an attachment by the fbo for rendering the skybox
-    init_atmosphere_cubemap(&vk->gpu);
-
-
-
-    
     std::cout << "JSON > loading framebuffers" << std::endl;
     load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
     
-    
-
-
     std::cout << "JSON > loading descriptors" << std::endl;
     load_descriptors_from_json(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
     clear_linear();
     
-    
-    init_atmosphere_render_descriptor_set(&vk->gpu, &world.desc.pool.pool);
-
     std::cout << "JSON > loading pipelines" << std::endl;
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
     make_terrain_pointer();
-
-
     
     get_registered_objects_from_json();
 
@@ -1563,10 +1501,10 @@ make_world(Window_Data *window
 	terrain_master.green_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
 	terrain_master.green_mesh.vbos[1] = terrain_master.green_mesh.heights_gpu_buffer.buffer;
 	world.terrain_render_queue.push_material(&terrain_master.green_mesh.push_k
-						       , sizeof(terrain_master.green_mesh.push_k)
-						       , {2, terrain_master.green_mesh.vbos}
-						       , model_info->index_data
-						       , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
+                                                 , sizeof(terrain_master.green_mesh.push_k)
+                                                 , {2, terrain_master.green_mesh.vbos}
+                                                 , model_info->index_data
+                                                 , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
 
 	terrain_master.green_mesh.ws_p = glm::vec3(200.0f, 0.0f, 0.0f);
 	terrain_master.green_mesh.gs_r = glm::quat(glm::radians(glm::vec3(0.0f, 45.0f, 20.0f)));
@@ -1581,10 +1519,10 @@ make_world(Window_Data *window
 	terrain_master.red_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
 	terrain_master.red_mesh.vbos[1] = terrain_master.red_mesh.heights_gpu_buffer.buffer;
 	world.terrain_render_queue.push_material(&terrain_master.red_mesh.push_k
-						       , sizeof(terrain_master.red_mesh.push_k)
-						       , {2, terrain_master.red_mesh.vbos}
- , model_info->index_data
-						       , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
+                                                 , sizeof(terrain_master.red_mesh.push_k)
+                                                 , {2, terrain_master.red_mesh.vbos}
+                                                 , model_info->index_data
+                                                 , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
 
 	terrain_master.red_mesh.ws_p = glm::vec3(0.0f, 0.0f, 200.0f);
 	terrain_master.red_mesh.gs_r = glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)));
@@ -1612,12 +1550,14 @@ make_world(Window_Data *window
 
     e_ptr->physics.enabled = false;
 
-    entities.camera_bound_entity = ev.id;
-    entities.input_bound_entity = ev.id;
+    entities.main_entity = ev.id;
 
     e_ptr->on_t = &terrain_master.red_mesh;
-    
-    world.user_camera.set_default(window->w, window->h, window->m_x, window->m_y);
+
+
+    s32 camera_index = push_camera(window);
+    attach_camera_to_entity(e_ptr, camera_index);
+
 
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
@@ -1684,7 +1624,8 @@ update_ubo(u32 current_image
 	bool render_to_shadow;
     };
 
-    Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
+    Entity *e_ptr = &entities.entity_list[entities.main_entity];
+    Camera *camera = &world->cameras[e_ptr->camera.camera];
     
     update_shadows(1000.0f
                    , 1.0f
@@ -1708,7 +1649,7 @@ update_ubo(u32 current_image
     /*    ubo.view_matrix = glm::lookAt(glm::vec3(2.0f)
 				  , glm::vec3(0.0f)
 				  , glm::vec3(0.0f, 0.0f, 1.0f));*/
-    ubo.view_matrix = world->user_camera.v_m;
+    ubo.view_matrix = camera->v_m;
     ubo.projection_matrix = glm::perspective(glm::radians(60.0f)
 					     , (float)swapchain->extent.width / (float)swapchain->extent.height
 					     , 1.0f
@@ -1767,14 +1708,12 @@ update_world(Window_Data *window
 	     , u32 current_frame
 	     , VkCommandBuffer *cmdbuf)
 {
-    on_which_terrain(world.user_camera.p);
+    auto *e = &entities.entity_list[entities.main_entity];
+    
+    //    on_which_terrain(world.user_camera.p);
     
     handle_input(window, dt, &vk->gpu);
     
-    auto *e = &entities.entity_list[entities.camera_bound_entity];
-    
-    world.user_camera.v_m = glm::lookAt(e->ws_p + e->on_t->ws_n, e->ws_p + e->on_t->ws_n + e->ws_d, e->on_t->ws_n);
-
     update_entities(dt);
     
     // ---- actually rendering the frame ----
@@ -1791,15 +1730,16 @@ handle_input(Window_Data *window
 	     , Vulkan::GPU *gpu)
 {
     // ---- get bound entity ----
-    // TODO make sure to check if camera_bound_entity < 0
-    Entity *e_ptr = &entities.entity_list[entities.camera_bound_entity];
+    // TODO make sure to check if main_entity < 0
+    Entity *e_ptr = &entities.entity_list[entities.main_entity];
+    Camera *e_camera = &world.cameras[e_ptr->camera.camera];
     glm::vec3 up = e_ptr->on_t->ws_n;
     
     if (window->m_moved)
     {
 #define SENSITIVITY 15.0f
     
-	glm::vec2 prev_mp = world.user_camera.mp;
+	glm::vec2 prev_mp = e_camera->mp;
 	glm::vec2 curr_mp = glm::vec2(window->m_x, window->m_y);
 
 	glm::vec3 res = e_ptr->ws_d;
@@ -1814,7 +1754,7 @@ handle_input(Window_Data *window
 
 	e_ptr->ws_d = res;
 	    
-	world.user_camera.mp = curr_mp;
+	e_camera->mp = curr_mp;
     }
 
     //    e_ptr->ws_v = glm::vec3(0.0f);
@@ -1844,7 +1784,7 @@ handle_input(Window_Data *window
     
     if (detected_collision) e_ptr->ws_v = glm::vec3(0.0f);
     
-    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
+    //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
     if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
     if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
     if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
@@ -1884,18 +1824,18 @@ handle_input(Window_Data *window
     {
 	for (u32 i = 0; i < 8; ++i)
 	{
-	    world.user_camera.captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
+	    e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
 	}
 
-	world.user_camera.captured_shadow_corners[0] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[1] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[2] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
-	world.user_camera.captured_shadow_corners[3] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[0] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[1] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[2] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[3] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
 
-	world.user_camera.captured_shadow_corners[4] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[5] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[6] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-	world.user_camera.captured_shadow_corners[7] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[4] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[5] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[6] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[7] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
     }
 
     if (movements > 0)

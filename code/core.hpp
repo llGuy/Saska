@@ -42,8 +42,13 @@ struct Window_Data
     Memory_Buffer_View<bool> key_map;
     Memory_Buffer_View<bool> mb_map;
 
+    // Mouse position
     s32 m_x = 0;
     s32 m_y = 0;
+
+    // Previous mouse position
+    s32 prev_m_x = 0;
+    s32 prev_m_y;
 
     bool m_moved = false;
     bool window_resized = false;

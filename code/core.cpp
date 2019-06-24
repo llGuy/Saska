@@ -91,6 +91,10 @@ internal void
 glfw_mouse_position_proc(GLFWwindow *win, f64 x, f64 y)
 {
     Window_Data *w_data = (Window_Data *)glfwGetWindowUserPointer(win);
+
+    w_data->prev_m_x = w_data->m_x;
+    w_data->prev_m_y = w_data->m_y;
+    
     w_data->m_x = x;
     w_data->m_y = y;
     w_data->m_moved = true;
@@ -181,24 +185,38 @@ main(s32 argc
 		  , &window);
 	
 	
-	auto now = std::chrono::high_resolution_clock::now();
 
 	f32 fps = 0.0f;
-	
+
+        {
+            f64 m_x, m_y;
+            glfwGetCursorPos(window.window, &m_x, &m_y);
+            window.m_x = (f32)m_x;
+            window.m_y = (f32)m_y;
+        }
+        
+	auto now = std::chrono::high_resolution_clock::now();
 	while(!glfwWindowShouldClose(window.window))
 	{
 	    glfwPollEvents();
             update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
 
-	    if (glfwGetKey(window.window, GLFW_KEY_R))
+	    if (glfwGetKey(window.window, GLFW_KEY_F))
 	    {
-		//		printf("%f\n", 1.0f / window.dt);
+		printf("%f\n", 1.0f / window.dt);
 	    }
 	    
 	    clear_linear();
 
+            window.m_moved = false;
+            
 	    auto new_now = std::chrono::high_resolution_clock::now();
 	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
+
+            /*	auto new_now = std::chrono::high_resolution_clock::now();
+            window.dt = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(new_now - now).count();
+	    now = new_now;*/
+            
 	    now = new_now;
 	}
 

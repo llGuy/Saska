@@ -19,9 +19,9 @@ update_world(Window_Data *window
 	     , VkCommandBuffer *cmdbuf);
 
 void
-handle_input(Window_Data *win
-	     , f32 dt
-	     , Vulkan::GPU *gpu);
+handle_input_debug(Window_Data *win
+                   , f32 dt
+                   , Vulkan::GPU *gpu);
 
 void
 destroy_world(Vulkan::GPU *gpu);

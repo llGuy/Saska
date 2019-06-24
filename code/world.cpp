@@ -55,10 +55,10 @@ struct Camera
 	d = glm::vec3(+1, 0.0f, +1);
 	u = glm::vec3(0, 1, 0);
 
-	fov = 60.0f;
+	fov = glm::radians(60.0f);
 	asp = w / h;
-	n = 0.1f;
-	f = 10000.0f;
+	n = 1.0f;
+	f = 100000.0f;
     }
     
     void
@@ -801,53 +801,45 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
     // else don't render the pointer at all
 }
 
-// index into array
-struct Entity_View
-{
-    // may have other data in the future in case we create separate arrays for different types of entities
-    s32 id;
-
-    Entity_View(void) : id(-1) {}
-};
-
-
-struct Entity_Base
-{
-    // position
-    glm::vec3 gs_p {0.0f};
-    // direction (world space)
-    glm::vec3 ws_d {0.0f};
-    // velocity
-    glm::vec3 gs_v {0.0f};
-    // rotation
-    glm::quat gs_r {0.0f, 0.0f, 0.0f, 0.0f};
-};
-
-
-
-
-
-
-
-
-#define MAX_ENTITIES 100
-
+using Entity_Handle = s32;
 
 struct Physics_Component
 {
-    bool enabled;
+    u32 entity_index;
     
     glm::vec3 gravity_force_accumulation = {};
 
+    bool enabled;
+    
     // other forces (friction...)
 };
 
 struct Camera_Component
 {
+    u32 entity_index;
+    
     // Can be set to -1, in that case, there is no camera bound
     s32 camera{-1};
 
     // Maybe some other variables to do with 3rd person / first person configs ...
+};
+
+struct Input_Component
+{
+    u32 entity_index;
+};
+
+struct Rendering_Component
+{
+    u32 entity_index;
+    
+    // push constant stuff for the graphics pipeline
+    struct
+    {
+	// in world space
+	glm::mat4x4 ws_t{1.0f};
+	glm::vec4 color;
+    } push_k;
 };
 
 struct Entity
@@ -861,47 +853,53 @@ struct Entity
     glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 size{1.0f};
 
-    // for now is a pointer
+    // For now is a pointer - is not a component because all entities will have one
     Morphable_Terrain *on_t;
 
-
-    
-    Physics_Component physics;
-    // May not be enabled for every entity...
-    Camera_Component  camera;
-
-    
-    
-
-    // push constant stuff for the graphics pipeline
-    struct
+    struct Components
     {
-	// in world space
-	glm::mat4x4 ws_t{1.0f};
-	glm::vec4 color;
-    } push_k;
-    
-    Entity_View index;
 
+        s32 camera_component;
+        s32 physics_component;
+        s32 input_component;
+        s32 rendering_component;
+        
+    } components;
+    
+    Entity_Handle index;
+
+    // Not needed for now because there aren't any entity groups needed yet
     union
     {
 	struct
 	{
 	    u32 below_count;
-	    Memory_Buffer_View<Entity_View> below;
+	    Memory_Buffer_View<Entity_Handle> below;
 	};
     };
 };
 
 global_var struct Entities
 {
+    static constexpr u32 MAX_ENTITIES = 30;
+    
     s32 entity_count = {};
     Entity entity_list[MAX_ENTITIES] = {};
 
+    // All possible components: 
     s32 physics_component_count = {};
     Physics_Component physics_components[MAX_ENTITIES] = {};
 
-    Hash_Table_Inline<Entity_View, 25, 5, 5> name_map{"map.entities"};
+    s32 camera_component_count = {};
+    Camera_Component camera_components[MAX_ENTITIES] = {};
+
+    s32 input_component_count = {};
+    Input_Component input_components[MAX_ENTITIES] = {};
+
+    s32 rendering_component_count = {};
+    Rendering_Component rendering_components[MAX_ENTITIES] = {};
+
+    Hash_Table_Inline<Entity_Handle, 30, 5, 5> name_map{"map.entities"};
 
     // For now:
     u32 main_entity;
@@ -928,36 +926,49 @@ construct_entity(const Constant_String &name
 internal Entity *
 get_entity(const Constant_String &name)
 {
-    Entity_View v = *entities.name_map.get(name.hash);
-    return(&entities.entity_list[v.id]);
+    Entity_Handle v = *entities.name_map.get(name.hash);
+    return(&entities.entity_list[v]);
 }
 
 internal Entity *
-get_entity(Entity_View v)
+get_entity(Entity_Handle v)
 {
-    return(&entities.entity_list[v.id]);
+    return(&entities.entity_list[v]);
 }
 
 void
 attach_camera_to_entity(Entity *e
                         , s32 camera_index)
 {
-    e->camera = Camera_Component{camera_index};
+    
 }
 
-// TODO : Completely refactor the component system
-internal void
-update_entity_camera(Entity *e, f32 dt)
+internal Camera_Component *
+add_camera_component(Entity *e
+                     , u32 camera_index)
 {
-    // If the entity has a camera bound to it
-    if (e->camera.camera >= 0)
+    e->components.camera_component = entities.camera_component_count++;
+    Camera_Component *component = &entities.camera_components[ e->components.camera_component ];
+    component->entity_index = e->index;
+    component->camera = camera_index;
+
+    return(component);
+}
+
+internal void
+update_camera_components(f32 dt)
+{
+    for (u32 i = 0; i < entities.camera_component_count; ++i)
     {
-        Camera *camera = &world.cameras[ e->camera.camera ];
+        Camera_Component *component = &entities.camera_components[ i ];
+        Camera *camera = &world.cameras[ component->camera ];
+        Entity *e = &entities.entity_list[ component->entity_index ];
 
         camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n
                                   , e->ws_p + e->on_t->ws_n + e->ws_d
                                   , e->on_t->ws_n);
 
+        // TODO: Don't need to calculate this every frame, just when parameters change
         camera->compute_projection();
 
         camera->p = e->ws_p;
@@ -966,44 +977,217 @@ update_entity_camera(Entity *e, f32 dt)
     }
 }
 
-internal void
-update_entity_physics(Entity *e, f32 dt)
+internal Rendering_Component *
+add_rendering_component(Entity *e)
 {
-    Physics_Component *p = &e->physics;
+    e->components.rendering_component = entities.rendering_component_count++;
+    Rendering_Component *component = &entities.rendering_components[ e->components.rendering_component ];
+    component->entity_index = e->index;
+    component->push_k = {};
 
-    if (p->enabled)
+    return(component);
+}
+
+internal void
+update_rendering_component(f32 dt)
+{
+    for (u32 i = 0; i < entities.rendering_component_count; ++i)
     {
-	Morphable_Terrain *t = e->on_t;
+        Rendering_Component *component = &entities.rendering_components[ i ];
+        Entity *e = &entities.entity_list[ component->entity_index ];
 
-	glm::vec3 gravity_d = -9.5f * t->ws_n;
-
-	Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
-    
-	if (ret.detected)
-	{
-	    // implement coefficient of restitution
-	    e->ws_v = glm::vec3(0.0f);
-	    gravity_d = glm::vec3(0.0f);
-	    e->ws_p = ret.ws_at;
-	}
-    
-	e->ws_v += gravity_d * dt;
-
-	e->ws_p += (e->ws_v + e->ws_input_v) * dt;
-    }
-    else
-    {
-	e->ws_p += e->ws_input_v * dt;
+        if (e->on_t)
+        {
+            component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
+        }
+        else
+        {
+            component->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
+        }
     }
 }
 
-internal Entity_View
+internal Physics_Component *
+add_physics_component(Entity *e
+                      , bool enabled)
+{
+    e->components.physics_component = entities.physics_component_count++;
+    Physics_Component *component = &entities.physics_components[ e->components.physics_component ];
+    component->entity_index = e->index;
+    component->enabled = enabled;
+
+    return(component);
+}
+
+internal void
+update_physics_components(f32 dt)
+{
+    for (u32 i = 0; i < entities.physics_component_count; ++i)
+    {
+        Physics_Component *component = &entities.physics_components[ i ];
+        Entity *e = &entities.entity_list[ component->entity_index ];
+
+        if (component->enabled)
+        {
+            Morphable_Terrain *t = e->on_t;
+
+            glm::vec3 gravity_d = -9.5f * t->ws_n;
+
+            Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
+    
+            if (ret.detected)
+            {
+                // implement coefficient of restitution
+                e->ws_v = glm::vec3(0.0f);
+                gravity_d = glm::vec3(0.0f);
+                e->ws_p = ret.ws_at;
+            }
+    
+            e->ws_v += gravity_d * dt;
+
+            e->ws_p += (e->ws_v + e->ws_input_v) * dt;
+        }
+        else
+        {
+            e->ws_p += e->ws_input_v * dt;
+        }
+    }
+}
+
+internal Input_Component *
+add_input_component(Entity *e)
+{
+    e->components.input_component = entities.input_component_count++;
+    Input_Component *component = &entities.input_components[ e->components.input_component ];
+    component->entity_index = e->index;
+
+    return(component);
+}
+
+// Don't even know yet if this is needed ? Only one entity will have this component - maybe just keep for consistency with the system
+internal void
+update_input_components(Window_Data *window
+                        , f32 dt
+                        , Vulkan::GPU *gpu)
+{
+    for (u32 i = 0; i < entities.input_component_count; ++i)
+    {
+        Input_Component *component = &entities.input_components[i];
+        Entity *e = &entities.entity_list[component->entity_index];
+        Physics_Component *e_physics = &entities.physics_components[e->components.physics_component];
+
+        glm::vec3 up = e->on_t->ws_n;
+        
+        // Mouse movement
+        if (window->m_moved)
+        {
+            // TODO: Make sensitivity configurable with a file or something, and later menu
+            persist constexpr u32 SENSITIVITY = 15.0f;
+    
+            glm::vec2 prev_mp = glm::vec2(window->prev_m_x, window->prev_m_y);
+            glm::vec2 curr_mp = glm::vec2(window->m_x, window->m_y);
+
+            glm::vec3 res = e->ws_d;
+	    
+            glm::vec2 d = (curr_mp - prev_mp);
+
+            f32 x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
+            f32 y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
+            res = glm::mat3(glm::rotate(x_angle, up)) * res;
+            glm::vec3 rotate_y = glm::cross(res, up);
+            res = glm::mat3(glm::rotate(y_angle, rotate_y)) * res;
+
+            e->ws_d = res;
+        }
+
+        // Mouse input
+        glm::ivec2 ts_coord = get_coord_pointing_at(e->ws_p
+                                                    , e->ws_d
+                                                    , &terrain_master.red_mesh
+                                                    , dt
+                                                    , gpu);
+        terrain_master.terrain_pointer.ts_position = ts_coord;
+    
+        // ---- modify the terrain ----
+        if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
+        {
+            if (ts_coord.x >= 0)
+            {
+                morph_terrain_at(ts_coord, &terrain_master.red_mesh, 3, dt);
+            }
+        }
+
+        // Keyboard input for entity
+        u32 movements = 0;
+        f32 accelerate = 1.0f;
+    
+        auto acc_v = [&movements, &accelerate](const glm::vec3 &d, glm::vec3 &dst){ ++movements; dst += d * accelerate; };
+
+        glm::vec3 d = glm::normalize(glm::vec3(e->ws_d.x
+                                               , e->ws_d.y
+                                               , e->ws_d.z));
+
+        Morphable_Terrain *t = e->on_t;
+        glm::mat4 inverse = t->inverse_transform;
+    
+        glm::vec3 ts_d = inverse * glm::vec4(d, 0.0f);
+    
+        ts_d.y = 0.0f;
+
+        d = glm::vec3(t->push_k.transform * glm::vec4(ts_d, 0.0f));
+        d = glm::normalize(d);
+    
+        glm::vec3 res = {};
+
+        bool detected_collision = detect_terrain_collision(e->ws_p, e->on_t).detected;
+    
+        if (detected_collision) e->ws_v = glm::vec3(0.0f);
+    
+        //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
+        if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
+        if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
+        if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
+        if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
+        if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
+    
+        if (window->key_map[GLFW_KEY_SPACE])
+        {
+            if (e_physics->enabled)
+            {
+                if (detected_collision)
+                {
+                    // give some velotity towards the up vector
+                    e->ws_v += up * 5.0f;
+                    e->ws_p += e->ws_v * dt;
+                }
+            }
+            else
+            {
+                acc_v(up, res);
+            }
+        }
+    
+        if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
+
+        if (movements > 0)
+        {
+            res = res * 15.0f;
+
+            e->ws_input_v = res;
+        }
+        else
+        {
+            e->ws_input_v = glm::vec3(0.0f);
+        }
+    }
+}
+
+internal Entity_Handle
 add_entity(const Entity &e)
 
 {
-    Entity_View view;
-    view.id = entities.entity_count;
-    //    view.is_group = (Entity_View::Is_Group)e.is_group;
+    Entity_Handle view;
+    view = entities.entity_count;
 
     entities.name_map.insert(e.id.hash, view);
     
@@ -1017,14 +1201,17 @@ add_entity(const Entity &e)
 }
 
 internal void
-make_entity_renderable(Entity *e_ptr
-		       , Model_Handle model_handle
-		       , GPU_Material_Submission_Queue *queue)
+push_entity_to_queue(Entity *e_ptr // Needs a rendering component attached
+                     , Model_Handle model_handle
+                     , GPU_Material_Submission_Queue *queue)
 {
     // ---- adds an entity to the stack of renderables
     auto *model = g_model_manager.get(model_handle);
-    queue->push_material(&e_ptr->push_k
-			 , sizeof(e_ptr->push_k)
+
+    Rendering_Component *component = &entities.rendering_components[ e_ptr->components.rendering_component ];
+    
+    queue->push_material(&component->push_k
+			 , sizeof(component->push_k)
 			 , model->raw_cache_for_rendering
 			 , model->index_data
 			 , Vulkan::init_draw_indexed_data_default(1, model->index_data.index_count));
@@ -1038,25 +1225,14 @@ make_entity_instanced_renderable(Model_Handle model_handle
 }
 
 internal void
-update_entities(f32 dt)
+update_entities(Window_Data *window
+                , f32 dt
+                , Vulkan::GPU *gpu)
 {
-    
-    for (s32 i = 0; i < entities.entity_count; ++i)
-    {
-	Entity *e = &entities.entity_list[i];
-	
-	update_entity_physics(&entities.entity_list[i], dt);
-        update_entity_camera(&entities.entity_list[i], dt);
-
-        if (e->on_t)
-        {
-            e->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
-        }
-        else
-        {
-            e->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
-        }
-    }
+    update_input_components(window, dt, gpu);
+    update_physics_components(dt);
+    update_camera_components(dt);
+    update_rendering_component(dt);
 }
 
 
@@ -1250,7 +1426,8 @@ calculate_ws_frustum_corners(glm::vec4 *corners
     Shadow_Matrices shadow_data = get_shadow_matrices();
 
     Entity *main = &entities.entity_list[entities.main_entity];
-    Camera *camera = &world.cameras[main->camera.camera];
+    Camera_Component *camera_component = &entities.camera_components[main->components.camera_component];
+    Camera *camera = &world.cameras[camera_component->camera];
     
     corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
     corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
@@ -1361,7 +1538,8 @@ render_world(Vulkan::State *vk
     Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
     Entity *e = &entities.entity_list[entities.main_entity];
-    Camera *camera = &world.cameras[e->camera.camera];
+    Camera_Component *e_camera_component = &entities.camera_components[e->components.camera_component];
+    Camera *camera = &world.cameras[e_camera_component->camera];
     
     // Start the rendering    
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
@@ -1544,21 +1722,16 @@ make_world(Window_Data *window
 				, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))
 				, glm::quat(0, 0, 0, 0));
 
-    Entity_View ev = add_entity(e);
-
+    Entity_Handle ev = add_entity(e);
     auto *e_ptr = get_entity(ev);
-
-    e_ptr->physics.enabled = false;
-
-    entities.main_entity = ev.id;
+    entities.main_entity = ev;
 
     e_ptr->on_t = &terrain_master.red_mesh;
 
-
-    s32 camera_index = push_camera(window);
-    attach_camera_to_entity(e_ptr, camera_index);
-
-
+    add_physics_component(e_ptr, false);    
+    add_camera_component(e_ptr, push_camera(window));
+    add_input_component(e_ptr);
+        
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
 				, glm::vec3(200.0f, -40.0f, 300.0f)
@@ -1567,17 +1740,19 @@ make_world(Window_Data *window
 
     r.size = glm::vec3(10.0f);
 
-    Entity_View rv = add_entity(r);
-
+    Entity_Handle rv = add_entity(r);
     auto *r_ptr = get_entity(rv);
     
-    r_ptr->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
     r_ptr->on_t = &terrain_master.red_mesh;
-    r_ptr->physics.enabled = true;
 
-    make_entity_renderable(r_ptr
-			   , g_model_manager.get_handle("vulkan_model.test_model"_hash)
-			   , &world.entity_render_queue);
+    Rendering_Component *r_ptr_rendering = add_rendering_component(r_ptr);
+    add_physics_component(r_ptr, true);
+    
+    r_ptr_rendering->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
+    
+    push_entity_to_queue(r_ptr
+                         , g_model_manager.get_handle("vulkan_model.test_model"_hash)
+                         , &world.entity_render_queue);
 
     Entity r2 = construct_entity("entity.rotating2"_hash
 				 , glm::vec3(250.0f, -40.0f, 350.0f)
@@ -1585,14 +1760,18 @@ make_world(Window_Data *window
 				 , glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
 
     r2.size = glm::vec3(10.0f);
-    Entity_View rv2 = add_entity(r2);
+    Entity_Handle rv2 = add_entity(r2);
     auto *r2_ptr = get_entity(rv2);
-    r2_ptr->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
+
+    Rendering_Component *r2_ptr_rendering = add_rendering_component(r2_ptr);
+    add_physics_component(r2_ptr, false);
+    
+    r2_ptr_rendering->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
     r2_ptr->on_t = &terrain_master.red_mesh;
-    r2_ptr->physics.enabled = false;
-    make_entity_renderable(r2_ptr
-			   , g_model_manager.get_handle("vulkan_model.test_model"_hash)
-			   , &world.entity_render_queue);
+
+    push_entity_to_queue(r2_ptr
+                         , g_model_manager.get_handle("vulkan_model.test_model"_hash)
+                         , &world.entity_render_queue);
 }
 
 
@@ -1625,7 +1804,8 @@ update_ubo(u32 current_image
     };
 
     Entity *e_ptr = &entities.entity_list[entities.main_entity];
-    Camera *camera = &world->cameras[e_ptr->camera.camera];
+    Camera_Component *camera_component = &entities.camera_components[ e_ptr->components.camera_component ];
+    Camera *camera = &world->cameras[camera_component->camera];
     
     update_shadows(1000.0f
                    , 1.0f
@@ -1644,16 +1824,9 @@ update_ubo(u32 current_image
 
     Uniform_Buffer_Object ubo = {};
 
-    ubo.model_matrix = glm::rotate(time * glm::radians(90.0f)
-				   , glm::vec3(0.0f, 0.0f, 1.0f));
-    /*    ubo.view_matrix = glm::lookAt(glm::vec3(2.0f)
-				  , glm::vec3(0.0f)
-				  , glm::vec3(0.0f, 0.0f, 1.0f));*/
     ubo.view_matrix = camera->v_m;
-    ubo.projection_matrix = glm::perspective(glm::radians(60.0f)
-					     , (float)swapchain->extent.width / (float)swapchain->extent.height
-					     , 1.0f
-					     , 100000.0f);
+
+    ubo.projection_matrix = camera->p_m;
 
     ubo.projection_matrix[1][1] *= -1;
 
@@ -1710,11 +1883,9 @@ update_world(Window_Data *window
 {
     auto *e = &entities.entity_list[entities.main_entity];
     
-    //    on_which_terrain(world.user_camera.p);
+    handle_input_debug(window, dt, &vk->gpu);
     
-    handle_input(window, dt, &vk->gpu);
-    
-    update_entities(dt);
+    update_entities(window, dt, &vk->gpu);
     
     // ---- actually rendering the frame ----
     render_frame(vk, image_index, current_frame, cmdbuf);
@@ -1724,92 +1895,20 @@ update_world(Window_Data *window
 #include <glm/gtx/string_cast.hpp>
 
 
+// Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
 void
-handle_input(Window_Data *window
-	     , f32 dt
-	     , Vulkan::GPU *gpu)
+handle_input_debug(Window_Data *window
+                   , f32 dt
+                   , Vulkan::GPU *gpu)
 {
     // ---- get bound entity ----
     // TODO make sure to check if main_entity < 0
     Entity *e_ptr = &entities.entity_list[entities.main_entity];
-    Camera *e_camera = &world.cameras[e_ptr->camera.camera];
+    Camera_Component *e_camera_component = &entities.camera_components[e_ptr->components.camera_component];
+    Physics_Component *e_physics = &entities.physics_components[e_ptr->components.physics_component];
+    Camera *e_camera = &world.cameras[e_camera_component->camera];
     glm::vec3 up = e_ptr->on_t->ws_n;
     
-    if (window->m_moved)
-    {
-#define SENSITIVITY 15.0f
-    
-	glm::vec2 prev_mp = e_camera->mp;
-	glm::vec2 curr_mp = glm::vec2(window->m_x, window->m_y);
-
-	glm::vec3 res = e_ptr->ws_d;
-	    
-	glm::vec2 d = (curr_mp - prev_mp);
-
-	f32 x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
-	f32 y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
-	res = glm::mat3(glm::rotate(x_angle, up)) * res;
-	glm::vec3 rotate_y = glm::cross(res, up);
-	res = glm::mat3(glm::rotate(y_angle, rotate_y)) * res;
-
-	e_ptr->ws_d = res;
-	    
-	e_camera->mp = curr_mp;
-    }
-
-    //    e_ptr->ws_v = glm::vec3(0.0f);
-    
-    u32 movements = 0;
-    f32 accelerate = 1.0f;
-    
-    auto acc_v = [&movements, &accelerate](const glm::vec3 &d, glm::vec3 &dst){ ++movements; dst += d * accelerate; };
-
-    glm::vec3 d = glm::normalize(glm::vec3(e_ptr->ws_d.x
-					   , e_ptr->ws_d.y
-					   , e_ptr->ws_d.z));
-
-    Morphable_Terrain *t = e_ptr->on_t;
-    glm::mat4 inverse = t->inverse_transform;
-    
-    glm::vec3 ts_d = inverse * glm::vec4(d, 0.0f);
-    
-    ts_d.y = 0.0f;
-
-    d = glm::vec3(t->push_k.transform * glm::vec4(ts_d, 0.0f));
-    d = glm::normalize(d);
-    
-    glm::vec3 res = {};
-
-    bool detected_collision = detect_terrain_collision(e_ptr->ws_p, e_ptr->on_t).detected;
-    
-    if (detected_collision) e_ptr->ws_v = glm::vec3(0.0f);
-    
-    //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
-    if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
-    if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
-    if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
-    if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
-    if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
-    
-    if (window->key_map[GLFW_KEY_SPACE])
-    {
-	if (e_ptr->physics.enabled)
-	{
-	    if (detected_collision)
-	    {
-		// give some velotity towards the up vector
-		e_ptr->ws_v += up * 5.0f;
-		e_ptr->ws_p += e_ptr->ws_v * dt;
-	    }
-	}
-	else
-	{
-	    acc_v(up, res);
-	}
-    }
-    
-    if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
-
     if (window->key_map[GLFW_KEY_UP]) light_pos += glm::vec3(0.0f, 0.0f, dt) * 5.0f;
     if (window->key_map[GLFW_KEY_LEFT]) light_pos += glm::vec3(-dt, 0.0f, 0.0f) * 5.0f;
     if (window->key_map[GLFW_KEY_RIGHT]) light_pos += glm::vec3(dt, 0.0f, 0.0f) * 5.0f;
@@ -1836,40 +1935,6 @@ handle_input(Window_Data *window
 	e_camera->captured_shadow_corners[5] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
 	e_camera->captured_shadow_corners[6] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
 	e_camera->captured_shadow_corners[7] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-    }
-
-    if (movements > 0)
-    {
-	res = res * 15.0f;
-
-	e_ptr->ws_input_v = res;
-    }
-    else
-    {
-	e_ptr->ws_input_v = glm::vec3(0.0f);
-    }
-
-
-
-    glm::ivec2 ts_coord = get_coord_pointing_at(e_ptr->ws_p
-						, e_ptr->ws_d
-						, &terrain_master.red_mesh
-						, dt
-						, gpu);
-    terrain_master.terrain_pointer.ts_position = ts_coord;
-    
-    // ---- modify the terrain ----
-    if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
-    {
-	/*	glm::ivec2 ts_coord = get_coord_pointing_at(world.user_camera.p
-						    , world.user_camera.d
-						    , &terrain_master.red_mesh
-						    , dt
-						    , gpu);*/
-	if (ts_coord.x >= 0)
-	{
-	    morph_terrain_at(ts_coord, &terrain_master.red_mesh, 3, dt);
-	}
     }
 }
 

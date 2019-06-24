@@ -92,6 +92,7 @@ global_var struct World
     static constexpr u32 MAX_CAMERAS = 10;
     u32 camera_count {0};
     Camera cameras [ MAX_CAMERAS ];
+    s32 camera_bound_to_3D_output{0};
 
     Cube test;
 
@@ -115,13 +116,20 @@ global_var struct World
     
 } world;
 
-s32
+internal s32
 push_camera(Window_Data *window)
 {
     world.cameras[world.camera_count++].set_default(window->w, window->h, window->m_x, window->m_y);
 
     return(world.camera_count - 1);
 }
+
+internal void
+bind_camera_to_3D_output(s32 at)
+{
+    world.camera_bound_to_3D_output = at;
+}
+
 
 
 // ---- terrain code ----
@@ -1537,9 +1545,7 @@ render_world(Vulkan::State *vk
     
     Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
-    Entity *e = &entities.entity_list[entities.main_entity];
-    Camera_Component *e_camera_component = &entities.camera_components[e->components.camera_component];
-    Camera *camera = &world.cameras[e_camera_component->camera];
+    Camera *camera = &world.cameras[world.camera_bound_to_3D_output];
     
     // Start the rendering    
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
@@ -1731,6 +1737,8 @@ make_world(Window_Data *window
     add_physics_component(e_ptr, false);    
     add_camera_component(e_ptr, push_camera(window));
     add_input_component(e_ptr);
+
+    bind_camera_to_3D_output(e_ptr->components.camera_component);
         
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
@@ -1803,17 +1811,15 @@ update_ubo(u32 current_image
 	bool render_to_shadow;
     };
 
-    Entity *e_ptr = &entities.entity_list[entities.main_entity];
-    Camera_Component *camera_component = &entities.camera_components[ e_ptr->components.camera_component ];
-    Camera *camera = &world->cameras[camera_component->camera];
+    Camera *camera = &world->cameras[world->camera_bound_to_3D_output];
     
     update_shadows(1000.0f
                    , 1.0f
                    , glm::radians(60.0f)
                    , (float)swapchain->extent.width / (float)swapchain->extent.height
-                   , e_ptr->ws_p
-                   , e_ptr->ws_d
-                   , e_ptr->on_t->ws_n);
+                   , camera->p
+                   , camera->d
+                   , camera->u);
 
     Shadow_Matrices shadow_data = get_shadow_matrices();
 

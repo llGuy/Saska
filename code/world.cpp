@@ -1813,7 +1813,7 @@ update_ubo(u32 current_image
 
     Camera *camera = &world->cameras[world->camera_bound_to_3D_output];
     
-    update_shadows(1000.0f
+    update_shadows(500.0f
                    , 1.0f
                    , glm::radians(60.0f)
                    , (float)swapchain->extent.width / (float)swapchain->extent.height

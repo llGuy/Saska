@@ -11,9 +11,9 @@ framebuffer_g_buffer = {
 
    compatible_render_pass = "render_pass_deferred",
 
-   color_attachments = { "texture_g_buffer_albedo"
-			 , "texture_g_buffer_position"
-			 , "texture_g_buffer_normal" },
+   color_attachments = { "texture_g_buffer_albedo",
+			 "texture_g_buffer_position",
+			 "texture_g_buffer_normal" },
 
    depth_attachment = "texture_g_buffer_depth"
 }
@@ -47,6 +47,6 @@ framebuffer_shadowmap = {
 }
 
 --- Need to specify the loaded framebuffer names for the game to know which ones to load
-loaded_framebuffers = { "framebuffer_g_buffer"
-			, "framebuffer_atmosphere"
-			, "framebuffer_shadowmap" }
+loaded_framebuffers = { "framebuffer_g_buffer",
+			"framebuffer_atmosphere",
+			"framebuffer_shadowmap" }

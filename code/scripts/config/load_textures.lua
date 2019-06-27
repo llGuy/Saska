@@ -91,9 +91,9 @@ texture_shadowmap = {
    dimensions = 3
 }
 
-loaded_textures = { "texture_g_buffer_albedo"
-		    , "texture_g_buffer_position"
-		    , "texture_g_buffer_normal"
-		    , "texture_g_buffer_depth"
-		    , "texture_atmosphere_cubemap"
-		    , "texture_shadowmap" }
+loaded_textures = { "texture_g_buffer_albedo",
+		    "texture_g_buffer_position",
+		    "texture_g_buffer_normal",
+		    "texture_g_buffer_depth",
+		    "texture_atmosphere_cubemap",
+		    "texture_shadowmap" }

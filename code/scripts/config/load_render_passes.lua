@@ -101,7 +101,25 @@ render_pass_atmosphere = {
 	                       1,
 	                       nil) },
 
-   dependencies = {
-      
-   }
+   dependencies = { [0] = Dependency(subpass_external_EXT, stage_bottom_of_pipe_EXT, memory_read_EXT, 0, stage_color_output_EXT, color_attachment_write_EXT | color_attachment_read_EXT, by_region_EXT),
+                    [1] = Dependency(0, stage_color_output_EXT, color_attachment_write_EXT | color_attachment_write_EXT, 1, stage_bottom_of_pipe_EXT, memory_read_EXT, by_region_EXT) }
 }
+
+render_pass_shadow = {
+   attachment_count = 1,
+
+   depth_attachment = Attachment(gpu_supported_depth_format_EXT, layout_undefined_EXT, layout_shader_read_EXT),
+
+   subpasses = { [0] = Subpass(nil,
+	                       0,
+	                       nil,
+	                       0,
+	                       Attachment_Reference(0, layout_depth_attachment_EXT)) },
+
+   dependencies = { [0] = Dependency(subpass_external_EXT, stage_frag_EXT, shader_read_EXT, 0, stage_early_fragment_test_EXT, depth_write_EXT, by_region_EXT),
+                    [1] = Dependency(0, stage_late_fragment_tests_EXT, depth_write_EXT, subpass_external_EXT, stage_frag_EXT, shader_read_EXT, by_region_EXT) }
+}
+
+loaded_render_passes = { "render_pass_deferred",
+                         "render_pass_atmosphere",
+                         "render_pass_shadow" }

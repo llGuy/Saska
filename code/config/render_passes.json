@@ -165,8 +165,8 @@
 	    }
 	},
 	"dependencies": {
-	    "d0": { "src": -1, "dst": 0, "src_stage": "f", "src_access": "s", "dst_stage": "e", "dst_access": "d", "flags": "r" },
-	    "d1": { "src": 0, "dst": -1, "src_stage": "l", "src_access": "d", "dst_stage": "f", "dst_access": "s", "flags": "r" }
+	    "d0": { "src": -1, "dst": 0, "src_stage": "f", "src_access": "sr", "dst_stage": "e", "dst_access": "dw", "flags": "r" },
+	    "d1": { "src": 0, "dst": -1, "src_stage": "l", "src_access": "dw", "dst_stage": "f", "dst_access": "sr", "flags": "r" }
 	}
     }
 }

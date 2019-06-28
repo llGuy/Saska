@@ -1,10 +1,10 @@
 CC := cl
 CFLAGS := /std:c++latest -Zi /EHsc
-LIBS := user32.lib User32.lib Gdi32.lib Shell32.lib kernel32.lib gdi32.lib msvcrt.lib msvcmrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib
+LIBS := user32.lib User32.lib Gdi32.lib Shell32.lib kernel32.lib gdi32.lib msvcrt.lib msvcmrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib C:/dependencies/Lua/lib/lua5.1.lib
 DEF := /DGLM_ENABLE_EXPERIMENTAL /DSTB_IMAGE_IMPLEMENTATION /DGLEW_STATIC
-INCS := /I C:/dependencies /I C:/dependencies/xml_parser /I C:/dependencies/c++ /I C:/VulkanSDK/1.1.108.0/Include /I C:/dependencies/glfw-3.2.1.bin.WIN64/include /I C:/dependencies/stb-master /I C:/dependencies/json-loader/include/
+INCS := /I C:/dependencies /I C:/dependencies/xml_parser /I C:/dependencies/c++ /I C:/VulkanSDK/1.1.108.0/Include /I C:/dependencies/glfw-3.2.1.bin.WIN64/include /I C:/dependencies/stb-master /I C:/dependencies/json-loader/include/ /I C:/dependencies/Lua/include/
 GCCDEF := -DGLM_ENABLE_EXPERIMENTAL -DSTB_IMAGE_IMPLEMENTATION -DGLEW_STATIC
-GCCINC := -IC:/dependencies/GLEW/include -IC:/dependencies/GLFW/include -IC:/dependencies/json-loader/include/nlohmann -IC:/dependencies -IC:/dependencies/xml_parser -IC:/dependencies/c++
+GCCINC := -IC:/dependencies/GLEW/include -IC:/dependencies/GLFW/include -IC:/dependencies/json-loader/include/nlohmann -IC:/dependencies -IC:/dependencies/xml_parser -IC:/dependencies/c++ /I C:/dependencies/Lua/include/
 
 SRCDIR := ./
 OBJDIR := ./

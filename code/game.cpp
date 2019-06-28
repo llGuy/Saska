@@ -1,6 +1,8 @@
 #include "world.hpp"
 #include "vulkan.hpp"
 
+#include "script.hpp"
+
 global_var struct Window_Rendering_Data
 {
     // ---- sync objects ----
@@ -39,6 +41,10 @@ make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Win
 
     // ---- initialize game data
     make_world(window, vk, &window_rendering.command_pool);
+
+    make_lua_scripting();
+
+    test_script();
 }
 
 void

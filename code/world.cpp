@@ -177,8 +177,11 @@ global_var struct Morphable_Terrain_Master
     Vulkan::Buffer idx_buffer;
     Model_Handle model_info;
 
-    Morphable_Terrain green_mesh;
-    Morphable_Terrain red_mesh;
+
+    static constexpr u32 MAX_TERRAINS = 10;
+    Morphable_Terrain terrains[MAX_TERRAINS];
+    u32 terrain_count {0};
+    
 
     Pipeline_Handle terrain_ppln;
 
@@ -192,13 +195,20 @@ global_var struct Morphable_Terrain_Master
     } terrain_pointer;
 } terrain_master;
 
+internal Morphable_Terrain *
+add_terrain(void)
+{
+    return(&terrain_master.terrains[terrain_master.terrain_count++]);
+}    
+
+
 internal void
 clean_up_terrain(Vulkan::GPU *gpu)
 {
-    terrain_master.mesh_xz_values.destroy(gpu);
-    terrain_master.idx_buffer.destroy(gpu);
-    terrain_master.green_mesh.heights_gpu_buffer.destroy(gpu);
-    terrain_master.red_mesh.heights_gpu_buffer.destroy(gpu);
+    for (u32 i = 0; i < terrain_master.terrain_count; ++i)
+    {
+        terrain_master.terrains[i].heights_gpu_buffer.destroy(gpu);
+    }
 }
 
 inline u32
@@ -263,7 +273,7 @@ is_on_terrain(const glm::vec3 &ws_position
     // ---- check if terrain space position is in the xz boundaries ----
     bool is_in_x_boundaries = (ts_position.x > min_x && ts_position.x < max_x);
     bool is_in_z_boundaries = (ts_position.z > min_z && ts_position.z < max_z);
-    bool is_on_top          = (ts_position.y > 0.0f);
+    bool is_on_top          = (ts_position.y > -0.1f);
 
     return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
 }
@@ -561,15 +571,13 @@ morph_terrain_at(const glm::ivec2 &ts_position
 internal Morphable_Terrain *
 on_which_terrain(const glm::vec3 &ws_position)
 {
-    // ---- loop through all the terrains ----
-
-    // ---- for testing, go through each terrain individually ----
-    bool green = is_on_terrain(ws_position, &terrain_master.green_mesh);
-    bool red = is_on_terrain(ws_position, &terrain_master.red_mesh);
-
-    //    if (green) std::cout << "green";
-    //    if (red) std::cout << "red";
-    
+    for (u32 i = 0; i < terrain_master.terrain_count; ++i)
+    {
+        if (is_on_terrain(ws_position, &terrain_master.terrains[i]))
+        {
+            return(&terrain_master.terrains[i]);
+        }
+    }
     return(nullptr);
 }
 
@@ -695,6 +703,41 @@ make_3D_terrain_mesh_instance(u32 width_x
 }
 
 internal void
+make_terrain_mesh_data(u32 w, u32 d, Morphable_Terrain *terrain, VkCommandPool *cmdpool, Vulkan::GPU *gpu)
+{
+    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, &terrain->mapped_gpu_heights, cmdpool, gpu);
+    terrain->xz_dim = glm::ivec2(w, d);
+}
+
+
+// TODO : Make this take roughness and metalness to push to pushconstant or whatever 
+internal void
+make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_Queue *queue
+                            , const glm::vec3 &position, const glm::quat &rotation, const glm::vec3 &size, const glm::vec3 &color)
+{
+    auto *model_info = g_model_manager.get(terrain_master.model_info);
+    terrain->vbos[0] = terrain_master.mesh_xz_values.buffer;
+    terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
+    world.terrain_render_queue.push_material(&terrain->push_k
+                                             , sizeof(terrain->push_k)
+                                             , {2, terrain->vbos}
+                                             , model_info->index_data
+                                             , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
+
+    terrain->ws_p = position;
+    terrain->gs_r = rotation;
+    terrain->size = size;
+    terrain->push_k.color = color;
+    terrain->push_k.transform =
+        glm::translate(terrain->ws_p)
+        * glm::mat4_cast(terrain->gs_r)
+        * glm::scale(terrain->size);
+    terrain->inverse_transform = compute_ws_to_ts_matrix(terrain);
+
+    terrain->ws_n = glm::vec3(glm::mat4_cast(terrain->gs_r) * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+}
+
+internal void
 make_morphable_terrain_master(VkCommandPool *cmdpool
 			      , Vulkan::GPU *gpu)
 {
@@ -709,29 +752,42 @@ make_morphable_terrain_master(VkCommandPool *cmdpool
 			 , model_info
 			 , cmdpool
 			 , gpu);
+}
 
-    make_3D_terrain_mesh_instance(21, 21
-				  , terrain_master.green_mesh.heights
-				  , &terrain_master.green_mesh.heights_gpu_buffer
-				  , &terrain_master.green_mesh.mapped_gpu_heights
-				  , cmdpool
-				  , gpu);
-    terrain_master.green_mesh.xz_dim = glm::ivec2(21, 21);
 
-    make_3D_terrain_mesh_instance(21, 21
-				  , terrain_master.red_mesh.heights
-				  , &terrain_master.red_mesh.heights_gpu_buffer
-				  , &terrain_master.red_mesh.mapped_gpu_heights
-				  , cmdpool
-				  , gpu);
-    terrain_master.red_mesh.xz_dim = glm::ivec2(21, 21);
+
+internal void
+make_terrains(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
+{
+    // Make the terrain render command recorder
+    world.terrain_render_queue = make_gpu_material_submission_queue(10
+                                                                    , VK_SHADER_STAGE_VERTEX_BIT
+                                                                    // Parameter is obsolete, must remove
+                                                                    , VK_COMMAND_BUFFER_LEVEL_SECONDARY
+                                                                    , cmdpool
+                                                                    , gpu);
+
+    auto *red_terrain = add_terrain();
+    make_terrain_mesh_data(21, 21, red_terrain, cmdpool, gpu);
+    make_terrain_rendering_data(red_terrain, &world.terrain_render_queue
+                                , glm::vec3(0.0f, 0.0f, 200.0f)
+                                , glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)))
+                                , glm::vec3(15.0f)
+                                , glm::vec3(255.0f, 69.0f, 0.0f) / 256.0f);
+
+    auto *green_terrain = add_terrain();
+    make_terrain_mesh_data(21, 21, green_terrain, cmdpool, gpu);
+    make_terrain_rendering_data(green_terrain, &world.terrain_render_queue
+                                , glm::vec3(200.0f, 0.0f, 0.0f)
+                                , glm::quat(glm::radians(glm::vec3(0.0f, 45.0f, 20.0f)))
+                                , glm::vec3(10.0f)
+                                , glm::vec3(0.1, 0.6, 0.2) * 0.7f);
 }
 
 internal void
 make_terrain_pointer(void)
 {
     terrain_master.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
-    terrain_master.terrain_pointer.t = &terrain_master.red_mesh;
 }
 
 internal void
@@ -830,6 +886,10 @@ struct Camera_Component
     s32 camera{-1};
 
     // Maybe some other variables to do with 3rd person / first person configs ...
+
+    // Variable allows for smooth animation between up vectors when switching terrains
+    bool in_animation = false;
+    glm::quat current_rotation;
 };
 
 struct Input_Component
@@ -862,7 +922,17 @@ struct Entity
     glm::vec3 size{1.0f};
 
     // For now is a pointer - is not a component because all entities will have one
-    Morphable_Terrain *on_t;
+    // This is the last terrain that the player was on / is still on
+    // Is used for collision detection and also the camera view matrix (up vector...)
+    Morphable_Terrain *on_t = nullptr;
+    bool is_on_terrain = false;
+
+    static constexpr f32 SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
+    
+    bool switch_terrain_animation_mode = false;
+    glm::quat previous_terrain_rot;
+    glm::quat current_rot;
+    f32 animation_time = 0.0f;
 
     struct Components
     {
@@ -972,16 +1042,26 @@ update_camera_components(f32 dt)
         Camera *camera = &world.cameras[ component->camera ];
         Entity *e = &entities.entity_list[ component->entity_index ];
 
+        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        if (e->on_t)
+        {
+            up = e->on_t->ws_n;
+            if (e->switch_terrain_animation_mode)
+            {
+                up = glm::vec3(glm::mat4_cast(e->current_rot) * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+            }
+        }
+        
         camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n
                                   , e->ws_p + e->on_t->ws_n + e->ws_d
-                                  , e->on_t->ws_n);
+                                  , up);
 
         // TODO: Don't need to calculate this every frame, just when parameters change
         camera->compute_projection();
 
         camera->p = e->ws_p;
         camera->d = e->ws_d;
-        camera->u = e->on_t->ws_n;
+        camera->u = up;
     }
 }
 
@@ -1003,10 +1083,10 @@ update_rendering_component(f32 dt)
     {
         Rendering_Component *component = &entities.rendering_components[ i ];
         Entity *e = &entities.entity_list[ component->entity_index ];
-
+        
         if (e->on_t)
         {
-            component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->on_t->gs_r) * glm::scale(e->size);
+            component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->current_rot) * glm::scale(e->size);
         }
         else
         {
@@ -1035,6 +1115,33 @@ update_physics_components(f32 dt)
         Physics_Component *component = &entities.physics_components[ i ];
         Entity *e = &entities.entity_list[ component->entity_index ];
 
+        auto *which_terrain = on_which_terrain(e->ws_p);
+        if (which_terrain)
+        {
+            if (which_terrain == e->on_t)
+            {
+                e->is_on_terrain = true;
+            }
+            else
+            {
+                // Switch terrains!
+                e->is_on_terrain = true;
+                glm::quat previous = glm::quat(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+                e->previous_terrain_rot = previous;
+                if (e->on_t)
+                {
+                    e->previous_terrain_rot = e->on_t->gs_r;
+                }
+                e->switch_terrain_animation_mode = true;
+                e->animation_time = 0.0f;
+                e->on_t = which_terrain;
+            }
+        }
+        else
+        {
+            e->is_on_terrain = false;
+        }
+        
         if (component->enabled)
         {
             Morphable_Terrain *t = e->on_t;
@@ -1058,6 +1165,21 @@ update_physics_components(f32 dt)
         else
         {
             e->ws_p += e->ws_input_v * dt;
+        }
+
+        if (e->animation_time > Entity::SWITCH_TERRAIN_ANIMATION_TIME)
+        {
+            e->switch_terrain_animation_mode = false;
+        }
+        
+        if (e->switch_terrain_animation_mode && e->on_t)
+        {
+            e->animation_time += dt;
+            e->current_rot = glm::mix(e->previous_terrain_rot, e->on_t->gs_r, e->animation_time / Entity::SWITCH_TERRAIN_ANIMATION_TIME);
+        }
+        else
+        {
+            e->current_rot = e->on_t->gs_r;
         }
     }
 }
@@ -1111,17 +1233,18 @@ update_input_components(Window_Data *window
         // Mouse input
         glm::ivec2 ts_coord = get_coord_pointing_at(e->ws_p
                                                     , e->ws_d
-                                                    , &terrain_master.red_mesh
+                                                    , e->on_t
                                                     , dt
                                                     , gpu);
         terrain_master.terrain_pointer.ts_position = ts_coord;
+        terrain_master.terrain_pointer.t = e->on_t;
     
         // ---- modify the terrain ----
         if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
         {
             if (ts_coord.x >= 0)
             {
-                morph_terrain_at(ts_coord, &terrain_master.red_mesh, 3, dt);
+                morph_terrain_at(ts_coord, e->on_t, 3, dt);
             }
         }
 
@@ -1665,7 +1788,6 @@ make_world(Window_Data *window
 
 
     
-    // ---- prepare the command recorders ----
     {
 	auto *model_info = g_model_manager.get(terrain_master.model_info);
 	
@@ -1675,50 +1797,7 @@ make_world(Window_Data *window
 								       , cmdpool
 								       , &vk->gpu);
 
-	world.terrain_render_queue = make_gpu_material_submission_queue(10
-									, VK_SHADER_STAGE_VERTEX_BIT
-									, VK_COMMAND_BUFFER_LEVEL_SECONDARY
-									, cmdpool
-									, &vk->gpu);
-
-	// ---- add test terrain to the recorder ----
-	terrain_master.green_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
-	terrain_master.green_mesh.vbos[1] = terrain_master.green_mesh.heights_gpu_buffer.buffer;
-	world.terrain_render_queue.push_material(&terrain_master.green_mesh.push_k
-                                                 , sizeof(terrain_master.green_mesh.push_k)
-                                                 , {2, terrain_master.green_mesh.vbos}
-                                                 , model_info->index_data
-                                                 , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
-
-	terrain_master.green_mesh.ws_p = glm::vec3(200.0f, 0.0f, 0.0f);
-	terrain_master.green_mesh.gs_r = glm::quat(glm::radians(glm::vec3(0.0f, 45.0f, 20.0f)));
-	terrain_master.green_mesh.size = glm::vec3(10.0f);
-	terrain_master.green_mesh.push_k.color = glm::vec3(0.1, 0.6, 0.2) * 0.7f;
-	terrain_master.green_mesh.push_k.transform =
-	    glm::translate(terrain_master.green_mesh.ws_p)
-	    * glm::mat4_cast(terrain_master.green_mesh.gs_r)
-	    * glm::scale(terrain_master.green_mesh.size);
-	terrain_master.green_mesh.inverse_transform = compute_ws_to_ts_matrix(&terrain_master.green_mesh);
-
-	terrain_master.red_mesh.vbos[0] = terrain_master.mesh_xz_values.buffer;
-	terrain_master.red_mesh.vbos[1] = terrain_master.red_mesh.heights_gpu_buffer.buffer;
-	world.terrain_render_queue.push_material(&terrain_master.red_mesh.push_k
-                                                 , sizeof(terrain_master.red_mesh.push_k)
-                                                 , {2, terrain_master.red_mesh.vbos}
-                                                 , model_info->index_data
-                                                 , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
-
-	terrain_master.red_mesh.ws_p = glm::vec3(0.0f, 0.0f, 200.0f);
-	terrain_master.red_mesh.gs_r = glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)));
-	terrain_master.red_mesh.size = glm::vec3(15.0f);
-	terrain_master.red_mesh.push_k.color = glm::vec3(255.0f, 69.0f, 0.0f) / 256.0f;
-	terrain_master.red_mesh.push_k.transform =
-	    glm::translate(terrain_master.red_mesh.ws_p)
-	    * glm::mat4_cast(terrain_master.red_mesh.gs_r)
-	    * glm::scale(terrain_master.red_mesh.size);
-	terrain_master.red_mesh.inverse_transform = compute_ws_to_ts_matrix(&terrain_master.red_mesh);
-
-	terrain_master.red_mesh.ws_n = glm::vec3(glm::mat4_cast(terrain_master.red_mesh.gs_r) * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+        make_terrains(&vk->gpu, cmdpool);
     }
     
     
@@ -1732,7 +1811,7 @@ make_world(Window_Data *window
     auto *e_ptr = get_entity(ev);
     entities.main_entity = ev;
 
-    e_ptr->on_t = &terrain_master.red_mesh;
+    e_ptr->on_t = on_which_terrain(e.ws_p);
 
     add_physics_component(e_ptr, false);    
     add_camera_component(e_ptr, push_camera(window));
@@ -1751,7 +1830,7 @@ make_world(Window_Data *window
     Entity_Handle rv = add_entity(r);
     auto *r_ptr = get_entity(rv);
     
-    r_ptr->on_t = &terrain_master.red_mesh;
+    r_ptr->on_t = &terrain_master.terrains[0];
 
     Rendering_Component *r_ptr_rendering = add_rendering_component(r_ptr);
     add_physics_component(r_ptr, true);
@@ -1775,7 +1854,7 @@ make_world(Window_Data *window
     add_physics_component(r2_ptr, false);
     
     r2_ptr_rendering->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
-    r2_ptr->on_t = &terrain_master.red_mesh;
+    r2_ptr->on_t = &terrain_master.terrains[0];
 
     push_entity_to_queue(r2_ptr
                          , g_model_manager.get_handle("vulkan_model.test_model"_hash)

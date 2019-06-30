@@ -506,8 +506,8 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-						   , 0
-						   , 16
+						   , VK_FALSE
+						   , 1
 						   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
 						   , VK_TRUE
 						   , (VkCompareOp)0
@@ -562,8 +562,8 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
 					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
 					       , VK_FALSE
 					       , 1
-					       , VK_BORDER_COLOR_INT_OPAQUE_WHITE
-					       , VK_FALSE 
+					       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+					       , VK_FALSE
 					       , (VkCompareOp)0
 					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
 					       , 0.0f, 0.0f, 1.0f 

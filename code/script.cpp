@@ -38,58 +38,41 @@ end_file(void)
     lua_settop(g_lua_state, 0);
 }
 
-s32
-Stack_Frame_Ptr::get_index(u32 inside_count)
-{
-    Stack_Frame_Ptr *parent_ptr = parent;
-
-    u32 total = inside_count + ptr;
-        
-    for (; parent_ptr; parent_ptr = parent_ptr->parent)
-    {
-        total += parent_ptr->ptr;
-    }
-
-    u32 size = lua_gettop(g_lua_state);
-
-    return(total - size);
-}
-
-global_var u32 g_stack_size_inside_frame = 0;
-
-Stack_Frame_Ptr
-begin_stack_frame(Stack_Frame_Ptr *parent)
-{
-    g_stack_size_inside_frame = 0;
-    
-    Stack_Frame_Ptr new_frame = { parent ? parent->ptr : 0, parent };
-    return(new_frame);
-}
-
 void
-push_to_stack(Stack_Item_Type type, const char *name, Stack_Frame_Ptr *from)
+push_to_stack(const char *name, Stack_Item_Type type, s32 stack_index = 0, s32 array_index = 0)
 {
     switch(type)
     {
-    case Stack_Item_Type::GLOBAL: {lua_getglobal(g_lua_state, name); break;}
-    case Stack_Item_Type::FIELD:  {lua_getfield(g_lua_state, from->get_index(g_stack_size_inside_frame), name); break;}
+    case Stack_Item_Type::GLOBAL:      {lua_getglobal(g_lua_state, name); break;}
+    case Stack_Item_Type::FIELD:       {lua_getfield(g_lua_state, stack_index, name); break;}
+    case Stack_Item_Type::ARRAY_INDEX: {lua_rawgeti(g_lua_state, stack_index, array_index); break;}
     }
+}
 
-    ++g_stack_size_inside_frame;
+template <typename T> T *cast_ptr(void *ptr) {return((T *)ptr);}
+
+void
+get_from_stack(Script_Primitive_Type type, s32 stack_index, void *dst)
+{
+    switch(type)
+    {
+    case Script_Primitive_Type::NUMBER:  {*cast_ptr<int>(dst) = lua_tonumber(g_lua_state, stack_index); break;}
+    case Script_Primitive_Type::STRING:  {*cast_ptr<const char *>(dst) = lua_tostring(g_lua_state, stack_index); break;}
+    case Script_Primitive_Type::BOOLEAN: {*cast_ptr<bool>(dst) = lua_toboolean(g_lua_state, stack_index); break;}
+    }
 }
 
 void
 test_script(void)
 {
     begin_file("scripts/tests/tables_indexing_test.lua");
-
-    Stack_Frame_Ptr fr_global = begin_stack_frame(nullptr);
     {
-        push_to_stack(GLOBAL, "a_table", &fr_global);
+        push_to_stack("random_thing", GLOBAL);
+        int result; 
+        get_from_stack(NUMBER, -1, &result);
+
+        add_global_to_lua(NUMBER, "foo", 42);
         
-        Stack_Frame_Ptr fr_struct = begin_stack_frame(&fr_global);
-        {
-            
-        }
-    }
+        printf("%d\n", result);
+    }    
 }

@@ -1,6 +1,8 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 
+#include "script.hpp"
+
 #include "graphics.hpp"
 
 #include <glm/glm.hpp>
@@ -289,6 +291,193 @@ submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue)
 {
     //    Vulkan::command_buffer_execute_commands(queue, {material_queue_manager.active_queue_ptr, material_queue_manager.active_queues});
 }
+
+void
+make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, Vulkan::GPU *gpu)
+{
+    VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+    
+    Vulkan::init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
+
+    VkImageAspectFlags aspect_flags;
+    
+    if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+    
+    Vulkan::init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
+
+    if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
+    {
+        Vulkan::init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR
+                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                   , VK_FALSE
+                                   , 1
+                                   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+                                   , VK_FALSE
+                                   , (VkCompareOp)0
+                                   , VK_SAMPLER_MIPMAP_MODE_LINEAR
+                                   , 0.0f, 0.0f, 1.0f
+                                   , gpu, &img->image_sampler);
+    }
+}
+
+void
+make_framebuffer(Vulkan::Framebuffer *fbo
+                 , u32 w, u32 h
+                 , u32 layer_count
+                 , Vulkan::Render_Pass *compatible
+                 , const Memory_Buffer_View<Vulkan::Image2D> &colors
+                 , Vulkan::Image2D *depth
+                 , Vulkan::GPU *gpu)
+{
+    if (colors.count)
+    {
+        allocate_memory_buffer(fbo->color_attachments, colors.count);
+        for (u32 i = 0; i < colors.count; ++i)
+        {
+            fbo->color_attachments[i] = colors[i].image_view;
+        }
+    }
+    else
+    {
+        fbo->color_attachments.buffer = nullptr;
+        fbo->color_attachments.count = 0;
+    }
+    if (depth)
+    {
+        fbo->depth_attachment = depth->image_view;
+    }
+    
+    Vulkan::init_framebuffer(compatible, w, h, layer_count, gpu, fbo);
+}
+
+struct Render_Pass_Attachment
+{
+    VkFormat format;
+    // Initial layout is always undefined
+    VkImageLayout final_layout;
+};
+
+struct Render_Pass_Attachment_Reference
+{
+    u32 index;
+    VkImageLayout layout;
+};
+
+struct Render_Pass_Subpass
+{
+    static constexpr u32 MAX_COLOR_ATTACHMENTS = 7;
+    Render_Pass_Attachment_Reference color_attachments[MAX_COLOR_ATTACHMENTS];
+    u32 color_attachment_count {0};
+
+    Render_Pass_Attachment_Reference depth_attachment;
+    bool enable_depth {0};
+
+    Render_Pass_Attachment_Reference input_attachments[MAX_COLOR_ATTACHMENTS];
+    u32 input_attachment_count {0};
+
+    template <typename ...T> void
+    set_color_attachment_references(const T &...ts)
+    {
+        Render_Pass_Attachment_Reference references[] { ts... };
+        for (u32 i = 0; i < sizeof...(ts); ++i)
+        {
+            color_attachments[i] = references[i];
+        }
+        color_attachment_count = sizeof...(ts);
+    }
+
+    template <typename ...T> void
+    set_input_attachment_references(const T &...ts)
+    {
+        Render_Pass_Attachment_Reference references[] { ts... };
+        for (u32 i = 0; i < sizeof...(ts); ++i)
+        {
+            input_attachments[i] = references[i];
+        }
+        input_attachment_count = sizeof...(ts);
+    }
+};
+
+struct Render_Pass_Dependency
+{
+    s32 src_index;
+    VkPipelineStageFlags src_stage;
+    u32 src_access;
+
+    s32 dst_index;
+    VkPipelineStageFlags dst_stage;
+    u32 dst_access;
+};
+
+void
+make_render_pass(Vulkan::Render_Pass *render_pass
+                 , u32 attachment_count
+                 , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
+                 , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
+                 , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
+                 , Vulkan::GPU *gpu)
+{
+    VkAttachmentDescription descriptions_vk[10] = {};
+    u32 att_i = 0;
+    for (; att_i < attachments.count; ++att_i)
+    {
+        descriptions_vk[att_i] = Vulkan::init_attachment_description(attachments[att_i].format
+                                                                     , VK_SAMPLE_COUNT_1_BIT
+                                                                     , VK_ATTACHMENT_LOAD_OP_CLEAR
+                                                                     , VK_ATTACHMENT_STORE_OP_STORE
+                                                                     , VK_ATTACHMENT_LOAD_OP_DONT_CARE
+                                                                     , VK_ATTACHMENT_STORE_OP_DONT_CARE
+                                                                     , VK_IMAGE_LAYOUT_UNDEFINED
+                                                                     , attachments[att_i].final_layout);
+    }
+    // Max is 5
+    VkSubpassDescription subpasses_vk[5] = {};
+    u32 sub_i = 0;
+    for (; sub_i < subpasses.count; ++sub_i)
+    {
+        // Max is 10
+        VkAttachmentReference attachment_references[10] = {};
+        u32 ref_i = 0;
+        for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i)
+        {
+            attachment_references[ref_i] = Vulkan::init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index
+                                                                             , subpasses[sub_i].color_attachments[ref_i].layout);
+        }
+        VkAttachmentReference depth_reference = {};
+        if (subpasses[sub_i].enable_depth) depth_reference = Vulkan::init_attachment_reference(subpasses[sub_i].depth_attachment.index
+                                                                                               , subpasses[sub_i].depth_attachment.layout);
+
+        VkAttachmentReference input_references[10] = {};
+        u32 inp_i = 0;
+        for (; inp_i < subpasses[sub_i].color_attachment_count; ++inp_i)
+        {
+            input_references[inp_i] = Vulkan::init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index
+                                                                        , subpasses[sub_i].input_attachments[inp_i].layout);
+        }
+        
+        subpasses_vk[sub_i] = Vulkan::init_subpass_description({ref_i, attachment_references}, subpasses[sub_i].enable_depth ? &depth_reference : nullptr, {inp_i, input_references});
+    }
+
+    VkSubpassDependency dependencies_vk[10] = {};
+    u32 dep_i = 0;
+    for (; dep_i < dependencies.count; ++dep_i)
+    {
+        const Render_Pass_Dependency *info = &dependencies[dep_i];
+        dependencies_vk[dep_i] = Vulkan::init_subpass_dependency(info->src_index, info->dst_index
+                                                                 , info->src_stage, info->src_access
+                                                                 , info->dst_stage, info->dst_access
+                                                                 , VK_DEPENDENCY_BY_REGION_BIT);
+    }
+    
+    Vulkan::init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
+}
+
+
 
 
 
@@ -579,6 +768,7 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , VkCommandPool *cmdpool)
 {
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+
     g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.main_fbo"_hash);
     g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
     g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);

@@ -1,3 +1,5 @@
+random_thing = 42
+
 function some_structure(x)
    return {
       name = "boo",

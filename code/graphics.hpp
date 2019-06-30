@@ -286,6 +286,12 @@ submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);
 
 
 
+void
+load_external_graphics_data(Vulkan::Swapchain *swapchain
+                            , Vulkan::GPU *gpu
+                            , VkDescriptorPool *pool
+                            , VkCommandPool *cmdpool);
+
 // Rendering pipeline
 void
 make_rendering_pipeline_data(Vulkan::GPU *gpu

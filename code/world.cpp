@@ -1732,7 +1732,7 @@ get_registered_objects_from_json(void)
 {
     world.deferred.render_pass		= g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
 
-    world.deferred.fbos			= g_framebuffer_manager.get_handle("framebuffer.main_fbo"_hash);
+    world.deferred.fbos			= g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
 
     world.deferred.main_pipeline	= g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
     world.deferred.lighting_pipeline	= g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);

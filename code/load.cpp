@@ -743,7 +743,7 @@ load_render_passes_from_json(Vulkan::GPU *gpu
     memset(buffer, 0, length * sizeof(char));
     is.read(buffer, length);
 
-    std::string content = std::string(buffer, length);
+    std::string content = std::string(buffer, 3976);
     
     nlohmann::json json = nlohmann::json::parse(content);
     for (auto i = json.begin(); i != json.end(); ++i)

@@ -1,18 +1,14 @@
 {
     "render_pass.deferred_render_pass": {
 	"new": false,
-	
 	"attachment_count": 5,
-
 	"color_attachments": {
 	    "c0": {
 		"format": 0,
 		"color_load": "c",
 		"color_store": "s",
-
 		"depth_load": "d",
 		"depth_store": "d",
-
 		"initial_layout": "u",
 		"final_layout": "p"
 	    },
@@ -20,10 +16,8 @@
 		"format": 8,
 		"color_load": "c",
 		"color_store": "s",
-
 		"depth_load": "d",
 		"depth_store": "d",
-
 		"initial_layout": "u",
 		"final_layout": "c"
 	    },
@@ -31,10 +25,8 @@
 		"format": 16,
 		"color_load": "c",
 		"color_store": "s",
-
 		"depth_load": "d",
 		"depth_store": "d",
-
 		"initial_layout": "u",
 		"final_layout": "c"
 	    },
@@ -42,10 +34,8 @@
 		"format": 16,
 		"color_load": "c",
 		"color_store": "s",
-
 		"depth_load": "d",
 		"depth_store": "d",
-
 		"initial_layout": "u",
 		"final_layout": "c"
 	    }
@@ -54,10 +44,8 @@
 	    "format": 1,
 	    "color_load": "c",
 	    "color_store": "s",
-
 	    "depth_load": "d",
 	    "depth_store": "d",
-
 	    "initial_layout": "u",
 	    "final_layout": "d"
 	},
@@ -107,11 +95,36 @@
 	}
     },
 
+    "render_pass.shadow_render_pass": {
+	"new": true,
+	"attachment_count": 1,
+	"depth_attachment": {
+	    "format": 1,
+	    "color_load": "c",
+	    "color_store": "s",
+
+	    "depth_load": "d",
+	    "depth_store": "d",
+
+	    "initial_layout": "u",
+	    "final_layout": "s"
+	},
+	"subpasses": {
+	    "s0": {
+		"depth_out": {
+		    "index": 0, "layout": "d"
+		}
+	    }
+	},
+	"dependencies": {
+	    "d0": { "src": -1, "dst": 0, "src_stage": "f", "src_access": "sr", "dst_stage": "e", "dst_access": "dw", "flags": "r" },
+	    "d1": { "src": 0, "dst": -1, "src_stage": "l", "src_access": "dw", "dst_stage": "f", "dst_access": "sr", "flags": "r" }
+	}
+    },
+    
     "render_pass.atmosphere_render_pass": {
 	"new": true,
-	
 	"attachment_count": 1,
-
 	"color_attachments": {
 	    "c0": {
 		"format": 8,
@@ -138,36 +151,5 @@
 	    "d0": { "src": -1, "dst": 0, "src_stage": "b", "src_access": "mr", "dst_stage": "o", "dst_access": "crw", "flags": "r" },
 	    "d1": { "src": 0, "dst": -1, "src_stage": "o", "src_access": "crw", "dst_stage": "b", "dst_access": "mr", "flags": "r" }
 	}
-    },
-
-    "render_pass.shadow_render_pass": {
-	"new": true,
-
-	"attachment_count": 1,
-	
-	"depth_attachment": {
-	    "format": 1,
-	    "color_load": "c",
-	    "color_store": "s",
-
-	    "depth_load": "d",
-	    "depth_store": "d",
-
-	    "initial_layout": "u",
-	    "final_layout": "s"
-	},
-
-	"subpasses": {
-	    "s0": {
-		"depth_out": {
-		    "index": 0, "layout": "d"
-		}
-	    }
-	},
-	"dependencies": {
-	    "d0": { "src": -1, "dst": 0, "src_stage": "f", "src_access": "sr", "dst_stage": "e", "dst_access": "dw", "flags": "r" },
-	    "d1": { "src": 0, "dst": -1, "src_stage": "l", "src_access": "dw", "dst_stage": "f", "dst_access": "sr", "flags": "r" }
-	}
     }
 }
-

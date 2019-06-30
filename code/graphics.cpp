@@ -414,6 +414,17 @@ struct Render_Pass_Dependency
     u32 dst_access;
 };
 
+Render_Pass_Dependency
+make_render_pass_dependency(s32 src_index,
+                            VkPipelineStageFlags src_stage,
+                            u32 src_access,
+                            s32 dst_index,
+                            VkPipelineStageFlags dst_stage,
+                            u32 dst_access)
+{
+    return Render_Pass_Dependency{ src_index, src_stage, src_access, dst_index, dst_stage, dst_access };
+}
+
 void
 make_render_pass(Vulkan::Render_Pass *render_pass
                  , u32 attachment_count
@@ -476,6 +487,57 @@ make_render_pass(Vulkan::Render_Pass *render_pass
     
     Vulkan::init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
 }
+
+struct Shader_Module_Info
+{
+    const char *filename;
+    VkShaderStageFlags stage;
+};
+
+struct Shader_Modules
+{
+    static constexpr u32 MAX_SHADERS = 5;
+    Shader_Module_Info modules[MAX_SHADERS];
+
+    template <typename ...T>
+    Shader_Modules(T ...modules_p)
+        : modules{modules_p...}
+    {
+    }
+};
+
+struct Shader_Uniform_Layouts
+{
+    static constexpr u32 MAX_LAYOUTS = 10;
+    Uniform_Layout layouts[MAX_LAYOUTS];
+
+    template <typename ...T>
+    Shader_Uniform_Layouts(T ...layouts_p)
+        : layouts{layouts_p...}
+    {
+    }
+};
+
+struct Shader_PK_Data
+{
+    u32 size;
+    u32 offset;
+    VkShaderStageFlags stages;
+};
+
+// ---- TODO : Finish this tomorrow ----
+void
+make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
+                       , const Shader_Modules &modules
+                       , bool primitive_restart, VkPrimitiveTopology topology
+                       , VkPolygonMode polygonmode, VkCullModeFlags culling
+                       , const Shader_Uniform_Layouts &layouts
+                       , const Shader_PK_Data &pk
+                       , VkExtent2D viewport
+                       , )
+{
+    
+}    
 
 
 
@@ -769,7 +831,7 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
 {
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
 
-    g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.main_fbo"_hash);
+    g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
     g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
     g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
 
@@ -861,4 +923,62 @@ end_deferred_rendering(const glm::mat4 &view_matrix // In future, change this to
                                 , 4, 1, 0, 0);
 
     queue->end_render_pass();
+}
+
+struct Post_Processing
+{
+    // This is the FBO that gets rendered to the screen (array of 3)
+    Framebuffer_Handle screen_fbo;
+    Render_Pass_Handle final_render_pass;
+
+    // There are different post processing effects : SSR, Bloom, Godrays...
+    // For now, just implement SSR
+    Pipeline_Handle ssr_ppln;
+    Uniform_Group_Handle prev_tex_uniform;
+} g_postfx;
+
+void
+make_postfx_data(Vulkan::GPU *gpu
+                 , Vulkan::Swapchain *swapchain)
+{
+    // ---- Make the final Render Pass ----
+    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
+    auto *final_render_pass = g_render_pass_manager.get(g_postfx.final_render_pass);
+    {
+        // Only one attachment
+        Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+
+        Render_Pass_Subpass subpass;
+        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+
+        Render_Pass_Dependency dependencies[2];
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+    
+        make_render_pass(final_render_pass, 1, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+    // ---- Make the framebuffer for the swapchain / screen ----
+    // ---- Only has one color attachment, no depth attachment ----
+    g_postfx.screen_fbo = g_framebuffer_manager.add("framebuffer.final_fbo"_hash, swapchain->views.count);
+    auto *final_fbo = g_framebuffer_manager.get(g_postfx.screen_fbo);
+    {    
+        final_fbo->extent = swapchain->extent;
+        for (u32 i = 0; i < swapchain->views.count; ++i)
+        {
+            allocate_memory_buffer(final_fbo->color_attachments, 1);
+            final_fbo[i].color_attachments[0] = swapchain->views[0];
+        }
+    
+        final_fbo->depth_attachment = VK_NULL_HANDLE;
+
+        Vulkan::init_framebuffer(final_render_pass, final_fbo->extent.width, final_fbo->extent.height, 1, gpu, final_fbo);
+    }
+    // ---- Make graphics pipeline for final render pass ----
+    g_postfx.ssr_ppln = g_pipeline_manager.add("graphics_pipeline.pfx_ssr"_hash);
+    auto *ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_ppln);
+    {
+        
+    }
 }

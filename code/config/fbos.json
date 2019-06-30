@@ -1,5 +1,5 @@
 {
-    "framebuffer.main_fbo": {
+    "framebuffer.deferred_fbo": {
 	"new": true,
 	
 	"width": 0,

@@ -510,7 +510,7 @@ struct Shader_Modules
 struct Shader_Uniform_Layouts
 {
     static constexpr u32 MAX_LAYOUTS = 10;
-    Uniform_Layout layouts[MAX_LAYOUTS];
+    Uniform_Layout_Handle layouts[MAX_LAYOUTS];
     u32 count;
     
     template <typename ...T>
@@ -618,7 +618,12 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
 
     VkPushConstantRange pk_range = {};
     Vulkan::init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
-    Vulkan::init_pipeline_layout({layouts.count, layouts.layouts}, {1, &pk_range}, gpu, &ppln->layout);
+    Uniform_Layout real_layouts [Shader_Uniform_Layouts::MAX_LAYOUTS] = {};
+    for (u32 i = 0; i < layouts.count; ++i)
+    {
+        real_layouts[i] = *g_uniform_layout_manager.get(layouts.layouts[i]);
+    }
+    Vulkan::init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, gpu, &ppln->layout);
     Memory_Buffer_View<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
     Vulkan::init_graphics_pipeline(&shaders_mb
                                    , &v_input
@@ -642,6 +647,7 @@ struct Deferred_Rendering
     Framebuffer_Handle dfr_framebuffer;
     Pipeline_Handle dfr_lighting_ppln;
     Uniform_Group_Handle dfr_subpass_group;
+    Uniform_Group_Handle dfr_g_buffer_group;
 } g_dfr_rendering;
 
 // TODO : Need to organise this in the future
@@ -918,16 +924,20 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
 void
 make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , VkDescriptorPool *pool
-                             , VkCommandPool *cmdpool)
+                             , VkCommandPool *cmdpool
+                             , Vulkan::Swapchain *swapchain)
 {
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
 
     g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
     g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
     g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
+    g_dfr_rendering.dfr_g_buffer_group = g_uniform_group_manager.get_handle("uniform_group.g_buffer"_hash);
 
     make_shadow_data();
     make_atmosphere_data(gpu, pool, cmdpool);
+
+    make_postfx_data(gpu, swapchain);
 }
 
 void
@@ -960,7 +970,7 @@ begin_deferred_rendering(u32 image_index /* To remove in the future */
                          , GPU_Command_Queue *queue)
 {
     queue->begin_render_pass(g_dfr_rendering.dfr_render_pass
-                             , g_dfr_rendering.dfr_framebuffer + image_index
+                             , g_dfr_rendering.dfr_framebuffer
                              , VK_SUBPASS_CONTENTS_INLINE
                              // Clear values hre
                              , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
@@ -1033,8 +1043,10 @@ make_postfx_data(Vulkan::GPU *gpu
                  , Vulkan::Swapchain *swapchain)
 {
     // ---- Make the final Render Pass ----
-    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
+    g_postfx.final_render_pass = g_render_pass_manager.get_handle("render_pass.final_render_pass"_hash);
     auto *final_render_pass = g_render_pass_manager.get(g_postfx.final_render_pass);
+    g_postfx.screen_fbo = g_framebuffer_manager.get_handle("framebuffer.final_fbo"_hash);
+    /*    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
     {
         // Only one attachment
         Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
@@ -1049,27 +1061,79 @@ make_postfx_data(Vulkan::GPU *gpu
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
     
         make_render_pass(final_render_pass, 1, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
-    }
+        }*/
     // ---- Make the framebuffer for the swapchain / screen ----
     // ---- Only has one color attachment, no depth attachment ----
-    g_postfx.screen_fbo = g_framebuffer_manager.add("framebuffer.final_fbo"_hash, swapchain->views.count);
-    auto *final_fbo = g_framebuffer_manager.get(g_postfx.screen_fbo);
+    /*    auto *final_fbo = g_framebuffer_manager.get(g_postfx.screen_fbo);
     {    
         final_fbo->extent = swapchain->extent;
         for (u32 i = 0; i < swapchain->views.count; ++i)
         {
-            allocate_memory_buffer(final_fbo->color_attachments, 1);
-            final_fbo[i].color_attachments[0] = swapchain->views[0];
+            allocate_memory_buffer(final_fbo[i].color_attachments, 1);
+            final_fbo[i].color_attachments[0] = swapchain->views[i];
+            final_fbo[i].depth_attachment = VK_NULL_HANDLE;
+            Vulkan::init_framebuffer(final_render_pass, final_fbo[i].extent.width, final_fbo->extent.height, 1, gpu, &final_fbo[i]);
         }
-    
-        final_fbo->depth_attachment = VK_NULL_HANDLE;
-
-        Vulkan::init_framebuffer(final_render_pass, final_fbo->extent.width, final_fbo->extent.height, 1, gpu, final_fbo);
-    }
+    }*/
     // ---- Make graphics pipeline for final render pass ----
     g_postfx.ssr_ppln = g_pipeline_manager.add("graphics_pipeline.pfx_ssr"_hash);
     auto *ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_ppln);
     {
+        Shader_Modules modules(Shader_Module_Info{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT}, Shader_Module_Info{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
         
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("descriptor_set_layout.g_buffer_layout"_hash)
+                                       , g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash)
+                                       , g_uniform_layout_manager.get_handle("descriptor_set_layout.test_descriptor_set_layout"_hash));
+        Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+
+        Shader_Blend_States blending(false);
+
+        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT);
+        
+        make_graphics_pipeline(ssr_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
+                               , VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr
+                               , false, 0.0f, dynamic, final_render_pass, 0, gpu);
     }
+}
+
+void
+apply_pfx_on_scene(u32 image_index
+                   , GPU_Command_Queue *queue
+                   , const VkRect2D &render_area
+                   , Uniform_Group *transforms_group
+                   , const glm::mat4 &view_matrix
+                   , const glm::mat4 &projection_matrix
+                   , Vulkan::GPU *gpu)
+{
+    queue->begin_render_pass(g_postfx.final_render_pass
+                             , g_postfx.screen_fbo + image_index
+                             , VK_SUBPASS_CONTENTS_INLINE
+                             , Vulkan::init_clear_color_color(0.0f, 0.0f, 1.0f, 1.0f));
+    Vulkan::command_buffer_set_viewport(render_area.extent.width, render_area.extent.height, 0.0f, 1.0f, &queue->q);
+    {
+        auto *pfx_ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_ppln);
+        Vulkan::command_buffer_bind_pipeline(pfx_ssr_ppln, &queue->q);
+
+        auto *g_buffer_group = g_uniform_group_manager.get(g_dfr_rendering.dfr_g_buffer_group);
+        auto *atmosphere_group = g_uniform_group_manager.get(g_atmosphere.cubemap_uniform_group);
+        
+        Uniform_Group groups[] = { *g_buffer_group, *atmosphere_group, *transforms_group };
+        Vulkan::command_buffer_bind_descriptor_sets(pfx_ssr_ppln, {3, groups}, &queue->q);
+
+        struct SSR_Lighting_Push_K
+        {
+            glm::vec4 ws_light_position;
+            glm::mat4 view;
+            glm::mat4 proj;
+        } ssr_pk;
+
+        ssr_pk.ws_light_position = view_matrix * glm::vec4(glm::normalize(-g_lighting.ws_light_position), 0.0f);
+        ssr_pk.view = view_matrix;
+        ssr_pk.proj = projection_matrix;
+        ssr_pk.proj[1][1] *= -1.0f;
+        Vulkan::command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln, &queue->q);
+
+        Vulkan::command_buffer_draw(&queue->q, 4, 1, 0, 0);
+    }
+    queue->end_render_pass();
 }

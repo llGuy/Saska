@@ -9,16 +9,18 @@ layout(location = 0) out vec4 final_color;
 
 layout(push_constant) uniform Push_K
 {
-    vec4 ws_light_position;
+    vec4 ws_light_direction;
+    mat4 view;
+    mat4 proj;
 } light_info_pk;
 
-layout(binding = 0, set = 0) uniform sampler2D g_albedo;
+layout(binding = 0, set = 0) uniform sampler2D g_final;
 layout(binding = 1, set = 0) uniform sampler2D g_position;
 layout(binding = 2, set = 0) uniform sampler2D g_normal;
 
 layout(binding = 0, set = 1) uniform samplerCube atmosphere_cubemap;
 
-layout(set = 0, binding = 0) uniform Camera_Transforms
+layout(binding = 0, set = 2) uniform Camera_Transforms
 {
     mat4 model;
     mat4 view;
@@ -28,11 +30,11 @@ layout(set = 0, binding = 0) uniform Camera_Transforms
     mat4 shadow_view;
 
     mat4 shadow_bias;
-
-    vec4 light_position;
+    // To see if this works
+    vec4 test_vector;
 } camera_ubo;
 
-const int num_marches = 10;
+const int num_marches = 30;
 
 vec3 hash33(vec3 p3)
 {
@@ -51,7 +53,7 @@ vec3 binary_search(inout vec3 dir
 
     for (int i = 0; i < 8; ++i)
     {
-	projected_coord = camera_ubo.proj * vec4(hit_coord, 1.0);
+	projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
 	projected_coord.xy /= projected_coord.w;
 	projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
 
@@ -64,7 +66,7 @@ vec3 binary_search(inout vec3 dir
 	else hit_coord -= dir;
     }
 
-    projected_coord = camera_ubo.proj * vec4(hit_coord, 1.0);
+    projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
     projected_coord.xy /= projected_coord.w;
     projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
 
@@ -91,7 +93,7 @@ vec4 ray_cast(inout vec3 direction
 	previous_ray_coord = hit_coord;
 	hit_coord += direction;
 
-	projected_coord = camera_ubo.proj * vec4(hit_coord, 1.0);
+	projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
 
 	projected_coord.xy /= projected_coord.w;
 	projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
@@ -129,7 +131,7 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
 {
     vec3 result = reflect(-normalize(vs_eye_vector), vs_normal);
 
-    mat4 inv_view = inverse(camera_ubo.view);
+    mat4 inv_view = inverse(light_info_pk.view);
     vec3 ws_reflect = normalize(vec3(inv_view * vec4(result, 1.0)));
 
     vec3 ws_eye_vector = normalize(vec3(inv_view * vec4(vs_eye_vector, 0.0)));
@@ -139,7 +141,9 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
 
     vec4 envi_color = texture(atmosphere_cubemap, reflect_dir);
 
-    return mix(pixel_color, envi_color * fresnel, 0.5);
+    pixel_color = pixel_color + (envi_color * 0.2);
+
+    return pixel_color;
 }
 
 void main(void)
@@ -148,12 +152,12 @@ void main(void)
     vec3 view_position = vec3(position);
     vec4 vnormal = (textureLod(g_normal, fs_in.uvs, 2));
     vec3 view_normal = vnormal.xyz;
-    vec4 pixel_color = texture(g_albedo, fs_in.uvs);
-    float metallic = vnormal.a;
+    vec4 pixel_color = texture(g_final, fs_in.uvs);
+    float metallic = 0.5;
 
     vec3 original_position = view_position;
 
-    if (view_normal.x < 5.0 && position.a > -0.5)
+    if (view_normal.x > -10.0 && view_normal.y > -10.0 && view_normal.z > -10.0)
     {
 	bool hit = false;
 
@@ -162,7 +166,7 @@ void main(void)
 	F0 = mix(F0, pixel_color.rgb, metallic);
 
 	vec3 to_camera = normalize(-view_position);
-	vec3 to_light = normalize(vec3(light_info_pk.ws_light_position));
+	vec3 to_light = -vec3(light_info_pk.ws_light_direction);
 	vec3 halfway = normalize(to_camera + to_light);
 
 	vec4 fresnel = vec4(fresnel_schlick(max(dot(view_normal, to_camera), 0.0), F0), 1.0);
@@ -173,7 +177,7 @@ void main(void)
 	vec3 ray_dir = normalize(reflect(normalize(original_position), normalize(view_normal)));
 
 	ray_dir = jitt + ray_dir * max(0.1, -view_position.z);
-
+	
 	float placeholder;
 	/* ray cast */
 	vec4 coords = ray_cast(ray_dir, view_position, ddepth, hit, placeholder);
@@ -182,7 +186,7 @@ void main(void)
 	float factor = (d_coords.x + d_coords.y);
 	float edge_factor = clamp(1.0 - factor, 0.0, 1.0);
 
-	vec4 reflected_color = texture(g_albedo, coords.xy);
+	vec4 reflected_color = texture(g_final, coords.xy);
 
 	pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt)
 						, view_normal
@@ -191,7 +195,7 @@ void main(void)
 
 	//check if is skybox
 	vec3 check_skybox = texture(g_normal, coords.xy).xyz;
-	bool is_skybox = check_skybox.x > 5 && check_skybox.y > 5 && check_skybox.z > 5;
+	bool is_skybox = (check_skybox.x < -10.0 && check_skybox.y < -10.0 && check_skybox.z < -10.0);
 
 	if (hit && !is_skybox)
 	{
@@ -201,10 +205,10 @@ void main(void)
 
 	    float dotted = dot(vs_reflected_dir, vs_reflected_point_to_original);
 			
-	    if (dotted > 0.9998) final_color = mix(pixel_color, reflected_color * fresnel, edge_factor * metallic);
+	    if (dotted > 0.9999) final_color = mix(pixel_color, reflected_color * fresnel, edge_factor);
 	    else final_color = pixel_color;
 	}
-	else final_color = pixel_color;		
+	else final_color = pixel_color;
     }
     else final_color = pixel_color;
 }

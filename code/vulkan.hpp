@@ -646,7 +646,14 @@ namespace Vulkan
     init_pipeline_vertex_input_info(Model *model /* model contains input information required */
 				    , VkPipelineVertexInputStateCreateInfo *info)
     {
-	model->create_vertex_input_state_info(info);
+        if (model)
+        {
+            model->create_vertex_input_state_info(info);
+        }
+        else
+        {
+            info->sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        }
     }
 
     internal FORCEINLINE VkVertexInputAttributeDescription

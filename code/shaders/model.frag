@@ -12,6 +12,7 @@ layout(location = 0) in GS_DATA
     
 } fs_in;
 
+
 layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
 layout(location = 2) out vec4 out_position;
@@ -76,9 +77,8 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
 void main(void)
 {
     float shadow_factor = get_shadow_light_factor(length(fs_in.position), fs_in.shadow_coord);
-    
-    out_final = vec4(fs_in.final, 1.0);
 
+    out_final = vec4(0.0, 0.0, 0.0, 1.0);
     out_albedo = vec4(fs_in.final, shadow_factor);
 
     out_position = vec4(fs_in.position, 1.0);

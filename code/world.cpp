@@ -1518,7 +1518,7 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 
 	    alignas(16) glm::mat4 shadow_map_bias;
 
-	    bool render_to_shadow;
+            alignas(16) glm::vec4 test_vector;
 	};
 	
 	u32 uniform_buffer_count = swapchain->imgs.count;
@@ -1709,6 +1709,8 @@ render_world(Vulkan::State *vk
     }
     end_deferred_rendering(camera->v_m, &queue);
 
+    apply_pfx_on_scene(image_index, &queue, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m, &vk->gpu);
+    
     Vulkan::end_command_buffer(cmdbuf);
 }
 
@@ -1784,10 +1786,8 @@ make_world(Window_Data *window
     
     get_registered_objects_from_json();
 
-    make_rendering_pipeline_data(&vk->gpu, &world.desc.pool.pool, cmdpool);
+    make_rendering_pipeline_data(&vk->gpu, &world.desc.pool.pool, cmdpool, &vk->swapchain);
 
-
-    
     {
 	auto *model_info = g_model_manager.get(terrain_master.model_info);
 	
@@ -1887,7 +1887,7 @@ update_ubo(u32 current_image
 
 	alignas(16) glm::mat4 shadow_map_bias;
 
-	bool render_to_shadow;
+        alignas(16) glm::vec4 test_vector;
     };
 
     Camera *camera = &world->cameras[world->camera_bound_to_3D_output];
@@ -1909,6 +1909,8 @@ update_ubo(u32 current_image
 
     Uniform_Buffer_Object ubo = {};
 
+    ubo.test_vector = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    
     ubo.view_matrix = camera->v_m;
 
     ubo.projection_matrix = camera->p_m;
@@ -1917,8 +1919,6 @@ update_ubo(u32 current_image
 
     ubo.shadow_projection_matrix = shadow_data.projection_matrix;
     ubo.shadow_view_matrix = shadow_data.light_view_matrix;
-
-    ubo.render_to_shadow = false;
 
     Vulkan::Buffer &current_ubo = uniform_buffers[current_image];
 

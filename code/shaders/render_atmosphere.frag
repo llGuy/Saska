@@ -16,9 +16,6 @@ main(void)
     vec4 cubemap_color = texture(cubemap_sampler, in_ms_cubemap_direction);
 
     out_final = cubemap_color;
-    out_albedo = out_albedo;
-
-    out_final = cubemap_color;
     out_albedo = cubemap_color;
 
     out_position = vec4(-100.0);

@@ -296,7 +296,8 @@ load_external_graphics_data(Vulkan::Swapchain *swapchain
 void
 make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , VkDescriptorPool *pool
-                             , VkCommandPool *cmdpool);
+                             , VkCommandPool *cmdpool
+                             , Vulkan::Swapchain *swapchain);
 
 struct Shadow_Matrices
 {
@@ -362,3 +363,16 @@ render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
 
 void
 update_atmosphere(GPU_Command_Queue *queue);
+
+void
+make_postfx_data(Vulkan::GPU *gpu
+                 , Vulkan::Swapchain *swapchain);
+
+void
+apply_pfx_on_scene(u32 image_index
+                   , GPU_Command_Queue *queue
+                   , const VkRect2D &render_area
+                   , Uniform_Group *transforms_group
+                   , const glm::mat4 &view_matrix
+                   , const glm::mat4 &projection_matrix
+                   , Vulkan::GPU *gpu);

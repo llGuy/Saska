@@ -13,7 +13,7 @@ layout(location = 0) in FS_IN
 void
 main(void)
 {
-    out_final = vec4(1.0);
+    out_final = vec4(0.0, 0.0, 0.0, 1.0);
     out_albedo = vec4(1.0);
     out_position = vec4(-100.0);
     out_normal = vec4(-100.0);

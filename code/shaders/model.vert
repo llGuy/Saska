@@ -11,7 +11,7 @@ layout(binding = 0) uniform Uniform_Buffer_Object
 
     mat4 shadow_bias;
     
-    bool render_shadow;
+    vec4 test_vector;
 } ubo;
 
 layout(push_constant) uniform Push_Constants

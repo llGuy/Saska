@@ -248,6 +248,8 @@ main(s32 argc
 	std::cout << e.what() << " : " << e.id << " : " << e.byte << std::endl;
 	close_debug_file();
     }
+
+    std::cin.get();
     
     return(0);
 }

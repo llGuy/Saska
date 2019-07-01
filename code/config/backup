@@ -1,68 +1,43 @@
-{
-    "renderer.other_material_renderer": {
-	"max": 3,
-	"graphics_pipeline": "pipeline.main_pipeline",
-	"push_data_dst": "vf",
-	"descriptor_sets": ["descriptor_set.test_descriptor_sets"]
-    }
-}
-
-,
-
-    "descriptor_set.test_descriptor_sets": {
-	"new": true,
-	"type": "set",
-	"source_pool": "descriptor_pool.test_descriptor_pool",
-	"count": -1,
-	"layout": "descriptor_set_layout.test_descriptor_set_layout",
-	"bindings": {
-	    
-	    "b0": {
-		"type": "buffer",
-		"buffer": {"name": "buffer.ubos", "at": -1},
-		"binding": 0,
-		"dst_element": 0,
-		"count": 1,
-		"buffer_offset": 0		
-	    }
-	    
-	}
-	
-    }
-
-
-
-
-
-,
-    "pipeline.terrain_mesh_pointer_pipeline": {
+"framebuffer.deferred_fbo": {
 	"new": true,
 	
-	"stages": {
-	    "v": "shaders/SPV/terrain_pointer.vert.spv",
-	    "f": "shaders/SPV/terrain_pointer.frag.spv"
-	},
-	"assemble": {
-	    "topology": "q",
-	    "restart": false
-	},
-	"raster": {
-	    "poly_mode": "l",
-	    "cull": "n"
-	},
-	"pipeline_layout": {
-	    "push_constant": {
-		"stage_flags": "v",
-		"offset": 0,
-		"size": 150
+	"width": 0,
+	"height": 0,
+	"insert_swapchain_imgs_at_0": true,
+	"color_attachment_count": 4,
+	"compatible_render_pass": "render_pass.deferred_render_pass",
+	"color_attachments": {
+	    "image2D.fbo_albedo": {
+		"new": true,
+		"to_create": true,
+		"sampler": true,
+		"index": 1,
+		"format": 8,
+		"usage": "ci"
+	    },
+	    "image2D.fbo_position": {
+		"new": true,
+		"to_create": true,
+		"sampler": true,
+		"index": 2,
+		"format": 16,
+		"usage": "ci"
+	    },
+	    "image2D.fbo_normal": {
+		"new": true,
+		"to_create": true,
+		"sampler": true,
+		"index": 3,
+		"format": 16,
+		"usage": "ci"
 	    }
 	},
-	"viewport": [0, 0],
-	"blend": ["disable", "disable", "disable", "disable"],
-	"vertex_input": "vulkan_model.terrain_base_info",
-	"depth": true,
-	"render_pass": {
-	    "name": "render_pass.deferred_render_pass",
-	    "subpass": 0
+	"depth_attachment": {
+	    "new": true,
+	    "name": "image2D.fbo_depth",
+	    "sampler": true,
+	    "to_create": true,
+	    "index": 4,
+	    "usage": "d"
 	}
-    }
+    },

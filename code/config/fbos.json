@@ -1,33 +1,61 @@
 {
+    "framebuffer.final_fbo": {
+	"new": true,
+	
+	"width": 0,
+	"height": 0,
+
+	"insert_swapchain_imgs_at_0": true,
+	"color_attachment_count": 1,
+
+	"color_attachments": {},
+	
+	"compatible_render_pass": "render_pass.final_render_pass"
+    },
+    
     "framebuffer.deferred_fbo": {
 	"new": true,
 	
 	"width": 0,
 	"height": 0,
-	"insert_swapchain_imgs_at_0": true,
+
+	"insert_swapchain_imgs_at_0": false,
 	"color_attachment_count": 4,
+	
 	"compatible_render_pass": "render_pass.deferred_render_pass",
+	
 	"color_attachments": {
+	    "image2D.fbo_final": {
+		"new": true,
+		"to_create": true,
+		"sampler": true,
+		"index": 0,
+		"format": 8,
+		"usage": "cs"
+	    },
 	    "image2D.fbo_albedo": {
 		"new": true,
 		"to_create": true,
+		"sampler": true,
 		"index": 1,
 		"format": 8,
-		"usage": "ci"
+		"usage": "cis"
 	    },
 	    "image2D.fbo_position": {
 		"new": true,
 		"to_create": true,
+		"sampler": true,
 		"index": 2,
 		"format": 16,
-		"usage": "ci"
+		"usage": "cis"
 	    },
 	    "image2D.fbo_normal": {
 		"new": true,
 		"to_create": true,
+		"sampler": true,
 		"index": 3,
 		"format": 16,
-		"usage": "ci"
+		"usage": "cis"
 	    }
 	},
 	"depth_attachment": {

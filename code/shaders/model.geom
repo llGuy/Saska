@@ -55,7 +55,7 @@ get_normal(int i1, int i2, int i3)
 void
 main(void)
 {
-    vec3 normal = get_normal(0, 1, 2);
+    vec3 normal = -get_normal(0, 1, 2);
     
     for (int i = 0; i < 3; ++i)
     {

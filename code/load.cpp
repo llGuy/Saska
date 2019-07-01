@@ -132,11 +132,12 @@ load_pipelines_from_json(Vulkan::GPU *gpu
     u32 length = is.tellg();
     is.seekg(0, is.beg);
 
-    char *buffer = new char [sizeof(char) * length];
+    char *buffer = new char [sizeof(char) * (length + 1)];
     memset(buffer, 0, length * sizeof(char));
     is.read(buffer, length);
 
-    std::string content = std::string(buffer, length);
+    buffer[length] = '\0';
+    std::string content = std::string(buffer, length + 1);
     
     nlohmann::json j = nlohmann::json::parse(content);
     for (nlohmann::json::iterator i = j.begin(); i != j.end(); ++i)
@@ -739,11 +740,12 @@ load_render_passes_from_json(Vulkan::GPU *gpu
     u32 length = is.tellg();
     is.seekg(0, is.beg);
 
-    char *buffer = new char [sizeof(char) * length];
+    char *buffer = new char [sizeof(char) * (length + 1)];
     memset(buffer, 0, length * sizeof(char));
     is.read(buffer, length);
+    buffer[length] = '\0';
 
-    std::string content = std::string(buffer, 3976);
+    std::string content = std::string(buffer, 3989);
     
     nlohmann::json json = nlohmann::json::parse(content);
     for (auto i = json.begin(); i != json.end(); ++i)
@@ -925,11 +927,12 @@ load_descriptors_from_json(Vulkan::GPU *gpu
     u32 length = is.tellg();
     is.seekg(0, is.beg);
 
-    char *buffer = new char[sizeof(char) * length];
+    char *buffer = new char[sizeof(char) * (length + 1)];
     memset(buffer, 0, length * sizeof(char));
     is.read(buffer, length);
+    buffer[length] = '\0';
 
-    std::string content = std::string(buffer, length);
+    std::string content = std::string(buffer, 3962);
     
     nlohmann::json json = nlohmann::json::parse(content);
     

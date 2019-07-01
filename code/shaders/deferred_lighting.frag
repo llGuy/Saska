@@ -75,7 +75,7 @@ pbr(void)
     albedo.xyz = pow(albedo.xyz, vec3(2.2));
     vec4 gposition = subpassLoad(g_buffer_position);
     vec3 vs_position = gposition.xyz;
-    vec4 gnormal = subpassLoad(g_buffer_normal);
+    vec4 gnormal = -subpassLoad(g_buffer_normal);
     vec3 vs_normal = gnormal.xyz;
     float roughness = gnormal.a;
     float metallic = gposition.a;
@@ -134,11 +134,6 @@ main(void)
 
     if (vs_normal.x > -10.0 && vs_normal.y > -10.0 && vs_normal.z > -10.0)
     {
-	/*	vec3 light_dir = vec3(push_k.view_matrix * vec4(-push_k.light_direction.xyz, 0.0));
-	float alpha = clamp(dot(-vec3(light_dir), vs_normal), 0, 1);
-	out_color = vec4(alpha * 0.8) * vec4(0.7, 0.6, 0.5, 1.0) + vec4(albedo_color, 1.0);
-*/
 	out_color = pbr();
-	
     }
 }

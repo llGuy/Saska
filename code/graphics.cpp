@@ -491,17 +491,18 @@ make_render_pass(Vulkan::Render_Pass *render_pass
 struct Shader_Module_Info
 {
     const char *filename;
-    VkShaderStageFlags stage;
+    VkShaderStageFlagBits stage;
 };
 
 struct Shader_Modules
 {
     static constexpr u32 MAX_SHADERS = 5;
     Shader_Module_Info modules[MAX_SHADERS];
-
+    u32 count;
+    
     template <typename ...T>
     Shader_Modules(T ...modules_p)
-        : modules{modules_p...}
+        : modules{modules_p...}, count(sizeof...(modules_p))
     {
     }
 };
@@ -510,10 +511,11 @@ struct Shader_Uniform_Layouts
 {
     static constexpr u32 MAX_LAYOUTS = 10;
     Uniform_Layout layouts[MAX_LAYOUTS];
-
+    u32 count;
+    
     template <typename ...T>
     Shader_Uniform_Layouts(T ...layouts_p)
-        : layouts{layouts_p...}
+        : layouts{layouts_p...}, count(sizeof...(layouts_p))
     {
     }
 };
@@ -522,7 +524,34 @@ struct Shader_PK_Data
 {
     u32 size;
     u32 offset;
-    VkShaderStageFlags stages;
+    VkShaderStageFlagBits stages;
+};
+
+struct Shader_Blend_States
+{
+    static constexpr u32 MAX_BLEND_STATES = 10;
+    // For now, is just boolean
+    bool blend_states[MAX_BLEND_STATES];
+    u32 count;
+    
+    template <typename ...T>
+    Shader_Blend_States(T ...states)
+        : blend_states{states...}, count(sizeof...(states))
+    {
+    }
+};
+
+struct Dynamic_States
+{
+    static constexpr u32 MAX_DYNAMIC_STATES = 10;
+    VkDynamicState dynamic_states[MAX_DYNAMIC_STATES];
+    u32 count;
+
+    template <typename ...T>
+    Dynamic_States(T ...states)
+        : dynamic_states{states...}, count(sizeof...(states))
+    {
+    }
 };
 
 // ---- TODO : Finish this tomorrow ----
@@ -531,14 +560,76 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
                        , const Shader_Modules &modules
                        , bool primitive_restart, VkPrimitiveTopology topology
                        , VkPolygonMode polygonmode, VkCullModeFlags culling
-                       , const Shader_Uniform_Layouts &layouts
+                       , Shader_Uniform_Layouts &layouts
                        , const Shader_PK_Data &pk
                        , VkExtent2D viewport
-                       , )
+                       , const Shader_Blend_States &blends
+                       , Vulkan::Model *model
+                       , bool enable_depth
+                       , f32 depth_bias
+                       , const Dynamic_States &dynamic_states
+                       , Vulkan::Render_Pass *compatible
+                       , u32 subpass
+                       , Vulkan::GPU *gpu)
 {
-    
-}    
+    VkShaderModule module_objects[Shader_Modules::MAX_SHADERS] = {};
+    VkPipelineShaderStageCreateInfo infos[Shader_Modules::MAX_SHADERS] = {};
+    for (u32 i = 0; i < modules.count; ++i)
+    {
+        File_Contents bytecode = read_file(modules.modules[i].filename);
+        Vulkan::init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, gpu, &module_objects[i]);
+        Vulkan::init_shader_pipeline_info(&module_objects[i], modules.modules[i].stage, &infos[i]);
+    }
+    VkPipelineVertexInputStateCreateInfo v_input = {};
+    Vulkan::init_pipeline_vertex_input_info(model, &v_input);
+    VkPipelineInputAssemblyStateCreateInfo assembly = {};
+    Vulkan::init_pipeline_input_assembly_info(0, topology, primitive_restart, &assembly);
+    VkPipelineViewportStateCreateInfo view_info = {};
+    VkViewport view = {};
+    Vulkan::init_viewport(viewport.width, viewport.height, 0.0f, 1.0f, &view);
+    VkRect2D scissor = {};
+    Vulkan::init_rect_2D(VkOffset2D{}, VkExtent2D{viewport.width, viewport.height}, &scissor);
+    Vulkan::init_pipeline_viewport_info({1, &view}, {1, &scissor}, &view_info);
+    VkPipelineMultisampleStateCreateInfo multi = {};
+    Vulkan::init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multi);
+    VkPipelineColorBlendStateCreateInfo blending_info = {};
+    VkPipelineColorBlendAttachmentState blend_states[Shader_Blend_States::MAX_BLEND_STATES];
+    for (u32 i = 0; i < blends.count; ++i)
+    {
+        Vulkan::init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+                                            , VK_FALSE
+                                            , VK_BLEND_FACTOR_ONE
+                                            , VK_BLEND_FACTOR_ZERO
+                                            , VK_BLEND_OP_ADD
+                                            , VK_BLEND_FACTOR_ONE
+                                            , VK_BLEND_FACTOR_ZERO
+                                            , VK_BLEND_OP_ADD
+                                            , &blend_states[i]);
+    }
+    Vulkan::init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, {blends.count, blend_states}, &blending_info);
+    VkPipelineDynamicStateCreateInfo dynamic_info = {};
+    dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_info.dynamicStateCount = dynamic_states.count;
+    dynamic_info.pDynamicStates = dynamic_states.dynamic_states;
+    VkPipelineDepthStencilStateCreateInfo depth = {};
+    Vulkan::init_pipeline_depth_stencil_info(enable_depth, enable_depth, 0.0f, 1.0f, VK_FALSE, &depth);
+    VkPipelineRasterizationStateCreateInfo raster = {};
+    Vulkan::init_pipeline_rasterization_info(polygonmode, culling, 2.0f, 0, &raster, depth_bias);
 
+    VkPushConstantRange pk_range = {};
+    Vulkan::init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
+    Vulkan::init_pipeline_layout({layouts.count, layouts.layouts}, {1, &pk_range}, gpu, &ppln->layout);
+    Memory_Buffer_View<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
+    Vulkan::init_graphics_pipeline(&shaders_mb
+                                   , &v_input
+                                   , &assembly
+                                   , &view_info
+                                   , &raster
+                                   , &multi
+                                   , &blending_info
+                                   , &dynamic_info
+                                   , &depth, &ppln->layout, compatible, subpass, gpu, &ppln->pipeline);
+}
 
 
 

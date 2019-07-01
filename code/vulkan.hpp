@@ -744,6 +744,18 @@ namespace Vulkan
 	rect->offset = offset;
 	rect->extent = extent;
     }
+
+    internal FORCEINLINE void
+    init_pipeline_viewport_info(const Memory_Buffer_View<VkViewport> &viewports
+				, const Memory_Buffer_View<VkRect2D> &scissors
+				, VkPipelineViewportStateCreateInfo *info)
+    {
+	info->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	info->viewportCount = viewports.count;
+	info->pViewports = viewports.buffer;
+	info->scissorCount = scissors.count;
+	info->pScissors = scissors.buffer;;
+    }
     
     internal FORCEINLINE void
     init_pipeline_viewport_info(Memory_Buffer_View<VkViewport> *viewports
@@ -817,6 +829,23 @@ namespace Vulkan
 	attachment->dstAlphaBlendFactor = dst_alpha;
 	attachment->alphaBlendOp = alpha_op;
     }
+
+    internal FORCEINLINE void
+    init_pipeline_blending_info(VkBool32 enable_logic_op
+				, VkLogicOp logic_op
+				, const Memory_Buffer_View<VkPipelineColorBlendAttachmentState> &states
+				, VkPipelineColorBlendStateCreateInfo *info)
+    {
+	info->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	info->logicOpEnable = enable_logic_op;
+	info->logicOp = logic_op;
+	info->attachmentCount = states.count;
+	info->pAttachments = states.buffer;
+	info->blendConstants[0] = 0.0f;
+	info->blendConstants[1] = 0.0f;
+	info->blendConstants[2] = 0.0f;
+	info->blendConstants[3] = 0.0f;
+    }
     
     internal FORCEINLINE void
     init_pipeline_blending_info(VkBool32 enable_logic_op
@@ -847,6 +876,12 @@ namespace Vulkan
     void
     init_pipeline_layout(Memory_Buffer_View<VkDescriptorSetLayout> *layouts
 			 , Memory_Buffer_View<VkPushConstantRange> *ranges
+			 , GPU *gpu
+			 , VkPipelineLayout *pipeline_layout);
+
+    void
+    init_pipeline_layout(const Memory_Buffer_View<VkDescriptorSetLayout> &layouts
+			 , const Memory_Buffer_View<VkPushConstantRange> &ranges
 			 , GPU *gpu
 			 , VkPipelineLayout *pipeline_layout);
 

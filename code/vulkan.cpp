@@ -1047,6 +1047,25 @@ namespace Vulkan
     }
 
     void
+    init_pipeline_layout(const Memory_Buffer_View<VkDescriptorSetLayout> &layouts
+			 , const Memory_Buffer_View<VkPushConstantRange> &ranges
+			 , GPU *gpu
+			 , VkPipelineLayout *pipeline_layout)
+    {
+	VkPipelineLayoutCreateInfo layout_info = {};
+	layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layout_info.setLayoutCount = layouts.count;
+	layout_info.pSetLayouts = layouts.buffer;
+	layout_info.pushConstantRangeCount = ranges.count;
+	layout_info.pPushConstantRanges = ranges.buffer;
+
+	VK_CHECK(vkCreatePipelineLayout(gpu->logical_device
+					, &layout_info
+					, nullptr
+					, pipeline_layout));        
+    }
+    
+    void
     init_pipeline_layout(Memory_Buffer_View<VkDescriptorSetLayout> *layouts
 			 , Memory_Buffer_View<VkPushConstantRange> *ranges
 			 , GPU *gpu

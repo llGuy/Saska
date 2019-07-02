@@ -317,10 +317,10 @@ make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_coun
                                    , VK_FALSE
                                    , 1
                                    , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-                                   , VK_FALSE
+                                   , VK_TRUE
                                    , (VkCompareOp)0
                                    , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                                   , 0.0f, 0.0f, 1.0f
+                                   , 0.0f, 0.0f, 0.0f
                                    , gpu, &img->image_sampler);
     }
 }
@@ -353,6 +353,8 @@ make_framebuffer(Vulkan::Framebuffer *fbo
     }
     
     Vulkan::init_framebuffer(compatible, w, h, layer_count, gpu, fbo);
+
+    fbo->extent = VkExtent2D{ w, h };
 }
 
 struct Render_Pass_Attachment
@@ -465,7 +467,7 @@ make_render_pass(Vulkan::Render_Pass *render_pass
 
         VkAttachmentReference input_references[10] = {};
         u32 inp_i = 0;
-        for (; inp_i < subpasses[sub_i].color_attachment_count; ++inp_i)
+        for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i)
         {
             input_references[inp_i] = Vulkan::init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index
                                                                         , subpasses[sub_i].input_attachments[inp_i].layout);
@@ -684,6 +686,8 @@ struct Lighting
 
 struct Atmosphere
 {
+    persist constexpr u32 CUBEMAP_W = 1000, CUBEMAP_H = 1000;
+    
     // GPU objects needed to create the atmosphere skybox cubemap
     Render_Pass_Handle make_render_pass;
     Framebuffer_Handle make_fbo;
@@ -781,12 +785,44 @@ make_atmosphere_data(Vulkan::GPU *gpu
                      , VkDescriptorPool *pool
                      , VkCommandPool *cmdpool)
 {
-    g_atmosphere.make_render_pass      = g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
+    // ---- Make render pass ----
+    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
+    /*    g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
+    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
+    {
+        // ---- Set render pass attachment data ----
+        Render_Pass_Attachment cubemap_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        // ---- Set render pass subpass data ----
+        Render_Pass_Subpass subpass = {};
+        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        // ---- Set render pass dependencies data ----
+        Render_Pass_Dependency dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        
+        make_render_pass(atmosphere_render_pass, 1, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        }*/
+    
+    //    g_atmosphere.make_render_pass      = g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
+
+    // ---- Make atmosphere framebuffer ----
+    /*    g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
+    auto *atmosphere_fbo = g_framebuffer_manager.get(g_atmosphere.make_fbo);
+    {
+        Image_Handle atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
+        auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
+        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_W, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
+        
+        make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
+        }*/
+    
     g_atmosphere.make_fbo              = g_framebuffer_manager.get_handle("framebuffer.atmosphere_fbo"_hash);
     g_atmosphere.render_pipeline       = g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
     g_atmosphere.make_pipeline         = g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
     g_atmosphere.cubemap_uniform_group = g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
-
+    
     {
         VkCommandBuffer cmdbuf;
         Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
@@ -1043,53 +1079,47 @@ make_postfx_data(Vulkan::GPU *gpu
                  , Vulkan::Swapchain *swapchain)
 {
     // ---- Make the final Render Pass ----
-    g_postfx.final_render_pass = g_render_pass_manager.get_handle("render_pass.final_render_pass"_hash);
+    g_postfx.screen_fbo = g_framebuffer_manager.add("framebuffer.final_fbo"_hash, swapchain->views.count);
+    
+    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
     auto *final_render_pass = g_render_pass_manager.get(g_postfx.final_render_pass);
-    g_postfx.screen_fbo = g_framebuffer_manager.get_handle("framebuffer.final_fbo"_hash);
-    /*    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
     {
         // Only one attachment
         Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
-
         Render_Pass_Subpass subpass;
         subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
-
         Render_Pass_Dependency dependencies[2];
         dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-    
         make_render_pass(final_render_pass, 1, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
-        }*/
+    }
     // ---- Make the framebuffer for the swapchain / screen ----
     // ---- Only has one color attachment, no depth attachment ----
-    /*    auto *final_fbo = g_framebuffer_manager.get(g_postfx.screen_fbo);
+    auto *final_fbo = g_framebuffer_manager.get(g_postfx.screen_fbo);
     {    
-        final_fbo->extent = swapchain->extent;
         for (u32 i = 0; i < swapchain->views.count; ++i)
         {
+            final_fbo[i].extent = swapchain->extent;
+            
             allocate_memory_buffer(final_fbo[i].color_attachments, 1);
             final_fbo[i].color_attachments[0] = swapchain->views[i];
             final_fbo[i].depth_attachment = VK_NULL_HANDLE;
-            Vulkan::init_framebuffer(final_render_pass, final_fbo[i].extent.width, final_fbo->extent.height, 1, gpu, &final_fbo[i]);
+            Vulkan::init_framebuffer(final_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, gpu, &final_fbo[i]);
         }
-    }*/
+    }
     // ---- Make graphics pipeline for final render pass ----
     g_postfx.ssr_ppln = g_pipeline_manager.add("graphics_pipeline.pfx_ssr"_hash);
     auto *ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_ppln);
     {
         Shader_Modules modules(Shader_Module_Info{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT}, Shader_Module_Info{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
-        
         Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("descriptor_set_layout.g_buffer_layout"_hash)
                                        , g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash)
                                        , g_uniform_layout_manager.get_handle("descriptor_set_layout.test_descriptor_set_layout"_hash));
         Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-
         Shader_Blend_States blending(false);
-
         Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT);
-        
         make_graphics_pipeline(ssr_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
                                , VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr
                                , false, 0.0f, dynamic, final_render_pass, 0, gpu);
@@ -1136,4 +1166,39 @@ apply_pfx_on_scene(u32 image_index
         Vulkan::command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
+}
+
+void
+test(Vulkan::GPU *gpu
+     , Vulkan::Swapchain *swapchain
+     , u32 index)
+{   
+    g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
+    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
+    // ---- Make render pass ----
+    {
+        // ---- Set render pass attachment data ----
+        Render_Pass_Attachment cubemap_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        // ---- Set render pass subpass data ----
+        Render_Pass_Subpass subpass = {};
+        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        // ---- Set render pass dependencies data ----
+        Render_Pass_Dependency dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        
+        make_render_pass(atmosphere_render_pass, 1, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+
+    g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
+    auto *atmosphere_fbo = g_framebuffer_manager.get(g_atmosphere.make_fbo);
+    {
+        Image_Handle atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
+        auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
+        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
+
+        make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
+    }
 }

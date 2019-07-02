@@ -1,18 +1,4 @@
 {
-    "framebuffer.final_fbo": {
-	"new": true,
-	
-	"width": 0,
-	"height": 0,
-
-	"insert_swapchain_imgs_at_0": true,
-	"color_attachment_count": 1,
-
-	"color_attachments": {},
-	
-	"compatible_render_pass": "render_pass.final_render_pass"
-    },
-    
     "framebuffer.deferred_fbo": {
 	"new": true,
 	
@@ -66,35 +52,6 @@
 	    "index": 4,
 	    "usage": "d"
 	}
-    },
-    "framebuffer.atmosphere_fbo": {
-	"new": true,
-	
-	"width": 1000,
-	"height": 1000,
-	"insert_swapchain_imgs_at_0": false,
-	"color_attachment_count": 1,
-
-	"color_attachments": {
-	    "image2D.atmosphere_cubemap": {
-		"new": true,
-		
-		"to_create": true,
-		
-		"index": 0,
-
-		"sampler": true,
-		
-		"format": 8,
-		
-		"usage": "cs",
-		
-		"is_cubemap": true
-	    }
-	},
-	
-	"compatible_render_pass": "render_pass.atmosphere_render_pass",
-	"layers": 6
     },
 
     "framebuffer.shadow_fbo": {

@@ -391,247 +391,253 @@ load_framebuffers_from_json(Vulkan::GPU *gpu
     for (auto i = json.begin(); i != json.end(); ++i)
     {
 	std::string fbo_name = i.key();
-	
-	bool insert_swapchain_imgs_at_0 = i.value().find("insert_swapchain_imgs_at_0").value();
-	u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
-	// create color attachments and depth attachments
-	struct Attachment {Vulkan::Image2D *img; u32 index;};
-	//	Memory_Buffer_View<Attachment> color_imgs = {};
-	std::vector<Attachment> color_imgs;
-	color_imgs.resize(i.value().find("color_attachment_count").value());
-	//	allocate_memory_buffer(color_imgs, i.value().find("color_attachment_count").value());
-	auto color_attachment_node = i.value().find("color_attachments");
-
-	persist auto create_attachment = [&gpu, &swapchain](const Constant_String &name
-							    , VkFormat format
-							    , VkImageUsageFlags usage
-							    , u32 width
-							    , u32 height
-							    , u32 index
-							    , bool make_new
-                                                            , bool is_cubemap
-                                                            , u32 layers) -> Attachment
-	    {
-		Vulkan::Image2D *img;
-		
-		if (make_new)
-		{
-		    Image_Handle img_handle = g_image_manager.add(name);
-		    img = g_image_manager.get(img_handle);
-		}
-		else
-		{
-		    img = g_image_manager.get(name);
-		}
-
-		Vulkan::init_framebuffer_attachment(width
-						    , height
-						    , format
-						    , usage
-						    , gpu
-						    , img
-                                                    , layers
-                                                    , is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0
-                                                    , is_cubemap ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D);
-		return(Attachment{img, index});
-	    };
-	
-	persist auto create_usage_flags = [](std::string &s) -> VkImageUsageFlags
-	{
-	    VkImageUsageFlags u = 0;
-	    for (u32 c = 0; c < s.length(); ++c)
-	    {
-		switch(s[c])
-		{
-		case 'c': {u |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; break;}
-		case 'i': {u |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT; break;}
-		case 'd': {u |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; break;}
-		case 's': {u |= VK_IMAGE_USAGE_SAMPLED_BIT; break;}
-		}
-	    }
-	    return(u);
-	};
-
-	// if these are 0, use swapchain format
-	u32 width = i.value().find("width").value();
-	u32 height = i.value().find("width").value();
-	if (!width || !height) {width = swapchain->extent.width; height = swapchain->extent.height;};
-	
-	u32 attachment = (insert_swapchain_imgs_at_0 ? 1 : 0);
-
-        auto layers_node = i.value().find("layers");
-	u32 layers = 1;
-	if (layers_node != i.value().end())
-	{
-	    layers = layers_node.value();
-	}
-        
-	if (color_attachment_node != i.value().end())
-	{
-	    for (auto c = color_attachment_node.value().begin(); c != color_attachment_node.value().end(); ++c, ++attachment)
-	    {
-		std::string img_name = c.key();
-		// fetch data from nodes
-		bool to_create = c.value().find("to_create").value();
-		u32 index = c.value().find("index").value();
-		u32 format = c.value().find("format").value();
-		std::string usage = c.value().find("usage").value();
-		bool make_new_img = c.value().find("new").value();
-                bool is_cubemap = (c.value().find("is_cubemap") != c.value().end()) ? (bool)c.value().find("is_cubemap").value() : false;
-
-		if (to_create)
-		{
-		    VkFormat f = make_format_from_code(format, swapchain, gpu);
-
-		    VkImageUsageFlags u = create_usage_flags(usage);
-	    
-		    // use data from nodes
-		    if (to_create)
-		    {
-			color_imgs[attachment] = create_attachment(init_const_str(img_name.c_str(), img_name.length())
-								   , f
-								   , u
-								   , width
-								   , height
-								   , index
-								   , make_new_img
-                                                                   , is_cubemap
-                                                                   , layers);
-		    }
-
-		    bool sampler = c.value().find("sampler") != c.value().end();
-		    if (sampler)
-		    {
-			Vulkan::init_image_sampler(VK_FILTER_LINEAR
-						   , VK_FILTER_LINEAR
-						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-						   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-						   , VK_FALSE
-						   , 1
-						   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-						   , VK_TRUE
-						   , (VkCompareOp)0
-						   , VK_SAMPLER_MIPMAP_MODE_LINEAR
-						   , 0.0f, 0.0f, 0.0f
-						   , gpu
-						   , &color_imgs[attachment].img->image_sampler);
-		    }
-		}
-		else
-		{
-		    Vulkan::Image2D *img = g_image_manager.get(make_constant_string(img_name.c_str(), img_name.length()));
-		    color_imgs[attachment] = Attachment{img, index};
-		}
-	    }
-	}
-
-	std::sort(color_imgs.begin()
-		  , color_imgs.end()
-		  , [](Attachment &a, Attachment &b) {return(a.index < b.index);});
-	
-	Attachment depth = {};
-	bool enable_depth = i.value().find("depth_attachment") != i.value().end();
-	if (enable_depth)
-	{
-	    auto depth_att_info = i.value().find("depth_attachment");
-	    std::string depth_att_name = depth_att_info.value().find("name").value();
-	    bool depth_att_to_create = depth_att_info.value().find("to_create").value();
-	    u32 depth_att_index = depth_att_info.value().find("index").value();
-	    std::string depth_att_usage = depth_att_info.value().find("usage").value();
-	    bool make_new_dep = depth_att_info.value().find("new").value();
-
-	    if (depth_att_to_create)
-	    {
-		depth = create_attachment(make_constant_string(depth_att_name.c_str(), depth_att_name.length())
-					  , gpu->supported_depth_format
-					  , create_usage_flags(depth_att_usage)
-					  , width
-					  , height
-					  , depth_att_index
-					  , make_new_dep
-                                          , false
-                                          , layers);
-
-		bool sampler = depth_att_info.value().find("sampler") != depth_att_info.value().end();
-		if (sampler)
-		{
-		    Vulkan::init_image_sampler(VK_FILTER_NEAREST
-					       , VK_FILTER_NEAREST
-					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-					       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-					       , VK_FALSE
-					       , 1
-					       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-					       , VK_FALSE
-					       , (VkCompareOp)0
-					       , VK_SAMPLER_MIPMAP_MODE_LINEAR
-					       , 0.0f, 0.0f, 1.0f 
-					       , gpu
-					       , &depth.img->image_sampler);
-		}
-	    }
-	    else
-	    {
-		depth.img = g_image_manager.get(make_constant_string(depth_att_name.c_str(), depth_att_name.length()));
-		depth.index = depth_att_index;
-	    }
-
-	    
-	}
-	
-	std::string compatible_render_pass_name = i.value().find("compatible_render_pass").value();
-	Vulkan::Render_Pass *compatible_render_pass = g_render_pass_manager.get(make_constant_string(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
-	// actual creation of the FBO
-	u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
 
 	bool make_new = i.value().find("new").value();
 
-	Vulkan::Framebuffer *fbos;
+        if (make_new)
+        {
+            bool insert_swapchain_imgs_at_0 = i.value().find("insert_swapchain_imgs_at_0").value();
+            u32 fbos_to_create = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count : 1);
+            // create color attachments and depth attachments
+            struct Attachment {Vulkan::Image2D *img; u32 index;};
+            //	Memory_Buffer_View<Attachment> color_imgs = {};
+            std::vector<Attachment> color_imgs;
+            color_imgs.resize(i.value().find("color_attachment_count").value());
+            //	allocate_memory_buffer(color_imgs, i.value().find("color_attachment_count").value());
+            auto color_attachment_node = i.value().find("color_attachments");
+
+            persist auto create_attachment = [&gpu, &swapchain](const Constant_String &name
+                                                                , VkFormat format
+                                                                , VkImageUsageFlags usage
+                                                                , u32 width
+                                                                , u32 height
+                                                                , u32 index
+                                                                , bool make_new
+                                                                , bool is_cubemap
+                                                                , u32 layers) -> Attachment
+                {
+                    Vulkan::Image2D *img;
+		
+                    if (make_new)
+                    {
+                        Image_Handle img_handle = g_image_manager.add(name);
+                        img = g_image_manager.get(img_handle);
+                    }
+                    else
+                    {
+                        img = g_image_manager.get(name);
+                    }
+
+                    Vulkan::init_framebuffer_attachment(width
+                                                        , height
+                                                        , format
+                                                        , usage
+                                                        , gpu
+                                                        , img
+                                                        , layers
+                                                        , is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0
+                                                        , is_cubemap ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D);
+                    return(Attachment{img, index});
+                };
 	
-	if (make_new)
-	{
-	    Framebuffer_Handle fbos_handle = g_framebuffer_manager.add(make_constant_string(fbo_name.c_str(), fbo_name.length())
-									 , fbo_count);
-	    fbos = g_framebuffer_manager.get(fbos_handle);
-	}
-	else
-	{
-	    fbos = g_framebuffer_manager.get(make_constant_string(fbo_name.c_str(), fbo_name.length()));
-	}
+            persist auto create_usage_flags = [](std::string &s) -> VkImageUsageFlags
+                {
+                    VkImageUsageFlags u = 0;
+                    for (u32 c = 0; c < s.length(); ++c)
+                    {
+                        switch(s[c])
+                        {
+                        case 'c': {u |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; break;}
+                        case 'i': {u |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT; break;}
+                        case 'd': {u |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT; break;}
+                        case 's': {u |= VK_IMAGE_USAGE_SAMPLED_BIT; break;}
+                        }
+                    }
+                    return(u);
+                };
+
+            // if these are 0, use swapchain format
+            u32 width = i.value().find("width").value();
+            u32 height = i.value().find("width").value();
+            if (!width || !height) {width = swapchain->extent.width; height = swapchain->extent.height;};
 	
-	for (u32 fbo = 0; fbo < fbo_count; ++fbo)
-	{
-	    allocate_memory_buffer(fbos[fbo].color_attachments
-				   , color_imgs.size());
+            u32 attachment = (insert_swapchain_imgs_at_0 ? 1 : 0);
 
-	    for (u32 color = 0; color < color_imgs.size(); ++color)
-	    {
-		if (insert_swapchain_imgs_at_0 && color == 0)
-		{
-		    fbos[fbo].color_attachments[color] = swapchain->views[fbo];
-		}
-		else
-		{
-		    fbos[fbo].color_attachments[color] = color_imgs[color].img->image_view;
-		}
-	    }
+            auto layers_node = i.value().find("layers");
+            u32 layers = 1;
+            if (layers_node != i.value().end())
+            {
+                layers = layers_node.value();
+            }
+        
+            if (color_attachment_node != i.value().end())
+            {
+                for (auto c = color_attachment_node.value().begin(); c != color_attachment_node.value().end(); ++c, ++attachment)
+                {
+                    std::string img_name = c.key();
+                    // fetch data from nodes
+                    bool to_create = c.value().find("to_create").value();
+                    u32 index = c.value().find("index").value();
+                    u32 format = c.value().find("format").value();
+                    std::string usage = c.value().find("usage").value();
+                    bool make_new_img = c.value().find("new").value();
+                    bool is_cubemap = (c.value().find("is_cubemap") != c.value().end()) ? (bool)c.value().find("is_cubemap").value() : false;
 
-	    if (enable_depth)
-	    {
-		fbos[fbo].depth_attachment = depth.img->image_view;
-	    }
+                    if (to_create)
+                    {
+                        VkFormat f = make_format_from_code(format, swapchain, gpu);
 
-	    Vulkan::init_framebuffer(compatible_render_pass
-					 , width
-					 , height
-					 , layers
-					 , gpu
-					 , &fbos[fbo]);
+                        VkImageUsageFlags u = create_usage_flags(usage);
+	    
+                        // use data from nodes
+                        if (to_create)
+                        {
+                            color_imgs[attachment] = create_attachment(init_const_str(img_name.c_str(), img_name.length())
+                                                                       , f
+                                                                       , u
+                                                                       , width
+                                                                       , height
+                                                                       , index
+                                                                       , make_new_img
+                                                                       , is_cubemap
+                                                                       , layers);
+                        }
 
-	    fbos[fbo].extent = VkExtent2D{ width, height };
-	}
+                        bool sampler = c.value().find("sampler") != c.value().end();
+                        if (sampler)
+                        {
+                            Vulkan::init_image_sampler(VK_FILTER_LINEAR
+                                                       , VK_FILTER_LINEAR
+                                                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                       , VK_FALSE
+                                                       , 1
+                                                       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+                                                       , VK_TRUE
+                                                       , (VkCompareOp)0
+                                                       , VK_SAMPLER_MIPMAP_MODE_LINEAR
+                                                       , 0.0f, 0.0f, 0.0f
+                                                       , gpu
+                                                       , &color_imgs[attachment].img->image_sampler);
+                        }
+                    }
+                    else
+                    {
+                        Vulkan::Image2D *img = g_image_manager.get(make_constant_string(img_name.c_str(), img_name.length()));
+                        color_imgs[attachment] = Attachment{img, index};
+                    }
+                }
+            }
+
+            std::sort(color_imgs.begin()
+                      , color_imgs.end()
+                      , [](Attachment &a, Attachment &b) {return(a.index < b.index);});
+	
+            Attachment depth = {};
+            bool enable_depth = i.value().find("depth_attachment") != i.value().end();
+            if (enable_depth)
+            {
+                auto depth_att_info = i.value().find("depth_attachment");
+                std::string depth_att_name = depth_att_info.value().find("name").value();
+                bool depth_att_to_create = depth_att_info.value().find("to_create").value();
+                u32 depth_att_index = depth_att_info.value().find("index").value();
+                std::string depth_att_usage = depth_att_info.value().find("usage").value();
+                bool make_new_dep = depth_att_info.value().find("new").value();
+
+                if (depth_att_to_create)
+                {
+                    depth = create_attachment(make_constant_string(depth_att_name.c_str(), depth_att_name.length())
+                                              , gpu->supported_depth_format
+                                              , create_usage_flags(depth_att_usage)
+                                              , width
+                                              , height
+                                              , depth_att_index
+                                              , make_new_dep
+                                              , false
+                                              , layers);
+
+                    bool sampler = depth_att_info.value().find("sampler") != depth_att_info.value().end();
+                    if (sampler)
+                    {
+                        Vulkan::init_image_sampler(VK_FILTER_NEAREST
+                                                   , VK_FILTER_NEAREST
+                                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                                                   , VK_FALSE
+                                                   , 1
+                                                   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+                                                   , VK_FALSE
+                                                   , (VkCompareOp)0
+                                                   , VK_SAMPLER_MIPMAP_MODE_LINEAR
+                                                   , 0.0f, 0.0f, 1.0f 
+                                                   , gpu
+                                                   , &depth.img->image_sampler);
+                    }
+                }
+                else
+                {
+                    depth.img = g_image_manager.get(make_constant_string(depth_att_name.c_str(), depth_att_name.length()));
+                    depth.index = depth_att_index;
+                }
+
+	    
+            }
+	
+            std::string compatible_render_pass_name = i.value().find("compatible_render_pass").value();
+            Vulkan::Render_Pass *compatible_render_pass = g_render_pass_manager.get(make_constant_string(compatible_render_pass_name.c_str(), compatible_render_pass_name.length()));
+            // actual creation of the FBO
+            u32 fbo_count = (insert_swapchain_imgs_at_0 ? swapchain->imgs.count /*is for presenting*/ : 1);
+
+            Vulkan::Framebuffer *fbos;
+	
+            if (make_new)
+            {
+                Framebuffer_Handle fbos_handle = g_framebuffer_manager.add(make_constant_string(fbo_name.c_str(), fbo_name.length())
+                                                                           , fbo_count);
+                fbos = g_framebuffer_manager.get(fbos_handle);
+            }
+            else
+            {
+                fbos = g_framebuffer_manager.get(make_constant_string(fbo_name.c_str(), fbo_name.length()));
+            }
+	
+            for (u32 fbo = 0; fbo < fbo_count; ++fbo)
+            {
+                allocate_memory_buffer(fbos[fbo].color_attachments
+                                       , color_imgs.size());
+
+                for (u32 color = 0; color < color_imgs.size(); ++color)
+                {
+                    if (insert_swapchain_imgs_at_0 && color == 0)
+                    {
+                        fbos[fbo].color_attachments[color] = swapchain->views[fbo];
+                    }
+                    else
+                    {
+                        fbos[fbo].color_attachments[color] = color_imgs[color].img->image_view;
+                    }
+                }
+
+                if (enable_depth)
+                {
+                    fbos[fbo].depth_attachment = depth.img->image_view;
+                }
+
+                if (make_new)
+                {
+                    Vulkan::init_framebuffer(compatible_render_pass
+                                             , width
+                                             , height
+                                             , layers
+                                             , gpu
+                                             , &fbos[fbo]);
+                }
+
+                fbos[fbo].extent = VkExtent2D{ width, height };
+            }
+        }
     }
 }
 
@@ -901,17 +907,18 @@ load_render_passes_from_json(Vulkan::GPU *gpu
 	{
 	    Render_Pass_Handle new_rndr_pass_handle = g_render_pass_manager.add(make_constant_string(rndr_pass_name.c_str(), rndr_pass_name.length()));
 	    new_rndr_pass = g_render_pass_manager.get(new_rndr_pass_handle);
-	}
-	else
-	{
-	    new_rndr_pass = g_render_pass_manager.get(make_constant_string(rndr_pass_name.c_str(), rndr_pass_name.length()));
-	}
-	
-	Vulkan::init_render_pass(Memory_Buffer_View<VkAttachmentDescription>{color_attachment_count, att_descriptions}
+
+            Vulkan::init_render_pass(Memory_Buffer_View<VkAttachmentDescription>{color_attachment_count, att_descriptions}
 				     , Memory_Buffer_View<VkSubpassDescription>{subpass_count, subpass_descriptions}
 				     , Memory_Buffer_View<VkSubpassDependency>{dependency_count, dependencies}
 				     , gpu
 				     , new_rndr_pass);
+	}
+	else
+	{
+            //	    new_rndr_pass = g_render_pass_manager.get(make_constant_string(rndr_pass_name.c_str(), rndr_pass_name.length()));
+	}
+       
     }
 }
 

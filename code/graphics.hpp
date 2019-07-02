@@ -376,3 +376,6 @@ apply_pfx_on_scene(u32 image_index
                    , const glm::mat4 &view_matrix
                    , const glm::mat4 &projection_matrix
                    , Vulkan::GPU *gpu);
+
+void
+test(Vulkan::GPU *, Vulkan::Swapchain *, u32 index = 0);

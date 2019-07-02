@@ -1372,7 +1372,7 @@ update_entities(Window_Data *window
 internal void
 prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool)
 {
-    world.deferred.render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
+    //    world.deferred.render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
 
     // ---- make cube model info ----
     {
@@ -1770,10 +1770,12 @@ make_world(Window_Data *window
     load_render_passes_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
+    test(&vk->gpu, &vk->swapchain);
+
     std::cout << "JSON > loading framebuffers" << std::endl;
     load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
-    
+
     std::cout << "JSON > loading descriptors" << std::endl;
     load_descriptors_from_json(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
     clear_linear();

@@ -429,7 +429,6 @@ make_render_pass_dependency(s32 src_index,
 
 void
 make_render_pass(Vulkan::Render_Pass *render_pass
-                 , u32 attachment_count
                  , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
                  , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
                  , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
@@ -451,29 +450,35 @@ make_render_pass(Vulkan::Render_Pass *render_pass
     // Max is 5
     VkSubpassDescription subpasses_vk[5] = {};
     u32 sub_i = 0;
+    VkAttachmentReference reference_buffer[30] = {};
+    u32 reference_count = 0;
     for (; sub_i < subpasses.count; ++sub_i)
     {
         // Max is 10
-        VkAttachmentReference attachment_references[10] = {};
         u32 ref_i = 0;
-        for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i)
+        u32 color_reference_start = reference_count;
+        for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i, ++reference_count)
         {
-            attachment_references[ref_i] = Vulkan::init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index
-                                                                             , subpasses[sub_i].color_attachments[ref_i].layout);
+            reference_buffer[reference_count] = Vulkan::init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index,
+                                                                                  subpasses[sub_i].color_attachments[ref_i].layout);
         }
-        VkAttachmentReference depth_reference = {};
-        if (subpasses[sub_i].enable_depth) depth_reference = Vulkan::init_attachment_reference(subpasses[sub_i].depth_attachment.index
-                                                                                               , subpasses[sub_i].depth_attachment.layout);
 
-        VkAttachmentReference input_references[10] = {};
+        u32 input_reference_start = reference_count;
         u32 inp_i = 0;
-        for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i)
+        for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i, ++reference_count)
         {
-            input_references[inp_i] = Vulkan::init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index
-                                                                        , subpasses[sub_i].input_attachments[inp_i].layout);
+            reference_buffer[reference_count] = Vulkan::init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index,
+                                                                                  subpasses[sub_i].input_attachments[inp_i].layout);
+        }
+
+        u32 depth_reference_ptr = reference_count;
+        if (subpasses[sub_i].enable_depth)
+        {
+            reference_buffer[reference_count++] = Vulkan::init_attachment_reference(subpasses[sub_i].depth_attachment.index,
+                                                                                    subpasses[sub_i].depth_attachment.layout);
         }
         
-        subpasses_vk[sub_i] = Vulkan::init_subpass_description({ref_i, attachment_references}, subpasses[sub_i].enable_depth ? &depth_reference : nullptr, {inp_i, input_references});
+        subpasses_vk[sub_i] = Vulkan::init_subpass_description({ref_i, &reference_buffer[color_reference_start]}, subpasses[sub_i].enable_depth ? &reference_buffer[depth_reference_ptr] : nullptr, {inp_i, &reference_buffer[input_reference_start]});
     }
 
     VkSubpassDependency dependencies_vk[10] = {};
@@ -802,7 +807,7 @@ make_atmosphere_data(Vulkan::GPU *gpu
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(atmosphere_render_pass, 1, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
         }*/
     
     //    g_atmosphere.make_render_pass      = g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
@@ -958,12 +963,50 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
 }
 
 void
+make_dfr_rendering_data(Vulkan::GPU *gpu)
+{
+    // ---- Make deferred rendering render pass ----
+    g_dfr_rendering.dfr_render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
+    auto *dfr_render_pass = g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass);
+    {
+        Render_Pass_Attachment attachments[] = { Render_Pass_Attachment{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 Render_Pass_Attachment{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 Render_Pass_Attachment{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 Render_Pass_Attachment{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                 Render_Pass_Attachment{gpu->supported_depth_format, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} };
+        Render_Pass_Subpass subpasses[2] = {};
+        subpasses[0].set_color_attachment_references(Render_Pass_Attachment_Reference{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+                                                     Render_Pass_Attachment_Reference{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+                                                     Render_Pass_Attachment_Reference{ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+                                                     Render_Pass_Attachment_Reference{ 3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+        subpasses[0].enable_depth = 1;
+        subpasses[0].depth_attachment = Render_Pass_Attachment_Reference{ 4, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+        
+        subpasses[1].set_color_attachment_references(Render_Pass_Attachment_Reference{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+        
+        subpasses[1].set_input_attachment_references(Render_Pass_Attachment_Reference{ 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+                                                     Render_Pass_Attachment_Reference{ 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+                                                     Render_Pass_Attachment_Reference{ 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+        Render_Pass_Dependency dependencies[3] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      1, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        dependencies[2] = make_render_pass_dependency(1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        
+        make_render_pass(dfr_render_pass, {5, attachments}, {2, subpasses}, {3, dependencies}, gpu);
+    }
+}
+
+void
 make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , VkDescriptorPool *pool
                              , VkCommandPool *cmdpool
                              , Vulkan::Swapchain *swapchain)
 {
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+    //    make_dfr_rendering_data(gpu);
 
     g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
     g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
@@ -1093,7 +1136,7 @@ make_postfx_data(Vulkan::GPU *gpu
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        make_render_pass(final_render_pass, 1, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
     }
     // ---- Make the framebuffer for the swapchain / screen ----
     // ---- Only has one color attachment, no depth attachment ----
@@ -1189,7 +1232,7 @@ test(Vulkan::GPU *gpu
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(atmosphere_render_pass, 1, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
     }
 
     g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
@@ -1201,4 +1244,6 @@ test(Vulkan::GPU *gpu
 
         make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
     }
+
+    make_dfr_rendering_data(gpu);
 }

@@ -31,7 +31,7 @@
     
     
     "render_pass.deferred_render_pass": {
-	"new": true ,
+	"new": false,
 	"attachment_count": 5,
 	"color_attachments": {
 	    "c0": {

@@ -101,6 +101,17 @@ make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *
 }
 
 VkWriteDescriptorSet
+update_input_attachment(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout)
+{
+    // textures will kind of always be VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    VkDescriptorImageInfo image_info = img.make_descriptor_info(layout);
+    VkWriteDescriptorSet write = {};
+    Vulkan::init_input_attachment_descriptor_set_write(group, binding, dst_element, count, &image_info, &write);
+    
+    return(write);
+}
+
+VkWriteDescriptorSet
 update_texture(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout)
 {
     // textures will kind of always be VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -127,6 +138,64 @@ update_binding_from_group(const Memory_Buffer_View<VkWriteDescriptorSet> &writes
 {
     Vulkan::update_descriptor_sets(writes, gpu);
 };
+
+enum Binding_Type { BUFFER, INPUT_ATTACHMENT, TEXTURE };
+struct Update_Binding
+{
+    Binding_Type type;
+    void *object;
+    u32 binding;
+    u32 t_changing_data = 0; // Offset into the buffer or image layout
+    // Stuff that can change optionally
+    u32 count = 1;
+    u32 dst_element = 0;
+};
+
+template <typename ...Update_Ts> void
+update_uniform_group(Vulkan::GPU *gpu, Uniform_Group *group, const Update_Ts &...updates)
+{
+    Update_Binding bindings[] = { updates... };
+
+    u32 image_info_count = 0;
+    VkDescriptorImageInfo image_info_buffer[20] = {};
+    u32 buffer_info_count = 0;
+    VkDescriptorBufferInfo buffer_info_buffer[20] = {};
+
+    VkWriteDescriptorSet writes[sizeof...(updates)] = {};
+    
+    for (u32 i = 0; i < sizeof...(updates); ++i)
+    {
+        switch (bindings[i].type)
+        {
+        case Binding_Type::BUFFER:
+            {
+                Vulkan::Buffer *ubo = (Vulkan::Buffer *)bindings[i].object;
+                buffer_info_buffer[buffer_info_count] = ubo->make_descriptor_info(bindings[i].t_changing_data);
+                Vulkan::init_buffer_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &buffer_info_buffer[buffer_info_count], &writes[i]);
+                ++buffer_info_count;
+                break;
+            }
+        case Binding_Type::TEXTURE:
+            {
+                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
+                Vulkan::init_image_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                ++image_info_count;
+                break;
+            }
+        case Binding_Type::INPUT_ATTACHMENT:
+            {
+                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
+                Vulkan::init_input_attachment_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                ++image_info_count;
+                break;
+            }
+        }
+    }
+
+    Vulkan::update_descriptor_sets({sizeof...(updates), writes}, gpu);
+}
 
 
 
@@ -1244,6 +1313,7 @@ apply_pfx_on_scene(u32 image_index
 void
 test(Vulkan::GPU *gpu
      , Vulkan::Swapchain *swapchain
+     , VkDescriptorPool *desc_pool
      , u32 index)
 {   
     g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
@@ -1347,6 +1417,20 @@ test(Vulkan::GPU *gpu
     Uniform_Group_Handle gbuffer_group_hdl = g_uniform_group_manager.add("uniform_group.g_buffer"_hash);
     auto *gbuffer_group_ptr = g_uniform_group_manager.get(gbuffer_group_hdl);
     {
-        //        make_uniform_group(gbuffer_layout_ptr, );
+        *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, desc_pool, gpu);
+
+        Image_Handle final_tx_hdl = g_image_manager.get_handle("image2D.fbo_final"_hash);
+        Vulkan::Image2D *final_tx = g_image_manager.get(final_tx_hdl);
+        
+        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
+        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        
+        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
+        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+        
+        update_uniform_group(gpu, gbuffer_group_ptr,
+                             Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }

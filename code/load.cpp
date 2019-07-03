@@ -965,57 +965,58 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 		{
 		    Uniform_Layout_Handle new_uniform_layout_handle = g_uniform_layout_manager.add(make_constant_string(key.c_str(), key.length()));
 		    new_uniform_layout = g_uniform_layout_manager.get(new_uniform_layout_handle);
-		}
-		else
-		{
-		    new_uniform_layout = g_uniform_layout_manager.get(make_constant_string(key.c_str(), key.length()));
-		}
+                    //		}
+                    //		else
+                    //		{
+                    //		    new_uniform_layout = g_uniform_layout_manager.get(make_constant_string(key.c_str(), key.length()));
+                    //		}
 		
-		u32 binding_count = i.value().find("binding_count").value();
-		VkDescriptorSetLayoutBinding *bindings;
-		if (binding_count > 0)
-		{
-		    bindings = ALLOCA_T(VkDescriptorSetLayoutBinding, binding_count);
-		}
-		else
-		{
-		    bindings = nullptr;
-		}
+                    u32 binding_count = i.value().find("binding_count").value();
+                    VkDescriptorSetLayoutBinding *bindings;
+                    if (binding_count > 0)
+                    {
+                        bindings = ALLOCA_T(VkDescriptorSetLayoutBinding, binding_count);
+                    }
+                    else
+                    {
+                        bindings = nullptr;
+                    }
 		
-		auto bindings_node = i.value().find("bindings");
+                    auto bindings_node = i.value().find("bindings");
 		
-		u32 at = 0;
-		for (auto binding_description = bindings_node.value().begin()
-			 ; binding_description != bindings_node.value().end()
-			 ; ++binding_description, ++at)
-		{
-		    char type = std::string(binding_description.value().find("type").value())[0];
-		    VkDescriptorType vk_type;
-		    u32 index = binding_description.value().find("binding").value();
-		    u32 count = binding_description.value().find("count").value();
-		    char flags = std::string(binding_description.value().find("shader_stages").value())[0];
-		    VkShaderStageFlagBits vk_flags;
+                    u32 at = 0;
+                    for (auto binding_description = bindings_node.value().begin()
+                             ; binding_description != bindings_node.value().end()
+                             ; ++binding_description, ++at)
+                    {
+                        char type = std::string(binding_description.value().find("type").value())[0];
+                        VkDescriptorType vk_type;
+                        u32 index = binding_description.value().find("binding").value();
+                        u32 count = binding_description.value().find("count").value();
+                        char flags = std::string(binding_description.value().find("shader_stages").value())[0];
+                        VkShaderStageFlagBits vk_flags;
 		    
-		    switch(type)
-		    {
-		    case 'c': {vk_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; break;}
-		    case 'i': {vk_type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT; break;}
-		    }
+                        switch(type)
+                        {
+                        case 'c': {vk_type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; break;}
+                        case 'i': {vk_type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT; break;}
+                        }
 		    
-		    switch(flags)
-		    {
-		    case 'v': {vk_flags = VK_SHADER_STAGE_VERTEX_BIT; break;}
-		    case 'f': {vk_flags = VK_SHADER_STAGE_FRAGMENT_BIT; break;}
-		    case 'g': {vk_flags = VK_SHADER_STAGE_GEOMETRY_BIT; break;}
-		    case 't': {break;}
-		    };
+                        switch(flags)
+                        {
+                        case 'v': {vk_flags = VK_SHADER_STAGE_VERTEX_BIT; break;}
+                        case 'f': {vk_flags = VK_SHADER_STAGE_FRAGMENT_BIT; break;}
+                        case 'g': {vk_flags = VK_SHADER_STAGE_GEOMETRY_BIT; break;}
+                        case 't': {break;}
+                        };
 		    
-		    bindings[at] = Vulkan::init_descriptor_set_layout_binding(vk_type, index, count, vk_flags);
-		}
+                        bindings[at] = Vulkan::init_descriptor_set_layout_binding(vk_type, index, count, vk_flags);
+                    }
 		
-		Memory_Buffer_View<VkDescriptorSetLayoutBinding> bindings_mbv {binding_count, bindings};
-		Vulkan::init_descriptor_set_layout(bindings_mbv, gpu, new_uniform_layout);
-	    }
+                    Memory_Buffer_View<VkDescriptorSetLayoutBinding> bindings_mbv {binding_count, bindings};
+                    Vulkan::init_descriptor_set_layout(bindings_mbv, gpu, new_uniform_layout);
+                }
+            }
 	    else if(i.value().find("type").value() == "set" && set_or_layout[sol] == "set")
 	    {
 		s32 count = i.value().find("count").value();
@@ -1034,131 +1035,134 @@ load_descriptors_from_json(Vulkan::GPU *gpu
 		}
 		
 		bool make_new = i.value().find("new").value();
-		Uniform_Group *sets = [&make_new, &key, &count]
-		    {
-			if (make_new)
-			{
-			    Uniform_Group_Handle uniform_group_handle = g_uniform_group_manager.add(make_constant_string(key.c_str(), key.length()), count);
-			    return(g_uniform_group_manager.get(uniform_group_handle));
-			}
-			else
-			{
-			    return(g_uniform_group_manager.get(make_constant_string(key.c_str(), key.length())));
-			}
-		    }();
+                if (make_new)
+                {
+                    Uniform_Group *sets = [&make_new, &key, &count]
+                        {
+                            if (make_new)
+                            {
+                                Uniform_Group_Handle uniform_group_handle = g_uniform_group_manager.add(make_constant_string(key.c_str(), key.length()), count);
+                                return(g_uniform_group_manager.get(uniform_group_handle));
+                            }
+                            else
+                            {
+                                return(g_uniform_group_manager.get(make_constant_string(key.c_str(), key.length())));
+                            }
+                        }();
 		
-		Memory_Buffer_View<VkDescriptorSet> separate_sets = {(u32)count, sets};
-		Vulkan::allocate_descriptor_sets(separate_sets
-						 , Memory_Buffer_View<VkDescriptorSetLayout>{(u32)count, layouts_inline}
-						 , gpu
-						 , source_pool);
+                    Memory_Buffer_View<VkDescriptorSet> separate_sets = {(u32)count, sets};
+                    Vulkan::allocate_descriptor_sets(separate_sets
+                                                     , Memory_Buffer_View<VkDescriptorSetLayout>{(u32)count, layouts_inline}
+                                                     , gpu
+                                                     , source_pool);
 	    
 		
 		
-		auto bindings_node = i.value().find("bindings");
+                    auto bindings_node = i.value().find("bindings");
 
-		for (u32 set_i = 0; set_i < count; ++set_i)
-		{
-		    VkWriteDescriptorSet *writes = ALLOCA_T(VkWriteDescriptorSet, bindings_node.value().size());
-		    u32 write_index = 0;
+                    for (u32 set_i = 0; set_i < count; ++set_i)
+                    {
+                        VkWriteDescriptorSet *writes = ALLOCA_T(VkWriteDescriptorSet, bindings_node.value().size());
+                        u32 write_index = 0;
 		    
-		    u32 buffer_info_cache_index = 0;
-		    u32 image_info_cache_index = 0;
+                        u32 buffer_info_cache_index = 0;
+                        u32 image_info_cache_index = 0;
 		    
-		    for (auto binding_desc = bindings_node.value().begin()
-			     ; binding_desc != bindings_node.value().end()
-			     ; ++binding_desc, ++write_index)
-		    {
-			std::string type_str = binding_desc.value().find("type").value();
-			u32 dst_element = binding_desc.value().find("dst_element").value();
-			u32 objects_count = binding_desc.value().find("count").value();
-			u32 binding = binding_desc.value().find("binding").value();
+                        for (auto binding_desc = bindings_node.value().begin()
+                                 ; binding_desc != bindings_node.value().end()
+                                 ; ++binding_desc, ++write_index)
+                        {
+                            std::string type_str = binding_desc.value().find("type").value();
+                            u32 dst_element = binding_desc.value().find("dst_element").value();
+                            u32 objects_count = binding_desc.value().find("count").value();
+                            u32 binding = binding_desc.value().find("binding").value();
 			
-			if (type_str == "buffer")
-			{
-			    auto buffer_info = binding_desc.value().find("buffer");
-			    std::string buffer_name = buffer_info.value().find("name").value();
-			    s32 at = buffer_info.value().find("at").value();
+                            if (type_str == "buffer")
+                            {
+                                auto buffer_info = binding_desc.value().find("buffer");
+                                std::string buffer_name = buffer_info.value().find("name").value();
+                                s32 at = buffer_info.value().find("at").value();
 			    
-			    Vulkan::Buffer *buffers = g_gpu_buffer_manager.get(make_constant_string(buffer_name.c_str(), buffer_name.length()));
-			    Vulkan::Buffer *buffer = [&at, &set_i, &buffers]
-				{
-				    if (at < 0)
-				    {
-					return(&buffers[set_i]);
-				    }
-				    else
-				    {
-					return(&buffers[at]);
-				    }
-				}();
+                                Vulkan::Buffer *buffers = g_gpu_buffer_manager.get(make_constant_string(buffer_name.c_str(), buffer_name.length()));
+                                Vulkan::Buffer *buffer = [&at, &set_i, &buffers]
+                                    {
+                                        if (at < 0)
+                                        {
+                                            return(&buffers[set_i]);
+                                        }
+                                        else
+                                        {
+                                            return(&buffers[at]);
+                                        }
+                                    }();
 			    
-			    u32 buffer_offset = binding_desc.value().find("buffer_offset").value();
+                                u32 buffer_offset = binding_desc.value().find("buffer_offset").value();
 			    
-			    buffer_infos_cache[buffer_info_cache_index] = {};
-			    Vulkan::init_descriptor_set_buffer_info(buffer, buffer_offset, &buffer_infos_cache[buffer_info_cache_index]);
-			    writes[write_index] = {};
-			    Vulkan::init_buffer_descriptor_set_write(&sets[set_i]
-								     , binding
-								     , dst_element
-								     , objects_count
-								     , &buffer_infos_cache[buffer_info_cache_index]
-								     , &writes[write_index]);
+                                buffer_infos_cache[buffer_info_cache_index] = {};
+                                Vulkan::init_descriptor_set_buffer_info(buffer, buffer_offset, &buffer_infos_cache[buffer_info_cache_index]);
+                                writes[write_index] = {};
+                                Vulkan::init_buffer_descriptor_set_write(&sets[set_i]
+                                                                         , binding
+                                                                         , dst_element
+                                                                         , objects_count
+                                                                         , &buffer_infos_cache[buffer_info_cache_index]
+                                                                         , &writes[write_index]);
 			    
-			    ++buffer_info_cache_index;
-			}
-			else if (type_str == "input")
-			{
-			    auto image_info = binding_desc.value().find("image");
-			    std::string image_name = image_info.value().find("name").value();
+                                ++buffer_info_cache_index;
+                            }
+                            else if (type_str == "input")
+                            {
+                                auto image_info = binding_desc.value().find("image");
+                                std::string image_name = image_info.value().find("name").value();
 			    
-			    char layout_code = std::string(image_info.value().find("layout").value())[0];
-			    VkImageLayout layout = make_image_layout_from_code(layout_code);
+                                char layout_code = std::string(image_info.value().find("layout").value())[0];
+                                VkImageLayout layout = make_image_layout_from_code(layout_code);
 			    
-			    Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
+                                Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
 
-			    image_infos_cache[image_info_cache_index] = {};
-			    Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
+                                image_infos_cache[image_info_cache_index] = {};
+                                Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
 
-			    writes[write_index] = {};
-			    Vulkan::init_input_attachment_descriptor_set_write(&sets[set_i]
-									       , binding_desc.value().find("binding").value()
-									       , binding_desc.value().find("dst_element").value()
-									       , binding_desc.value().find("count").value()
-									       , &image_infos_cache[image_info_cache_index]
-									       , &writes[write_index]);
+                                writes[write_index] = {};
+                                Vulkan::init_input_attachment_descriptor_set_write(&sets[set_i]
+                                                                                   , binding_desc.value().find("binding").value()
+                                                                                   , binding_desc.value().find("dst_element").value()
+                                                                                   , binding_desc.value().find("count").value()
+                                                                                   , &image_infos_cache[image_info_cache_index]
+                                                                                   , &writes[write_index]);
 			    
-			    ++image_info_cache_index;
-			}
-			else if (type_str == "sampler")
-			{
-			    auto image_info = binding_desc.value().find("image");
-			    std::string image_name = image_info.value().find("name").value();
+                                ++image_info_cache_index;
+                            }
+                            else if (type_str == "sampler")
+                            {
+                                auto image_info = binding_desc.value().find("image");
+                                std::string image_name = image_info.value().find("name").value();
 			    
-			    char layout_code = std::string(image_info.value().find("layout").value())[0];
-			    VkImageLayout layout = make_image_layout_from_code(layout_code);
+                                char layout_code = std::string(image_info.value().find("layout").value())[0];
+                                VkImageLayout layout = make_image_layout_from_code(layout_code);
 			    
-			    Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
+                                Vulkan::Image2D *image = g_image_manager.get(make_constant_string(image_name.c_str(), image_name.length()));
 
-			    image_infos_cache[image_info_cache_index] = {};
-			    Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
+                                image_infos_cache[image_info_cache_index] = {};
+                                Vulkan::init_descriptor_set_image_info(image->image_sampler, image->image_view, layout, &image_infos_cache[image_info_cache_index]);
 
-			    writes[write_index] = {};
-			    Vulkan::init_image_descriptor_set_write(&sets[set_i]
-								    , binding_desc.value().find("binding").value()
-								    , binding_desc.value().find("dst_element").value()
-								    , binding_desc.value().find("count").value()
-								    , &image_infos_cache[image_info_cache_index]
-								    , &writes[write_index]);
+                                writes[write_index] = {};
+                                Vulkan::init_image_descriptor_set_write(&sets[set_i]
+                                                                        , binding_desc.value().find("binding").value()
+                                                                        , binding_desc.value().find("dst_element").value()
+                                                                        , binding_desc.value().find("count").value()
+                                                                        , &image_infos_cache[image_info_cache_index]
+                                                                        , &writes[write_index]);
 			    
-			    ++image_info_cache_index;
-			}
-		    }
+                                ++image_info_cache_index;
+                            }
+                        }
 		    
-		    Vulkan::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{(u32)(bindings_node.value().size()), writes}
+                        Vulkan::update_descriptor_sets(Memory_Buffer_View<VkWriteDescriptorSet>{(u32)(bindings_node.value().size()), writes}
 					       , gpu);
 		}	    
 	    }
+            }
 	}
     }
 }

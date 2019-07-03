@@ -202,6 +202,9 @@ update_texture(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_
 VkWriteDescriptorSet
 update_buffer(Uniform_Group *group, Vulkan::Buffer &ubo, u32 binding, u32 dst_element, u32 count, u32 offset_into_buffer = 0);
 
+VkWriteDescriptorSet
+update_input_attachment(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout);
+
 // Use : update_binding_from_group( { update_texture(...), update_texture(...), update_buffer(...)... } ...)
 void
 update_binding_from_group(const Memory_Buffer_View<VkWriteDescriptorSet> &writes, Vulkan::GPU *gpu);
@@ -373,4 +376,4 @@ apply_pfx_on_scene(u32 image_index
                    , Vulkan::GPU *gpu);
 
 void
-test(Vulkan::GPU *, Vulkan::Swapchain *, u32 index = 0);
+test(Vulkan::GPU *, Vulkan::Swapchain *, VkDescriptorPool *desc_pool, u32 index = 0);

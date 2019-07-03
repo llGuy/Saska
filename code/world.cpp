@@ -37,8 +37,9 @@ struct Camera
     glm::vec3 d; // direction
     glm::vec3 u; // up
 
-    f32 fov;
+    f32 fov; // field of view
     f32 asp; // aspect ratio
+    f32 aspc; // conditional horizontal aspect ratio
     f32 n, f; // near and far planes
     
     glm::vec4 captured_frustum_corners[8] {};
@@ -57,6 +58,11 @@ struct Camera
 
 	fov = glm::radians(60.0f);
 	asp = w / h;
+	aspc = 16.0f / 9.0f;
+	if (asp < aspc)
+	{
+	    fov = 2.0f * atan(tan(fov / 2.0f) / asp * aspc);
+	}
 	n = 1.0f;
 	f = 100000.0f;
     }

@@ -192,7 +192,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.atmosphere_layout"],
+	    "descriptor_set_layouts": [],
 	    "push_constant": {
 		"stage_flags": "f",
 		"offset": 0,

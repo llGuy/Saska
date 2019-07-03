@@ -172,14 +172,9 @@ make_uniform_binding_s(u32 count
 // Separate Uniform_Layout_Info (list of binding structs) from Uniform_Layout (API struct) for optimisation reasons
 struct Uniform_Layout_Info // --> VkDescriptorSetLayout
 {
-    Memory_Buffer_View<Uniform_Binding> bindings;
-    u32 stack_ptr {0};
-
-    void
-    allocate(u32 binding_count);
-
-    void
-    free(void);
+    persist constexpr u32 MAX_BINDINGS = 15;
+    Uniform_Binding bindings_buffer[MAX_BINDINGS] = {};
+    u32 binding_count = 0;
     
     void
     push(const Uniform_Binding &binding_info);

@@ -63,21 +63,9 @@ make_uniform_binding_s(u32 count
 
 
 void
-Uniform_Layout_Info::allocate(u32 binding_count)
-{
-    allocate_memory_buffer(bindings, binding_count);
-}
-
-void
-Uniform_Layout_Info::free(void)
-{
-    deallocate_free_list(bindings.buffer);
-}
-    
-void
 Uniform_Layout_Info::push(const Uniform_Binding &binding_info)
 {
-    bindings[stack_ptr++] = binding_info;
+    bindings_buffer[binding_count++] = binding_info;
 }
 
 void
@@ -86,7 +74,7 @@ Uniform_Layout_Info::push(u32 count
 			  , VkDescriptorType uniform_type
 			  , VkShaderStageFlags shader_flags)
 {
-    bindings[stack_ptr++] = Vulkan::init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
+    bindings_buffer[binding_count++] = Vulkan::init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 using Uniform_Layout = VkDescriptorSetLayout;
@@ -95,7 +83,7 @@ Uniform_Layout
 make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu)
 {
     VkDescriptorSetLayout layout;
-    Vulkan::init_descriptor_set_layout(blueprint->bindings, gpu, &layout);
+    Vulkan::init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, gpu, &layout);
     return(layout);
 }
 
@@ -317,7 +305,7 @@ make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_coun
                                    , VK_FALSE
                                    , 1
                                    , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-                                   , VK_TRUE
+                                   , VK_FALSE
                                    , (VkCompareOp)0
                                    , VK_SAMPLER_MIPMAP_MODE_LINEAR
                                    , 0.0f, 0.0f, 0.0f
@@ -391,6 +379,13 @@ struct Render_Pass_Subpass
             color_attachments[i] = references[i];
         }
         color_attachment_count = sizeof...(ts);
+    }
+
+    void
+    set_depth(const Render_Pass_Attachment_Reference &reference)
+    {
+        enable_depth = true;
+        depth_attachment = reference;
     }
 
     template <typename ...T> void
@@ -666,6 +661,8 @@ struct Lighting
     // Later, need to add PSSM
     struct Shadows
     {
+        persist constexpr u32 SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+        
         Framebuffer_Handle fbo;
         Render_Pass_Handle pass;
         Image_Handle map;
@@ -963,13 +960,13 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
 }
 
 void
-make_dfr_rendering_data(Vulkan::GPU *gpu)
+make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
 {
     // ---- Make deferred rendering render pass ----
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
     auto *dfr_render_pass = g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass);
     {
-        Render_Pass_Attachment attachments[] = { Render_Pass_Attachment{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+        Render_Pass_Attachment attachments[] = { Render_Pass_Attachment{swapchain->format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                  Render_Pass_Attachment{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                  Render_Pass_Attachment{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                  Render_Pass_Attachment{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
@@ -997,6 +994,39 @@ make_dfr_rendering_data(Vulkan::GPU *gpu)
         
         make_render_pass(dfr_render_pass, {5, attachments}, {2, subpasses}, {3, dependencies}, gpu);
     }
+
+    // ---- Make deferred rendering framebuffer ----
+    g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.add("framebuffer.deferred_fbo"_hash);
+    auto *dfr_framebuffer = g_framebuffer_manager.get(g_dfr_rendering.dfr_framebuffer);
+    {
+        u32 w = swapchain->extent.width, h = swapchain->extent.height;
+        
+        Image_Handle final_tx_hdl = g_image_manager.add("image2D.fbo_final"_hash);
+        auto *final_tx = g_image_manager.get(final_tx_hdl);
+        Image_Handle albedo_tx_hdl = g_image_manager.add("image2D.fbo_albedo"_hash);
+        auto *albedo_tx = g_image_manager.get(albedo_tx_hdl);
+        Image_Handle position_tx_hdl = g_image_manager.add("image2D.fbo_position"_hash);
+        auto *position_tx = g_image_manager.get(position_tx_hdl);
+        Image_Handle normal_tx_hdl = g_image_manager.add("image2D.fbo_normal"_hash);
+        auto *normal_tx = g_image_manager.get(normal_tx_hdl);
+        Image_Handle depth_tx_hdl = g_image_manager.add("image2D.fbo_depth"_hash);
+        auto *depth_tx = g_image_manager.get(depth_tx_hdl);
+
+        make_texture(final_tx, w, h, swapchain->format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2, gpu);
+        make_texture(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_texture(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_texture(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_texture(depth_tx, w, h, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+
+        Vulkan::Image2D color_attachments[4] = {};
+        color_attachments[0] = *final_tx;
+        color_attachments[1] = *albedo_tx;
+        color_attachments[2] = *position_tx;
+        color_attachments[3] = *normal_tx;
+        
+        // Can put final_tx as the pointer to the array because, the other 3 textures will be stored contiguously just after it in memory
+        make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {4, color_attachments}, depth_tx, gpu);
+    }
 }
 
 void
@@ -1006,7 +1036,7 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , Vulkan::Swapchain *swapchain)
 {
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-    //    make_dfr_rendering_data(gpu);
+    //    make_dfr_rendering_data(gpu, swapchain);
 
     g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
     g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
@@ -1245,5 +1275,78 @@ test(Vulkan::GPU *gpu
         make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
     }
 
-    make_dfr_rendering_data(gpu);
+    make_dfr_rendering_data(gpu, swapchain);
+
+    // ---- Make shadow render pass ----
+    g_lighting.shadows.pass = g_render_pass_manager.add("render_pass.shadow_render_pass"_hash);
+    auto *shadow_pass = g_render_pass_manager.get(g_lighting.shadows.pass);
+    {
+        Render_Pass_Attachment shadow_attachment { gpu->supported_depth_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        Render_Pass_Subpass subpass = {};
+        subpass.set_depth(Render_Pass_Attachment_Reference{ 0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL });
+        Render_Pass_Dependency dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        
+        make_render_pass(shadow_pass, {1, &shadow_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+
+    // ---- Make shadow framebuffer ----
+    g_lighting.shadows.fbo = g_framebuffer_manager.add("framebuffer.shadow_fbo"_hash);
+    auto *shadow_fbo = g_framebuffer_manager.get(g_lighting.shadows.fbo);
+    {
+        Image_Handle shadowmap_handle = g_image_manager.add("image2D.shadow_map"_hash);
+        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
+        make_texture(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        
+        make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Vulkan::Image2D>(), shadowmap_texture, gpu);
+    }
+
+
+
+    // Make descriptor stuff
+    // ---- Make render atmosphere uniform layout
+    Uniform_Layout_Handle render_atmosphere_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.render_atmosphere_layout"_hash);
+    auto *render_atmosphere_layout_ptr = g_uniform_layout_manager.get(render_atmosphere_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *render_atmosphere_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Layout_Handle sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
+    auto *sampler2D_layout_ptr = g_uniform_layout_manager.get(sampler2D_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *sampler2D_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Layout_Handle gbuffer_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.g_buffer_layout"_hash);
+    auto *gbuffer_layout_ptr = g_uniform_layout_manager.get(gbuffer_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *gbuffer_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Layout_Handle gbuffer_input_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.deferred_layout"_hash);
+    auto *gbuffer_input_layout_ptr = g_uniform_layout_manager.get(gbuffer_input_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Group_Handle gbuffer_group_hdl = g_uniform_group_manager.add("uniform_group.g_buffer"_hash);
+    auto *gbuffer_group_ptr = g_uniform_group_manager.get(gbuffer_group_hdl);
+    {
+        //        make_uniform_group(gbuffer_layout_ptr, );
+    }
 }

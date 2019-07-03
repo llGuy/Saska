@@ -1399,17 +1399,14 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
     
     // ---- make descriptor set layout for rendering the cubes ----
     {
-	world.test.set_layout = g_uniform_layout_manager.add("descriptor_set_layout.test_descriptor_set_layout"_hash);
-	auto *layout = g_uniform_layout_manager.get(world.test.set_layout);
-	
-	VkDescriptorSetLayoutBinding bindings[] =
-	    {
-		Vulkan::init_descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT)
-	    };
-	
-	Vulkan::init_descriptor_set_layout(Memory_Buffer_View<VkDescriptorSetLayoutBinding>{1, bindings}
-					       , gpu
-					       , layout);
+        // TODO : Move the test descriptor set to camera structure and better name please
+        world.test.set_layout = g_uniform_layout_manager.add("descriptor_set_layout.test_descriptor_set_layout"_hash);
+        auto *layout = g_uniform_layout_manager.get(world.test.set_layout);
+
+        Uniform_Layout_Info blueprint = {};
+        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+        
+        *layout = make_uniform_layout(&blueprint, gpu);
     }
 
     // ---- make cube vbo ----
@@ -1765,17 +1762,17 @@ make_world(Window_Data *window
 {
     prepare_external_loading_state(&vk->gpu, &vk->swapchain, cmdpool);
     make_morphable_terrain_master(cmdpool, &vk->gpu);
-    
-    std::cout << "JSON > loading render passes" << std::endl;
-    load_render_passes_from_json(&vk->gpu, &vk->swapchain);
-    clear_linear();
 
+
+
+
+    // For now this creates a bunch of vulkan objects
     test(&vk->gpu, &vk->swapchain);
 
-    std::cout << "JSON > loading framebuffers" << std::endl;
-    load_framebuffers_from_json(&vk->gpu, &vk->swapchain);
-    clear_linear();
 
+
+
+    
     std::cout << "JSON > loading descriptors" << std::endl;
     load_descriptors_from_json(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
     clear_linear();

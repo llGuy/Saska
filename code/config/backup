@@ -41,3 +41,25 @@
 	    "usage": "d"
 	}
     },
+
+
+
+
+
+
+
+
+
+
+    "descriptor_set_layout.render_atmosphere_layout": {
+	"new": false,
+	
+	"type":"layout",
+
+	"binding_count": 1,
+	"bindings": {
+	    "b0": {
+		"type": "c", "binding": 0, "count": 1, "shader_stages": "f"
+	    }
+	}
+    },

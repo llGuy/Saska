@@ -1,56 +1,4 @@
 {
-    "descriptor_set_layout.render_atmosphere_layout": {
-	"new": true,
-	
-	"type": "layout",
-
-	"binding_count": 1,
-	"bindings": {
-	    "b0": {
-		"type": "c", "binding": 0, "count": 1, "shader_stages": "f"
-	    }
-	}
-    },
-    "descriptor_set_layout.atmosphere_layout": {
-	"new": true,
-	
-	"type": "layout",
-
-	"binding_count": 0,
-	"bindings": {}
-    },
-    "descriptor_set_layout.2D_sampler_layout": {
-	"new": true,
-	
-	"type": "layout",
-
-	"binding_count": 1,
-	"bindings": {
-	    "b0": {
-		"type": "c", "binding": 0, "count": 1, "shader_stages": "f"
-	    }
-	}
-    },
-
-    "descriptor_set_layout.g_buffer_layout": {
-	"new": true,
-
-	"type": "layout",
-
-	"binding_count": 3,
-	"bindings": {
-	    "b0": {
-		"type": "c", "binding": 0, "count": 1, "shader_stages": "f"
-	    },
-	    "b1": {
-		"type": "c", "binding": 1, "count": 1, "shader_stages": "f"
-	    },
-	    "b2": {
-		"type": "c", "binding": 2, "count": 1, "shader_stages": "f"
-	    }
-	}
-    },
-
     "uniform_group.g_buffer": {
 	"new": true,
 	
@@ -160,24 +108,7 @@
 	}
     },
 
-    "descriptor_set_layout.deferred_layout": {
-	"new": true,
 
-	"type": "layout",
-
-	"binding_count": 3,
-	"bindings": {
-	    "b0": {
-		"type": "i", "binding": 0, "count": 1, "shader_stages": "f"
-	    },
-	    "b1": {
-		"type": "i", "binding": 1, "count": 1, "shader_stages": "f"
-	    },
-	    "b2": {
-		"type": "i", "binding": 2, "count": 1, "shader_stages": "f"
-	    }
-	}
-    },
 
     "descriptor_set.deferred_descriptor_sets": {
 	"new": true,

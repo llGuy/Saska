@@ -617,6 +617,49 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
 
 
 // Rendering pipeline
+struct Cameras
+{
+    persist constexpr u32 MAX_CAMERAS = 10;
+    u32 camera_count = 0;
+    Camera cameras[MAX_CAMERAS] = {};
+    Camera_Handle camera_bound_to_3D_output;
+
+    GPU_Buffer_Handle camera_transforms_ubos;
+    u32 ubo_count;
+} g_cameras;
+
+Camera_Handle
+add_camera(Window_Data *window)
+{
+    u32 index = g_cameras.camera_count;
+    g_cameras.cameras[index].set_default(window->w, window->h, window->m_x, window->m_y);
+    ++g_cameras.camera_count;
+    return(index);
+}
+
+void
+make_camera(Camera *camera, f32 fov, f32 asp, f32 near, f32 far)
+{
+    camera->fov = fov;
+    camera->asp = asp;
+    camera->n = near;
+    camera->f = far;
+}
+
+Camera *
+get_camera(Camera_Handle handle)
+{
+    return(&g_cameras.cameras[handle]);
+}
+
+void
+bind_camera_to_3D_scene_output(Camera_Handle handle)
+{
+    g_cameras.camera_bound_to_3D_output = handle;
+}
+
+
+
 struct Deferred_Rendering
 {
     Render_Pass_Handle dfr_render_pass;
@@ -1363,5 +1406,35 @@ test(Vulkan::GPU *gpu
         *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, desc_pool, gpu);
         update_uniform_group(gpu, shadow_map_ptr,
                              Update_Binding{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    Uniform_Group_Handle cubemap_group_hdl = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
+    auto *cubemap_group_ptr = g_uniform_group_manager.get(cubemap_group_hdl);
+    {
+        Image_Handle cubemap_hdl = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
+        auto *cubemap_ptr = g_image_manager.get(cubemap_hdl);
+
+        *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, desc_pool, gpu);
+        update_uniform_group(gpu, cubemap_group_ptr,
+                             Update_Binding{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    Uniform_Group_Handle gbuffer_input_group_hdl = g_uniform_group_manager.add("descriptor_set.deferred_descriptor_sets"_hash);
+    auto *gbuffer_input_group_ptr = g_uniform_group_manager.get(gbuffer_input_group_hdl);
+    {
+        Image_Handle albedo_tx_hdl = g_image_manager.get_handle("image2D.fbo_albedo"_hash);
+        Vulkan::Image2D *albedo_tx = g_image_manager.get(albedo_tx_hdl);
+        
+        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
+        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        
+        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
+        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+
+        *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, desc_pool, gpu);
+        update_uniform_group(gpu, gbuffer_input_group_ptr,
+                             Update_Binding{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }

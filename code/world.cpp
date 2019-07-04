@@ -30,7 +30,7 @@ struct Camera_UBO_Transforms
     GPU_Buffer_Handle master_ubos;
 } transforms;
 
-struct Camera
+/*struct Camera
 {
     glm::vec2 mp;
     glm::vec3 p; // position
@@ -66,7 +66,7 @@ struct Camera
     {
 	p_m = glm::perspective(fov, asp, n, f);
     }
-};
+    };*/
 
 // should not be in this file in the future
 struct Screen_GUI_Quad
@@ -1773,11 +1773,7 @@ make_world(Window_Data *window
 
 
     
-    std::cout << "JSON > loading descriptors" << std::endl;
-    load_descriptors_from_json(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
-    clear_linear();
-    
-    std::cout << "JSON > loading pipelines" << std::endl;
+ std::cout << "JSON > loading pipelines" << std::endl;
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 

@@ -249,8 +249,6 @@ main(s32 argc
 	close_debug_file();
     }
 
-    std::cin.get();
-    
     return(0);
 }
 

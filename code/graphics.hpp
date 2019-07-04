@@ -2,6 +2,8 @@
 
 #include "core.hpp"
 #include "vulkan.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
 
 using Handle = s32;
 using GPU_Buffer_Handle = Handle;
@@ -333,6 +335,58 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
                              , VkCommandPool *cmdpool
                              , Vulkan::Swapchain *swapchain);
 
+struct Camera
+{
+    glm::vec2 mp;
+    glm::vec3 p; // position
+    glm::vec3 d; // direction
+    glm::vec3 u; // up
+
+    f32 fov;
+    f32 asp; // aspect ratio
+    f32 n, f; // near and far planes
+    
+    glm::vec4 captured_frustum_corners[8] {};
+    glm::vec4 captured_shadow_corners[8] {};
+    
+    glm::mat4 p_m;
+    glm::mat4 v_m;
+    
+    void
+    set_default(f32 w, f32 h, f32 m_x, f32 m_y)
+    {
+	mp = glm::vec2(m_x, m_y);
+	p = glm::vec3(50.0f, 10.0f, 280.0f);
+	d = glm::vec3(+1, 0.0f, +1);
+	u = glm::vec3(0, 1, 0);
+
+	fov = glm::radians(60.0f);
+	asp = w / h;
+	n = 1.0f;
+	f = 100000.0f;
+    }
+    
+    void
+    compute_projection(void)
+    {
+	p_m = glm::perspective(fov, asp, n, f);
+    } 
+};
+
+using Camera_Handle = Handle;
+
+Camera_Handle
+add_camera(Window_Data *window);
+
+void
+make_camera(Camera *camera, f32 fov, f32 asp, f32 near, f32 far);
+
+Camera *
+get_camera(Camera_Handle handle);
+
+void
+bind_camera_to_3D_scene_output(Camera_Handle handle);
+
 struct Shadow_Matrices
 {
     glm::mat4 projection_matrix;
@@ -411,5 +465,6 @@ apply_pfx_on_scene(u32 image_index
                    , const glm::mat4 &projection_matrix
                    , Vulkan::GPU *gpu);
 
+// For now, this function creates all the stuff that JSON used to create, but need to dispatch to appropriate locations
 void
 test(Vulkan::GPU *, Vulkan::Swapchain *, VkDescriptorPool *desc_pool, Vulkan::Buffer *ubos, u32 index = 0);

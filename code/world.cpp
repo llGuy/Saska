@@ -1767,7 +1767,7 @@ make_world(Window_Data *window
 
 
     // For now this creates a bunch of vulkan objects
-    test(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
+    test(&vk->gpu, &vk->swapchain, &world.desc.pool.pool, g_gpu_buffer_manager.get(world.transforms.master_ubos));
 
 
 

@@ -196,27 +196,63 @@ make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu);
 Uniform_Group
 make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *gpu);
 
-VkWriteDescriptorSet
-update_texture(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-VkWriteDescriptorSet
-update_buffer(Uniform_Group *group, Vulkan::Buffer &ubo, u32 binding, u32 dst_element, u32 count, u32 offset_into_buffer = 0);
-
-VkWriteDescriptorSet
-update_input_attachment(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout);
-
-// Use : update_binding_from_group( { update_texture(...), update_texture(...), update_buffer(...)... } ...)
-void
-update_binding_from_group(const Memory_Buffer_View<VkWriteDescriptorSet> &writes, Vulkan::GPU *gpu);
-
-// Update_Struct should always be VkWriteDescriptorSet
-// Function for compile time stuff (however, most of it will be runtime from JSON - or whatever file format is currently being used)
-template <typename ...Update_Struct> void
-update_binding_from_group(Vulkan::GPU *gpu, Update_Struct &&...updates)
+enum Binding_Type { BUFFER, INPUT_ATTACHMENT, TEXTURE };
+struct Update_Binding
 {
-    constexpr u32 UPDATES_COUNT = sizeof...(Update_Struct);
-    VkWriteDescriptorSet tmp_updates[UPDATES_COUNT] = { updates... };
-    Vulkan::update_descriptor_sets({UPDATES_COUNT, tmp_updates}, gpu);
+    Binding_Type type;
+    void *object;
+    u32 binding;
+    u32 t_changing_data = 0; // Offset into the buffer or image layout
+    // Stuff that can change optionally
+    u32 count = 1;
+    u32 dst_element = 0;
+};
+
+// Template function, need to define here
+template <typename ...Update_Ts> void
+update_uniform_group(Vulkan::GPU *gpu, Uniform_Group *group, const Update_Ts &...updates)
+{
+    Update_Binding bindings[] = { updates... };
+
+    u32 image_info_count = 0;
+    VkDescriptorImageInfo image_info_buffer[20] = {};
+    u32 buffer_info_count = 0;
+    VkDescriptorBufferInfo buffer_info_buffer[20] = {};
+
+    VkWriteDescriptorSet writes[sizeof...(updates)] = {};
+    
+    for (u32 i = 0; i < sizeof...(updates); ++i)
+    {
+        switch (bindings[i].type)
+        {
+        case Binding_Type::BUFFER:
+            {
+                Vulkan::Buffer *ubo = (Vulkan::Buffer *)bindings[i].object;
+                buffer_info_buffer[buffer_info_count] = ubo->make_descriptor_info(bindings[i].t_changing_data);
+                Vulkan::init_buffer_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &buffer_info_buffer[buffer_info_count], &writes[i]);
+                ++buffer_info_count;
+                break;
+            }
+        case Binding_Type::TEXTURE:
+            {
+                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
+                Vulkan::init_image_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                ++image_info_count;
+                break;
+            }
+        case Binding_Type::INPUT_ATTACHMENT:
+            {
+                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
+                Vulkan::init_input_attachment_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                ++image_info_count;
+                break;
+            }
+        }
+    }
+
+    Vulkan::update_descriptor_sets({sizeof...(updates), writes}, gpu);
 }
 
 using Uniform_Layout_Handle = Handle;
@@ -376,4 +412,4 @@ apply_pfx_on_scene(u32 image_index
                    , Vulkan::GPU *gpu);
 
 void
-test(Vulkan::GPU *, Vulkan::Swapchain *, VkDescriptorPool *desc_pool, u32 index = 0);
+test(Vulkan::GPU *, Vulkan::Swapchain *, VkDescriptorPool *desc_pool, Vulkan::Buffer *ubos, u32 index = 0);

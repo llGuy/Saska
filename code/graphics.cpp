@@ -100,102 +100,8 @@ make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *
     return(uniform_group);
 }
 
-VkWriteDescriptorSet
-update_input_attachment(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout)
-{
-    // textures will kind of always be VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    VkDescriptorImageInfo image_info = img.make_descriptor_info(layout);
-    VkWriteDescriptorSet write = {};
-    Vulkan::init_input_attachment_descriptor_set_write(group, binding, dst_element, count, &image_info, &write);
-    
-    return(write);
-}
-
-VkWriteDescriptorSet
-update_texture(Uniform_Group *group, Vulkan::Image2D &img, u32 binding, u32 dst_element, u32 count, VkImageLayout layout)
-{
-    // textures will kind of always be VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    VkDescriptorImageInfo image_info = img.make_descriptor_info(layout);
-    VkWriteDescriptorSet write = {};
-    Vulkan::init_image_descriptor_set_write(group, binding, dst_element, count, &image_info, &write);
-    
-    return(write);
-}
-
-VkWriteDescriptorSet
-update_buffer(Uniform_Group *group, Vulkan::Buffer &ubo, u32 binding, u32 dst_element, u32 count, u32 offset_into_buffer)
-{
-    VkDescriptorBufferInfo buffer_info = ubo.make_descriptor_info(offset_into_buffer);
-    VkWriteDescriptorSet write = {};
-    Vulkan::init_buffer_descriptor_set_write(group, binding, dst_element, count, &buffer_info, &write);
-
-    return(write);
-}
-
-// Use : update_binding_from_group( { update_texture(...), update_texture(...), update_buffer(...)... } ...)
-void
-update_binding_from_group(const Memory_Buffer_View<VkWriteDescriptorSet> &writes, Vulkan::GPU *gpu)
-{
-    Vulkan::update_descriptor_sets(writes, gpu);
-};
-
-enum Binding_Type { BUFFER, INPUT_ATTACHMENT, TEXTURE };
-struct Update_Binding
-{
-    Binding_Type type;
-    void *object;
-    u32 binding;
-    u32 t_changing_data = 0; // Offset into the buffer or image layout
-    // Stuff that can change optionally
-    u32 count = 1;
-    u32 dst_element = 0;
-};
-
-template <typename ...Update_Ts> void
-update_uniform_group(Vulkan::GPU *gpu, Uniform_Group *group, const Update_Ts &...updates)
-{
-    Update_Binding bindings[] = { updates... };
-
-    u32 image_info_count = 0;
-    VkDescriptorImageInfo image_info_buffer[20] = {};
-    u32 buffer_info_count = 0;
-    VkDescriptorBufferInfo buffer_info_buffer[20] = {};
-
-    VkWriteDescriptorSet writes[sizeof...(updates)] = {};
-    
-    for (u32 i = 0; i < sizeof...(updates); ++i)
-    {
-        switch (bindings[i].type)
-        {
-        case Binding_Type::BUFFER:
-            {
-                Vulkan::Buffer *ubo = (Vulkan::Buffer *)bindings[i].object;
-                buffer_info_buffer[buffer_info_count] = ubo->make_descriptor_info(bindings[i].t_changing_data);
-                Vulkan::init_buffer_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &buffer_info_buffer[buffer_info_count], &writes[i]);
-                ++buffer_info_count;
-                break;
-            }
-        case Binding_Type::TEXTURE:
-            {
-                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
-                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
-                Vulkan::init_image_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
-                ++image_info_count;
-                break;
-            }
-        case Binding_Type::INPUT_ATTACHMENT:
-            {
-                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
-                image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
-                Vulkan::init_input_attachment_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
-                ++image_info_count;
-                break;
-            }
-        }
-    }
-
-    Vulkan::update_descriptor_sets({sizeof...(updates), writes}, gpu);
-}
+/* template <typename ...Update_Ts> void
+   update uniform_group(...) {} ---- defined in header*/
 
 
 
@@ -1314,6 +1220,7 @@ void
 test(Vulkan::GPU *gpu
      , Vulkan::Swapchain *swapchain
      , VkDescriptorPool *desc_pool
+     , Vulkan::Buffer *ubos
      , u32 index)
 {   
     g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
@@ -1432,5 +1339,29 @@ test(Vulkan::GPU *gpu
                              Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              Update_Binding{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              Update_Binding{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    Uniform_Group_Handle transforms_uniform_group = g_uniform_group_manager.add("descriptor_set.test_descriptor_sets"_hash, swapchain->imgs.count);
+    auto *transforms = g_uniform_group_manager.get(transforms_uniform_group);
+    {
+        Uniform_Layout_Handle layout_hdl = g_uniform_layout_manager.get_handle("descriptor_set_layout.test_descriptor_set_layout"_hash);
+        auto *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
+        for (u32 i = 0; i < swapchain->imgs.count; ++i)
+        {
+            transforms[i] = make_uniform_group(layout_ptr, desc_pool, gpu);
+            update_uniform_group(gpu, &transforms[i],
+                                 Update_Binding{BUFFER, &ubos[i], 0});
+        }
+    }
+
+    Uniform_Group_Handle shadow_map_set = g_uniform_group_manager.add("descriptor_set.shadow_map_set"_hash);
+    auto *shadow_map_ptr = g_uniform_group_manager.get(shadow_map_set);
+    {
+        Image_Handle shadowmap_handle = g_image_manager.get_handle("image2D.shadow_map"_hash);
+        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
+        
+        *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, desc_pool, gpu);
+        update_uniform_group(gpu, shadow_map_ptr,
+                             Update_Binding{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }

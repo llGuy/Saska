@@ -1190,6 +1190,12 @@ namespace Vulkan
     {
 	VkDescriptorPool pool;
     };
+
+    void
+    init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes
+			 , u32 max_sets
+			 , GPU *gpu
+			 , VkDescriptorPool *pool);
     
     void
     init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes

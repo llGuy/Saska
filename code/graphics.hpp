@@ -74,6 +74,7 @@ using Model_Manager = Object_Manager<Vulkan::Model>;
 // For now, defined descriptor manager structs here:
 
 // Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
+using Uniform_Pool = VkDescriptorPool;
 using Uniform_Group = VkDescriptorSet;
 using Uniform_Layout = VkDescriptorSetLayout;
 
@@ -88,6 +89,7 @@ extern Pipeline_Manager g_pipeline_manager;
 extern Uniform_Layout_Manager g_uniform_layout_manager;
 extern Uniform_Group_Manager g_uniform_group_manager;
 extern Model_Manager g_model_manager;
+extern Uniform_Pool g_uniform_pool;
 
 
 
@@ -331,7 +333,6 @@ load_external_graphics_data(Vulkan::Swapchain *swapchain
 // Rendering pipeline
 void
 make_rendering_pipeline_data(Vulkan::GPU *gpu
-                             , VkDescriptorPool *pool
                              , VkCommandPool *cmdpool
                              , Vulkan::Swapchain *swapchain);
 
@@ -496,4 +497,12 @@ apply_pfx_on_scene(u32 image_index
 
 // For now, this function creates all the stuff that JSON used to create, but need to dispatch to appropriate locations
 void
-test(Vulkan::GPU *, Vulkan::Swapchain *, VkDescriptorPool *desc_pool, Vulkan::Buffer *ubos, u32 index = 0);
+test(Vulkan::GPU *, Vulkan::Swapchain *, u32 index = 0);
+
+void
+initialize_game_3D_graphics(Vulkan::GPU *gpu,
+                            Vulkan::Swapchain *swapchain,
+                            GPU_Command_Queue_Pool *pool);
+
+void
+destroy_graphics(Vulkan::GPU *gpu);

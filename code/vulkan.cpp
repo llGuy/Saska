@@ -1254,6 +1254,22 @@ namespace Vulkan
     init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes
 			 , u32 max_sets
 			 , GPU *gpu
+			 , VkDescriptorPool *pool)
+    {
+	VkDescriptorPoolCreateInfo pool_info = {};
+	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	pool_info.poolSizeCount = sizes.count;
+	pool_info.pPoolSizes = sizes.buffer;
+
+	pool_info.maxSets = max_sets;
+
+	VK_CHECK(vkCreateDescriptorPool(gpu->logical_device, &pool_info, nullptr, pool));
+    }
+    
+    void
+    init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes
+			 , u32 max_sets
+			 , GPU *gpu
 			 , Descriptor_Pool *pool)
     {
 	VkDescriptorPoolCreateInfo pool_info = {};

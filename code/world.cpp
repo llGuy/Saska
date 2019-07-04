@@ -23,45 +23,16 @@ struct Cube // to get rid of later on
     Uniform_Group_Handle sets;
 };
 
-// should not be in this file in the future
-struct Screen_GUI_Quad
-{
-    Pipeline_Handle quad_ppln;
-};
-
-// this belongs in the graphics.cpp module
-struct Deferred_Rendering_Data
-{
-    Render_Pass_Handle render_pass;
-    Pipeline_Handle lighting_pipeline;
-    Pipeline_Handle main_pipeline;
-    Uniform_Group_Handle descriptor_set;
-    Framebuffer_Handle fbos;
-};
-
 global_var struct World
 {
-
-    Deferred_Rendering_Data deferred;
-
     Cube test;
 
-    Screen_GUI_Quad screen_quad;
-
     static constexpr u32 MAX_TEST_MTRLS = 10;
-    
     GPU_Material_Submission_Queue entity_render_queue;
     GPU_Material_Submission_Queue terrain_render_queue;
 
-    struct Descriptors
-    {
-	Vulkan::Descriptor_Pool pool;
-    } desc;
-
-    Pipeline_Handle model_shadow_ppln;
-    Pipeline_Handle terrain_shadow_ppln;
+    // This needs to be removed in the future
     Pipeline_Handle debug_frustum_ppln;
-    
 } world;
 
 
@@ -117,6 +88,8 @@ global_var struct Morphable_Terrain_Master
     
 
     Pipeline_Handle terrain_ppln;
+    Pipeline_Handle terrain_shadow_ppln;
+    
 
     struct
     {
@@ -912,6 +885,9 @@ global_var struct Entities
 
     Hash_Table_Inline<Entity_Handle, 30, 5, 5> name_map{"map.entities"};
 
+    Pipeline_Handle entity_ppln;
+    Pipeline_Handle entity_shadow_ppln;
+
     // For now:
     u32 main_entity;
     
@@ -1410,18 +1386,6 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 
 	test_model->index_data.index_buffer = ibo->buffer;
     }
-
-    // ---- make descriptor pool ----
-    {
-	VkDescriptorPoolSize pool_sizes[3] = {};
-
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, swapchain->imgs.count + 5, &pool_sizes[0]);
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, swapchain->imgs.count + 5, &pool_sizes[1]);
-	Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5, &pool_sizes[2]);
-
-    
-	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, swapchain->imgs.count + 10, gpu, &world.desc.pool);
-    }
 }
 
 // ---- to orgnise later on ----
@@ -1504,39 +1468,6 @@ render_debug_frustum(GPU_Command_Queue *queue
 }
 
 internal void
-draw_2D_quad_debug(VkCommandBuffer *cmdbuf
-                   , Uniform_Group *shadow_map_uniform_group)
-{
-    struct Screen_Quad
-    {
-	glm::vec2 scale;
-	glm::vec2 position;
-    } screen_quad_push_k;
-
-    screen_quad_push_k.scale = glm::vec2(0.2f);
-    screen_quad_push_k.position = glm::vec2(-0.8f, +0.5f);
-
-    auto *quad_ppln = g_pipeline_manager.get(world.screen_quad.quad_ppln);
-    
-    Vulkan::command_buffer_bind_pipeline(quad_ppln, cmdbuf);
-
-    VkDescriptorSet quad_set[] = {*shadow_map_uniform_group};
-    Vulkan::command_buffer_bind_descriptor_sets(quad_ppln
-						, {1, quad_set}
-						, cmdbuf);
-
-    Vulkan::command_buffer_push_constant(&screen_quad_push_k
-					 , sizeof(screen_quad_push_k)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , quad_ppln
-					 , cmdbuf);
-
-    Vulkan::command_buffer_draw(cmdbuf
-                                , 4, 1, 0, 0);
-}
-
-internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
@@ -1558,13 +1489,13 @@ render_world(Vulkan::State *vk
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, &queue);
     {
-        auto *model_ppln = g_pipeline_manager.get(world.model_shadow_ppln);
+        auto *model_ppln = g_pipeline_manager.get(entities.entity_shadow_ppln);
 
         world.entity_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
                                                           , &queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *terrain_ppln = g_pipeline_manager.get(world.terrain_shadow_ppln);    
+        auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_shadow_ppln);    
     
         world.terrain_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
                                                            , &queue
@@ -1576,7 +1507,7 @@ render_world(Vulkan::State *vk
     begin_deferred_rendering(image_index, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &queue);
     {
         auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_ppln);    
-        auto *entity_ppln = g_pipeline_manager.get(world.deferred.main_pipeline);
+        auto *entity_ppln = g_pipeline_manager.get(entities.entity_ppln);
     
         world.terrain_render_queue.submit_queued_materials({2, uniform_groups}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         world.entity_render_queue.submit_queued_materials({2, uniform_groups}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -1612,24 +1543,14 @@ render_world(Vulkan::State *vk
 internal void
 get_registered_objects_from_json(void)
 {
-    world.deferred.render_pass		= g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-
-    world.deferred.fbos			= g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
-
-    world.deferred.main_pipeline	= g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
-    world.deferred.lighting_pipeline	= g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
-    
-    world.test.sets			= g_uniform_group_manager.get_handle("descriptor_set.test_descriptor_sets"_hash);
-    world.deferred.descriptor_set	= g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
+    entities.entity_ppln = g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
+    entities.entity_shadow_ppln = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
 
     terrain_master.terrain_ppln		= g_pipeline_manager.get_handle("pipeline.terrain_pipeline"_hash);
-
-    world.screen_quad.quad_ppln		= g_pipeline_manager.get_handle("pipeline.screen_quad"_hash);
+    terrain_master.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
 
     world.debug_frustum_ppln	= g_pipeline_manager.get_handle("pipeline.debug_frustum"_hash);
 
-    world.model_shadow_ppln = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
-    world.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
 }
 
 
@@ -1649,8 +1570,7 @@ make_world(Window_Data *window
 
 
 
-    // For now this creates a bunch of vulkan objects
-    test(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
+    initialize_game_3D_graphics(&vk->gpu, &vk->swapchain, cmdpool);
 
 
 
@@ -1660,11 +1580,13 @@ make_world(Window_Data *window
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
+    test(&vk->gpu, &vk->swapchain);
+
     make_terrain_pointer();
     
     get_registered_objects_from_json();
 
-    make_rendering_pipeline_data(&vk->gpu, &world.desc.pool.pool, cmdpool, &vk->swapchain);
+    //    make_rendering_pipeline_data(&vk->gpu, cmdpool, &vk->swapchain);
 
     {
 	auto *model_info = g_model_manager.get(terrain_master.model_info);
@@ -1809,18 +1731,6 @@ update_ubo(u32 current_image
 
 
 
-internal f32 angle = 0.0f;
-
-internal void
-render_frame(Vulkan::State *vulkan_state
-	     , u32 image_index
-	     , u32 current_frame
-	     , VkCommandBuffer *cmdbuf)
-{
-    render_world(vulkan_state, image_index, current_frame, cmdbuf);
-    // ---- exit ----
-}
-
 void
 update_world(Window_Data *window
 	     , Vulkan::State *vk
@@ -1829,14 +1739,15 @@ update_world(Window_Data *window
 	     , u32 current_frame
 	     , VkCommandBuffer *cmdbuf)
 {
-    auto *e = &entities.entity_list[entities.main_entity];
-    
     handle_input_debug(window, dt, &vk->gpu);
     
     update_entities(window, dt, &vk->gpu);
     
-    // ---- actually rendering the frame ----
-    render_frame(vk, image_index, current_frame, cmdbuf);
+
+    // ---- Actually rendering the frame ----
+    update_3D_output_camera_transforms(image_index, &vk->gpu);
+    
+    render_world(vk, image_index, current_frame, cmdbuf);    
 }
 
 
@@ -1904,5 +1815,5 @@ destroy_world(Vulkan::GPU *gpu)
 	vkDestroyDescriptorSetLayout(gpu->logical_device, g_uniform_layout_manager.objects[i], nullptr);
     }
 
-    vkDestroyDescriptorPool(gpu->logical_device, world.desc.pool.pool, nullptr);
+    destroy_graphics(gpu);
 }

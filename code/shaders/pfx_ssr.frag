@@ -202,7 +202,7 @@ void main(void)
 
 	    float dotted = dot(vs_reflected_dir, vs_reflected_point_to_original);
 			
-	    if (dotted > 0.9999) final_color = mix(pixel_color, reflected_color * fresnel, edge_factor);
+	    if (dotted > 0.9999) final_color = mix(pixel_color, reflected_color * fresnel, edge_factor * 0.3);
 	    else final_color = pixel_color;
 	}
 	else final_color = pixel_color;

@@ -18,9 +18,6 @@ Uniform_Layout_Manager g_uniform_layout_manager;
 Uniform_Group_Manager g_uniform_group_manager;
 Model_Manager g_model_manager;
 
-// Later when maybe introducing new APIs, might be something different
-// Clearer name for people reading code
-//using GPU_Command_Queue = VkCommandBuffer;
 using GPU_Command_Queue_Pool = VkCommandPool;
 // Submit level of a Material Submission Queue Manager which will either submit to a secondary queue or directly into the main queue
 using Submit_Level = VkCommandBufferLevel;
@@ -48,6 +45,20 @@ end_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu)
 
 
 // --------------------- Uniform stuff ---------------------
+Uniform_Pool g_uniform_pool;
+
+internal void
+make_uniform_pool(Vulkan::GPU *gpu)
+{
+    VkDescriptorPoolSize pool_sizes[3] = {};
+
+    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20, &pool_sizes[0]);
+    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 20, &pool_sizes[1]);
+    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 20, &pool_sizes[2]);
+    
+    Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, 30, gpu, &g_uniform_pool);
+}
+
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
 using Uniform_Binding = VkDescriptorSetLayoutBinding;
 
@@ -100,8 +111,6 @@ make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *
     return(uniform_group);
 }
 
-/* template <typename ...Update_Ts> void
-   update uniform_group(...) {} ---- defined in header*/
 
 
 
@@ -531,7 +540,6 @@ struct Dynamic_States
     }
 };
 
-// ---- TODO : Finish this tomorrow ----
 void
 make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
                        , const Shader_Modules &modules
@@ -671,7 +679,7 @@ make_camera_data(Vulkan::GPU *gpu, VkDescriptorPool *pool, Vulkan::Swapchain *sw
         {
             transforms[i] = make_uniform_group(layout_ptr, pool, gpu);
             update_uniform_group(gpu, &transforms[i],
-                                 Update_Binding{BUFFER, &transforms[i], 0});
+                                 Update_Binding{BUFFER, &camera_ubos[i], 0});
         }
     }
 }
@@ -716,7 +724,7 @@ update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu)
 
     auto map = current_ubo.construct_map();
     map.begin(gpu);
-    map.fill(Memory_Byte_Buffer{sizeof(Camera_Transform_Uniform_Data), data});
+    map.fill(Memory_Byte_Buffer{sizeof(Camera_Transform_Uniform_Data), &transform_data});
     map.end(gpu);
 }
 
@@ -791,8 +799,6 @@ struct Lighting
         Image_Handle map;
         Uniform_Group_Handle set;
     
-        Pipeline_Handle model_shadow_ppln;
-        Pipeline_Handle terrain_shadow_ppln;
         Pipeline_Handle debug_frustum_ppln;
     
         glm::mat4 light_view_matrix;
@@ -910,10 +916,9 @@ make_atmosphere_data(Vulkan::GPU *gpu
                      , VkDescriptorPool *pool
                      , VkCommandPool *cmdpool)
 {
+    g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
+    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
     // ---- Make render pass ----
-    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
-    /*    g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
-    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
     {
         // ---- Set render pass attachment data ----
         Render_Pass_Attachment cubemap_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -928,50 +933,100 @@ make_atmosphere_data(Vulkan::GPU *gpu
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
         make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
-        }*/
-    
-    //    g_atmosphere.make_render_pass      = g_render_pass_manager.get_handle("render_pass.atmosphere_render_pass"_hash);
+    }
 
-    // ---- Make atmosphere framebuffer ----
-    /*    g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
+    g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
     auto *atmosphere_fbo = g_framebuffer_manager.get(g_atmosphere.make_fbo);
     {
         Image_Handle atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
         auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
-        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_W, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
-        
-        make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
-        }*/
-    
-    g_atmosphere.make_fbo              = g_framebuffer_manager.get_handle("framebuffer.atmosphere_fbo"_hash);
-    g_atmosphere.render_pipeline       = g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
-    g_atmosphere.make_pipeline         = g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
-    g_atmosphere.cubemap_uniform_group = g_uniform_group_manager.get_handle("descriptor_set.cubemap"_hash);
-    
-    {
-        VkCommandBuffer cmdbuf;
-        Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
+        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
 
-        GPU_Command_Queue queue{cmdbuf};
-        update_atmosphere(&queue);
-    
-        Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
+        make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
     }
+
+    // ---- Make render atmosphere uniform layout
+    Uniform_Layout_Handle render_atmosphere_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.render_atmosphere_layout"_hash);
+    auto *render_atmosphere_layout_ptr = g_uniform_layout_manager.get(render_atmosphere_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *render_atmosphere_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Group_Handle cubemap_group_hdl = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
+    auto *cubemap_group_ptr = g_uniform_group_manager.get(cubemap_group_hdl);
+    {
+        Image_Handle cubemap_hdl = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
+        auto *cubemap_ptr = g_image_manager.get(cubemap_hdl);
+
+        *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, &g_uniform_pool, gpu);
+        update_uniform_group(gpu, cubemap_group_ptr,
+                             Update_Binding{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    // ---- Update the atmosphere (initialize it) ----
+    VkCommandBuffer cmdbuf;
+    Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
+
+    GPU_Command_Queue queue{cmdbuf};
+    update_atmosphere(&queue);
+    
+    Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
 }
 
 internal void
-make_shadow_data(void)
+make_shadow_data(Vulkan::GPU *gpu)
 {
     glm::vec3 light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
     g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     g_lighting.shadows.inverse_light_view = glm::inverse(g_lighting.shadows.light_view_matrix);
+
+    // ---- Make shadow render pass ----
+    g_lighting.shadows.pass = g_render_pass_manager.add("render_pass.shadow_render_pass"_hash);
+    auto *shadow_pass = g_render_pass_manager.get(g_lighting.shadows.pass);
+    {
+        Render_Pass_Attachment shadow_attachment { gpu->supported_depth_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        Render_Pass_Subpass subpass = {};
+        subpass.set_depth(Render_Pass_Attachment_Reference{ 0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL });
+        Render_Pass_Dependency dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        
+        make_render_pass(shadow_pass, {1, &shadow_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+
+    // ---- Make shadow framebuffer ----
+    g_lighting.shadows.fbo = g_framebuffer_manager.add("framebuffer.shadow_fbo"_hash);
+    auto *shadow_fbo = g_framebuffer_manager.get(g_lighting.shadows.fbo);
+    {
+        Image_Handle shadowmap_handle = g_image_manager.add("image2D.shadow_map"_hash);
+        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
+        make_texture(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        
+        make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Vulkan::Image2D>(), shadowmap_texture, gpu);
+    }
     
-    g_lighting.shadows.fbo                 = g_framebuffer_manager.get_handle("framebuffer.shadow_fbo"_hash);
-    g_lighting.shadows.pass                = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
-    g_lighting.shadows.map                 = g_image_manager.get_handle("image2D.shadow_map"_hash);
-    g_lighting.shadows.set                 = g_uniform_group_manager.get_handle("descriptor_set.shadow_map_set"_hash);
-    g_lighting.shadows.model_shadow_ppln   = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
-    g_lighting.shadows.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
+    Uniform_Layout_Handle sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
+    auto *sampler2D_layout_ptr = g_uniform_layout_manager.get(sampler2D_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *sampler2D_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Group_Handle shadow_map_set = g_uniform_group_manager.add("descriptor_set.shadow_map_set"_hash);
+    auto *shadow_map_ptr = g_uniform_group_manager.get(shadow_map_set);
+    {
+        Image_Handle shadowmap_handle = g_image_manager.get_handle("image2D.shadow_map"_hash);
+        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
+        
+        *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, &g_uniform_pool, gpu);
+        update_uniform_group(gpu, shadow_map_ptr,
+                             Update_Binding{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
 }
 
 Shadow_Matrices
@@ -1150,11 +1205,69 @@ make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
         // Can put final_tx as the pointer to the array because, the other 3 textures will be stored contiguously just after it in memory
         make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {4, color_attachments}, depth_tx, gpu);
     }
+
+    Uniform_Layout_Handle gbuffer_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.g_buffer_layout"_hash);
+    auto *gbuffer_layout_ptr = g_uniform_layout_manager.get(gbuffer_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *gbuffer_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Layout_Handle gbuffer_input_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.deferred_layout"_hash);
+    auto *gbuffer_input_layout_ptr = g_uniform_layout_manager.get(gbuffer_input_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info = {};
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+
+    Uniform_Group_Handle gbuffer_group_hdl = g_uniform_group_manager.add("uniform_group.g_buffer"_hash);
+    auto *gbuffer_group_ptr = g_uniform_group_manager.get(gbuffer_group_hdl);
+    {
+        *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, &g_uniform_pool, gpu);
+
+        Image_Handle final_tx_hdl = g_image_manager.get_handle("image2D.fbo_final"_hash);
+        Vulkan::Image2D *final_tx = g_image_manager.get(final_tx_hdl);
+        
+        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
+        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        
+        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
+        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+        
+        update_uniform_group(gpu, gbuffer_group_ptr,
+                             Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    Uniform_Group_Handle gbuffer_input_group_hdl = g_uniform_group_manager.add("descriptor_set.deferred_descriptor_sets"_hash);
+    auto *gbuffer_input_group_ptr = g_uniform_group_manager.get(gbuffer_input_group_hdl);
+    {
+        Image_Handle albedo_tx_hdl = g_image_manager.get_handle("image2D.fbo_albedo"_hash);
+        Vulkan::Image2D *albedo_tx = g_image_manager.get(albedo_tx_hdl);
+        
+        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
+        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        
+        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
+        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+
+        *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, &g_uniform_pool, gpu);
+        update_uniform_group(gpu, gbuffer_input_group_ptr,
+                             Update_Binding{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             Update_Binding{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
 }
 
 void
 make_rendering_pipeline_data(Vulkan::GPU *gpu
-                             , VkDescriptorPool *pool
                              , VkCommandPool *cmdpool
                              , Vulkan::Swapchain *swapchain)
 {
@@ -1162,12 +1275,12 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
     //    make_dfr_rendering_data(gpu, swapchain);
 
     g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
-    g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
+
     g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
     g_dfr_rendering.dfr_g_buffer_group = g_uniform_group_manager.get_handle("uniform_group.g_buffer"_hash);
 
-    make_shadow_data();
-    make_atmosphere_data(gpu, pool, cmdpool);
+    make_shadow_data(gpu);
+    make_atmosphere_data(gpu, &g_uniform_pool, cmdpool);
 
     make_postfx_data(gpu, swapchain);
 }
@@ -1367,167 +1480,39 @@ apply_pfx_on_scene(u32 image_index
 void
 test(Vulkan::GPU *gpu
      , Vulkan::Swapchain *swapchain
-     , VkDescriptorPool *desc_pool
-     , Vulkan::Buffer *ubos
      , u32 index)
-{   
-    g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
-    auto *atmosphere_render_pass = g_render_pass_manager.get(g_atmosphere.make_render_pass);
-    // ---- Make render pass ----
-    {
-        // ---- Set render pass attachment data ----
-        Render_Pass_Attachment cubemap_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-        // ---- Set render pass subpass data ----
-        Render_Pass_Subpass subpass = {};
-        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
-        // ---- Set render pass dependencies data ----
-        Render_Pass_Dependency dependencies[2] = {};
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
-                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        
-        make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
-    }
+{
+    Uniform_Pool *desc_pool = &g_uniform_pool;
+    
+    g_atmosphere.render_pipeline       = g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
+    g_atmosphere.make_pipeline         = g_pipeline_manager.get_handle("pipeline.atmosphere_pipeline"_hash);
+    g_dfr_rendering.dfr_lighting_ppln = g_pipeline_manager.get_handle("pipeline.deferred_pipeline"_hash);
 
-    g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
-    auto *atmosphere_fbo = g_framebuffer_manager.get(g_atmosphere.make_fbo);
-    {
-        Image_Handle atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
-        auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
-        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
+    
 
-        make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
-    }
+    //    make_dfr_rendering_data(gpu, swapchain);
 
+
+
+
+    //    make_camera_data(gpu, desc_pool, swapchain);    
+}
+
+void
+initialize_game_3D_graphics(Vulkan::GPU *gpu,
+                            Vulkan::Swapchain *swapchain,
+                            GPU_Command_Queue_Pool *pool)
+{
+    make_uniform_pool(gpu);
+    make_atmosphere_data(gpu, &g_uniform_pool, pool);
     make_dfr_rendering_data(gpu, swapchain);
+    make_shadow_data(gpu);
+    make_postfx_data(gpu, swapchain);
+    make_camera_data(gpu, &g_uniform_pool, swapchain);
+}
 
-    // ---- Make shadow render pass ----
-    g_lighting.shadows.pass = g_render_pass_manager.add("render_pass.shadow_render_pass"_hash);
-    auto *shadow_pass = g_render_pass_manager.get(g_lighting.shadows.pass);
-    {
-        Render_Pass_Attachment shadow_attachment { gpu->supported_depth_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-        Render_Pass_Subpass subpass = {};
-        subpass.set_depth(Render_Pass_Attachment_Reference{ 0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL });
-        Render_Pass_Dependency dependencies[2] = {};
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT,
-                                                      0, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
-        
-        make_render_pass(shadow_pass, {1, &shadow_attachment}, {1, &subpass}, {2, dependencies}, gpu);
-    }
-
-    // ---- Make shadow framebuffer ----
-    g_lighting.shadows.fbo = g_framebuffer_manager.add("framebuffer.shadow_fbo"_hash);
-    auto *shadow_fbo = g_framebuffer_manager.get(g_lighting.shadows.fbo);
-    {
-        Image_Handle shadowmap_handle = g_image_manager.add("image2D.shadow_map"_hash);
-        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
-        make_texture(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
-        
-        make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Vulkan::Image2D>(), shadowmap_texture, gpu);
-    }
-
-
-    make_camera_data(gpu, desc_pool, swapchain);
-
-    // Make descriptor stuff
-    // ---- Make render atmosphere uniform layout
-    Uniform_Layout_Handle render_atmosphere_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.render_atmosphere_layout"_hash);
-    auto *render_atmosphere_layout_ptr = g_uniform_layout_manager.get(render_atmosphere_layout_hdl);
-    {
-        Uniform_Layout_Info layout_info = {};
-        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *render_atmosphere_layout_ptr = make_uniform_layout(&layout_info, gpu);
-    }
-
-    Uniform_Layout_Handle sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
-    auto *sampler2D_layout_ptr = g_uniform_layout_manager.get(sampler2D_layout_hdl);
-    {
-        Uniform_Layout_Info layout_info = {};
-        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *sampler2D_layout_ptr = make_uniform_layout(&layout_info, gpu);
-    }
-
-    Uniform_Layout_Handle gbuffer_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.g_buffer_layout"_hash);
-    auto *gbuffer_layout_ptr = g_uniform_layout_manager.get(gbuffer_layout_hdl);
-    {
-        Uniform_Layout_Info layout_info = {};
-        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *gbuffer_layout_ptr = make_uniform_layout(&layout_info, gpu);
-    }
-
-    Uniform_Layout_Handle gbuffer_input_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.deferred_layout"_hash);
-    auto *gbuffer_input_layout_ptr = g_uniform_layout_manager.get(gbuffer_input_layout_hdl);
-    {
-        Uniform_Layout_Info layout_info = {};
-        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
-        layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
-        layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info, gpu);
-    }
-
-    Uniform_Group_Handle gbuffer_group_hdl = g_uniform_group_manager.add("uniform_group.g_buffer"_hash);
-    auto *gbuffer_group_ptr = g_uniform_group_manager.get(gbuffer_group_hdl);
-    {
-        *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, desc_pool, gpu);
-
-        Image_Handle final_tx_hdl = g_image_manager.get_handle("image2D.fbo_final"_hash);
-        Vulkan::Image2D *final_tx = g_image_manager.get(final_tx_hdl);
-        
-        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
-        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
-        
-        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
-        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
-        
-        update_uniform_group(gpu, gbuffer_group_ptr,
-                             Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             Update_Binding{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             Update_Binding{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
-
-    Uniform_Group_Handle shadow_map_set = g_uniform_group_manager.add("descriptor_set.shadow_map_set"_hash);
-    auto *shadow_map_ptr = g_uniform_group_manager.get(shadow_map_set);
-    {
-        Image_Handle shadowmap_handle = g_image_manager.get_handle("image2D.shadow_map"_hash);
-        auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
-        
-        *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, desc_pool, gpu);
-        update_uniform_group(gpu, shadow_map_ptr,
-                             Update_Binding{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
-
-    Uniform_Group_Handle cubemap_group_hdl = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
-    auto *cubemap_group_ptr = g_uniform_group_manager.get(cubemap_group_hdl);
-    {
-        Image_Handle cubemap_hdl = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
-        auto *cubemap_ptr = g_image_manager.get(cubemap_hdl);
-
-        *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, desc_pool, gpu);
-        update_uniform_group(gpu, cubemap_group_ptr,
-                             Update_Binding{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
-
-    Uniform_Group_Handle gbuffer_input_group_hdl = g_uniform_group_manager.add("descriptor_set.deferred_descriptor_sets"_hash);
-    auto *gbuffer_input_group_ptr = g_uniform_group_manager.get(gbuffer_input_group_hdl);
-    {
-        Image_Handle albedo_tx_hdl = g_image_manager.get_handle("image2D.fbo_albedo"_hash);
-        Vulkan::Image2D *albedo_tx = g_image_manager.get(albedo_tx_hdl);
-        
-        Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
-        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
-        
-        Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
-        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
-
-        *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, desc_pool, gpu);
-        update_uniform_group(gpu, gbuffer_input_group_ptr,
-                             Update_Binding{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             Update_Binding{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             Update_Binding{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
+void
+destroy_graphics(Vulkan::GPU *gpu)
+{
+    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }

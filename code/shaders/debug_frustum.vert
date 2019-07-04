@@ -21,14 +21,13 @@ layout(push_constant) uniform Push_Constants
 
 layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_proj;
     mat4 shadow_view;
-    
-    bool render_shadow;
+    mat4 shadow_proj;
+
+    vec4 debug_vector;
 } ubo;
 
 layout(location = 0) out VS_DATA

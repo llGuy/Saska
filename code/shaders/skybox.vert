@@ -6,7 +6,6 @@ layout(location = 0) out vec3 out_dir;
 
 layout(binding = 0) uniform Uniform_Buffer_Object
 {
-    mat4 model;
     mat4 view_matrix;
     mat4 projection_matrix;
 } ubo;

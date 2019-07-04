@@ -2,16 +2,13 @@
 
 layout(binding = 0) uniform Uniform_Buffer_Object
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_proj;
     mat4 shadow_view;
+    mat4 shadow_proj;
 
-    mat4 shadow_bias;
-    
-    vec4 test_vector;
+    vec4 debug_vector;
 } ubo;
 
 layout(push_constant) uniform Push_Constants

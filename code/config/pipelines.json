@@ -16,7 +16,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo"],
 	    
 	    "push_constant": {
 		"stage_flags": "v",
@@ -118,7 +118,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo"],
 
 	    "push_constant": {
 		"stage_flags": "v",
@@ -153,7 +153,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo"],
 
 	    "push_constant": {
 		"stage_flags": "v",
@@ -224,7 +224,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.render_atmosphere_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo", "descriptor_set_layout.render_atmosphere_layout"],
 	    "push_constant": {
 		"stage_flags": "v",
 		"offset": 0,
@@ -257,7 +257,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.2D_sampler_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo", "descriptor_set_layout.2D_sampler_layout"],
 
 	    "push_constant": {
 		"stage_flags": "v",
@@ -292,7 +292,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout", "descriptor_set_layout.2D_sampler_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo", "descriptor_set_layout.2D_sampler_layout"],
 
 	    "push_constant": {
 		"stage_flags": "v",
@@ -326,7 +326,7 @@
 	    "cull": "n"
 	},
 	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.test_descriptor_set_layout"],
+	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo"],
 	    
 	    "push_constant": {
 		"stage_flags": "v",

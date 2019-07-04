@@ -625,8 +625,101 @@ struct Cameras
     Camera_Handle camera_bound_to_3D_output;
 
     GPU_Buffer_Handle camera_transforms_ubos;
+    Uniform_Group camera_transforms_uniform_groups;
     u32 ubo_count;
 } g_cameras;
+
+internal void
+make_camera_data(Vulkan::GPU *gpu, VkDescriptorPool *pool, Vulkan::Swapchain *swapchain)
+{
+    Uniform_Layout_Handle ubo_layout_hdl = g_uniform_layout_manager.add("uniform_layout.camera_transforms_ubo"_hash, swapchain->imgs.count);
+    auto *ubo_layout_ptr = g_uniform_layout_manager.get(ubo_layout_hdl);
+    {
+        Uniform_Layout_Info blueprint = {};
+        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        *ubo_layout_ptr = make_uniform_layout(&blueprint, gpu);
+    }
+
+    g_cameras.camera_transforms_ubos = g_gpu_buffer_manager.add("gpu_buffer.camera_transforms_ubos"_hash, swapchain->imgs.count);
+    auto *camera_ubos = g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos);
+    {
+        u32 uniform_buffer_count = swapchain->imgs.count;
+
+        g_cameras.ubo_count = uniform_buffer_count;
+	
+        VkDeviceSize buffer_size = sizeof(Camera_Transform_Uniform_Data);
+
+        for (u32 i = 0
+                 ; i < uniform_buffer_count
+                 ; ++i)
+        {
+            Vulkan::init_buffer(buffer_size
+                                , VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
+                                , VK_SHARING_MODE_EXCLUSIVE
+                                , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+                                , gpu
+                                , &camera_ubos[i]);
+        }
+    }
+
+    Uniform_Group_Handle transforms_uniform_group = g_uniform_group_manager.add("uniform_group.camera_transforms_ubo"_hash, swapchain->imgs.count);
+    auto *transforms = g_uniform_group_manager.get(transforms_uniform_group);
+    {
+        Uniform_Layout_Handle layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash);
+        auto *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
+        for (u32 i = 0; i < swapchain->imgs.count; ++i)
+        {
+            transforms[i] = make_uniform_group(layout_ptr, pool, gpu);
+            update_uniform_group(gpu, &transforms[i],
+                                 Update_Binding{BUFFER, &transforms[i], 0});
+        }
+    }
+}
+
+void
+make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
+                                   const glm::mat4 &view_matrix,
+                                   const glm::mat4 &projection_matrix,
+                                   const glm::mat4 &shadow_view_matrix,
+                                   const glm::mat4 &shadow_projection_matrix,
+                                   const glm::vec4 &debug_vector)
+{
+    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector };
+}
+
+void
+update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu)
+{
+    Camera *camera = get_camera_bound_to_3D_output();
+    
+    update_shadows(500.0f
+                   , 1.0f
+                   , camera->fov
+                   , camera->asp
+                   , camera->p
+                   , camera->d
+                   , camera->u);
+
+    Shadow_Matrices shadow_data = get_shadow_matrices();
+
+    Camera_Transform_Uniform_Data transform_data = {};
+    glm::mat4 projection_matrix = camera->p_m;
+    projection_matrix[1][1] *= -1.0f;
+    make_camera_transform_uniform_data(&transform_data,
+                                       camera->v_m,
+                                       projection_matrix,
+                                       shadow_data.light_view_matrix,
+                                       shadow_data.projection_matrix,
+                                       glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+    
+    Vulkan::Buffer &current_ubo = *g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos + image_index);
+
+    auto map = current_ubo.construct_map();
+    map.begin(gpu);
+    map.fill(Memory_Byte_Buffer{sizeof(Camera_Transform_Uniform_Data), data});
+    map.end(gpu);
+}
+
 
 Camera_Handle
 add_camera(Window_Data *window)
@@ -652,10 +745,22 @@ get_camera(Camera_Handle handle)
     return(&g_cameras.cameras[handle]);
 }
 
+Camera *
+get_camera_bound_to_3D_output(void)
+{
+    return(&g_cameras.cameras[g_cameras.camera_bound_to_3D_output]);
+}
+
 void
 bind_camera_to_3D_scene_output(Camera_Handle handle)
 {
     g_cameras.camera_bound_to_3D_output = handle;
+}
+
+Memory_Buffer_View<Vulkan::Buffer>
+get_camera_transform_ubos(void)
+{
+    return {g_cameras.ubo_count, g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos)};
 }
 
 
@@ -1207,7 +1312,7 @@ make_postfx_data(Vulkan::GPU *gpu
         Shader_Modules modules(Shader_Module_Info{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT}, Shader_Module_Info{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
         Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("descriptor_set_layout.g_buffer_layout"_hash)
                                        , g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash)
-                                       , g_uniform_layout_manager.get_handle("descriptor_set_layout.test_descriptor_set_layout"_hash));
+                                       , g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
         Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         Shader_Blend_States blending(false);
         Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT);
@@ -1325,6 +1430,7 @@ test(Vulkan::GPU *gpu
     }
 
 
+    make_camera_data(gpu, desc_pool, swapchain);
 
     // Make descriptor stuff
     // ---- Make render atmosphere uniform layout
@@ -1382,19 +1488,6 @@ test(Vulkan::GPU *gpu
                              Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              Update_Binding{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              Update_Binding{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
-
-    Uniform_Group_Handle transforms_uniform_group = g_uniform_group_manager.add("descriptor_set.test_descriptor_sets"_hash, swapchain->imgs.count);
-    auto *transforms = g_uniform_group_manager.get(transforms_uniform_group);
-    {
-        Uniform_Layout_Handle layout_hdl = g_uniform_layout_manager.get_handle("descriptor_set_layout.test_descriptor_set_layout"_hash);
-        auto *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
-        for (u32 i = 0; i < swapchain->imgs.count; ++i)
-        {
-            transforms[i] = make_uniform_group(layout_ptr, desc_pool, gpu);
-            update_uniform_group(gpu, &transforms[i],
-                                 Update_Binding{BUFFER, &ubos[i], 0});
-        }
     }
 
     Uniform_Group_Handle shadow_map_set = g_uniform_group_manager.add("descriptor_set.shadow_map_set"_hash);

@@ -9,9 +9,13 @@ layout(location = 1) out vec3 out_test;
 
 layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
+
+    mat4 shadow_view;
+    mat4 shadow_proj;
+
+    vec4 debug_vector;
 } ubo;
 
 layout(push_constant) uniform Push_K

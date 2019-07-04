@@ -23,51 +23,6 @@ struct Cube // to get rid of later on
     Uniform_Group_Handle sets;
 };
 
-struct Camera_UBO_Transforms
-{
-    // ---- buffers containing view matrix and projection matrix - basically data that is common to most shaders ----
-    u32 count;
-    GPU_Buffer_Handle master_ubos;
-} transforms;
-
-/*struct Camera
-{
-    glm::vec2 mp;
-    glm::vec3 p; // position
-    glm::vec3 d; // direction
-    glm::vec3 u; // up
-
-    f32 fov;
-    f32 asp; // aspect ratio
-    f32 n, f; // near and far planes
-    
-    glm::vec4 captured_frustum_corners[8] {};
-    glm::vec4 captured_shadow_corners[8] {};
-    
-    glm::mat4 p_m;
-    glm::mat4 v_m;
-    
-    void
-    set_default(f32 w, f32 h, f32 m_x, f32 m_y)
-    {
-	mp = glm::vec2(m_x, m_y);
-	p = glm::vec3(50.0f, 10.0f, 280.0f);
-	d = glm::vec3(+1, 0.0f, +1);
-	u = glm::vec3(0, 1, 0);
-
-	fov = glm::radians(60.0f);
-	asp = w / h;
-	n = 1.0f;
-	f = 100000.0f;
-    }
-    
-    void
-    compute_projection(void)
-    {
-	p_m = glm::perspective(fov, asp, n, f);
-    }
-    };*/
-
 // should not be in this file in the future
 struct Screen_GUI_Quad
 {
@@ -89,14 +44,7 @@ global_var struct World
 
     Deferred_Rendering_Data deferred;
 
-    static constexpr u32 MAX_CAMERAS = 10;
-    u32 camera_count {0};
-    Camera cameras [ MAX_CAMERAS ];
-    s32 camera_bound_to_3D_output{0};
-
     Cube test;
-
-    Camera_UBO_Transforms transforms;
 
     Screen_GUI_Quad screen_quad;
 
@@ -115,21 +63,6 @@ global_var struct World
     Pipeline_Handle debug_frustum_ppln;
     
 } world;
-
-internal s32
-push_camera(Window_Data *window)
-{
-    world.cameras[world.camera_count++].set_default(window->w, window->h, window->m_x, window->m_y);
-
-    return(world.camera_count - 1);
-}
-
-internal void
-bind_camera_to_3D_output(s32 at)
-{
-    world.camera_bound_to_3D_output = at;
-}
-
 
 
 // ---- terrain code ----
@@ -207,7 +140,7 @@ clean_up_terrain(Vulkan::GPU *gpu)
 {
     for (u32 i = 0; i < terrain_master.terrain_count; ++i)
     {
-        terrain_master.terrains[i].heights_gpu_buffer.destroy(gpu);
+
     }
 }
 
@@ -883,7 +816,7 @@ struct Camera_Component
     u32 entity_index;
     
     // Can be set to -1, in that case, there is no camera bound
-    s32 camera{-1};
+    Camera_Handle camera{-1};
 
     // Maybe some other variables to do with 3rd person / first person configs ...
 
@@ -1039,7 +972,7 @@ update_camera_components(f32 dt)
     for (u32 i = 0; i < entities.camera_component_count; ++i)
     {
         Camera_Component *component = &entities.camera_components[ i ];
-        Camera *camera = &world.cameras[ component->camera ];
+        Camera *camera = get_camera(component->camera);
         Entity *e = &entities.entity_list[ component->entity_index ];
 
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
@@ -1396,18 +1329,6 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
 
 	binding->end_attributes_creation();
     }
-    
-    // ---- make descriptor set layout for rendering the cubes ----
-    {
-        // TODO : Move the test descriptor set to camera structure and better name please
-        world.test.set_layout = g_uniform_layout_manager.add("descriptor_set_layout.test_descriptor_set_layout"_hash);
-        auto *layout = g_uniform_layout_manager.get(world.test.set_layout);
-
-        Uniform_Layout_Info blueprint = {};
-        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
-        
-        *layout = make_uniform_layout(&blueprint, gpu);
-    }
 
     // ---- make cube vbo ----
     {
@@ -1501,43 +1422,6 @@ prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, V
     
 	Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, swapchain->imgs.count + 10, gpu, &world.desc.pool);
     }
-
-    // ---- make the ubos ----
-    {
-	struct Uniform_Buffer_Object
-	{
-	    alignas(16) glm::mat4 model_matrix;
-	    alignas(16) glm::mat4 view_matrix;
-	    alignas(16) glm::mat4 projection_matrix;
-	    
-	    alignas(16) glm::mat4 shadow_projection_matrix;
-	    alignas(16) glm::mat4 shadow_view_matrix;
-
-	    alignas(16) glm::mat4 shadow_map_bias;
-
-            alignas(16) glm::vec4 test_vector;
-	};
-	
-	u32 uniform_buffer_count = swapchain->imgs.count;
-
-	world.transforms.count = uniform_buffer_count;
-	world.transforms.master_ubos = g_gpu_buffer_manager.add("buffer.ubos"_hash, uniform_buffer_count);
-	auto *ubos = g_gpu_buffer_manager.get(world.transforms.master_ubos);
-	
-	VkDeviceSize buffer_size = sizeof(Uniform_Buffer_Object);
-
-	for (u32 i = 0
-		 ; i < uniform_buffer_count
-		 ; ++i)
-	{
-	    Vulkan::init_buffer(buffer_size
-				, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-				, VK_SHARING_MODE_EXCLUSIVE
-				, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-				, gpu
-				, &ubos[i]);
-	}
-    }
 }
 
 // ---- to orgnise later on ----
@@ -1555,7 +1439,7 @@ calculate_ws_frustum_corners(glm::vec4 *corners
 
     Entity *main = &entities.entity_list[entities.main_entity];
     Camera_Component *camera_component = &entities.camera_components[main->components.camera_component];
-    Camera *camera = &world.cameras[camera_component->camera];
+    Camera *camera = get_camera(camera_component->camera);
     
     corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
     corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
@@ -1656,7 +1540,6 @@ internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
-	     , Memory_Buffer_View<Vulkan::Buffer> &ubos
 	     , VkCommandBuffer *cmdbuf)
 {
     // Fetch some data needed to render
@@ -1665,7 +1548,7 @@ render_world(Vulkan::State *vk
     
     Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
-    Camera *camera = &world.cameras[world.camera_bound_to_3D_output];
+    Camera *camera = get_camera_bound_to_3D_output();
     
     // Start the rendering    
     Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
@@ -1767,13 +1650,13 @@ make_world(Window_Data *window
 
 
     // For now this creates a bunch of vulkan objects
-    test(&vk->gpu, &vk->swapchain, &world.desc.pool.pool, g_gpu_buffer_manager.get(world.transforms.master_ubos));
+    test(&vk->gpu, &vk->swapchain, &world.desc.pool.pool);
 
 
 
 
     
- std::cout << "JSON > loading pipelines" << std::endl;
+    std::cout << "JSON > loading pipelines" << std::endl;
     load_pipelines_from_json(&vk->gpu, &vk->swapchain);
     clear_linear();
 
@@ -1809,10 +1692,10 @@ make_world(Window_Data *window
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
     add_physics_component(e_ptr, false);    
-    add_camera_component(e_ptr, push_camera(window));
+    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window));
     add_input_component(e_ptr);
 
-    bind_camera_to_3D_output(e_ptr->components.camera_component);
+    bind_camera_to_3D_scene_output(camera_component_ptr->camera);
         
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
@@ -1864,7 +1747,7 @@ make_world(Window_Data *window
 
 
 
-internal void
+/*internal void
 update_ubo(u32 current_image
 	   , Vulkan::GPU *gpu
 	   , Vulkan::Swapchain *swapchain
@@ -1885,7 +1768,7 @@ update_ubo(u32 current_image
         alignas(16) glm::vec4 test_vector;
     };
 
-    Camera *camera = &world->cameras[world->camera_bound_to_3D_output];
+    Camera *camera = get_camera_bound_to_3D_output();
     
     update_shadows(500.0f
                    , 1.0f
@@ -1915,13 +1798,8 @@ update_ubo(u32 current_image
     ubo.shadow_projection_matrix = shadow_data.projection_matrix;
     ubo.shadow_view_matrix = shadow_data.light_view_matrix;
 
-    Vulkan::Buffer &current_ubo = uniform_buffers[current_image];
-
-    auto map = current_ubo.construct_map();
-    map.begin(gpu);
-    map.fill(Memory_Byte_Buffer{sizeof(ubo), &ubo});
-    map.end(gpu);
-}
+    update_3D_output_camera_transforms();
+}*/
 
 
 
@@ -1939,17 +1817,7 @@ render_frame(Vulkan::State *vulkan_state
 	     , u32 current_frame
 	     , VkCommandBuffer *cmdbuf)
 {
-    
-    auto *ubos = g_gpu_buffer_manager.get(world.transforms.master_ubos);
-    Memory_Buffer_View<Vulkan::Buffer> ubo_mbv { world.transforms.count, ubos };
-
-    update_ubo(image_index
-	       , &vulkan_state->gpu
-	       , &vulkan_state->swapchain
-	       , ubo_mbv
-	       , &world);
-
-    render_world(vulkan_state, image_index, current_frame, ubo_mbv, cmdbuf);
+    render_world(vulkan_state, image_index, current_frame, cmdbuf);
     // ---- exit ----
 }
 
@@ -1986,7 +1854,7 @@ handle_input_debug(Window_Data *window
     Entity *e_ptr = &entities.entity_list[entities.main_entity];
     Camera_Component *e_camera_component = &entities.camera_components[e_ptr->components.camera_component];
     Physics_Component *e_physics = &entities.physics_components[e_ptr->components.physics_component];
-    Camera *e_camera = &world.cameras[e_camera_component->camera];
+    Camera *e_camera = get_camera(e_camera_component->camera);
     glm::vec3 up = e_ptr->on_t->ws_n;
     
     if (window->key_map[GLFW_KEY_UP]) light_pos += glm::vec3(0.0f, 0.0f, dt) * 5.0f;

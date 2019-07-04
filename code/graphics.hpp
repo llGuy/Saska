@@ -381,11 +381,40 @@ add_camera(Window_Data *window);
 void
 make_camera(Camera *camera, f32 fov, f32 asp, f32 near, f32 far);
 
+enum { CAMERA_BOUND_TO_3D_OUTPUT = -1 };
+
 Camera *
 get_camera(Camera_Handle handle);
 
+Camera *
+get_camera_bound_to_3D_output(void);
+
 void
 bind_camera_to_3D_scene_output(Camera_Handle handle);
+
+Memory_Buffer_View<Vulkan::Buffer>
+get_camera_transform_ubos(void);
+
+struct Camera_Transform_Uniform_Data
+{
+    alignas(16) glm::mat4 view_matrix;
+    alignas(16) glm::mat4 projection_matrix;
+    alignas(16) glm::mat4 shadow_projection_matrix;
+    alignas(16) glm::mat4 shadow_view_matrix;
+    
+    alignas(16) glm::vec4 debug_vector;
+};
+
+void
+make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
+                                   const glm::mat4 &view_matrix,
+                                   const glm::mat4 &projection_matrix,
+                                   const glm::mat4 &shadow_view_matrix,
+                                   const glm::mat4 &shadow_projection_matrix,
+                                   const glm::vec4 &debug_vector);
+
+void
+update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu);
 
 struct Shadow_Matrices
 {

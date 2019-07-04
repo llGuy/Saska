@@ -22,16 +22,13 @@ layout(binding = 0, set = 1) uniform samplerCube atmosphere_cubemap;
 
 layout(binding = 0, set = 2) uniform Camera_Transforms
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_proj;
     mat4 shadow_view;
+    mat4 shadow_proj;
 
-    mat4 shadow_bias;
-    // To see if this works
-    vec4 test_vector;
+    vec4 debug_vector;
 } camera_ubo;
 
 const int num_marches = 30;

@@ -67,40 +67,7 @@
 	    "subpass": 1
 	}
     },
-    
-    "pipeline.deferred_pipeline": {
-	"new": true,
-	
-	"stages": {
-	    "v": "shaders/SPV/deferred_lighting.vert.spv",
-	    "f": "shaders/SPV/deferred_lighting.frag.spv"
-	},
-	"assemble": {
-	    "topology": "s",
-	    "restart": false
-	},
-	"raster": {
-	    "poly_mode": "f",
-	    "cull": "n"
-	},
-	"pipeline_layout": {
-	    "descriptor_set_layouts": ["descriptor_set_layout.deferred_layout" ],
-
-	    "push_constant": {
-		"stage_flags": "f",
-		"offset": 0,
-		"size": 160
-	    }
-	},
-	"viewport": [0, 0],
-	"blend": ["disable"],
-	"vertex_input": "",
-	"depth": false,
-	"render_pass": {
-	    "name": "render_pass.deferred_render_pass",
-	    "subpass": 1
-	}
-    },
+   
 
     "pipeline.terrain_shadow": {
 	"new": true,
@@ -175,71 +142,8 @@
 
 
     
-    "pipeline.atmosphere_pipeline": {
-	"new": true,
-	
-	"stages": {
-	    "v": "shaders/SPV/atmosphere.vert.spv",
-	    "g": "shaders/SPV/atmosphere.geom.spv",
-	    "f": "shaders/SPV/atmosphere.frag.spv"
-	},
-	"assemble": {
-	    "topology": "p",
-	    "restart": false
-	},
-	"raster": {
-	    "poly_mode": "f",
-	    "cull": "n"
-	},
-	"pipeline_layout": {
-	    "descriptor_set_layouts": [],
-	    "push_constant": {
-		"stage_flags": "f",
-		"offset": 0,
-		"size": 160
-	    }
-	},
-	"viewport": [1000, 1000],
-	"blend": ["disable"],
-	"vertex_input": "",
-	"depth": false,
-	"render_pass": {
-	    "name": "render_pass.atmosphere_render_pass",
-	    "subpass": 0
-	}
-    },
-    "pipeline.render_atmosphere": {
-	"new": true,
-	
-	"stages": {
-	    "v": "shaders/SPV/render_atmosphere.vert.spv",
-	    "f": "shaders/SPV/render_atmosphere.frag.spv"
-	},
-	"assemble": {
-	    "topology": "l",
-	    "restart": false
-	},
-	"raster": {
-	    "poly_mode": "f",
-	    "cull": "n"
-	},
-	"pipeline_layout": {
-	    "descriptor_set_layouts": ["uniform_layout.camera_transforms_ubo", "descriptor_set_layout.render_atmosphere_layout"],
-	    "push_constant": {
-		"stage_flags": "v",
-		"offset": 0,
-		"size": 160
-	    }
-	},
-	"viewport": [0, 0],
-	"blend": ["disable", "disable", "disable", "disable"],
-	"vertex_input": "vulkan_model.test_model",
-	"depth": true,
-	"render_pass": {
-	    "name": "render_pass.deferred_render_pass",
-	    "subpass": 0
-	}
-    },
+
+
     "pipeline.main_pipeline": {
 	"new": true,
 	

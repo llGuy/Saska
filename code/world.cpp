@@ -1474,7 +1474,7 @@ render_world(Vulkan::State *vk
 	     , VkCommandBuffer *cmdbuf)
 {
     // Fetch some data needed to render
-    auto *transforms_ubo_uniform_groups = g_uniform_group_manager.get(world.test.sets);
+    auto transforms_ubo_uniform_groups = get_camera_transform_uniform_groups();
     Shadow_Display shadow_display_data = get_shadow_display();
     
     Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};

@@ -396,6 +396,9 @@ bind_camera_to_3D_scene_output(Camera_Handle handle);
 Memory_Buffer_View<Vulkan::Buffer>
 get_camera_transform_ubos(void);
 
+Memory_Buffer_View<Uniform_Group>
+get_camera_transform_uniform_groups(void);
+
 struct Camera_Transform_Uniform_Data
 {
     alignas(16) glm::mat4 view_matrix;

@@ -1,9 +1,20 @@
 #define GLFW_INCLUDE_VULKAN
 
 #include <GLFW/glfw3.h>
+#include <iostream>
+
+#if defined(UNITY_BUILD)
+#include "memory.cpp"
+#include "game.cpp"
+#include "world.cpp"
+#include "script.cpp"
+#include "load.cpp"
+#include "graphics.cpp"
+#include "vulkan.cpp"
+
+#else
 #include <vulkan/vulkan.h>
 
-#include <iostream>
 #include <nlohmann/json.hpp>
 
 #include "memory.hpp"
@@ -15,6 +26,7 @@
 
 #include "game.hpp"
 #include "vulkan.hpp"
+#endif
 
 #define DEBUG_FILE ".debug"
 

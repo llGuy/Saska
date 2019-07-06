@@ -322,7 +322,181 @@ make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_
 void
 submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);
 
+void
+make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, Vulkan::GPU *gpu);
 
+void
+make_framebuffer(Vulkan::Framebuffer *fbo
+                 , u32 w, u32 h
+                 , u32 layer_count
+                 , Vulkan::Render_Pass *compatible
+                 , const Memory_Buffer_View<Vulkan::Image2D> &colors
+                 , Vulkan::Image2D *depth
+                 , Vulkan::GPU *gpu);
+
+struct Render_Pass_Attachment
+{
+    VkFormat format;
+    // Initial layout is always undefined
+    VkImageLayout final_layout;
+};
+
+struct Render_Pass_Attachment_Reference
+{
+    u32 index;
+    VkImageLayout layout;
+};
+
+struct Render_Pass_Subpass
+{
+    static constexpr u32 MAX_COLOR_ATTACHMENTS = 7;
+    Render_Pass_Attachment_Reference color_attachments[MAX_COLOR_ATTACHMENTS];
+    u32 color_attachment_count {0};
+
+    Render_Pass_Attachment_Reference depth_attachment;
+    bool enable_depth {0};
+
+    Render_Pass_Attachment_Reference input_attachments[MAX_COLOR_ATTACHMENTS];
+    u32 input_attachment_count {0};
+
+    template <typename ...T> void
+    set_color_attachment_references(const T &...ts)
+    {
+        Render_Pass_Attachment_Reference references[] { ts... };
+        for (u32 i = 0; i < sizeof...(ts); ++i)
+        {
+            color_attachments[i] = references[i];
+        }
+        color_attachment_count = sizeof...(ts);
+    }
+
+    void
+    set_depth(const Render_Pass_Attachment_Reference &reference)
+    {
+        enable_depth = true;
+        depth_attachment = reference;
+    }
+
+    template <typename ...T> void
+    set_input_attachment_references(const T &...ts)
+    {
+        Render_Pass_Attachment_Reference references[] { ts... };
+        for (u32 i = 0; i < sizeof...(ts); ++i)
+        {
+            input_attachments[i] = references[i];
+        }
+        input_attachment_count = sizeof...(ts);
+    }
+};
+
+struct Render_Pass_Dependency
+{
+    s32 src_index;
+    VkPipelineStageFlags src_stage;
+    u32 src_access;
+
+    s32 dst_index;
+    VkPipelineStageFlags dst_stage;
+    u32 dst_access;
+};
+
+Render_Pass_Dependency
+make_render_pass_dependency(s32 src_index,
+                            VkPipelineStageFlags src_stage,
+                            u32 src_access,
+                            s32 dst_index,
+                            VkPipelineStageFlags dst_stage,
+                            u32 dst_access);
+
+void
+make_render_pass(Vulkan::Render_Pass *render_pass
+                 , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
+                 , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
+                 , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
+                 , Vulkan::GPU *gpu);
+
+struct Shader_Module_Info
+{
+    const char *filename;
+    VkShaderStageFlagBits stage;
+};
+
+struct Shader_Modules
+{
+    static constexpr u32 MAX_SHADERS = 5;
+    Shader_Module_Info modules[MAX_SHADERS];
+    u32 count;
+    
+    template <typename ...T>
+    Shader_Modules(T ...modules_p)
+        : modules{modules_p...}, count(sizeof...(modules_p))
+    {
+    }
+};
+
+struct Shader_Uniform_Layouts
+{
+    static constexpr u32 MAX_LAYOUTS = 10;
+    Uniform_Layout_Handle layouts[MAX_LAYOUTS];
+    u32 count;
+    
+    template <typename ...T>
+    Shader_Uniform_Layouts(T ...layouts_p)
+        : layouts{layouts_p...}, count(sizeof...(layouts_p))
+    {
+    }
+};
+
+struct Shader_PK_Data
+{
+    u32 size;
+    u32 offset;
+    VkShaderStageFlagBits stages;
+};
+
+struct Shader_Blend_States
+{
+    static constexpr u32 MAX_BLEND_STATES = 10;
+    // For now, is just boolean
+    bool blend_states[MAX_BLEND_STATES];
+    u32 count;
+    
+    template <typename ...T>
+    Shader_Blend_States(T ...states)
+        : blend_states{states...}, count(sizeof...(states))
+    {
+    }
+};
+
+struct Dynamic_States
+{
+    static constexpr u32 MAX_DYNAMIC_STATES = 10;
+    VkDynamicState dynamic_states[MAX_DYNAMIC_STATES];
+    u32 count;
+
+    template <typename ...T>
+    Dynamic_States(T ...states)
+        : dynamic_states{states...}, count(sizeof...(states))
+    {
+    }
+};
+
+void
+make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
+                       , const Shader_Modules &modules
+                       , bool primitive_restart, VkPrimitiveTopology topology
+                       , VkPolygonMode polygonmode, VkCullModeFlags culling
+                       , Shader_Uniform_Layouts &layouts
+                       , const Shader_PK_Data &pk
+                       , VkExtent2D viewport
+                       , const Shader_Blend_States &blends
+                       , Vulkan::Model *model
+                       , bool enable_depth
+                       , f32 depth_bias
+                       , const Dynamic_States &dynamic_states
+                       , Vulkan::Render_Pass *compatible
+                       , u32 subpass
+                       , Vulkan::GPU *gpu);
 
 void
 load_external_graphics_data(Vulkan::Swapchain *swapchain
@@ -441,8 +615,12 @@ struct Shadow_Debug
 
 struct Shadow_Display
 {
+    u32 shadowmap_w, shadowmap_h;
     Uniform_Group texture;
 };
+
+void
+render_3D_frustum_debug_information(GPU_Command_Queue *queue, u32 image_index);
 
 Shadow_Matrices
 get_shadow_matrices(void);
@@ -497,10 +675,6 @@ apply_pfx_on_scene(u32 image_index
                    , const glm::mat4 &view_matrix
                    , const glm::mat4 &projection_matrix
                    , Vulkan::GPU *gpu);
-
-// For now, this function creates all the stuff that JSON used to create, but need to dispatch to appropriate locations
-void
-test(Vulkan::GPU *, Vulkan::Swapchain *, u32 index = 0);
 
 void
 initialize_game_3D_graphics(Vulkan::GPU *gpu,

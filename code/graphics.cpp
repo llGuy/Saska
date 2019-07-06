@@ -329,72 +329,6 @@ make_framebuffer(Vulkan::Framebuffer *fbo
     fbo->extent = VkExtent2D{ w, h };
 }
 
-struct Render_Pass_Attachment
-{
-    VkFormat format;
-    // Initial layout is always undefined
-    VkImageLayout final_layout;
-};
-
-struct Render_Pass_Attachment_Reference
-{
-    u32 index;
-    VkImageLayout layout;
-};
-
-struct Render_Pass_Subpass
-{
-    static constexpr u32 MAX_COLOR_ATTACHMENTS = 7;
-    Render_Pass_Attachment_Reference color_attachments[MAX_COLOR_ATTACHMENTS];
-    u32 color_attachment_count {0};
-
-    Render_Pass_Attachment_Reference depth_attachment;
-    bool enable_depth {0};
-
-    Render_Pass_Attachment_Reference input_attachments[MAX_COLOR_ATTACHMENTS];
-    u32 input_attachment_count {0};
-
-    template <typename ...T> void
-    set_color_attachment_references(const T &...ts)
-    {
-        Render_Pass_Attachment_Reference references[] { ts... };
-        for (u32 i = 0; i < sizeof...(ts); ++i)
-        {
-            color_attachments[i] = references[i];
-        }
-        color_attachment_count = sizeof...(ts);
-    }
-
-    void
-    set_depth(const Render_Pass_Attachment_Reference &reference)
-    {
-        enable_depth = true;
-        depth_attachment = reference;
-    }
-
-    template <typename ...T> void
-    set_input_attachment_references(const T &...ts)
-    {
-        Render_Pass_Attachment_Reference references[] { ts... };
-        for (u32 i = 0; i < sizeof...(ts); ++i)
-        {
-            input_attachments[i] = references[i];
-        }
-        input_attachment_count = sizeof...(ts);
-    }
-};
-
-struct Render_Pass_Dependency
-{
-    s32 src_index;
-    VkPipelineStageFlags src_stage;
-    u32 src_access;
-
-    s32 dst_index;
-    VkPipelineStageFlags dst_stage;
-    u32 dst_access;
-};
-
 Render_Pass_Dependency
 make_render_pass_dependency(s32 src_index,
                             VkPipelineStageFlags src_stage,
@@ -473,72 +407,6 @@ make_render_pass(Vulkan::Render_Pass *render_pass
     
     Vulkan::init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
 }
-
-struct Shader_Module_Info
-{
-    const char *filename;
-    VkShaderStageFlagBits stage;
-};
-
-struct Shader_Modules
-{
-    static constexpr u32 MAX_SHADERS = 5;
-    Shader_Module_Info modules[MAX_SHADERS];
-    u32 count;
-    
-    template <typename ...T>
-    Shader_Modules(T ...modules_p)
-        : modules{modules_p...}, count(sizeof...(modules_p))
-    {
-    }
-};
-
-struct Shader_Uniform_Layouts
-{
-    static constexpr u32 MAX_LAYOUTS = 10;
-    Uniform_Layout_Handle layouts[MAX_LAYOUTS];
-    u32 count;
-    
-    template <typename ...T>
-    Shader_Uniform_Layouts(T ...layouts_p)
-        : layouts{layouts_p...}, count(sizeof...(layouts_p))
-    {
-    }
-};
-
-struct Shader_PK_Data
-{
-    u32 size;
-    u32 offset;
-    VkShaderStageFlagBits stages;
-};
-
-struct Shader_Blend_States
-{
-    static constexpr u32 MAX_BLEND_STATES = 10;
-    // For now, is just boolean
-    bool blend_states[MAX_BLEND_STATES];
-    u32 count;
-    
-    template <typename ...T>
-    Shader_Blend_States(T ...states)
-        : blend_states{states...}, count(sizeof...(states))
-    {
-    }
-};
-
-struct Dynamic_States
-{
-    static constexpr u32 MAX_DYNAMIC_STATES = 10;
-    VkDynamicState dynamic_states[MAX_DYNAMIC_STATES];
-    u32 count;
-
-    template <typename ...T>
-    Dynamic_States(T ...states)
-        : dynamic_states{states...}, count(sizeof...(states))
-    {
-    }
-};
 
 void
 make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
@@ -993,23 +861,19 @@ make_atmosphere_data(Vulkan::GPU *gpu
                                false, 0.0f, dynamic, atmosphere_render_pass, 0, gpu);
     }
 
-    
-
-    // TODO Fix problems with validation layers todo with this and get rid of JSON
-
     g_atmosphere.render_pipeline = g_pipeline_manager.add("pipeline.render_atmosphere"_hash);
     auto *render_ppln = g_pipeline_manager.get(g_atmosphere.render_pipeline);
     {
-        Model_Handle cube_hdl = g_model_manager.get_handle("vulkan_model.test_model"_hash);
+        Model_Handle cube_hdl = g_model_manager.get_handle("model.cube_model"_hash);
         auto *model_ptr = g_model_manager.get(cube_hdl);
         Shader_Modules modules(Shader_Module_Info{"shaders/SPV/render_atmosphere.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                Shader_Module_Info{"shaders/SPV/render_atmosphere.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         Uniform_Layout_Handle camera_transforms_layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash);
         Shader_Uniform_Layouts layouts(camera_transforms_layout_hdl, render_atmosphere_layout_hdl);
-        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         Shader_Blend_States blending(false, false, false, false);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(make_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+        make_graphics_pipeline(render_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, model_ptr,
                                true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0, gpu);
     }
@@ -1025,7 +889,7 @@ make_atmosphere_data(Vulkan::GPU *gpu
 }
 
 internal void
-make_shadow_data(Vulkan::GPU *gpu)
+make_shadow_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
 {
     glm::vec3 light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
     g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -1076,6 +940,97 @@ make_shadow_data(Vulkan::GPU *gpu)
         update_uniform_group(gpu, shadow_map_ptr,
                              Update_Binding{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
+
+    g_lighting.shadows.debug_frustum_ppln = g_pipeline_manager.add("pipeline.debug_frustum"_hash);
+    auto *frustum_ppln = g_pipeline_manager.get(g_lighting.shadows.debug_frustum_ppln);
+    {
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/debug_frustum.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/debug_frustum.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts (g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending(false, false, false, false);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(frustum_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0, gpu);
+    }
+}
+
+internal void
+calculate_ws_frustum_corners(glm::vec4 *corners
+			     , glm::vec4 *shadow_corners)
+{
+    Shadow_Matrices shadow_data = get_shadow_matrices();
+
+    Camera *camera = get_camera_bound_to_3D_output();
+    
+    corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
+    corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
+    corners[3] = shadow_data.inverse_light_view * camera->captured_frustum_corners[2];
+    corners[2] = shadow_data.inverse_light_view * camera->captured_frustum_corners[3];
+    
+    corners[4] = shadow_data.inverse_light_view * camera->captured_frustum_corners[4];
+    corners[5] = shadow_data.inverse_light_view * camera->captured_frustum_corners[5];
+    corners[7] = shadow_data.inverse_light_view * camera->captured_frustum_corners[6];
+    corners[6] = shadow_data.inverse_light_view * camera->captured_frustum_corners[7];
+
+    shadow_corners[0] = shadow_data.inverse_light_view * camera->captured_shadow_corners[0];
+    shadow_corners[1] = shadow_data.inverse_light_view * camera->captured_shadow_corners[1];
+    shadow_corners[2] = shadow_data.inverse_light_view * camera->captured_shadow_corners[2];
+    shadow_corners[3] = shadow_data.inverse_light_view * camera->captured_shadow_corners[3];
+    
+    shadow_corners[4] = shadow_data.inverse_light_view * camera->captured_shadow_corners[4];
+    shadow_corners[5] = shadow_data.inverse_light_view * camera->captured_shadow_corners[5];
+    shadow_corners[6] = shadow_data.inverse_light_view * camera->captured_shadow_corners[6];
+    shadow_corners[7] = shadow_data.inverse_light_view * camera->captured_shadow_corners[7];
+}
+
+internal void
+render_debug_frustum(GPU_Command_Queue *queue
+                     , VkDescriptorSet ubo)
+{
+    auto *debug_frustum_ppln = g_pipeline_manager.get(g_lighting.shadows.debug_frustum_ppln);
+    Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
+
+    Vulkan::command_buffer_bind_descriptor_sets(debug_frustum_ppln
+						, {1, &ubo}
+						, &queue->q);
+
+    struct Push_K
+    {
+	alignas(16) glm::vec4 positions[8];
+	alignas(16) glm::vec4 color;
+    } push_k1, push_k2;
+
+    calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
+
+    push_k1.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    push_k2.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    
+    Vulkan::command_buffer_push_constant(&push_k1
+					 , sizeof(push_k1)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , debug_frustum_ppln
+					 , &queue->q);
+    
+    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
+
+    Vulkan::command_buffer_push_constant(&push_k2
+					 , sizeof(push_k2)
+					 , 0
+					 , VK_SHADER_STAGE_VERTEX_BIT
+					 , debug_frustum_ppln
+					 , &queue->q);
+    
+    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
+}
+
+void
+render_3D_frustum_debug_information(GPU_Command_Queue *queue, u32 image_index)
+{
+    auto *camera_transforms = g_uniform_group_manager.get(g_cameras.camera_transforms_ubos);
+    //    render_debug_frustum(queue, camera_transforms[image_index]);
 }
 
 Shadow_Matrices
@@ -1107,7 +1062,7 @@ Shadow_Display
 get_shadow_display(void)
 {
     auto *texture = g_uniform_group_manager.get(g_lighting.shadows.set);
-    Shadow_Display ret{*texture};
+    Shadow_Display ret{Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_H, *texture};
     return(ret);
 }
 
@@ -1342,7 +1297,7 @@ make_rendering_pipeline_data(Vulkan::GPU *gpu
     g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
     g_dfr_rendering.dfr_g_buffer_group = g_uniform_group_manager.get_handle("uniform_group.g_buffer"_hash);
 
-    make_shadow_data(gpu);
+    make_shadow_data(gpu, swapchain);
     make_atmosphere_data(gpu, &g_uniform_pool, swapchain, cmdpool);
 
     make_postfx_data(gpu, swapchain);
@@ -1540,14 +1495,106 @@ apply_pfx_on_scene(u32 image_index
     queue->end_render_pass();
 }
 
-void
-test(Vulkan::GPU *gpu
-     , Vulkan::Swapchain *swapchain
-     , u32 index)
+internal void
+make_cube_model(Vulkan::GPU *gpu,
+                Vulkan::Swapchain *swapchain,
+                GPU_Command_Queue_Pool *pool)
 {
-    Uniform_Pool *desc_pool = &g_uniform_pool;
+    Model_Handle cube_model_hdl = g_model_manager.add("model.cube_model"_hash);
+    auto *cube_model_ptr = g_model_manager.get(cube_model_hdl);
+    {
+        cube_model_ptr->attribute_count = 3;
+	cube_model_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
+	cube_model_ptr->binding_count = 1;
+	cube_model_ptr->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding));
+
+	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
+	
+	// only one binding
+	Vulkan::Model_Binding *binding = cube_model_ptr->bindings;
+	binding->begin_attributes_creation(cube_model_ptr->attributes_buffer);
+
+	binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::pos));
+	binding->push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::color));
+	binding->push_attribute(2, VK_FORMAT_R32G32_SFLOAT, sizeof(Vertex::uvs));
+
+	binding->end_attributes_creation();
+    }
+
+    GPU_Buffer_Handle cube_vbo_hdl = g_gpu_buffer_manager.add("vbo.cube_model_vbo"_hash);
+    auto *vbo = g_gpu_buffer_manager.get(cube_vbo_hdl);
+    {
+        struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
+
+        glm::vec3 gray = glm::vec3(0.2);
+	
+        f32 radius = 2.0f;
+	
+        persist Vertex vertices[]
+        {
+            {{-radius, -radius, radius	}, gray},
+            {{radius, -radius, radius	}, gray},
+            {{radius, radius, radius	}, gray},
+            {{-radius, radius, radius	}, gray},
+												 
+            {{-radius, -radius, -radius	}, gray},
+            {{radius, -radius, -radius	}, gray},
+            {{radius, radius, -radius	}, gray},
+            {{-radius, radius, -radius	}, gray}
+        };
+	
+        auto *main_binding = &cube_model_ptr->bindings[0];
+	    
+        Memory_Byte_Buffer byte_buffer{sizeof(vertices), vertices};
+	
+        Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+                                                              , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                                                              , pool
+                                                              , vbo
+                                                              , gpu);
+
+        main_binding->buffer = vbo->buffer;
+        cube_model_ptr->create_vbo_list();
+    }
     
-    g_atmosphere.render_pipeline       = g_pipeline_manager.get_handle("pipeline.render_atmosphere"_hash);
+    GPU_Buffer_Handle model_ibo_hdl = g_gpu_buffer_manager.add("ibo.cube_model_ibo"_hash);
+    auto *ibo = g_gpu_buffer_manager.get(model_ibo_hdl);
+    {
+	persist u32 mesh_indices[] = 
+            {
+                0, 1, 2,
+                2, 3, 0,
+
+                1, 5, 6,
+                6, 2, 1,
+
+                7, 6, 5,
+                5, 4, 7,
+	    
+                3, 7, 4,
+                4, 0, 3,
+	    
+                4, 5, 1,
+                1, 0, 4,
+	    
+                3, 2, 6,
+                6, 7, 3,
+            };
+
+	cube_model_ptr->index_data.index_type = VK_INDEX_TYPE_UINT32;
+	cube_model_ptr->index_data.index_offset = 0;
+	cube_model_ptr->index_data.index_count = sizeof(mesh_indices) / sizeof(mesh_indices[0]);
+
+	Memory_Byte_Buffer byte_buffer{sizeof(mesh_indices), mesh_indices};
+	    
+	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+							      , pool
+							      , ibo
+							      , gpu);
+
+	cube_model_ptr->index_data.index_buffer = ibo->buffer;
+    }
 }
 
 void
@@ -1557,8 +1604,9 @@ initialize_game_3D_graphics(Vulkan::GPU *gpu,
 {
     make_uniform_pool(gpu);
     make_dfr_rendering_data(gpu, swapchain);
-    make_shadow_data(gpu);
     make_camera_data(gpu, &g_uniform_pool, swapchain);
+    make_shadow_data(gpu, swapchain);
+    make_cube_model(gpu, swapchain, pool);
     make_atmosphere_data(gpu, &g_uniform_pool, swapchain, pool);
     make_postfx_data(gpu, swapchain);
 }

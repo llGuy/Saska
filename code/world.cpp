@@ -14,27 +14,10 @@
 
 constexpr f32 PI = 3.14159265359f;
 
-struct Cube // to get rid of later on
-{
-    Uniform_Layout_Handle set_layout;
-    Model_Handle model;
-    GPU_Buffer_Handle model_vbo;
-    GPU_Buffer_Handle model_ibo;
-    Uniform_Group_Handle sets;
-};
+global_var constexpr u32 MAX_MTRLS = 10;
+global_var GPU_Material_Submission_Queue g_world_submission_queues[MAX_MTRLS];
 
-global_var struct World
-{
-    Cube test;
-
-    static constexpr u32 MAX_TEST_MTRLS = 10;
-    GPU_Material_Submission_Queue entity_render_queue;
-    GPU_Material_Submission_Queue terrain_render_queue;
-
-    // This needs to be removed in the future
-    Pipeline_Handle debug_frustum_ppln;
-} world;
-
+enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 
 // ---- terrain code ----
 struct Morphable_Terrain
@@ -99,19 +82,19 @@ global_var struct Morphable_Terrain_Master
 	// will not be a pointer in the future
 	Morphable_Terrain *t;
     } terrain_pointer;
-} terrain_master;
+} g_terrains;
 
 internal Morphable_Terrain *
 add_terrain(void)
 {
-    return(&terrain_master.terrains[terrain_master.terrain_count++]);
+    return(&g_terrains.terrains[g_terrains.terrain_count++]);
 }    
 
 
 internal void
 clean_up_terrain(Vulkan::GPU *gpu)
 {
-    for (u32 i = 0; i < terrain_master.terrain_count; ++i)
+    for (u32 i = 0; i < g_terrains.terrain_count; ++i)
     {
 
     }
@@ -477,11 +460,11 @@ morph_terrain_at(const glm::ivec2 &ts_position
 internal Morphable_Terrain *
 on_which_terrain(const glm::vec3 &ws_position)
 {
-    for (u32 i = 0; i < terrain_master.terrain_count; ++i)
+    for (u32 i = 0; i < g_terrains.terrain_count; ++i)
     {
-        if (is_on_terrain(ws_position, &terrain_master.terrains[i]))
+        if (is_on_terrain(ws_position, &g_terrains.terrains[i]))
         {
-            return(&terrain_master.terrains[i]);
+            return(&g_terrains.terrains[i]);
         }
     }
     return(nullptr);
@@ -621,14 +604,14 @@ internal void
 make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_Queue *queue
                             , const glm::vec3 &position, const glm::quat &rotation, const glm::vec3 &size, const glm::vec3 &color)
 {
-    auto *model_info = g_model_manager.get(terrain_master.model_info);
-    terrain->vbos[0] = terrain_master.mesh_xz_values.buffer;
+    auto *model_info = g_model_manager.get(g_terrains.model_info);
+    terrain->vbos[0] = g_terrains.mesh_xz_values.buffer;
     terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
-    world.terrain_render_queue.push_material(&terrain->push_k
-                                             , sizeof(terrain->push_k)
-                                             , {2, terrain->vbos}
-                                             , model_info->index_data
-                                             , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
+    g_world_submission_queues[TERRAIN_QUEUE].push_material(&terrain->push_k
+                                                           , sizeof(terrain->push_k)
+                                                           , {2, terrain->vbos}
+                                                           , model_info->index_data
+                                                           , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
 
     terrain->ws_p = position;
     terrain->gs_r = rotation;
@@ -643,30 +626,13 @@ make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_
     terrain->ws_n = glm::vec3(glm::mat4_cast(terrain->gs_r) * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
 }
 
-internal void
-make_morphable_terrain_master(VkCommandPool *cmdpool
-			      , Vulkan::GPU *gpu)
-{
-    // ---- register the info of the model for json loader to access ---
-    terrain_master.model_info = g_model_manager.add("vulkan_model.terrain_base_info"_hash);
-    auto *model_info = g_model_manager.get(terrain_master.model_info);
-    
-    make_3D_terrain_base(21, 21
-			 , 1.0f
-			 , &terrain_master.mesh_xz_values
-			 , &terrain_master.idx_buffer
-			 , model_info
-			 , cmdpool
-			 , gpu);
-}
-
 
 
 internal void
-make_terrains(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
+make_terrain_instances(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
 {
     // Make the terrain render command recorder
-    world.terrain_render_queue = make_gpu_material_submission_queue(10
+    g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10
                                                                     , VK_SHADER_STAGE_VERTEX_BIT
                                                                     // Parameter is obsolete, must remove
                                                                     , VK_COMMAND_BUFFER_LEVEL_SECONDARY
@@ -675,7 +641,7 @@ make_terrains(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
 
     auto *red_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, red_terrain, cmdpool, gpu);
-    make_terrain_rendering_data(red_terrain, &world.terrain_render_queue
+    make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , glm::vec3(0.0f, 0.0f, 200.0f)
                                 , glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)))
                                 , glm::vec3(15.0f)
@@ -683,7 +649,7 @@ make_terrains(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
 
     auto *green_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, green_terrain, cmdpool, gpu);
-    make_terrain_rendering_data(green_terrain, &world.terrain_render_queue
+    make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , glm::vec3(200.0f, 0.0f, 0.0f)
                                 , glm::quat(glm::radians(glm::vec3(0.0f, 45.0f, 20.0f)))
                                 , glm::vec3(10.0f)
@@ -691,9 +657,80 @@ make_terrains(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
 }
 
 internal void
-make_terrain_pointer(void)
+make_terrain_pointer(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
 {
-    terrain_master.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
+    //    g_terrains.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
+
+    g_terrains.terrain_pointer.ppln = g_pipeline_manager.add("pipeline.terrain_mesh_pointer"_hash);
+    auto *terrain_pointer_ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
+    {
+        Render_Pass_Handle dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/terrain_pointer.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/terrain_pointer.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending(false, false, false, false);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+    }
+}
+
+internal void
+initialize_terrains(VkCommandPool *cmdpool
+                    , Vulkan::Swapchain *swapchain
+                    , Vulkan::GPU *gpu)
+{
+    // ---- register the info of the model for json loader to access ---
+    g_terrains.model_info = g_model_manager.add("model.terrain_base_info"_hash);
+    auto *model_info = g_model_manager.get(g_terrains.model_info);
+    
+    make_3D_terrain_base(21, 21
+			 , 1.0f
+			 , &g_terrains.mesh_xz_values
+			 , &g_terrains.idx_buffer
+			 , model_info
+			 , cmdpool
+			 , gpu);
+
+    make_terrain_instances(gpu, cmdpool);
+
+    g_terrains.terrain_ppln = g_pipeline_manager.add("pipeline.terrain_pipeline"_hash);
+    auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);
+    {
+        Render_Pass_Handle dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/terrain.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/terrain.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                               Shader_Module_Info{"shaders/SPV/terrain.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                       g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending(false, false, false, false);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, model_info,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+    }
+
+    g_terrains.terrain_shadow_ppln = g_pipeline_manager.add("pipeline.terrain_shadow"_hash);
+    auto *terrain_shadow_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);
+    {
+        auto shadow_display = get_shadow_display();
+        VkExtent2D shadow_extent = VkExtent2D{shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+        Render_Pass_Handle shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/terrain_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/terrain_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending = {};
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0, gpu);
+    }
+    
+    make_terrain_pointer(gpu, swapchain);
 }
 
 internal void
@@ -701,9 +738,9 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 				   , VkDescriptorSet *ubo_set)
 {
     // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
-    if (terrain_master.terrain_pointer.ts_position.x >= 0)
+    if (g_terrains.terrain_pointer.ts_position.x >= 0)
     {
-	auto *ppln = g_pipeline_manager.get(terrain_master.terrain_pointer.ppln);
+	auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
 	Vulkan::command_buffer_bind_pipeline(ppln
 					     , &queue->q);
 
@@ -720,18 +757,18 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 	    f32 ts_heights[8];
 	} push_k;
 
-	push_k.ts_to_ws_terrain_model = terrain_master.terrain_pointer.t->push_k.transform;
+	push_k.ts_to_ws_terrain_model = g_terrains.terrain_pointer.t->push_k.transform;
 	push_k.color = glm::vec4(1.0f);
-	push_k.ts_center_position = glm::vec4((f32)terrain_master.terrain_pointer.ts_position.x
+	push_k.ts_center_position = glm::vec4((f32)g_terrains.terrain_pointer.ts_position.x
 					      , 0.0f
-					      , (f32)terrain_master.terrain_pointer.ts_position.y
+					      , (f32)g_terrains.terrain_pointer.ts_position.y
 					      , 1.0f);
 
-	u32 x = terrain_master.terrain_pointer.ts_position.x;
-	u32 z = terrain_master.terrain_pointer.ts_position.y;
-	u32 width = terrain_master.terrain_pointer.t->xz_dim.x;
-	u32 depth = terrain_master.terrain_pointer.t->xz_dim.y;
-	f32 *heights = (f32 *)(terrain_master.terrain_pointer.t->mapped_gpu_heights.data);
+	u32 x = g_terrains.terrain_pointer.ts_position.x;
+	u32 z = g_terrains.terrain_pointer.ts_position.y;
+	u32 width = g_terrains.terrain_pointer.t->xz_dim.x;
+	u32 depth = g_terrains.terrain_pointer.t->xz_dim.y;
+	f32 *heights = (f32 *)(g_terrains.terrain_pointer.t->mapped_gpu_heights.data);
 
 	auto calculate_height = [width, depth, heights](s32 x, s32 z) -> f32
 	{
@@ -888,11 +925,13 @@ global_var struct Entities
     Pipeline_Handle entity_ppln;
     Pipeline_Handle entity_shadow_ppln;
 
+    Model_Handle entity_model;
+
     // For now:
     u32 main_entity;
     
     // have some sort of stack of REMOVED entities
-} entities;
+} g_entities;
 
 Entity
 construct_entity(const Constant_String &name
@@ -913,14 +952,14 @@ construct_entity(const Constant_String &name
 internal Entity *
 get_entity(const Constant_String &name)
 {
-    Entity_Handle v = *entities.name_map.get(name.hash);
-    return(&entities.entity_list[v]);
+    Entity_Handle v = *g_entities.name_map.get(name.hash);
+    return(&g_entities.entity_list[v]);
 }
 
 internal Entity *
 get_entity(Entity_Handle v)
 {
-    return(&entities.entity_list[v]);
+    return(&g_entities.entity_list[v]);
 }
 
 void
@@ -934,8 +973,8 @@ internal Camera_Component *
 add_camera_component(Entity *e
                      , u32 camera_index)
 {
-    e->components.camera_component = entities.camera_component_count++;
-    Camera_Component *component = &entities.camera_components[ e->components.camera_component ];
+    e->components.camera_component = g_entities.camera_component_count++;
+    Camera_Component *component = &g_entities.camera_components[ e->components.camera_component ];
     component->entity_index = e->index;
     component->camera = camera_index;
 
@@ -945,11 +984,11 @@ add_camera_component(Entity *e
 internal void
 update_camera_components(f32 dt)
 {
-    for (u32 i = 0; i < entities.camera_component_count; ++i)
+    for (u32 i = 0; i < g_entities.camera_component_count; ++i)
     {
-        Camera_Component *component = &entities.camera_components[ i ];
+        Camera_Component *component = &g_entities.camera_components[ i ];
         Camera *camera = get_camera(component->camera);
-        Entity *e = &entities.entity_list[ component->entity_index ];
+        Entity *e = &g_entities.entity_list[ component->entity_index ];
 
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
         if (e->on_t)
@@ -977,8 +1016,8 @@ update_camera_components(f32 dt)
 internal Rendering_Component *
 add_rendering_component(Entity *e)
 {
-    e->components.rendering_component = entities.rendering_component_count++;
-    Rendering_Component *component = &entities.rendering_components[ e->components.rendering_component ];
+    e->components.rendering_component = g_entities.rendering_component_count++;
+    Rendering_Component *component = &g_entities.rendering_components[ e->components.rendering_component ];
     component->entity_index = e->index;
     component->push_k = {};
 
@@ -988,10 +1027,10 @@ add_rendering_component(Entity *e)
 internal void
 update_rendering_component(f32 dt)
 {
-    for (u32 i = 0; i < entities.rendering_component_count; ++i)
+    for (u32 i = 0; i < g_entities.rendering_component_count; ++i)
     {
-        Rendering_Component *component = &entities.rendering_components[ i ];
-        Entity *e = &entities.entity_list[ component->entity_index ];
+        Rendering_Component *component = &g_entities.rendering_components[ i ];
+        Entity *e = &g_entities.entity_list[ component->entity_index ];
         
         if (e->on_t)
         {
@@ -1008,8 +1047,8 @@ internal Physics_Component *
 add_physics_component(Entity *e
                       , bool enabled)
 {
-    e->components.physics_component = entities.physics_component_count++;
-    Physics_Component *component = &entities.physics_components[ e->components.physics_component ];
+    e->components.physics_component = g_entities.physics_component_count++;
+    Physics_Component *component = &g_entities.physics_components[ e->components.physics_component ];
     component->entity_index = e->index;
     component->enabled = enabled;
 
@@ -1019,10 +1058,10 @@ add_physics_component(Entity *e
 internal void
 update_physics_components(f32 dt)
 {
-    for (u32 i = 0; i < entities.physics_component_count; ++i)
+    for (u32 i = 0; i < g_entities.physics_component_count; ++i)
     {
-        Physics_Component *component = &entities.physics_components[ i ];
-        Entity *e = &entities.entity_list[ component->entity_index ];
+        Physics_Component *component = &g_entities.physics_components[ i ];
+        Entity *e = &g_entities.entity_list[ component->entity_index ];
 
         auto *which_terrain = on_which_terrain(e->ws_p);
         if (which_terrain)
@@ -1096,8 +1135,8 @@ update_physics_components(f32 dt)
 internal Input_Component *
 add_input_component(Entity *e)
 {
-    e->components.input_component = entities.input_component_count++;
-    Input_Component *component = &entities.input_components[ e->components.input_component ];
+    e->components.input_component = g_entities.input_component_count++;
+    Input_Component *component = &g_entities.input_components[ e->components.input_component ];
     component->entity_index = e->index;
 
     return(component);
@@ -1109,11 +1148,11 @@ update_input_components(Window_Data *window
                         , f32 dt
                         , Vulkan::GPU *gpu)
 {
-    for (u32 i = 0; i < entities.input_component_count; ++i)
+    for (u32 i = 0; i < g_entities.input_component_count; ++i)
     {
-        Input_Component *component = &entities.input_components[i];
-        Entity *e = &entities.entity_list[component->entity_index];
-        Physics_Component *e_physics = &entities.physics_components[e->components.physics_component];
+        Input_Component *component = &g_entities.input_components[i];
+        Entity *e = &g_entities.entity_list[component->entity_index];
+        Physics_Component *e_physics = &g_entities.physics_components[e->components.physics_component];
 
         glm::vec3 up = e->on_t->ws_n;
         
@@ -1145,8 +1184,8 @@ update_input_components(Window_Data *window
                                                     , e->on_t
                                                     , dt
                                                     , gpu);
-        terrain_master.terrain_pointer.ts_position = ts_coord;
-        terrain_master.terrain_pointer.t = e->on_t;
+        g_terrains.terrain_pointer.ts_position = ts_coord;
+        g_terrains.terrain_pointer.t = e->on_t;
     
         // ---- modify the terrain ----
         if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
@@ -1227,11 +1266,11 @@ add_entity(const Entity &e)
 
 {
     Entity_Handle view;
-    view = entities.entity_count;
+    view = g_entities.entity_count;
 
-    entities.name_map.insert(e.id.hash, view);
+    g_entities.name_map.insert(e.id.hash, view);
     
-    entities.entity_list[entities.entity_count++] = e;
+    g_entities.entity_list[g_entities.entity_count++] = e;
 
     auto e_ptr = get_entity(view);
 
@@ -1248,7 +1287,7 @@ push_entity_to_queue(Entity *e_ptr // Needs a rendering component attached
     // ---- adds an entity to the stack of renderables
     auto *model = g_model_manager.get(model_handle);
 
-    Rendering_Component *component = &entities.rendering_components[ e_ptr->components.rendering_component ];
+    Rendering_Component *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
     
     queue->push_material(&component->push_k
 			 , sizeof(component->push_k)
@@ -1275,197 +1314,115 @@ update_entities(Window_Data *window
     update_rendering_component(dt);
 }
 
-
-
-
 internal void
-prepare_external_loading_state(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool)
+initialize_entities(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool, Window_Data *window)
 {
-    //    world.deferred.render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
-
-    // ---- make cube model info ----
+    g_entities.entity_model = g_model_manager.get_handle("model.cube_model"_hash);
+    
+    g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
+    auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     {
-	world.test.model = g_model_manager.add("vulkan_model.test_model"_hash);
-	auto *test_model = g_model_manager.get(world.test.model);
-	
-	test_model->attribute_count = 3;
-	test_model->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
-	test_model->binding_count = 1;
-	test_model->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding));
-
-	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
-	
-	// only one binding
-	Vulkan::Model_Binding *binding = test_model->bindings;
-	binding->begin_attributes_creation(test_model->attributes_buffer);
-
-	binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::pos));
-	binding->push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::color));
-	binding->push_attribute(2, VK_FORMAT_R32G32_SFLOAT, sizeof(Vertex::uvs));
-
-	binding->end_attributes_creation();
+        Model_Handle cube_hdl = g_model_manager.get_handle("model.cube_model"_hash);
+        Render_Pass_Handle dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                               Shader_Module_Info{"shaders/SPV/model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                       g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending(false, false, false, false);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, g_model_manager.get(cube_hdl),
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
 
-    // ---- make cube vbo ----
+    g_entities.entity_shadow_ppln = g_pipeline_manager.add("pipeline.model_shadow"_hash);
+    auto *entity_shadow_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
     {
-	world.test.model_vbo = g_gpu_buffer_manager.add("vbo.test_model_vbo"_hash);
-	auto *vbo = g_gpu_buffer_manager.get(world.test.model_vbo);
-	auto *test_model = g_model_manager.get(world.test.model);
-	
-	struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
-
-	glm::vec3 gray = glm::vec3(0.2);
-	
-	f32 radius = 2.0f;
-	
-	persist Vertex vertices[]
-	{
-	    {{-radius, -radius, radius	}, gray},
-	    {{radius, -radius, radius	}, gray},
-	    {{radius, radius, radius	}, gray},
-	    {{-radius, radius, radius	}, gray},
-												 
-	    {{-radius, -radius, -radius	}, gray},
-	    {{radius, -radius, -radius	}, gray},
-	    {{radius, radius, -radius	}, gray},
-	    {{-radius, radius, -radius	}, gray}
-	};
-	
-	auto *main_binding = &test_model->bindings[0];
-	    
-	Memory_Byte_Buffer byte_buffer{sizeof(vertices), vertices};
-	
-	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
-							      , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-							      , cmdpool
-							      , vbo
-							      , gpu);
-
-	main_binding->buffer = vbo->buffer;
-	test_model->create_vbo_list();
+        auto shadow_display = get_shadow_display();
+        VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+        Model_Handle cube_hdl = g_model_manager.get_handle("model.cube_model"_hash);
+        Render_Pass_Handle shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        Shader_Uniform_Layouts layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        Shader_PK_Data push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        Shader_Blend_States blending(false);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
+        make_graphics_pipeline(entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, g_model_manager.get(cube_hdl),
+                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0, gpu);
     }
 
-    // ---- make cube ibo ----
-    {
-	world.test.model_ibo = g_gpu_buffer_manager.add("ibo.test_model_ibo"_hash);
-	auto *ibo = g_gpu_buffer_manager.get(world.test.model_ibo);
-	auto *test_model = g_model_manager.get(world.test.model);
-	
-	persist u32 mesh_indices[] = 
-	{
-	    0, 1, 2,
-	    2, 3, 0,
+    g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20
+                                                                                 , VK_SHADER_STAGE_VERTEX_BIT
+                                                                                 , VK_COMMAND_BUFFER_LEVEL_SECONDARY
+                                                                                 , cmdpool
+                                                                                 , gpu);
 
-	    1, 5, 6,
-	    6, 2, 1,
+    Entity e = construct_entity("entity.bound_group_test0"_hash
+				, glm::vec3(50.0f, 10.0f, 280.0f)
+				, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))
+				, glm::quat(0, 0, 0, 0));
 
-	    7, 6, 5,
-	    5, 4, 7,
-	    
-	    3, 7, 4,
-	    4, 0, 3,
-	    
-	    4, 5, 1,
-	    1, 0, 4,
-	    
-	    3, 2, 6,
-	    6, 7, 3,
-	};
+    Entity_Handle ev = add_entity(e);
+    auto *e_ptr = get_entity(ev);
+    g_entities.main_entity = ev;
 
-	test_model->index_data.index_type = VK_INDEX_TYPE_UINT32;
-	test_model->index_data.index_offset = 0;
-	test_model->index_data.index_count = sizeof(mesh_indices) / sizeof(mesh_indices[0]);
+    e_ptr->on_t = on_which_terrain(e.ws_p);
 
-	Memory_Byte_Buffer byte_buffer{sizeof(mesh_indices), mesh_indices};
-	    
-	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
-							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-							      , cmdpool
-							      , ibo
-							      , gpu);
+    add_physics_component(e_ptr, false);    
+    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window));
+    add_input_component(e_ptr);
 
-	test_model->index_data.index_buffer = ibo->buffer;
-    }
+    bind_camera_to_3D_scene_output(camera_component_ptr->camera);
+        
+    // add rotating entity
+    Entity r = construct_entity("entity.rotating"_hash
+				, glm::vec3(200.0f, -40.0f, 300.0f)
+				, glm::vec3(0.0f)
+				, glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    r.size = glm::vec3(10.0f);
+
+    Entity_Handle rv = add_entity(r);
+    auto *r_ptr = get_entity(rv);
+    
+    r_ptr->on_t = &g_terrains.terrains[0];
+
+    Rendering_Component *r_ptr_rendering = add_rendering_component(r_ptr);
+    add_physics_component(r_ptr, true);
+    
+    r_ptr_rendering->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
+    
+    push_entity_to_queue(r_ptr
+                         , g_model_manager.get_handle("model.cube_model"_hash)
+                         , &g_world_submission_queues[ENTITY_QUEUE]);
+
+    Entity r2 = construct_entity("entity.rotating2"_hash
+				 , glm::vec3(250.0f, -40.0f, 350.0f)
+				 , glm::vec3(0.0f)
+				 , glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+
+    r2.size = glm::vec3(10.0f);
+    Entity_Handle rv2 = add_entity(r2);
+    auto *r2_ptr = get_entity(rv2);
+
+    Rendering_Component *r2_ptr_rendering = add_rendering_component(r2_ptr);
+    add_physics_component(r2_ptr, false);
+    
+    r2_ptr_rendering->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
+    r2_ptr->on_t = &g_terrains.terrains[0];
+
+    push_entity_to_queue(r2_ptr
+                         , g_model_manager.get_handle("model.cube_model"_hash)
+                         , &g_world_submission_queues[ENTITY_QUEUE]);
 }
-
-// ---- to orgnise later on ----
-global_var glm::vec3 light_pos = glm::vec3(0.00000001f, 10.0f, 0.00000001f);
 
 // ---- rendering of the entire world happens here ----
 internal void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, Vulkan::Framebuffer *fbo);
-
-internal void
-calculate_ws_frustum_corners(glm::vec4 *corners
-			     , glm::vec4 *shadow_corners)
-{
-    Shadow_Matrices shadow_data = get_shadow_matrices();
-
-    Entity *main = &entities.entity_list[entities.main_entity];
-    Camera_Component *camera_component = &entities.camera_components[main->components.camera_component];
-    Camera *camera = get_camera(camera_component->camera);
-    
-    corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
-    corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
-    corners[3] = shadow_data.inverse_light_view * camera->captured_frustum_corners[2];
-    corners[2] = shadow_data.inverse_light_view * camera->captured_frustum_corners[3];
-    
-    corners[4] = shadow_data.inverse_light_view * camera->captured_frustum_corners[4];
-    corners[5] = shadow_data.inverse_light_view * camera->captured_frustum_corners[5];
-    corners[7] = shadow_data.inverse_light_view * camera->captured_frustum_corners[6];
-    corners[6] = shadow_data.inverse_light_view * camera->captured_frustum_corners[7];
-
-    shadow_corners[0] = shadow_data.inverse_light_view * camera->captured_shadow_corners[0];
-    shadow_corners[1] = shadow_data.inverse_light_view * camera->captured_shadow_corners[1];
-    shadow_corners[2] = shadow_data.inverse_light_view * camera->captured_shadow_corners[2];
-    shadow_corners[3] = shadow_data.inverse_light_view * camera->captured_shadow_corners[3];
-    
-    shadow_corners[4] = shadow_data.inverse_light_view * camera->captured_shadow_corners[4];
-    shadow_corners[5] = shadow_data.inverse_light_view * camera->captured_shadow_corners[5];
-    shadow_corners[6] = shadow_data.inverse_light_view * camera->captured_shadow_corners[6];
-    shadow_corners[7] = shadow_data.inverse_light_view * camera->captured_shadow_corners[7];
-}
-
-internal void
-render_debug_frustum(GPU_Command_Queue *queue
-                     , VkDescriptorSet ubo)
-{
-    auto *debug_frustum_ppln = g_pipeline_manager.get(world.debug_frustum_ppln);
-    Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
-
-    Vulkan::command_buffer_bind_descriptor_sets(debug_frustum_ppln
-						, {1, &ubo}
-						, &queue->q);
-
-    struct Push_K
-    {
-	alignas(16) glm::vec4 positions[8];
-	alignas(16) glm::vec4 color;
-    } push_k1, push_k2;
-
-    calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
-
-    push_k1.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    push_k2.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    
-    Vulkan::command_buffer_push_constant(&push_k1
-					 , sizeof(push_k1)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , debug_frustum_ppln
-					 , &queue->q);
-    
-    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
-
-    Vulkan::command_buffer_push_constant(&push_k2
-					 , sizeof(push_k2)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , debug_frustum_ppln
-					 , &queue->q);
-    
-    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
-}
 
 internal void
 render_world(Vulkan::State *vk
@@ -1489,15 +1446,15 @@ render_world(Vulkan::State *vk
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, &queue);
     {
-        auto *model_ppln = g_pipeline_manager.get(entities.entity_shadow_ppln);
+        auto *model_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
 
-        world.entity_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
+        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
                                                           , &queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_shadow_ppln);    
+        auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);    
     
-        world.terrain_render_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
+        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
                                                            , &queue
                                                            , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
@@ -1506,17 +1463,19 @@ render_world(Vulkan::State *vk
     // Rendering the scene with lighting and everything
     begin_deferred_rendering(image_index, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &queue);
     {
-        auto *terrain_ppln = g_pipeline_manager.get(terrain_master.terrain_ppln);    
-        auto *entity_ppln = g_pipeline_manager.get(entities.entity_ppln);
+        auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);    
+        auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     
-        world.terrain_render_queue.submit_queued_materials({2, uniform_groups}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        world.entity_render_queue.submit_queued_materials({2, uniform_groups}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         prepare_terrain_pointer_for_render(&queue, &transforms_ubo_uniform_groups[image_index]);
-        render_debug_frustum(&queue, transforms_ubo_uniform_groups[image_index]);
+
+        render_3D_frustum_debug_information(&queue, image_index);
         
         // ---- render skybox ----
-        render_atmosphere({1, uniform_groups}, camera->p, g_model_manager.get(world.test.model), &queue);
+        auto *cube_model = g_model_manager.get(g_entities.entity_model);
+        render_atmosphere({1, uniform_groups}, camera->p, cube_model, &queue);
     }
     end_deferred_rendering(camera->v_m, &queue);
 
@@ -1525,211 +1484,15 @@ render_world(Vulkan::State *vk
     Vulkan::end_command_buffer(cmdbuf);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-internal void
-get_registered_objects_from_json(void)
-{
-    entities.entity_ppln = g_pipeline_manager.get_handle("pipeline.main_pipeline"_hash);
-    entities.entity_shadow_ppln = g_pipeline_manager.get_handle("pipeline.model_shadow"_hash);
-
-    terrain_master.terrain_ppln		= g_pipeline_manager.get_handle("pipeline.terrain_pipeline"_hash);
-    terrain_master.terrain_shadow_ppln = g_pipeline_manager.get_handle("pipeline.terrain_shadow"_hash);
-
-    world.debug_frustum_ppln	= g_pipeline_manager.get_handle("pipeline.debug_frustum"_hash);
-
-}
-
-
-
-
-
-
-
 void
 make_world(Window_Data *window
 	   , Vulkan::State *vk
 	   , VkCommandPool *cmdpool)
 {
-    prepare_external_loading_state(&vk->gpu, &vk->swapchain, cmdpool);
-    make_morphable_terrain_master(cmdpool, &vk->gpu);
-
-
-
-
     initialize_game_3D_graphics(&vk->gpu, &vk->swapchain, cmdpool);
-
-
-
-
-    
-    std::cout << "JSON > loading pipelines" << std::endl;
-    load_pipelines_from_json(&vk->gpu, &vk->swapchain);
-    clear_linear();
-
-    test(&vk->gpu, &vk->swapchain);
-
-    make_terrain_pointer();
-    
-    get_registered_objects_from_json();
-
-    //    make_rendering_pipeline_data(&vk->gpu, cmdpool, &vk->swapchain);
-
-    {
-	auto *model_info = g_model_manager.get(terrain_master.model_info);
-	
-	world.entity_render_queue = make_gpu_material_submission_queue(20
-								       , VK_SHADER_STAGE_VERTEX_BIT
-								       , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-								       , cmdpool
-								       , &vk->gpu);
-
-        make_terrains(&vk->gpu, cmdpool);
-    }
-    
-    
-    
-    Entity e = construct_entity("entity.bound_group_test0"_hash
-				, glm::vec3(50.0f, 10.0f, 280.0f)
-				, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))
-				, glm::quat(0, 0, 0, 0));
-
-    Entity_Handle ev = add_entity(e);
-    auto *e_ptr = get_entity(ev);
-    entities.main_entity = ev;
-
-    e_ptr->on_t = on_which_terrain(e.ws_p);
-
-    add_physics_component(e_ptr, false);    
-    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window));
-    add_input_component(e_ptr);
-
-    bind_camera_to_3D_scene_output(camera_component_ptr->camera);
-        
-    // add rotating entity
-    Entity r = construct_entity("entity.rotating"_hash
-				, glm::vec3(200.0f, -40.0f, 300.0f)
-				, glm::vec3(0.0f)
-				, glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
-
-    r.size = glm::vec3(10.0f);
-
-    Entity_Handle rv = add_entity(r);
-    auto *r_ptr = get_entity(rv);
-    
-    r_ptr->on_t = &terrain_master.terrains[0];
-
-    Rendering_Component *r_ptr_rendering = add_rendering_component(r_ptr);
-    add_physics_component(r_ptr, true);
-    
-    r_ptr_rendering->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
-    
-    push_entity_to_queue(r_ptr
-                         , g_model_manager.get_handle("vulkan_model.test_model"_hash)
-                         , &world.entity_render_queue);
-
-    Entity r2 = construct_entity("entity.rotating2"_hash
-				 , glm::vec3(250.0f, -40.0f, 350.0f)
-				 , glm::vec3(0.0f)
-				 , glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
-
-    r2.size = glm::vec3(10.0f);
-    Entity_Handle rv2 = add_entity(r2);
-    auto *r2_ptr = get_entity(rv2);
-
-    Rendering_Component *r2_ptr_rendering = add_rendering_component(r2_ptr);
-    add_physics_component(r2_ptr, false);
-    
-    r2_ptr_rendering->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
-    r2_ptr->on_t = &terrain_master.terrains[0];
-
-    push_entity_to_queue(r2_ptr
-                         , g_model_manager.get_handle("vulkan_model.test_model"_hash)
-                         , &world.entity_render_queue);
+    initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
+    initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
 }
-
-
-
-
-
-
-
-
-
-/*internal void
-update_ubo(u32 current_image
-	   , Vulkan::GPU *gpu
-	   , Vulkan::Swapchain *swapchain
-	   , Memory_Buffer_View<Vulkan::Buffer> &uniform_buffers
-	   , World *world)
-{
-    struct Uniform_Buffer_Object
-    {
-	alignas(16) glm::mat4 model_matrix;
-	alignas(16) glm::mat4 view_matrix;
-	alignas(16) glm::mat4 projection_matrix;
-
-	alignas(16) glm::mat4 shadow_projection_matrix;
-	alignas(16) glm::mat4 shadow_view_matrix;
-
-	alignas(16) glm::mat4 shadow_map_bias;
-
-        alignas(16) glm::vec4 test_vector;
-    };
-
-    Camera *camera = get_camera_bound_to_3D_output();
-    
-    update_shadows(500.0f
-                   , 1.0f
-                   , glm::radians(60.0f)
-                   , (float)swapchain->extent.width / (float)swapchain->extent.height
-                   , camera->p
-                   , camera->d
-                   , camera->u);
-
-    Shadow_Matrices shadow_data = get_shadow_matrices();
-
-    persist auto start_time = std::chrono::high_resolution_clock::now();
-
-    auto current_time = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
-
-    Uniform_Buffer_Object ubo = {};
-
-    ubo.test_vector = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    
-    ubo.view_matrix = camera->v_m;
-
-    ubo.projection_matrix = camera->p_m;
-
-    ubo.projection_matrix[1][1] *= -1;
-
-    ubo.shadow_projection_matrix = shadow_data.projection_matrix;
-    ubo.shadow_view_matrix = shadow_data.light_view_matrix;
-
-    update_3D_output_camera_transforms();
-}*/
-
-
-
-
-
-
-
-
 
 void
 update_world(Window_Data *window
@@ -1762,21 +1525,16 @@ handle_input_debug(Window_Data *window
 {
     // ---- get bound entity ----
     // TODO make sure to check if main_entity < 0
-    Entity *e_ptr = &entities.entity_list[entities.main_entity];
-    Camera_Component *e_camera_component = &entities.camera_components[e_ptr->components.camera_component];
-    Physics_Component *e_physics = &entities.physics_components[e_ptr->components.physics_component];
+    Entity *e_ptr = &g_entities.entity_list[g_entities.main_entity];
+    Camera_Component *e_camera_component = &g_entities.camera_components[e_ptr->components.camera_component];
+    Physics_Component *e_physics = &g_entities.physics_components[e_ptr->components.physics_component];
     Camera *e_camera = get_camera(e_camera_component->camera);
     glm::vec3 up = e_ptr->on_t->ws_n;
     
-    if (window->key_map[GLFW_KEY_UP]) light_pos += glm::vec3(0.0f, 0.0f, dt) * 5.0f;
-    if (window->key_map[GLFW_KEY_LEFT]) light_pos += glm::vec3(-dt, 0.0f, 0.0f) * 5.0f;
-    if (window->key_map[GLFW_KEY_RIGHT]) light_pos += glm::vec3(dt, 0.0f, 0.0f) * 5.0f;
-    if (window->key_map[GLFW_KEY_DOWN]) light_pos += glm::vec3(0.0f, 0.0f, -dt) * 5.0f;
-
     Shadow_Matrices shadow_data = get_shadow_matrices();
     Shadow_Debug    shadow_debug = get_shadow_debug();
     
-    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -glm::normalize(light_pos), glm::vec3(0.0f, 1.0f, 0.0f));
+    //    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -glm::normalize(light_pos), glm::vec3(0.0f, 1.0f, 0.0f));
 
     if (window->key_map[GLFW_KEY_C])
     {

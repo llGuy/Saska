@@ -671,7 +671,7 @@ make_terrain_pointer(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
         Shader_Blend_States blending(false, false, false, false);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
-                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
 }
@@ -708,7 +708,7 @@ initialize_terrains(VkCommandPool *cmdpool
         Shader_Blend_States blending(false, false, false, false);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, model_info,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
 
@@ -1332,7 +1332,7 @@ initialize_entities(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPoo
         Shader_Blend_States blending(false, false, false, false);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, g_model_manager.get(cube_hdl),
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, g_model_manager.get(cube_hdl),
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
 
@@ -1372,7 +1372,7 @@ initialize_entities(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPoo
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
     add_physics_component(e_ptr, false);    
-    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window));
+    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window, get_backbuffer_resolution()));
     add_input_component(e_ptr);
 
     bind_camera_to_3D_scene_output(camera_component_ptr->camera);
@@ -1427,7 +1427,7 @@ internal void
 render_world(Vulkan::State *vk
 	     , u32 image_index
 	     , u32 current_frame
-	     , VkCommandBuffer *cmdbuf)
+	     , GPU_Command_Queue *queue)
 {
     // Fetch some data needed to render
     auto transforms_ubo_uniform_groups = get_camera_transform_uniform_groups();
@@ -1438,57 +1438,52 @@ render_world(Vulkan::State *vk
     Camera *camera = get_camera_bound_to_3D_output();
     
     // Start the rendering    
-    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
+    //    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
     
-    GPU_Command_Queue queue {*cmdbuf};
-
     // Rendering to the shadow map
-    begin_shadow_offscreen(4000, 4000, &queue);
+    begin_shadow_offscreen(4000, 4000, queue);
     {
         auto *model_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
 
         g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
-                                                          , &queue
+                                                          , queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);    
     
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
-                                                           , &queue
+                                                           , queue
                                                            , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
-    end_shadow_offscreen(&queue);
+    end_shadow_offscreen(queue);
 
     // Rendering the scene with lighting and everything
-    begin_deferred_rendering(image_index, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &queue);
+    begin_deferred_rendering(image_index, queue);
     {
         auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);    
         auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     
-        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, &queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        prepare_terrain_pointer_for_render(&queue, &transforms_ubo_uniform_groups[image_index]);
+        prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
 
-        render_3D_frustum_debug_information(&queue, image_index);
+        render_3D_frustum_debug_information(queue, image_index);
         
         // ---- render skybox ----
         auto *cube_model = g_model_manager.get(g_entities.entity_model);
-        render_atmosphere({1, uniform_groups}, camera->p, cube_model, &queue);
+        render_atmosphere({1, uniform_groups}, camera->p, cube_model, queue);
     }
-    end_deferred_rendering(camera->v_m, &queue);
+    end_deferred_rendering(camera->v_m, queue);
 
-    apply_pfx_on_scene(image_index, &queue, Vulkan::init_render_area({0, 0}, vk->swapchain.extent), &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m, &vk->gpu);
-    
-    Vulkan::end_command_buffer(cmdbuf);
+    apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m, &vk->gpu);
 }
 
 void
-make_world(Window_Data *window
-	   , Vulkan::State *vk
-	   , VkCommandPool *cmdpool)
+initialize_world(Window_Data *window
+                 , Vulkan::State *vk
+                 , VkCommandPool *cmdpool)
 {
-    initialize_game_3D_graphics(&vk->gpu, &vk->swapchain, cmdpool);
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
 }
@@ -1499,7 +1494,7 @@ update_world(Window_Data *window
 	     , f32 dt
 	     , u32 image_index
 	     , u32 current_frame
-	     , VkCommandBuffer *cmdbuf)
+	     , GPU_Command_Queue *cmdbuf)
 {
     handle_input_debug(window, dt, &vk->gpu);
     

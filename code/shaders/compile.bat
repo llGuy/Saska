@@ -33,3 +33,6 @@ C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/screen_quad.frag.spv
 
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_ssr.vert.spv pfx_ssr.vert
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_ssr.frag.spv pfx_ssr.frag
+
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_final.vert.spv pfx_final.vert
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_final.frag.spv pfx_final.frag

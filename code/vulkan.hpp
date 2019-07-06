@@ -769,7 +769,7 @@ namespace Vulkan
     }
 
     internal FORCEINLINE void
-    init_rect_2D(VkOffset2D offset
+    init_rect2D(VkOffset2D offset
 		 , VkExtent2D extent
 		 , VkRect2D *rect)
     {

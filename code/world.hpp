@@ -2,11 +2,12 @@
 
 #include "core.hpp"
 #include "vulkan.hpp"
+#include "graphics.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
 void
-make_world(Window_Data *window
+initialize_world(Window_Data *window
 	   , Vulkan::State *vk
 	   , VkCommandPool *cmdpool);
 
@@ -16,7 +17,7 @@ update_world(Window_Data *window
 	     , f32 dt
 	     , u32 image_index
 	     , u32 current_frame
-	     , VkCommandBuffer *cmdbuf);
+	     , GPU_Command_Queue *queue);
 
 void
 handle_input_debug(Window_Data *win

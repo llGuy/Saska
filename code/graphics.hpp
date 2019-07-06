@@ -549,7 +549,7 @@ struct Camera
 using Camera_Handle = Handle;
 
 Camera_Handle
-add_camera(Window_Data *window);
+add_camera(Window_Data *window, Resolution resolution);
 
 void
 make_camera(Camera *camera, f32 fov, f32 asp, f32 near, f32 far);
@@ -648,7 +648,6 @@ get_backbuffer_resolution(void);
 
 void
 begin_deferred_rendering(u32 image_index /* To remove in the future */
-                         , const VkRect2D &render_area
                          , GPU_Command_Queue *queue);
 
 void
@@ -669,16 +668,22 @@ make_postfx_data(Vulkan::GPU *gpu
                  , Vulkan::Swapchain *swapchain);
 
 void
-apply_pfx_on_scene(u32 image_index
-                   , GPU_Command_Queue *queue
-                   , const VkRect2D &render_area
+apply_pfx_on_scene(GPU_Command_Queue *queue
                    , Uniform_Group *transforms_group
                    , const glm::mat4 &view_matrix
                    , const glm::mat4 &projection_matrix
                    , Vulkan::GPU *gpu);
 
 void
+render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain *swapchain);
+
+void
 initialize_game_3D_graphics(Vulkan::GPU *gpu,
+                            Vulkan::Swapchain *swapchain,
+                            GPU_Command_Queue_Pool *pool);
+
+void
+initialize_game_2D_graphics(Vulkan::GPU *gpu,
                             Vulkan::Swapchain *swapchain,
                             GPU_Command_Queue_Pool *pool);
 

@@ -1,5 +1,6 @@
 #include "world.hpp"
 #include "vulkan.hpp"
+#include "graphics.hpp"
 
 #include "script.hpp"
 
@@ -39,8 +40,12 @@ make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Win
     }
     
 
-    // ---- initialize game data
-    make_world(window, vk, &window_rendering.command_pool);
+    // ---- Initialize game data ----
+    // Initialize atmosphere, shadow, skeletal animation...
+    initialize_game_3D_graphics(gpu, swapchain, &window_rendering.command_pool);
+    // Initialize UI stuff, text, etc...
+    initialize_game_2D_graphics(gpu, swapchain, &window_rendering.command_pool);
+    initialize_world(window, vk, &window_rendering.command_pool);
 
     make_lua_scripting();
 
@@ -101,7 +106,13 @@ update_game(Vulkan::GPU *gpu
 
     // ---- begin recording instructions into the command buffers ----
 
-    update_world(window, vk, dt, next_image_data.image_index, current_frame, &window_rendering.command_buffer[current_frame]);
+    GPU_Command_Queue queue{window_rendering.command_buffer[current_frame]};
+    Vulkan::begin_command_buffer(&queue.q, 0, nullptr);
+    {
+        update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
+        render_final_output(next_image_data.image_index, &queue, swapchain);
+    }
+    Vulkan::end_command_buffer(&queue.q);
     // ---- end recording instructions
 
     VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;

@@ -159,8 +159,8 @@ main(s32 argc
     allocate_memory_buffer(window.key_map, MAX_KEYS);
     allocate_memory_buffer(window.mb_map, MAX_MB);
 	
-    window.w = 1280;
-    window.h = 720;
+    window.w = 2800;
+    window.h = 1650;
 	
     window.window = glfwCreateWindow(window.w
                                      , window.h

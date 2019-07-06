@@ -143,7 +143,8 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
     return pixel_color;
 }
 
-void main(void)
+void
+main(void)
 {
     vec4 position = (textureLod(g_position, fs_in.uvs, 2));
     vec3 view_position = vec3(position);
@@ -176,7 +177,7 @@ void main(void)
 	ray_dir = jitt + ray_dir * max(0.1, -view_position.z);
 	
 	float placeholder;
-	/* ray cast */
+	// ray cast 
 	vec4 coords = ray_cast(ray_dir, view_position, ddepth, hit, placeholder);
 
 	vec2 d_coords = smoothstep(0.2, 0.6, abs(vec2(0.5, 0.5) - coords.xy));
@@ -208,6 +209,4 @@ void main(void)
 	else final_color = pixel_color;
     }
     else final_color = pixel_color;
-
-    //    final_color = vec4(fs_in.uvs, 0, 1);
 }

@@ -208,4 +208,6 @@ void main(void)
 	else final_color = pixel_color;
     }
     else final_color = pixel_color;
+
+    //    final_color = vec4(fs_in.uvs, 0, 1);
 }

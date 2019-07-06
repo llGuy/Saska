@@ -439,7 +439,7 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
     Vulkan::init_pipeline_input_assembly_info(0, topology, primitive_restart, &assembly);
     VkPipelineViewportStateCreateInfo view_info = {};
     VkViewport view = {};
-    Vulkan::init_viewport(viewport.width, viewport.height, 0.0f, 1.0f, &view);
+    Vulkan::init_viewport(0.0f, 0.0f, viewport.width, viewport.height, 0.0f, 1.0f, &view);
     VkRect2D scissor = {};
     Vulkan::init_rect_2D(VkOffset2D{}, VkExtent2D{viewport.width, viewport.height}, &scissor);
     Vulkan::init_pipeline_viewport_info({1, &view}, {1, &scissor}, &view_info);
@@ -650,10 +650,10 @@ get_camera_transform_uniform_groups(void)
     return {g_cameras.ubo_count, g_uniform_group_manager.get(g_cameras.camera_transforms_uniform_groups)};
 }
 
-
-
 struct Deferred_Rendering
 {
+    Resolution backbuffer_res = {1280, 720};
+    
     Render_Pass_Handle dfr_render_pass;
     // At the moment, dfr_framebuffer points to multiple because it is the bound to swapchain - in future, change
     Framebuffer_Handle dfr_framebuffer;
@@ -662,7 +662,12 @@ struct Deferred_Rendering
     Uniform_Group_Handle dfr_g_buffer_group;
 } g_dfr_rendering;
 
-// TODO : Need to organise this in the future
+Resolution
+get_backbuffer_resolution(void)
+{
+    return(g_dfr_rendering.backbuffer_res);
+}
+
 struct Lighting
 {
     // Default value
@@ -719,7 +724,7 @@ update_atmosphere(GPU_Command_Queue *queue)
                              , Vulkan::init_clear_color_color(0, 0.0, 0.0, 0));
 
     VkViewport viewport;
-    Vulkan::init_viewport(1000, 1000, 0.0f, 1.0f, &viewport);
+    Vulkan::init_viewport(0, 0, 1000, 1000, 0.0f, 1.0f, &viewport);
     vkCmdSetViewport(queue->q, 0, 1, &viewport);    
 
     auto *make_ppln = g_pipeline_manager.get(g_atmosphere.make_pipeline);
@@ -1294,7 +1299,7 @@ begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
                              , Vulkan::init_clear_color_depth(1.0f, 0));
     
     VkViewport viewport = {};
-    Vulkan::init_viewport(shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
+    Vulkan::init_viewport(0, 0, shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
     vkCmdSetViewport(queue->q, 0, 1, &viewport);
 
     vkCmdSetDepthBias(queue->q, 1.25f, 0.0f, 1.75f);
@@ -1427,7 +1432,7 @@ make_postfx_data(Vulkan::GPU *gpu
                                        , g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
         Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         Shader_Blend_States blending(false);
-        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT);
+        Dynamic_States dynamic (VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
         make_graphics_pipeline(ssr_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
                                , VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr
                                , false, 0.0f, dynamic, final_render_pass, 0, gpu);
@@ -1447,7 +1452,13 @@ apply_pfx_on_scene(u32 image_index
                              , g_postfx.screen_fbo + image_index
                              , VK_SUBPASS_CONTENTS_INLINE
                              , Vulkan::init_clear_color_color(0.0f, 0.0f, 1.0f, 1.0f));
-    Vulkan::command_buffer_set_viewport(render_area.extent.width, render_area.extent.height, 0.0f, 1.0f, &queue->q);
+    VkViewport v = {};
+    Vulkan::init_viewport(g_dfr_rendering.backbuffer_res.width / 4, g_dfr_rendering.backbuffer_res.height / 4,
+                          g_dfr_rendering.backbuffer_res.width / 2, g_dfr_rendering.backbuffer_res.height / 2, 0.0f, 1.0f, &v);
+    Vulkan::command_buffer_set_viewport(&v, &queue->q);
+    Rect2D render_rect = Vulkan::make_rect2D(g_dfr_rendering.backbuffer_res.width / 4, g_dfr_rendering.backbuffer_res.height / 4,
+                                             g_dfr_rendering.backbuffer_res.width / 2, g_dfr_rendering.backbuffer_res.height / 2);
+    Vulkan::command_buffer_set_rect2D(&render_rect, &queue->q);
     {
         auto *pfx_ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_ppln);
         Vulkan::command_buffer_bind_pipeline(pfx_ssr_ppln, &queue->q);

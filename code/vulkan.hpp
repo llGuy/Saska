@@ -713,15 +713,28 @@ namespace Vulkan
 	info->primitiveRestartEnable = primitive_restart;
     }
 
+    internal FORCEINLINE VkRect2D
+    make_rect2D(s32 startx,
+                 s32 starty,
+                 u32 width,
+                 u32 height)
+    {
+        VkRect2D dst = {};
+        dst.offset = VkOffset2D{startx, starty};
+        dst.extent = VkExtent2D{width, height};
+        return(dst);
+    }
+    
     internal FORCEINLINE void
-    init_viewport(u32 width
+    init_viewport(u32 x, u32 y
+                  , u32 width
 		  , u32 height
 		  , f32 min_depth
 		  , f32 max_depth
 		  , VkViewport *viewport)
     {
-	viewport->x = 0.0f;
-	viewport->y = 0.0f;
+	viewport->x = x;
+	viewport->y = y;
 	viewport->width = (f32)width;
 	viewport->height = (f32)height;
 	viewport->minDepth = min_depth;
@@ -729,10 +742,22 @@ namespace Vulkan
     }
 
     internal FORCEINLINE void
+    command_buffer_set_rect2D(VkRect2D *rect, VkCommandBuffer *cmdbuf)
+    {
+        vkCmdSetScissor(*cmdbuf, 0, 1, rect);
+    }
+
+    internal FORCEINLINE void
+    command_buffer_set_viewport(VkViewport *viewport, VkCommandBuffer *cmdbuf)
+    {
+        vkCmdSetViewport(*cmdbuf, 0, 1, viewport);
+    }
+    
+    internal FORCEINLINE void
     command_buffer_set_viewport(u32 width, u32 height, f32 depth_min, f32 depth_max, VkCommandBuffer *cmdbuf)
     {
         VkViewport viewport = {};
-        Vulkan::init_viewport(width, height, depth_min, depth_max, &viewport);
+        Vulkan::init_viewport(0, 0, width, height, depth_min, depth_max, &viewport);
    
         vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);
     }

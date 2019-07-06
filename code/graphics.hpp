@@ -81,6 +81,9 @@ using Uniform_Layout = VkDescriptorSetLayout;
 using Uniform_Layout_Manager = Object_Manager<Uniform_Layout>;
 using Uniform_Group_Manager = Object_Manager<Uniform_Group>;
 
+using Resolution = VkExtent2D;
+using Rect2D = VkRect2D;
+
 extern GPU_Buffer_Manager g_gpu_buffer_manager;
 extern Image_Manager g_image_manager;
 extern Framebuffer_Manager g_framebuffer_manager;
@@ -639,6 +642,9 @@ begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
 
 void
 end_shadow_offscreen(GPU_Command_Queue *queue);
+
+Resolution
+get_backbuffer_resolution(void);
 
 void
 begin_deferred_rendering(u32 image_index /* To remove in the future */

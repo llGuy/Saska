@@ -1285,25 +1285,6 @@ make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
 }
 
 void
-make_rendering_pipeline_data(Vulkan::GPU *gpu
-                             , VkCommandPool *cmdpool
-                             , Vulkan::Swapchain *swapchain)
-{
-    g_dfr_rendering.dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-    //    make_dfr_rendering_data(gpu, swapchain);
-
-    g_dfr_rendering.dfr_framebuffer = g_framebuffer_manager.get_handle("framebuffer.deferred_fbo"_hash);
-
-    g_dfr_rendering.dfr_subpass_group = g_uniform_group_manager.get_handle("descriptor_set.deferred_descriptor_sets"_hash);
-    g_dfr_rendering.dfr_g_buffer_group = g_uniform_group_manager.get_handle("uniform_group.g_buffer"_hash);
-
-    make_shadow_data(gpu, swapchain);
-    make_atmosphere_data(gpu, &g_uniform_pool, swapchain, cmdpool);
-
-    make_postfx_data(gpu, swapchain);
-}
-
-void
 begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
                        , GPU_Command_Queue *queue)
 {

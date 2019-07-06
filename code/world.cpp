@@ -1,6 +1,5 @@
 #include <chrono>
 #include <iostream>
-#include "load.hpp"
 #include "world.hpp"
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>

@@ -8,14 +8,11 @@
 #include "game.cpp"
 #include "world.cpp"
 #include "script.cpp"
-#include "load.cpp"
 #include "graphics.cpp"
 #include "vulkan.cpp"
 
 #else
 #include <vulkan/vulkan.h>
-
-#include <nlohmann/json.hpp>
 
 #include "memory.hpp"
 
@@ -136,130 +133,118 @@ s32
 main(s32 argc
      , char * argv[])
 {
-    try
-    {
-	open_debug_file();
+    open_debug_file();
 	
-	OUTPUT_DEBUG_LOG("%s\n", "starting session");
+    OUTPUT_DEBUG_LOG("%s\n", "starting session");
 
-	linear_allocator_global.capacity = megabytes(megabytes(10));
-	linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
+    linear_allocator_global.capacity = megabytes(megabytes(10));
+    linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
 	
-	stack_allocator_global.capacity = megabytes(10);
-	stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
+    stack_allocator_global.capacity = megabytes(10);
+    stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-	free_list_allocator_global.available_bytes = megabytes(10);
-	free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
-	init_free_list_allocator_head(&free_list_allocator_global);
+    free_list_allocator_global.available_bytes = megabytes(10);
+    free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
+    init_free_list_allocator_head(&free_list_allocator_global);
 	
-	OUTPUT_DEBUG_LOG("stack allocator start address : %p\n", stack_allocator_global.current);
+    OUTPUT_DEBUG_LOG("stack allocator start address : %p\n", stack_allocator_global.current);
     
-	if (!glfwInit())
-	{
-	    return(-1);
-	}
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-	allocate_memory_buffer(window.key_map, MAX_KEYS);
-	allocate_memory_buffer(window.mb_map, MAX_MB);
-	
-	window.w = 1280;
-	window.h = 720;
-	
-	window.window = glfwCreateWindow(window.w
-					 , window.h
-					 , "Game"
-					 , NULL
-					 , NULL);
-
-	if (!window.window)
-	{
-	    glfwTerminate();
-	    return(-1);
-	}
-
-	glfwSetInputMode(window.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	glfwSetWindowUserPointer(window.window, &window);
-	glfwSetKeyCallback(window.window, glfw_keyboard_input_proc);
-	glfwSetMouseButtonCallback(window.window, glfw_mouse_button_proc);
-	glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
-	glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
-
-	Vulkan::State vk = {};
-
-	Vulkan::init_state(&vk, window.window);
-
-
-	make_game(&vk
-		  , &vk.gpu
-		  , &vk.swapchain
-		  , &window);
-	
-	
-
-	f32 fps = 0.0f;
-
-        {
-            f64 m_x, m_y;
-            glfwGetCursorPos(window.window, &m_x, &m_y);
-            window.m_x = (f32)m_x;
-            window.m_y = (f32)m_y;
-        }
-        
-	auto now = std::chrono::high_resolution_clock::now();
-	while(!glfwWindowShouldClose(window.window))
-	{
-	    glfwPollEvents();
-            update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
-
-	    if (glfwGetKey(window.window, GLFW_KEY_F))
-	    {
-		printf("%f\n", 1.0f / window.dt);
-	    }
-	    
-	    clear_linear();
-
-            window.m_moved = false;
-            
-	    auto new_now = std::chrono::high_resolution_clock::now();
-	    window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
-
-            /*	auto new_now = std::chrono::high_resolution_clock::now();
-            window.dt = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(new_now - now).count();
-	    now = new_now;*/
-            
-	    now = new_now;
-	}
-
-	OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);
-	OUTPUT_DEBUG_LOG("stack allocator allocated %d bytes\n", (u32)((u8 *)stack_allocator_global.current - (u8 *)stack_allocator_global.start));
-	
-	OUTPUT_DEBUG_LOG("finished session : FPS : %f\n", fps);
-
-	//	printf("%f\n", fps);
-
-	std::cout << std::endl;
-	
-	close_debug_file();
-
-	// destroy rnd and vk
-        vkDeviceWaitIdle(vk.gpu.logical_device);
-        Vulkan::destroy_swapchain(&vk);
-	destroy_game(&vk.gpu);
-	
-	Vulkan::destroy_state(&vk);
-	
-	glfwDestroyWindow(window.window);
-	glfwTerminate();
-
-        std::cout << "Finished session" << std::endl;
-    }
-    catch(nlohmann::json::parse_error &e)
+    if (!glfwInit())
     {
-	std::cout << e.what() << " : " << e.id << " : " << e.byte << std::endl;
-	close_debug_file();
+        return(-1);
     }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+    allocate_memory_buffer(window.key_map, MAX_KEYS);
+    allocate_memory_buffer(window.mb_map, MAX_MB);
+	
+    window.w = 1280;
+    window.h = 720;
+	
+    window.window = glfwCreateWindow(window.w
+                                     , window.h
+                                     , "Game"
+                                     , NULL
+                                     , NULL);
+
+    if (!window.window)
+    {
+        glfwTerminate();
+        return(-1);
+    }
+
+    glfwSetInputMode(window.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetWindowUserPointer(window.window, &window);
+    glfwSetKeyCallback(window.window, glfw_keyboard_input_proc);
+    glfwSetMouseButtonCallback(window.window, glfw_mouse_button_proc);
+    glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
+    glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
+
+    Vulkan::State vk = {};
+
+    Vulkan::init_state(&vk, window.window);
+
+
+    make_game(&vk
+              , &vk.gpu
+              , &vk.swapchain
+              , &window);
+	
+	
+
+    f32 fps = 0.0f;
+
+    {
+        f64 m_x, m_y;
+        glfwGetCursorPos(window.window, &m_x, &m_y);
+        window.m_x = (f32)m_x;
+        window.m_y = (f32)m_y;
+    }
+        
+    auto now = std::chrono::high_resolution_clock::now();
+    while(!glfwWindowShouldClose(window.window))
+    {
+        glfwPollEvents();
+        update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
+
+        if (glfwGetKey(window.window, GLFW_KEY_F))
+        {
+            printf("%f\n", 1.0f / window.dt);
+        }
+	    
+        clear_linear();
+
+        window.m_moved = false;
+            
+        auto new_now = std::chrono::high_resolution_clock::now();
+        window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
+
+        now = new_now;
+    }
+
+    OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);
+    OUTPUT_DEBUG_LOG("stack allocator allocated %d bytes\n", (u32)((u8 *)stack_allocator_global.current - (u8 *)stack_allocator_global.start));
+	
+    OUTPUT_DEBUG_LOG("finished session : FPS : %f\n", fps);
+
+    //	printf("%f\n", fps);
+
+    std::cout << std::endl;
+	
+    close_debug_file();
+
+    // destroy rnd and vk
+    vkDeviceWaitIdle(vk.gpu.logical_device);
+    Vulkan::destroy_swapchain(&vk);
+    destroy_game(&vk.gpu);
+	
+    Vulkan::destroy_state(&vk);
+	
+    glfwDestroyWindow(window.window);
+    glfwTerminate();
+
+    std::cout << "Finished session" << std::endl;
 
     return(0);
 }

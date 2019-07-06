@@ -505,11 +505,6 @@ load_external_graphics_data(Vulkan::Swapchain *swapchain
                             , VkCommandPool *cmdpool);
 
 // Rendering pipeline
-void
-make_rendering_pipeline_data(Vulkan::GPU *gpu
-                             , VkCommandPool *cmdpool
-                             , Vulkan::Swapchain *swapchain);
-
 struct Camera
 {
     glm::vec2 mp;

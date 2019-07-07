@@ -1443,7 +1443,7 @@ make_postfx_data(Vulkan::GPU *gpu
         Shader_Uniform_Layouts layouts(g_postfx.pfx_single_tx_layout);
         Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         Shader_Blend_States blending(false);
-        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_VIEWPORT);
+        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
         make_graphics_pipeline(final_ppln, modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
                                false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
@@ -1459,7 +1459,7 @@ make_postfx_data(Vulkan::GPU *gpu
                                        , g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
         Shader_PK_Data push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         Shader_Blend_States blending(false);
-        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
+        Dynamic_States dynamic (VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(ssr_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
                                , VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr
                                , false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
@@ -1561,8 +1561,6 @@ render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain
     VkViewport v = {};
     Vulkan::init_viewport(rect2Dx, rect2Dy, rect2D_width, rect2D_height, 0.0f, 1.0f, &v);
     Vulkan::command_buffer_set_viewport(&v, &queue->q);
-    auto rect2D = Vulkan::make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
-    Vulkan::command_buffer_set_rect2D(&rect2D, &queue->q);
     {
         auto *pfx_final_ppln = g_pipeline_manager.get(g_postfx.final_stage.ppln);
         Vulkan::command_buffer_bind_pipeline(pfx_final_ppln, &queue->q);
@@ -1702,6 +1700,9 @@ initialize_game_3D_graphics(Vulkan::GPU *gpu,
     make_cube_model(gpu, swapchain, pool);
     make_atmosphere_data(gpu, &g_uniform_pool, swapchain, pool);
 }
+
+// 2D Graphics
+
 
 void
 initialize_game_2D_graphics(Vulkan::GPU *gpu,

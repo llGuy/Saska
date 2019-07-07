@@ -213,7 +213,6 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 	    }
 	}
     }
-    t->mapped_gpu_heights.flush(0, t->mapped_gpu_heights.size, gpu);
 
     return(ts_position);
 }
@@ -359,7 +358,8 @@ internal void
 morph_terrain_at(const glm::ivec2 &ts_position
 		 , Morphable_Terrain *t
 		 , f32 morph_zone_radius
-		 , f32 dt)
+		 , f32 dt
+                 , Vulkan::GPU *gpu)
 {
     u32 morph_quotients_outer_count = (morph_zone_radius - 1) * (morph_zone_radius - 1);
     u32 morph_quotients_inner_count = morph_zone_radius * 2 - 1;
@@ -454,6 +454,8 @@ morph_terrain_at(const glm::ivec2 &ts_position
 	    }
 	}
     }
+
+    t->mapped_gpu_heights.flush(0, t->mapped_gpu_heights.size, gpu);
 }
 
 internal Morphable_Terrain *
@@ -1191,7 +1193,7 @@ update_input_components(Window_Data *window
         {
             if (ts_coord.x >= 0)
             {
-                morph_terrain_at(ts_coord, e->on_t, 3, dt);
+                morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
             }
         }
 

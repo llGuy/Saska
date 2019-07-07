@@ -5,6 +5,7 @@
 
 #if defined(UNITY_BUILD)
 #include "memory.cpp"
+#include "ui.hpp"
 #include "game.cpp"
 #include "world.cpp"
 #include "script.cpp"

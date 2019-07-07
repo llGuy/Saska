@@ -36,3 +36,6 @@ C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_ssr.frag.spv pfx
 
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_final.vert.spv pfx_final.vert
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/pfx_final.frag.spv pfx_final.frag
+
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/font2Dquad.vert.spv font2Dquad.vert
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/font2Dquad.frag.spv font2Dquad.frag

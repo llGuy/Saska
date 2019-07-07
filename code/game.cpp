@@ -84,8 +84,6 @@ update_game(Vulkan::GPU *gpu
     persist constexpr u32 MAX_FRAMES_IN_FLIGHT = 2;
 
     current_frame = 0;
-    
-    Vulkan::wait_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
 
     VkFence null_fence = VK_NULL_HANDLE;
     
@@ -103,9 +101,11 @@ update_game(Vulkan::GPU *gpu
     {
 	OUTPUT_DEBUG_LOG("%s\n", "failed to acquire swapchain image");
     }
-
+    
+    Vulkan::wait_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
+    Vulkan::reset_fences(gpu, {1, &window_rendering.cpu_wait[current_frame]});
+    
     // ---- begin recording instructions into the command buffers ----
-
     GPU_Command_Queue queue{window_rendering.command_buffer[current_frame]};
     Vulkan::begin_command_buffer(&queue.q, 0, nullptr);
     {
@@ -117,7 +117,6 @@ update_game(Vulkan::GPU *gpu
 
     VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
 
-    Vulkan::reset_fences(gpu, {1, &window_rendering.cpu_wait[current_frame]});
     Vulkan::submit(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer[current_frame]}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.img_ready[current_frame]}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}

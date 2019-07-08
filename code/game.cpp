@@ -21,22 +21,22 @@ global_var struct Window_Rendering_Data
 } window_rendering;
 
 void
-make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Window_Data *window)
+make_game(Vulkan_State *vk, GPU *gpu, Swapchain *swapchain, Window_Data *window)
 {
-    Vulkan::allocate_command_pool(gpu->queue_families.graphics_family
+    allocate_command_pool(gpu->queue_families.graphics_family
 				  , gpu
 				  , &window_rendering.command_pool);
 
-    Vulkan::allocate_command_buffers(&window_rendering.command_pool
+    allocate_command_buffers(&window_rendering.command_pool
 				     , VK_COMMAND_BUFFER_LEVEL_PRIMARY
 				     , gpu
 				     , Memory_Buffer_View<VkCommandBuffer>{3, window_rendering.command_buffer});
 
     for (u32 i = 0; i < 2; ++i)
     {
-        Vulkan::init_semaphore(gpu, &window_rendering.img_ready[i]);
-        Vulkan::init_semaphore(gpu, &window_rendering.render_finish[i]);   
-        Vulkan::init_fence(gpu, VK_FENCE_CREATE_SIGNALED_BIT, &window_rendering.cpu_wait[i]);
+        init_semaphore(gpu, &window_rendering.img_ready[i]);
+        init_semaphore(gpu, &window_rendering.render_finish[i]);   
+        init_fence(gpu, VK_FENCE_CREATE_SIGNALED_BIT, &window_rendering.cpu_wait[i]);
     }
     
 
@@ -53,12 +53,12 @@ make_game(Vulkan::State *vk, Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, Win
 }
 
 void
-destroy_game(Vulkan::GPU *gpu)
+destroy_game(GPU *gpu)
 {
     // ---- destroy world data ----
     destroy_world(gpu);
     
-    Vulkan::free_command_buffer(Memory_Buffer_View<VkCommandBuffer>{3, window_rendering.command_buffer}
+    free_command_buffer(Memory_Buffer_View<VkCommandBuffer>{3, window_rendering.command_buffer}
 				, &window_rendering.command_pool, gpu);
 
     vkDestroyCommandPool(gpu->logical_device, window_rendering.command_pool, nullptr);
@@ -73,10 +73,10 @@ destroy_game(Vulkan::GPU *gpu)
 }
 
 void
-update_game(Vulkan::GPU *gpu
-	    , Vulkan::Swapchain *swapchain
+update_game(GPU *gpu
+	    , Swapchain *swapchain
 	    , Window_Data *window
-	    , Vulkan::State *vk
+	    , Vulkan_State *vk
 	    , f32 dt)
 {
     // ---- update different parts of the game (world, gui...)
@@ -87,7 +87,7 @@ update_game(Vulkan::GPU *gpu
 
     VkFence null_fence = VK_NULL_HANDLE;
     
-    auto next_image_data = Vulkan::acquire_next_image(swapchain
+    auto next_image_data = acquire_next_image(swapchain
 						      , gpu
 						      , &window_rendering.img_ready[current_frame]
 						      , &null_fence);
@@ -102,22 +102,22 @@ update_game(Vulkan::GPU *gpu
 	OUTPUT_DEBUG_LOG("%s\n", "failed to acquire swapchain image");
     }
     
-    Vulkan::wait_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
-    Vulkan::reset_fences(gpu, {1, &window_rendering.cpu_wait[current_frame]});
+    wait_fences(gpu, Memory_Buffer_View<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
+    reset_fences(gpu, {1, &window_rendering.cpu_wait[current_frame]});
     
     // ---- begin recording instructions into the command buffers ----
     GPU_Command_Queue queue{window_rendering.command_buffer[current_frame]};
-    Vulkan::begin_command_buffer(&queue.q, 0, nullptr);
+    begin_command_buffer(&queue.q, 0, nullptr);
     {
         update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
         render_final_output(next_image_data.image_index, &queue, swapchain);
     }
-    Vulkan::end_command_buffer(&queue.q);
+    end_command_buffer(&queue.q);
     // ---- end recording instructions
 
     VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
 
-    Vulkan::submit(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer[current_frame]}
+    submit(Memory_Buffer_View<VkCommandBuffer>{1, &window_rendering.command_buffer[current_frame]}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.img_ready[current_frame]}
                                , Memory_Buffer_View<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}
                                , Memory_Buffer_View<VkPipelineStageFlags>{1, &wait_stages}
@@ -126,7 +126,7 @@ update_game(Vulkan::GPU *gpu
     
     VkSemaphore signal_semaphores[] = {window_rendering.render_finish[current_frame]};
 
-    Vulkan::present(Memory_Buffer_View<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}
+    present(Memory_Buffer_View<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}
                                 , Memory_Buffer_View<VkSwapchainKHR>{1, &swapchain->swapchain}
                                 , &next_image_data.image_index
                                 , &gpu->present_queue);

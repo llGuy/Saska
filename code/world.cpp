@@ -32,8 +32,8 @@ struct Morphable_Terrain
 
     u32 offset_into_heights_gpu_buffer;
     // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
-    Vulkan::Buffer heights_gpu_buffer;
-    Vulkan::Mapped_GPU_Memory mapped_gpu_heights;
+    GPU_Buffer heights_gpu_buffer;
+    Mapped_GPU_Memory mapped_gpu_heights;
 
     VkBuffer vbos[2];
 
@@ -58,9 +58,9 @@ struct Planet
 global_var struct Morphable_Terrain_Master
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
-    Vulkan::Buffer mesh_xz_values;
+    GPU_Buffer mesh_xz_values;
     
-    Vulkan::Buffer idx_buffer;
+    GPU_Buffer idx_buffer;
     Model_Handle model_info;
 
 
@@ -91,7 +91,7 @@ add_terrain(void)
 
 
 internal void
-clean_up_terrain(Vulkan::GPU *gpu)
+clean_up_terrain(GPU *gpu)
 {
     for (u32 i = 0; i < g_terrains.terrain_count; ++i)
     {
@@ -177,7 +177,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 		      , const glm::vec3 &ws_ray_d
 		      , Morphable_Terrain *t
 		      , f32 dt
-		      , Vulkan::GPU *gpu)
+		      , GPU *gpu)
 {
     persist constexpr f32 MAX_DISTANCE = 6.0f;
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -359,7 +359,7 @@ morph_terrain_at(const glm::ivec2 &ts_position
 		 , Morphable_Terrain *t
 		 , f32 morph_zone_radius
 		 , f32 dt
-                 , Vulkan::GPU *gpu)
+                 , GPU *gpu)
 {
     u32 morph_quotients_outer_count = (morph_zone_radius - 1) * (morph_zone_radius - 1);
     u32 morph_quotients_inner_count = morph_zone_radius * 2 - 1;
@@ -483,11 +483,11 @@ internal void
 make_3D_terrain_base(u32 width_x
 		     , u32 depth_z
 		     , f32 random_displacement_factor
-		     , Vulkan::Buffer *mesh_xz_values
-		     , Vulkan::Buffer *idx_buffer
-		     , Vulkan::Model *model_info
+		     , GPU_Buffer *mesh_xz_values
+		     , GPU_Buffer *idx_buffer
+		     , Model *model_info
 		     , VkCommandPool *cmdpool
-		     , Vulkan::GPU *gpu)
+		     , GPU *gpu)
 {
     assert(width_x & 0X1 && depth_z & 0X1);
     
@@ -527,13 +527,13 @@ make_3D_terrain_base(u32 width_x
     }
     
     // load data into buffers
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * 2 * width_x * depth_z, vtx}
+    invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(f32) * 2 * width_x * depth_z, vtx}
 							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							  , cmdpool
 							  , mesh_xz_values
 							  , gpu);
 
-    Vulkan::invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(u32) * 11 * (((width_x - 1) * (depth_z - 1)) / 4), idx} // <--- this is idx, not vtx .... (stupid error)
+    invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer{sizeof(u32) * 11 * (((width_x - 1) * (depth_z - 1)) / 4), idx} // <--- this is idx, not vtx .... (stupid error)
 							  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							  , cmdpool
 							  , idx_buffer
@@ -542,7 +542,7 @@ make_3D_terrain_base(u32 width_x
     model_info->attribute_count = 2;
     model_info->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model_info->attribute_count);
     model_info->binding_count = 2;
-    model_info->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding) * model_info->binding_count);
+    model_info->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding) * model_info->binding_count);
     enum :u32 {GROUND_BASE_XY_VALUES_BND = 0, HEIGHT_BND = 1, GROUND_BASE_XY_VALUES_ATT = 0, HEIGHT_ATT = 1};
     // buffer that holds only the x-z values of each vertex - the reason is so that we can create multiple terrain meshes without copying the x-z values each time
     model_info->bindings[0].binding = 0;
@@ -568,16 +568,16 @@ internal void
 make_3D_terrain_mesh_instance(u32 width_x
 			      , u32 depth_z
 			      , f32 *&cpu_side_heights
-			      , Vulkan::Buffer *gpu_side_heights
-			      , Vulkan::Mapped_GPU_Memory *mapped_gpu_heights
+			      , GPU_Buffer *gpu_side_heights
+			      , Mapped_GPU_Memory *mapped_gpu_heights
 			      , VkCommandPool *cmdpool
-			      , Vulkan::GPU *gpu)
+			      , GPU *gpu)
 {
     // Don't need in the future
     cpu_side_heights = (f32 *)allocate_free_list(sizeof(f32) * width_x * depth_z);
     memset(cpu_side_heights, 0, sizeof(f32) * width_x * depth_z);
 
-    Vulkan::init_buffer(Vulkan::adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu)
+    init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu)
 			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 			, VK_SHARING_MODE_EXCLUSIVE
 			, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
@@ -587,13 +587,13 @@ make_3D_terrain_mesh_instance(u32 width_x
     *mapped_gpu_heights = gpu_side_heights->construct_map();
 
     mapped_gpu_heights->begin(gpu);
-    memset(mapped_gpu_heights->data, 0, Vulkan::adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu));
+    memset(mapped_gpu_heights->data, 0, adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu));
 
-    mapped_gpu_heights->flush(0, Vulkan::adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu), gpu);
+    mapped_gpu_heights->flush(0, adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu), gpu);
 }
 
 internal void
-make_terrain_mesh_data(u32 w, u32 d, Morphable_Terrain *terrain, VkCommandPool *cmdpool, Vulkan::GPU *gpu)
+make_terrain_mesh_data(u32 w, u32 d, Morphable_Terrain *terrain, VkCommandPool *cmdpool, GPU *gpu)
 {
     make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, &terrain->mapped_gpu_heights, cmdpool, gpu);
     terrain->xz_dim = glm::ivec2(w, d);
@@ -612,7 +612,7 @@ make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_
                                                            , sizeof(terrain->push_k)
                                                            , {2, terrain->vbos}
                                                            , model_info->index_data
-                                                           , Vulkan::init_draw_indexed_data_default(1, model_info->index_data.index_count));
+                                                           , init_draw_indexed_data_default(1, model_info->index_data.index_count));
 
     terrain->ws_p = position;
     terrain->gs_r = rotation;
@@ -630,7 +630,7 @@ make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_
 
 
 internal void
-make_terrain_instances(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
+make_terrain_instances(GPU *gpu, VkCommandPool *cmdpool)
 {
     // Make the terrain render command recorder
     g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10
@@ -658,7 +658,7 @@ make_terrain_instances(Vulkan::GPU *gpu, VkCommandPool *cmdpool)
 }
 
 internal void
-make_terrain_pointer(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
+make_terrain_pointer(GPU *gpu, Swapchain *swapchain)
 {
     //    g_terrains.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
 
@@ -680,8 +680,8 @@ make_terrain_pointer(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
 
 internal void
 initialize_terrains(VkCommandPool *cmdpool
-                    , Vulkan::Swapchain *swapchain
-                    , Vulkan::GPU *gpu)
+                    , Swapchain *swapchain
+                    , GPU *gpu)
 {
     // ---- register the info of the model for json loader to access ---
     g_terrains.model_info = g_model_manager.add("model.terrain_base_info"_hash);
@@ -742,10 +742,10 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
     if (g_terrains.terrain_pointer.ts_position.x >= 0)
     {
 	auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
-	Vulkan::command_buffer_bind_pipeline(ppln
+	command_buffer_bind_pipeline(ppln
 					     , &queue->q);
 
-	Vulkan::command_buffer_bind_descriptor_sets(ppln
+	command_buffer_bind_descriptor_sets(ppln
 						    , {1, ubo_set}
 						    , &queue->q);
 
@@ -793,14 +793,14 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 	push_k.ts_heights[6] = calculate_height(x, z);
 	push_k.ts_heights[7] = calculate_height(x - 1, z + 1);
     
-	Vulkan::command_buffer_push_constant(&push_k
+	command_buffer_push_constant(&push_k
 					     , sizeof(push_k)
 					     , 0
 					     , VK_SHADER_STAGE_VERTEX_BIT
 					     , ppln
 					     , &queue->q);
 
-	Vulkan::command_buffer_draw(&queue->q
+	command_buffer_draw(&queue->q
 				    , 8
 				    , 1
 				    , 0
@@ -1147,7 +1147,7 @@ add_input_component(Entity *e)
 internal void
 update_input_components(Window_Data *window
                         , f32 dt
-                        , Vulkan::GPU *gpu)
+                        , GPU *gpu)
 {
     for (u32 i = 0; i < g_entities.input_component_count; ++i)
     {
@@ -1294,7 +1294,7 @@ push_entity_to_queue(Entity *e_ptr // Needs a rendering component attached
 			 , sizeof(component->push_k)
 			 , model->raw_cache_for_rendering
 			 , model->index_data
-			 , Vulkan::init_draw_indexed_data_default(1, model->index_data.index_count));
+			 , init_draw_indexed_data_default(1, model->index_data.index_count));
 }
 
 internal void
@@ -1307,7 +1307,7 @@ make_entity_instanced_renderable(Model_Handle model_handle
 internal void
 update_entities(Window_Data *window
                 , f32 dt
-                , Vulkan::GPU *gpu)
+                , GPU *gpu)
 {
     update_input_components(window, dt, gpu);
     update_physics_components(dt);
@@ -1316,7 +1316,7 @@ update_entities(Window_Data *window
 }
 
 internal void
-initialize_entities(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPool *cmdpool, Window_Data *window)
+initialize_entities(GPU *gpu, Swapchain *swapchain, VkCommandPool *cmdpool, Window_Data *window)
 {
     g_entities.entity_model = g_model_manager.get_handle("model.cube_model"_hash);
     
@@ -1423,10 +1423,10 @@ initialize_entities(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain, VkCommandPoo
 
 // ---- rendering of the entire world happens here ----
 internal void
-prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, Vulkan::Framebuffer *fbo);
+prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, Framebuffer *fbo);
 
 internal void
-render_world(Vulkan::State *vk
+render_world(Vulkan_State *vk
 	     , u32 image_index
 	     , u32 current_frame
 	     , GPU_Command_Queue *queue)
@@ -1440,7 +1440,7 @@ render_world(Vulkan::State *vk
     Camera *camera = get_camera_bound_to_3D_output();
     
     // Start the rendering    
-    //    Vulkan::begin_command_buffer(cmdbuf, 0, nullptr);
+    //    begin_command_buffer(cmdbuf, 0, nullptr);
     
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, queue);
@@ -1483,7 +1483,7 @@ render_world(Vulkan::State *vk
 
 void
 initialize_world(Window_Data *window
-                 , Vulkan::State *vk
+                 , Vulkan_State *vk
                  , VkCommandPool *cmdpool)
 {
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
@@ -1492,7 +1492,7 @@ initialize_world(Window_Data *window
 
 void
 update_world(Window_Data *window
-	     , Vulkan::State *vk
+	     , Vulkan_State *vk
 	     , f32 dt
 	     , u32 image_index
 	     , u32 current_frame
@@ -1517,7 +1517,7 @@ update_world(Window_Data *window
 void
 handle_input_debug(Window_Data *window
                    , f32 dt
-                   , Vulkan::GPU *gpu)
+                   , GPU *gpu)
 {
     // ---- get bound entity ----
     // TODO make sure to check if main_entity < 0
@@ -1554,7 +1554,7 @@ handle_input_debug(Window_Data *window
 
 
 void
-destroy_world(Vulkan::GPU *gpu)
+destroy_world(GPU *gpu)
 {
     g_render_pass_manager.clean_up(gpu);
     g_image_manager.clean_up(gpu);

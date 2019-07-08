@@ -23,23 +23,23 @@ using GPU_Command_Queue_Pool = VkCommandPool;
 using Submit_Level = VkCommandBufferLevel;
 
 GPU_Command_Queue
-make_command_queue(VkCommandPool *pool, Submit_Level level, Vulkan::GPU *gpu)
+make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu)
 {
     GPU_Command_Queue result;
-    Vulkan::allocate_command_buffers(pool, level, gpu, {1, &result.q});
+    allocate_command_buffers(pool, level, gpu, {1, &result.q});
     return(result);
 }
 
 void
-begin_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu)
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu)
 {
-    Vulkan::begin_command_buffer(&queue->q, 0, nullptr);
+    begin_command_buffer(&queue->q, 0, nullptr);
 }
     
 void
-end_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu)
+end_command_queue(GPU_Command_Queue *queue, GPU *gpu)
 {
-    Vulkan::end_command_buffer(&queue->q);
+    end_command_buffer(&queue->q);
 }
 
 
@@ -48,15 +48,15 @@ end_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu)
 Uniform_Pool g_uniform_pool;
 
 internal void
-make_uniform_pool(Vulkan::GPU *gpu)
+make_uniform_pool(GPU *gpu)
 {
     VkDescriptorPoolSize pool_sizes[3] = {};
 
-    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20, &pool_sizes[0]);
-    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 20, &pool_sizes[1]);
-    Vulkan::init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 20, &pool_sizes[2]);
+    init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20, &pool_sizes[0]);
+    init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 20, &pool_sizes[1]);
+    init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 20, &pool_sizes[2]);
     
-    Vulkan::init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, 30, gpu, &g_uniform_pool);
+    init_descriptor_pool(Memory_Buffer_View<VkDescriptorPoolSize>{3, pool_sizes}, 30, gpu, &g_uniform_pool);
 }
 
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
@@ -68,7 +68,7 @@ make_uniform_binding_s(u32 count
 		       , VkDescriptorType uniform_type
 		       , VkShaderStageFlags shader_flags)
 {
-    return Vulkan::init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
+    return init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 
@@ -85,16 +85,16 @@ Uniform_Layout_Info::push(u32 count
 			  , VkDescriptorType uniform_type
 			  , VkShaderStageFlags shader_flags)
 {
-    bindings_buffer[binding_count++] = Vulkan::init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
+    bindings_buffer[binding_count++] = init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 using Uniform_Layout = VkDescriptorSetLayout;
 
 Uniform_Layout
-make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu)
+make_uniform_layout(Uniform_Layout_Info *blueprint, GPU *gpu)
 {
     VkDescriptorSetLayout layout;
-    Vulkan::init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, gpu, &layout);
+    init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, gpu, &layout);
     return(layout);
 }
 
@@ -104,9 +104,9 @@ make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu)
 using Uniform_Group = VkDescriptorSet;
 
 Uniform_Group
-make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *gpu)
+make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, GPU *gpu)
 {
-    Uniform_Group uniform_group = Vulkan::allocate_descriptor_set(layout, gpu, pool);
+    Uniform_Group uniform_group = allocate_descriptor_set(layout, gpu, pool);
 
     return(uniform_group);
 }
@@ -128,8 +128,8 @@ global_var struct GPU_Material_Submission_Queue_Manager // maybe in the future t
 u32
 GPU_Material_Submission_Queue::push_material(void *push_k_ptr, u32 push_k_size
 					     , const Memory_Buffer_View<VkBuffer> &vbo_bindings
-					     , const Vulkan::Model_Index_Data &index_data
-					     , const Vulkan::Draw_Indexed_Data &draw_index_data)
+					     , const Model_Index_Data &index_data
+					     , const Draw_Indexed_Data &draw_index_data)
 {
     Material new_mtrl = {};
     new_mtrl.push_k_ptr = push_k_ptr;
@@ -155,7 +155,7 @@ GPU_Material_Submission_Queue::get_command_buffer(GPU_Command_Queue *queue)
     
 void
 GPU_Material_Submission_Queue::submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
-						       , Vulkan::Graphics_Pipeline *graphics_pipeline
+						       , Graphics_Pipeline *graphics_pipeline
 						       , GPU_Command_Queue *main_queue
 						       , Submit_Level level)
 {
@@ -172,14 +172,14 @@ GPU_Material_Submission_Queue::submit_queued_materials(const Memory_Buffer_View<
 	inheritance_info.subpass = main_queue->subpass;
 	inheritance_info.framebuffer = g_framebuffer_manager.get(main_queue->fbo_handle)->framebuffer;
 	
-	Vulkan::begin_command_buffer(&dst_command_queue->q
+	begin_command_buffer(&dst_command_queue->q
 				     , VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT
 				     , &inheritance_info);
     }
 	    
-    Vulkan::command_buffer_bind_pipeline(graphics_pipeline, &dst_command_queue->q);
+    command_buffer_bind_pipeline(graphics_pipeline, &dst_command_queue->q);
 
-    Vulkan::command_buffer_bind_descriptor_sets(graphics_pipeline
+    command_buffer_bind_descriptor_sets(graphics_pipeline
 						, uniform_groups
 						, &dst_command_queue->q);
 
@@ -190,29 +190,29 @@ GPU_Material_Submission_Queue::submit_queued_materials(const Memory_Buffer_View<
         VkDeviceSize *zero = ALLOCA_T(VkDeviceSize, mtrl->vbo_bindings.count);
         for (u32 z = 0; z < mtrl->vbo_bindings.count; ++z) zero[z] = 0;
 			
-        Vulkan::command_buffer_bind_vbos(mtrl->vbo_bindings
+        command_buffer_bind_vbos(mtrl->vbo_bindings
                                          , {mtrl->vbo_bindings.count, zero}
                                          , 0
                                          , mtrl->vbo_bindings.count
                                          , &dst_command_queue->q);
 			
-        Vulkan::command_buffer_bind_ibo(mtrl->index_data
+        command_buffer_bind_ibo(mtrl->index_data
                                         , &dst_command_queue->q);
 
-        Vulkan::command_buffer_push_constant(mtrl->push_k_ptr
+        command_buffer_push_constant(mtrl->push_k_ptr
                                              , mtrl->push_k_size
                                              , 0
                                              , push_k_dst
                                              , graphics_pipeline
                                              , &dst_command_queue->q);
 
-        Vulkan::command_buffer_draw_indexed(&dst_command_queue->q
+        command_buffer_draw_indexed(&dst_command_queue->q
                                             , mtrl->draw_index_data);
     }
 
     if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
-	Vulkan::end_command_buffer(&dst_command_queue->q);
+	end_command_buffer(&dst_command_queue->q);
     }
 }
 
@@ -225,12 +225,12 @@ GPU_Material_Submission_Queue::flush_queue(void)
 void
 GPU_Material_Submission_Queue::submit_to_cmdbuf(GPU_Command_Queue *queue)
 {
-    //    Vulkan::command_buffer_execute_commands(&queue->q, {1, get_command_buffer(nullptr)});
+    //    command_buffer_execute_commands(&queue->q, {1, get_command_buffer(nullptr)});
 }
 
 GPU_Material_Submission_Queue
 make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
-				   , Submit_Level level, GPU_Command_Queue_Pool *pool, Vulkan::GPU *gpu)
+				   , Submit_Level level, GPU_Command_Queue_Pool *pool, GPU *gpu)
 {
     GPU_Material_Submission_Queue material_queue;
 
@@ -261,15 +261,15 @@ make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_
 void
 submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue)
 {
-    //    Vulkan::command_buffer_execute_commands(queue, {material_queue_manager.active_queue_ptr, material_queue_manager.active_queues});
+    //    command_buffer_execute_commands(queue, {material_queue_manager.active_queue_ptr, material_queue_manager.active_queues});
 }
 
 void
-make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, Vulkan::GPU *gpu)
+make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
-    Vulkan::init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
 
     VkImageAspectFlags aspect_flags;
     
@@ -278,11 +278,11 @@ make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_coun
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
     
-    Vulkan::init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
+    init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
 
     if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
     {
-        Vulkan::init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR
+        init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR
                                    , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
                                    , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
                                    , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
@@ -298,13 +298,13 @@ make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_coun
 }
 
 void
-make_framebuffer(Vulkan::Framebuffer *fbo
+make_framebuffer(Framebuffer *fbo
                  , u32 w, u32 h
                  , u32 layer_count
-                 , Vulkan::Render_Pass *compatible
-                 , const Memory_Buffer_View<Vulkan::Image2D> &colors
-                 , Vulkan::Image2D *depth
-                 , Vulkan::GPU *gpu)
+                 , Render_Pass *compatible
+                 , const Memory_Buffer_View<Image2D> &colors
+                 , Image2D *depth
+                 , GPU *gpu)
 {
     if (colors.count)
     {
@@ -324,7 +324,7 @@ make_framebuffer(Vulkan::Framebuffer *fbo
         fbo->depth_attachment = depth->image_view;
     }
     
-    Vulkan::init_framebuffer(compatible, w, h, layer_count, gpu, fbo);
+    init_framebuffer(compatible, w, h, layer_count, gpu, fbo);
 
     fbo->extent = VkExtent2D{ w, h };
 }
@@ -341,17 +341,17 @@ make_render_pass_dependency(s32 src_index,
 }
 
 void
-make_render_pass(Vulkan::Render_Pass *render_pass
+make_render_pass(Render_Pass *render_pass
                  , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
                  , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
                  , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
-                 , Vulkan::GPU *gpu)
+                 , GPU *gpu)
 {
     VkAttachmentDescription descriptions_vk[10] = {};
     u32 att_i = 0;
     for (; att_i < attachments.count; ++att_i)
     {
-        descriptions_vk[att_i] = Vulkan::init_attachment_description(attachments[att_i].format
+        descriptions_vk[att_i] = init_attachment_description(attachments[att_i].format
                                                                      , VK_SAMPLE_COUNT_1_BIT
                                                                      , VK_ATTACHMENT_LOAD_OP_CLEAR
                                                                      , VK_ATTACHMENT_STORE_OP_STORE
@@ -372,7 +372,7 @@ make_render_pass(Vulkan::Render_Pass *render_pass
         u32 color_reference_start = reference_count;
         for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i, ++reference_count)
         {
-            reference_buffer[reference_count] = Vulkan::init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index,
+            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index,
                                                                                   subpasses[sub_i].color_attachments[ref_i].layout);
         }
 
@@ -380,18 +380,18 @@ make_render_pass(Vulkan::Render_Pass *render_pass
         u32 inp_i = 0;
         for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i, ++reference_count)
         {
-            reference_buffer[reference_count] = Vulkan::init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index,
+            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index,
                                                                                   subpasses[sub_i].input_attachments[inp_i].layout);
         }
 
         u32 depth_reference_ptr = reference_count;
         if (subpasses[sub_i].enable_depth)
         {
-            reference_buffer[reference_count++] = Vulkan::init_attachment_reference(subpasses[sub_i].depth_attachment.index,
+            reference_buffer[reference_count++] = init_attachment_reference(subpasses[sub_i].depth_attachment.index,
                                                                                     subpasses[sub_i].depth_attachment.layout);
         }
         
-        subpasses_vk[sub_i] = Vulkan::init_subpass_description({ref_i, &reference_buffer[color_reference_start]}, subpasses[sub_i].enable_depth ? &reference_buffer[depth_reference_ptr] : nullptr, {inp_i, &reference_buffer[input_reference_start]});
+        subpasses_vk[sub_i] = init_subpass_description({ref_i, &reference_buffer[color_reference_start]}, subpasses[sub_i].enable_depth ? &reference_buffer[depth_reference_ptr] : nullptr, {inp_i, &reference_buffer[input_reference_start]});
     }
 
     VkSubpassDependency dependencies_vk[10] = {};
@@ -399,17 +399,17 @@ make_render_pass(Vulkan::Render_Pass *render_pass
     for (; dep_i < dependencies.count; ++dep_i)
     {
         const Render_Pass_Dependency *info = &dependencies[dep_i];
-        dependencies_vk[dep_i] = Vulkan::init_subpass_dependency(info->src_index, info->dst_index
+        dependencies_vk[dep_i] = init_subpass_dependency(info->src_index, info->dst_index
                                                                  , info->src_stage, info->src_access
                                                                  , info->dst_stage, info->dst_access
                                                                  , VK_DEPENDENCY_BY_REGION_BIT);
     }
     
-    Vulkan::init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
+    init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
 }
 
 void
-make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
+make_graphics_pipeline(Graphics_Pipeline *ppln
                        , const Shader_Modules &modules
                        , bool primitive_restart, VkPrimitiveTopology topology
                        , VkPolygonMode polygonmode, VkCullModeFlags culling
@@ -417,39 +417,39 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
                        , const Shader_PK_Data &pk
                        , VkExtent2D viewport
                        , const Shader_Blend_States &blends
-                       , Vulkan::Model *model
+                       , Model *model
                        , bool enable_depth
                        , f32 depth_bias
                        , const Dynamic_States &dynamic_states
-                       , Vulkan::Render_Pass *compatible
+                       , Render_Pass *compatible
                        , u32 subpass
-                       , Vulkan::GPU *gpu)
+                       , GPU *gpu)
 {
     VkShaderModule module_objects[Shader_Modules::MAX_SHADERS] = {};
     VkPipelineShaderStageCreateInfo infos[Shader_Modules::MAX_SHADERS] = {};
     for (u32 i = 0; i < modules.count; ++i)
     {
         File_Contents bytecode = read_file(modules.modules[i].filename);
-        Vulkan::init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, gpu, &module_objects[i]);
-        Vulkan::init_shader_pipeline_info(&module_objects[i], modules.modules[i].stage, &infos[i]);
+        init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, gpu, &module_objects[i]);
+        init_shader_pipeline_info(&module_objects[i], modules.modules[i].stage, &infos[i]);
     }
     VkPipelineVertexInputStateCreateInfo v_input = {};
-    Vulkan::init_pipeline_vertex_input_info(model, &v_input);
+    init_pipeline_vertex_input_info(model, &v_input);
     VkPipelineInputAssemblyStateCreateInfo assembly = {};
-    Vulkan::init_pipeline_input_assembly_info(0, topology, primitive_restart, &assembly);
+    init_pipeline_input_assembly_info(0, topology, primitive_restart, &assembly);
     VkPipelineViewportStateCreateInfo view_info = {};
     VkViewport view = {};
-    Vulkan::init_viewport(0.0f, 0.0f, viewport.width, viewport.height, 0.0f, 1.0f, &view);
+    init_viewport(0.0f, 0.0f, viewport.width, viewport.height, 0.0f, 1.0f, &view);
     VkRect2D scissor = {};
-    Vulkan::init_rect2D(VkOffset2D{}, VkExtent2D{viewport.width, viewport.height}, &scissor);
-    Vulkan::init_pipeline_viewport_info({1, &view}, {1, &scissor}, &view_info);
+    init_rect2D(VkOffset2D{}, VkExtent2D{viewport.width, viewport.height}, &scissor);
+    init_pipeline_viewport_info({1, &view}, {1, &scissor}, &view_info);
     VkPipelineMultisampleStateCreateInfo multi = {};
-    Vulkan::init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multi);
+    init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multi);
     VkPipelineColorBlendStateCreateInfo blending_info = {};
     VkPipelineColorBlendAttachmentState blend_states[Shader_Blend_States::MAX_BLEND_STATES];
     for (u32 i = 0; i < blends.count; ++i)
     {
-        Vulkan::init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+        init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
                                             , VK_FALSE
                                             , VK_BLEND_FACTOR_ONE
                                             , VK_BLEND_FACTOR_ZERO
@@ -459,26 +459,26 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
                                             , VK_BLEND_OP_ADD
                                             , &blend_states[i]);
     }
-    Vulkan::init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, {blends.count, blend_states}, &blending_info);
+    init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, {blends.count, blend_states}, &blending_info);
     VkPipelineDynamicStateCreateInfo dynamic_info = {};
     dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamic_info.dynamicStateCount = dynamic_states.count;
     dynamic_info.pDynamicStates = dynamic_states.dynamic_states;
     VkPipelineDepthStencilStateCreateInfo depth = {};
-    Vulkan::init_pipeline_depth_stencil_info(enable_depth, enable_depth, 0.0f, 1.0f, VK_FALSE, &depth);
+    init_pipeline_depth_stencil_info(enable_depth, enable_depth, 0.0f, 1.0f, VK_FALSE, &depth);
     VkPipelineRasterizationStateCreateInfo raster = {};
-    Vulkan::init_pipeline_rasterization_info(polygonmode, culling, 2.0f, 0, &raster, depth_bias);
+    init_pipeline_rasterization_info(polygonmode, culling, 2.0f, 0, &raster, depth_bias);
 
     VkPushConstantRange pk_range = {};
-    Vulkan::init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
+    init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
     Uniform_Layout real_layouts [Shader_Uniform_Layouts::MAX_LAYOUTS] = {};
     for (u32 i = 0; i < layouts.count; ++i)
     {
         real_layouts[i] = *g_uniform_layout_manager.get(layouts.layouts[i]);
     }
-    Vulkan::init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, gpu, &ppln->layout);
+    init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, gpu, &ppln->layout);
     Memory_Buffer_View<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
-    Vulkan::init_graphics_pipeline(&shaders_mb
+    init_graphics_pipeline(&shaders_mb
                                    , &v_input
                                    , &assembly
                                    , &view_info
@@ -511,7 +511,7 @@ struct Cameras
 } g_cameras;
 
 internal void
-make_camera_data(Vulkan::GPU *gpu, VkDescriptorPool *pool, Vulkan::Swapchain *swapchain)
+make_camera_data(GPU *gpu, VkDescriptorPool *pool, Swapchain *swapchain)
 {
     Uniform_Layout_Handle ubo_layout_hdl = g_uniform_layout_manager.add("uniform_layout.camera_transforms_ubo"_hash, swapchain->imgs.count);
     auto *ubo_layout_ptr = g_uniform_layout_manager.get(ubo_layout_hdl);
@@ -534,7 +534,7 @@ make_camera_data(Vulkan::GPU *gpu, VkDescriptorPool *pool, Vulkan::Swapchain *sw
                  ; i < uniform_buffer_count
                  ; ++i)
         {
-            Vulkan::init_buffer(buffer_size
+            init_buffer(buffer_size
                                 , VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
                                 , VK_SHARING_MODE_EXCLUSIVE
                                 , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -569,7 +569,7 @@ make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
 }
 
 void
-update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu)
+update_3D_output_camera_transforms(u32 image_index, GPU *gpu)
 {
     Camera *camera = get_camera_bound_to_3D_output();
     
@@ -593,7 +593,7 @@ update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu)
                                        shadow_data.projection_matrix,
                                        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
     
-    Vulkan::Buffer &current_ubo = *g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos + image_index);
+    GPU_Buffer &current_ubo = *g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos + image_index);
 
     auto map = current_ubo.construct_map();
     map.begin(gpu);
@@ -638,7 +638,7 @@ bind_camera_to_3D_scene_output(Camera_Handle handle)
     g_cameras.camera_bound_to_3D_output = handle;
 }
 
-Memory_Buffer_View<Vulkan::Buffer>
+Memory_Buffer_View<GPU_Buffer>
 get_camera_transform_ubos(void)
 {
     return {g_cameras.ubo_count, g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos)};
@@ -721,15 +721,15 @@ update_atmosphere(GPU_Command_Queue *queue)
     queue->begin_render_pass(g_atmosphere.make_render_pass
                              , g_atmosphere.make_fbo
                              , VK_SUBPASS_CONTENTS_INLINE
-                             , Vulkan::init_clear_color_color(0, 0.0, 0.0, 0));
+                             , init_clear_color_color(0, 0.0, 0.0, 0));
 
     VkViewport viewport;
-    Vulkan::init_viewport(0, 0, 1000, 1000, 0.0f, 1.0f, &viewport);
+    init_viewport(0, 0, 1000, 1000, 0.0f, 1.0f, &viewport);
     vkCmdSetViewport(queue->q, 0, 1, &viewport);    
 
     auto *make_ppln = g_pipeline_manager.get(g_atmosphere.make_pipeline);
     
-    Vulkan::command_buffer_bind_pipeline(make_ppln, &queue->q);
+    command_buffer_bind_pipeline(make_ppln, &queue->q);
 
     struct Atmos_Push_K
     {
@@ -744,14 +744,14 @@ update_atmosphere(GPU_Command_Queue *queue)
 
     k.light_dir = glm::vec4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
     
-    Vulkan::command_buffer_push_constant(&k
+    command_buffer_push_constant(&k
 					 , sizeof(k)
 					 , 0
 					 , VK_SHADER_STAGE_FRAGMENT_BIT
 					 , make_ppln
 					 , &queue->q);
     
-    Vulkan::command_buffer_draw(&queue->q
+    command_buffer_draw(&queue->q
 				, 1, 1, 0, 0);
 
     queue->end_render_pass();
@@ -760,22 +760,22 @@ update_atmosphere(GPU_Command_Queue *queue)
 void
 render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
                   , const glm::vec3 &camera_position // To change to camera structure
-                  , Vulkan::Model *cube
+                  , Model *cube
                   , GPU_Command_Queue *queue)
 {
     auto *render_pipeline = g_pipeline_manager.get(g_atmosphere.render_pipeline);
-    Vulkan::command_buffer_bind_pipeline(render_pipeline, &queue->q);
+    command_buffer_bind_pipeline(render_pipeline, &queue->q);
 
     Uniform_Group *groups = ALLOCA_T(Uniform_Group, sets.count + 1);
     for (u32 i = 0; i < sets.count; ++i) groups[i] = sets[i];
     groups[sets.count] = *g_uniform_group_manager.get(g_atmosphere.cubemap_uniform_group);
     
-    Vulkan::command_buffer_bind_descriptor_sets(render_pipeline, {sets.count + 1, groups}, &queue->q);
+    command_buffer_bind_descriptor_sets(render_pipeline, {sets.count + 1, groups}, &queue->q);
 
     VkDeviceSize zero = 0;
-    Vulkan::command_buffer_bind_vbos(cube->raw_cache_for_rendering, {1, &zero}, 0, 1, &queue->q);
+    command_buffer_bind_vbos(cube->raw_cache_for_rendering, {1, &zero}, 0, 1, &queue->q);
 
-    Vulkan::command_buffer_bind_ibo(cube->index_data, &queue->q);
+    command_buffer_bind_ibo(cube->index_data, &queue->q);
 
     struct Skybox_Push_Constant
     {
@@ -784,21 +784,21 @@ render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
 
     push_k.model_matrix = glm::scale(glm::vec3(1000.0f));
 
-    Vulkan::command_buffer_push_constant(&push_k
+    command_buffer_push_constant(&push_k
 					 , sizeof(push_k)
 					 , 0
 					 , VK_SHADER_STAGE_VERTEX_BIT
 					 , render_pipeline
 					 , &queue->q);
 
-    Vulkan::command_buffer_draw_indexed(&queue->q
+    command_buffer_draw_indexed(&queue->q
 					, cube->index_data.init_draw_indexed_data(0, 0));
 }
 
 internal void
-make_atmosphere_data(Vulkan::GPU *gpu
+make_atmosphere_data(GPU *gpu
                      , VkDescriptorPool *pool
-                     , Vulkan::Swapchain *swapchain
+                     , Swapchain *swapchain
                      , VkCommandPool *cmdpool)
 {
     g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
@@ -886,16 +886,16 @@ make_atmosphere_data(Vulkan::GPU *gpu
 
     // ---- Update the atmosphere (initialize it) ----
     VkCommandBuffer cmdbuf;
-    Vulkan::init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
+    init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
 
     GPU_Command_Queue queue{cmdbuf};
     update_atmosphere(&queue);
     
-    Vulkan::destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
+    destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
 }
 
 internal void
-make_shadow_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
+make_shadow_data(GPU *gpu, Swapchain *swapchain)
 {
     glm::vec3 light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
     g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -925,7 +925,7 @@ make_shadow_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
         auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
         make_texture(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
         
-        make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Vulkan::Image2D>(), shadowmap_texture, gpu);
+        make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Image2D>(), shadowmap_texture, gpu);
     }
     
     Uniform_Layout_Handle sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
@@ -996,9 +996,9 @@ render_debug_frustum(GPU_Command_Queue *queue
                      , VkDescriptorSet ubo)
 {
     auto *debug_frustum_ppln = g_pipeline_manager.get(g_lighting.shadows.debug_frustum_ppln);
-    Vulkan::command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
+    command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
 
-    Vulkan::command_buffer_bind_descriptor_sets(debug_frustum_ppln
+    command_buffer_bind_descriptor_sets(debug_frustum_ppln
 						, {1, &ubo}
 						, &queue->q);
 
@@ -1013,23 +1013,23 @@ render_debug_frustum(GPU_Command_Queue *queue
     push_k1.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
     push_k2.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
     
-    Vulkan::command_buffer_push_constant(&push_k1
+    command_buffer_push_constant(&push_k1
 					 , sizeof(push_k1)
 					 , 0
 					 , VK_SHADER_STAGE_VERTEX_BIT
 					 , debug_frustum_ppln
 					 , &queue->q);
     
-    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
+    command_buffer_draw(&queue->q, 24, 1, 0, 0);
 
-    Vulkan::command_buffer_push_constant(&push_k2
+    command_buffer_push_constant(&push_k2
 					 , sizeof(push_k2)
 					 , 0
 					 , VK_SHADER_STAGE_VERTEX_BIT
 					 , debug_frustum_ppln
 					 , &queue->q);
     
-    Vulkan::command_buffer_draw(&queue->q, 24, 1, 0, 0);
+    command_buffer_draw(&queue->q, 24, 1, 0, 0);
 }
 
 void
@@ -1148,7 +1148,7 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
 }
 
 void
-make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
+make_dfr_rendering_data(GPU *gpu, Swapchain *swapchain)
 {
     // ---- Make deferred rendering render pass ----
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
@@ -1206,7 +1206,7 @@ make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
         make_texture(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
         make_texture(depth_tx, w, h, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
 
-        Vulkan::Image2D color_attachments[4] = {};
+        Image2D color_attachments[4] = {};
         color_attachments[0] = *final_tx;
         color_attachments[1] = *albedo_tx;
         color_attachments[2] = *position_tx;
@@ -1242,13 +1242,13 @@ make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
         *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, &g_uniform_pool, gpu);
 
         Image_Handle final_tx_hdl = g_image_manager.get_handle("image2D.fbo_final"_hash);
-        Vulkan::Image2D *final_tx = g_image_manager.get(final_tx_hdl);
+        Image2D *final_tx = g_image_manager.get(final_tx_hdl);
         
         Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
-        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        Image2D *position_tx = g_image_manager.get(position_tx_hdl);
         
         Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
-        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+        Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
         
         update_uniform_group(gpu, gbuffer_group_ptr,
                              Update_Binding{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
@@ -1260,13 +1260,13 @@ make_dfr_rendering_data(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain)
     auto *gbuffer_input_group_ptr = g_uniform_group_manager.get(g_dfr_rendering.dfr_subpass_group);
     {
         Image_Handle albedo_tx_hdl = g_image_manager.get_handle("image2D.fbo_albedo"_hash);
-        Vulkan::Image2D *albedo_tx = g_image_manager.get(albedo_tx_hdl);
+        Image2D *albedo_tx = g_image_manager.get(albedo_tx_hdl);
         
         Image_Handle position_tx_hdl = g_image_manager.get_handle("image2D.fbo_position"_hash);
-        Vulkan::Image2D *position_tx = g_image_manager.get(position_tx_hdl);
+        Image2D *position_tx = g_image_manager.get(position_tx_hdl);
         
         Image_Handle normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
-        Vulkan::Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
+        Image2D *normal_tx = g_image_manager.get(normal_tx_hdl);
 
         *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, &g_uniform_pool, gpu);
         update_uniform_group(gpu, gbuffer_input_group_ptr,
@@ -1297,10 +1297,10 @@ begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
     queue->begin_render_pass(g_lighting.shadows.pass
                              , g_lighting.shadows.fbo
                              , VK_SUBPASS_CONTENTS_INLINE
-                             , Vulkan::init_clear_color_depth(1.0f, 0));
+                             , init_clear_color_depth(1.0f, 0));
     
     VkViewport viewport = {};
-    Vulkan::init_viewport(0, 0, shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
+    init_viewport(0, 0, shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
     vkCmdSetViewport(queue->q, 0, 1, &viewport);
 
     vkCmdSetDepthBias(queue->q, 1.25f, 0.0f, 1.75f);
@@ -1311,7 +1311,7 @@ begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
 void
 end_shadow_offscreen(GPU_Command_Queue *queue)
 {
-    Vulkan::command_buffer_end_render_pass(&queue->q);
+    command_buffer_end_render_pass(&queue->q);
 }
 
 void
@@ -1322,14 +1322,14 @@ begin_deferred_rendering(u32 image_index /* To remove in the future */
                              , g_dfr_rendering.dfr_framebuffer
                              , VK_SUBPASS_CONTENTS_INLINE
                              // Clear values hre
-                             , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-                             , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-                             , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-                             , Vulkan::init_clear_color_color(0, 0.4, 0.7, 0)
-                             , Vulkan::init_clear_color_depth(1.0f, 0));
+                             , init_clear_color_color(0, 0.4, 0.7, 0)
+                             , init_clear_color_color(0, 0.4, 0.7, 0)
+                             , init_clear_color_color(0, 0.4, 0.7, 0)
+                             , init_clear_color_color(0, 0.4, 0.7, 0)
+                             , init_clear_color_depth(1.0f, 0));
 
-    Vulkan::command_buffer_set_viewport(g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 0.0f, 1.0f, &queue->q);
-    Vulkan::command_buffer_set_line_width(2.0f, &queue->q);
+    command_buffer_set_viewport(g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 0.0f, 1.0f, &queue->q);
+    command_buffer_set_line_width(2.0f, &queue->q);
 
     // User renders what is needed ...
 }    
@@ -1342,14 +1342,14 @@ end_deferred_rendering(const glm::mat4 &view_matrix // In future, change this to
 
     auto *dfr_lighting_ppln = g_pipeline_manager.get(g_dfr_rendering.dfr_lighting_ppln);
 
-    Vulkan::command_buffer_bind_pipeline(dfr_lighting_ppln
+    command_buffer_bind_pipeline(dfr_lighting_ppln
 					 , &queue->q);
 
     auto *dfr_subpass_group = g_uniform_group_manager.get(g_dfr_rendering.dfr_subpass_group);
     
     VkDescriptorSet deferred_sets[] = {*dfr_subpass_group};
     
-    Vulkan::command_buffer_bind_descriptor_sets(dfr_lighting_ppln
+    command_buffer_bind_descriptor_sets(dfr_lighting_ppln
 						, {1, deferred_sets}
 						, &queue->q);
     
@@ -1362,14 +1362,14 @@ end_deferred_rendering(const glm::mat4 &view_matrix // In future, change this to
     deferred_push_k.light_position = glm::vec4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
     deferred_push_k.view_matrix = view_matrix;
     
-    Vulkan::command_buffer_push_constant(&deferred_push_k
+    command_buffer_push_constant(&deferred_push_k
 					 , sizeof(deferred_push_k)
 					 , 0
 					 , VK_SHADER_STAGE_FRAGMENT_BIT
 					 , dfr_lighting_ppln
 					 , &queue->q);
     
-    Vulkan::command_buffer_draw(&queue->q
+    command_buffer_draw(&queue->q
                                 , 4, 1, 0, 0);
 
     queue->end_render_pass();
@@ -1392,8 +1392,8 @@ struct Post_Processing
 } g_postfx;
 
 void
-make_postfx_data(Vulkan::GPU *gpu
-                 , Vulkan::Swapchain *swapchain)
+make_postfx_data(GPU *gpu
+                 , Swapchain *swapchain)
 {
     g_postfx.pfx_single_tx_layout = g_uniform_layout_manager.add("uniform_layout.pfx_single_tx_output"_hash);
     auto *single_tx_layout_ptr = g_uniform_layout_manager.get(g_postfx.pfx_single_tx_layout);
@@ -1432,7 +1432,7 @@ make_postfx_data(Vulkan::GPU *gpu
             allocate_memory_buffer(final_fbo[i].color_attachments, 1);
             final_fbo[i].color_attachments[0] = swapchain->views[i];
             final_fbo[i].depth_attachment = VK_NULL_HANDLE;
-            Vulkan::init_framebuffer(pfx_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, gpu, &final_fbo[i]);
+            init_framebuffer(pfx_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, gpu, &final_fbo[i]);
         }
     }
 
@@ -1492,24 +1492,24 @@ apply_pfx_on_scene(GPU_Command_Queue *queue
                    , Uniform_Group *transforms_group
                    , const glm::mat4 &view_matrix
                    , const glm::mat4 &projection_matrix
-                   , Vulkan::GPU *gpu)
+                   , GPU *gpu)
 {
     queue->begin_render_pass(g_postfx.pfx_render_pass
                              , g_postfx.ssr_stage.fbo
                              , VK_SUBPASS_CONTENTS_INLINE
-                             , Vulkan::init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
+                             , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
     VkViewport v = {};
-    Vulkan::init_viewport(0, 0, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 0.0f, 1.0f, &v);
-    Vulkan::command_buffer_set_viewport(&v, &queue->q);
+    init_viewport(0, 0, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 0.0f, 1.0f, &v);
+    command_buffer_set_viewport(&v, &queue->q);
     {
         auto *pfx_ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_stage.ppln);
-        Vulkan::command_buffer_bind_pipeline(pfx_ssr_ppln, &queue->q);
+        command_buffer_bind_pipeline(pfx_ssr_ppln, &queue->q);
 
         auto *g_buffer_group = g_uniform_group_manager.get(g_dfr_rendering.dfr_g_buffer_group);
         auto *atmosphere_group = g_uniform_group_manager.get(g_atmosphere.cubemap_uniform_group);
         
         Uniform_Group groups[] = { *g_buffer_group, *atmosphere_group, *transforms_group };
-        Vulkan::command_buffer_bind_descriptor_sets(pfx_ssr_ppln, {3, groups}, &queue->q);
+        command_buffer_bind_descriptor_sets(pfx_ssr_ppln, {3, groups}, &queue->q);
 
         struct SSR_Lighting_Push_K
         {
@@ -1522,20 +1522,20 @@ apply_pfx_on_scene(GPU_Command_Queue *queue
         ssr_pk.view = view_matrix;
         ssr_pk.proj = projection_matrix;
         ssr_pk.proj[1][1] *= -1.0f;
-        Vulkan::command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln, &queue->q);
+        command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln, &queue->q);
 
-        Vulkan::command_buffer_draw(&queue->q, 4, 1, 0, 0);
+        command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
 }
 
 void
-render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain *swapchain)
+render_final_output(u32 image_index, GPU_Command_Queue *queue, Swapchain *swapchain)
 {
     queue->begin_render_pass(g_postfx.pfx_render_pass
                              , g_postfx.final_stage.fbo + image_index
                              , VK_SUBPASS_CONTENTS_INLINE
-                             , Vulkan::init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
+                             , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
 
     f32 backbuffer_asp = (f32)g_dfr_rendering.backbuffer_res.width / (f32)g_dfr_rendering.backbuffer_res.height;
     f32 swapchain_asp = (f32)swapchain->extent.width / (f32)swapchain->extent.height;
@@ -1559,17 +1559,17 @@ render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain
     }
     
     VkViewport v = {};
-    Vulkan::init_viewport(rect2Dx, rect2Dy, rect2D_width, rect2D_height, 0.0f, 1.0f, &v);
-    Vulkan::command_buffer_set_viewport(&v, &queue->q);
+    init_viewport(rect2Dx, rect2Dy, rect2D_width, rect2D_height, 0.0f, 1.0f, &v);
+    command_buffer_set_viewport(&v, &queue->q);
     {
         auto *pfx_final_ppln = g_pipeline_manager.get(g_postfx.final_stage.ppln);
-        Vulkan::command_buffer_bind_pipeline(pfx_final_ppln, &queue->q);
+        command_buffer_bind_pipeline(pfx_final_ppln, &queue->q);
 
-        auto rect2D = Vulkan::make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
-        Vulkan::command_buffer_set_rect2D(&rect2D, &queue->q);
+        auto rect2D = make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
+        command_buffer_set_rect2D(&rect2D, &queue->q);
         
         Uniform_Group groups[] = { *g_uniform_group_manager.get(g_postfx.ssr_stage.output_group) };
-        Vulkan::command_buffer_bind_descriptor_sets(pfx_final_ppln, {1, groups}, &queue->q);
+        command_buffer_bind_descriptor_sets(pfx_final_ppln, {1, groups}, &queue->q);
 
         struct SSR_Lighting_Push_K
         {
@@ -1577,16 +1577,16 @@ render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain
         } pk;
 
         pk.debug = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-        Vulkan::command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln, &queue->q);
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln, &queue->q);
 
-        Vulkan::command_buffer_draw(&queue->q, 4, 1, 0, 0);
+        command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
 }
 
 internal void
-make_cube_model(Vulkan::GPU *gpu,
-                Vulkan::Swapchain *swapchain,
+make_cube_model(GPU *gpu,
+                Swapchain *swapchain,
                 GPU_Command_Queue_Pool *pool)
 {
     Model_Handle cube_model_hdl = g_model_manager.add("model.cube_model"_hash);
@@ -1595,12 +1595,12 @@ make_cube_model(Vulkan::GPU *gpu,
         cube_model_ptr->attribute_count = 3;
 	cube_model_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
 	cube_model_ptr->binding_count = 1;
-	cube_model_ptr->bindings = (Vulkan::Model_Binding *)allocate_free_list(sizeof(Vulkan::Model_Binding));
+	cube_model_ptr->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding));
 
 	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
 	
 	// only one binding
-	Vulkan::Model_Binding *binding = cube_model_ptr->bindings;
+	Model_Binding *binding = cube_model_ptr->bindings;
 	binding->begin_attributes_creation(cube_model_ptr->attributes_buffer);
 
 	binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(Vertex::pos));
@@ -1636,7 +1636,7 @@ make_cube_model(Vulkan::GPU *gpu,
 	    
         Memory_Byte_Buffer byte_buffer{sizeof(vertices), vertices};
 	
-        Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+        invoke_staging_buffer_for_device_local_buffer(byte_buffer
                                                               , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
                                                               , pool
                                                               , vbo
@@ -1676,7 +1676,7 @@ make_cube_model(Vulkan::GPU *gpu,
 
 	Memory_Byte_Buffer byte_buffer{sizeof(mesh_indices), mesh_indices};
 	    
-	Vulkan::invoke_staging_buffer_for_device_local_buffer(byte_buffer
+	invoke_staging_buffer_for_device_local_buffer(byte_buffer
 							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							      , pool
 							      , ibo
@@ -1687,8 +1687,8 @@ make_cube_model(Vulkan::GPU *gpu,
 }
 
 void
-initialize_game_3D_graphics(Vulkan::GPU *gpu,
-                            Vulkan::Swapchain *swapchain,
+initialize_game_3D_graphics(GPU *gpu,
+                            Swapchain *swapchain,
                             GPU_Command_Queue_Pool *pool)
 {
     g_dfr_rendering.backbuffer_res = {1280, 900};
@@ -1705,15 +1705,15 @@ initialize_game_3D_graphics(Vulkan::GPU *gpu,
 
 
 void
-initialize_game_2D_graphics(Vulkan::GPU *gpu,
-                            Vulkan::Swapchain *swapchain,
+initialize_game_2D_graphics(GPU *gpu,
+                            Swapchain *swapchain,
                             GPU_Command_Queue_Pool *pool)
 {
     make_postfx_data(gpu, swapchain);
 }
 
 void
-destroy_graphics(Vulkan::GPU *gpu)
+destroy_graphics(GPU *gpu)
 {
     vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }

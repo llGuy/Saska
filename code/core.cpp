@@ -1,3 +1,24 @@
+/*   
+
+     TODO
+     * Get basic UI working (rendering quads, making sure resizing of window doens't completely distort it, etc...)
+        - Create the render pass for rendering UI
+        - Create VBO for rendering UI boxes
+        - Create shader for rendering UI boxes (maybe just use the font rendering one for now) - delete code for fonts, and just use it for rendering ui boxes
+        - Create CPU side buffer for all the vertices that will get sent to the GPU
+        - Start writing update_ui() function
+            - Start with updating GPU side buffer with the vertices with vkCmdUpdateBuffer (secondary queue)
+            - Render UI Boxes from there into secondary queue
+        - Once finished with update_ui, make sure that scaling works
+        - Create UI Box parent system
+        - Find way to integrate Font rendering (possibly bound to UI Boxes? - even invisible ones)
+     * Get font rendering working, displaying textured images (quads) on the screen
+     * Get started working on the in-game console to make gameplay development quicker and easier
+     * Start getting the gameplay moving (add better physics, sliding through different terrains, etc...)
+     * Add skeletal animation (loading models + animations, etc...)
+
+*/
+
 #define GLFW_INCLUDE_VULKAN
 
 #include <GLFW/glfw3.h>
@@ -5,7 +26,7 @@
 
 #if defined(UNITY_BUILD)
 #include "memory.cpp"
-#include "ui.hpp"
+#include "ui.cpp"
 #include "game.cpp"
 #include "world.cpp"
 #include "script.cpp"
@@ -182,9 +203,9 @@ main(s32 argc
     glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
     glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
 
-    Vulkan::State vk = {};
+    Vulkan_State vk = {};
 
-    Vulkan::init_state(&vk, window.window);
+    init_vulkan_state(&vk, window.window);
 
 
     make_game(&vk
@@ -237,10 +258,10 @@ main(s32 argc
 
     // destroy rnd and vk
     vkDeviceWaitIdle(vk.gpu.logical_device);
-    Vulkan::destroy_swapchain(&vk);
+    destroy_swapchain(&vk);
     destroy_game(&vk.gpu);
 	
-    Vulkan::destroy_state(&vk);
+    destroy_vulkan_state(&vk);
 	
     glfwDestroyWindow(window.window);
     glfwTerminate();

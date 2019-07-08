@@ -8,12 +8,12 @@
 
 void
 initialize_world(Window_Data *window
-	   , Vulkan::State *vk
+	   , Vulkan_State *vk
 	   , VkCommandPool *cmdpool);
 
 void
 update_world(Window_Data *window
-	     , Vulkan::State *vk
+	     , Vulkan_State *vk
 	     , f32 dt
 	     , u32 image_index
 	     , u32 current_frame
@@ -22,7 +22,7 @@ update_world(Window_Data *window
 void
 handle_input_debug(Window_Data *win
                    , f32 dt
-                   , Vulkan::GPU *gpu);
+                   , GPU *gpu);
 
 void
-destroy_world(Vulkan::GPU *gpu);
+destroy_world(GPU *gpu);

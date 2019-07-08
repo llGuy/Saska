@@ -3,4 +3,4 @@
 #include "vulkan.hpp"
 
 void
-initialize_ui(Vulkan::GPU *gpu, Vulkan::Swapchain *swapchain);
+initialize_ui(GPU *gpu, Swapchain *swapchain);

@@ -5,16 +5,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-using Handle = s32;
-using GPU_Buffer_Handle = Handle;
-using Image_Handle = Handle;
-using Framebuffer_Handle = Handle;
-using Render_Pass_Handle = Handle;
-using Pipeline_Handle = Handle;
-using Model_Handle = Handle;
-
 enum {INVALID_HANDLE = -1};
 
+typedef s32 Handle;
 template <typename T, u32 Max = 40> struct Object_Manager
 {
     using Type = T;
@@ -56,7 +49,7 @@ template <typename T, u32 Max = 40> struct Object_Manager
     }
 
     void
-    clean_up(Vulkan::GPU *gpu)
+    clean_up(GPU *gpu)
     {
 	for (u32 i = 0; i < count; ++i)
 	{
@@ -65,25 +58,25 @@ template <typename T, u32 Max = 40> struct Object_Manager
     }
 };
 
-using GPU_Buffer_Manager = Object_Manager<Vulkan::Buffer>;
-using Image_Manager = Object_Manager<Vulkan::Image2D>;
-using Framebuffer_Manager = Object_Manager<Vulkan::Framebuffer>;
-using Render_Pass_Manager = Object_Manager<Vulkan::Render_Pass>;
-using Pipeline_Manager = Object_Manager<Vulkan::Graphics_Pipeline>;
-using Model_Manager = Object_Manager<Vulkan::Model>;
-// For now, defined descriptor manager structs here:
-
-// Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
-using Uniform_Pool = VkDescriptorPool;
-using Uniform_Group = VkDescriptorSet;
-using Uniform_Layout = VkDescriptorSetLayout;
-
-using Uniform_Layout_Manager = Object_Manager<Uniform_Layout>;
-using Uniform_Group_Manager = Object_Manager<Uniform_Group>;
-
-using Resolution = VkExtent2D;
-using Rect2D = VkRect2D;
-
+typedef Handle GPU_Buffer_Handle;
+typedef Handle Image_Handle;
+typedef Handle Framebuffer_Handle;
+typedef Handle Render_Pass_Handle;
+typedef Handle Pipeline_Handle;
+typedef Handle Model_Handle;
+typedef Object_Manager<GPU_Buffer> GPU_Buffer_Manager;
+typedef Object_Manager<Image2D> Image_Manager;
+typedef Object_Manager<Framebuffer> Framebuffer_Manager;
+typedef Object_Manager<Render_Pass> Render_Pass_Manager;
+typedef Object_Manager<Graphics_Pipeline> Pipeline_Manager;
+typedef Object_Manager<Model> Model_Manager;
+typedef VkDescriptorPool Uniform_Pool;
+typedef VkDescriptorSet Uniform_Group;
+typedef VkDescriptorSetLayout Uniform_Layout;
+typedef VkExtent2D Resolution;
+typedef VkRect2D Rect2D;
+typedef Object_Manager<Uniform_Layout> Uniform_Layout_Manager;
+typedef Object_Manager<Uniform_Group> Uniform_Group_Manager;
 extern GPU_Buffer_Manager g_gpu_buffer_manager;
 extern Image_Manager g_image_manager;
 extern Framebuffer_Manager g_framebuffer_manager;
@@ -93,12 +86,6 @@ extern Uniform_Layout_Manager g_uniform_layout_manager;
 extern Uniform_Group_Manager g_uniform_group_manager;
 extern Model_Manager g_model_manager;
 extern Uniform_Pool g_uniform_pool;
-
-
-
-// Later when maybe introducing new APIs, might be something different
-// Clearer name for people reading code
-//using GPU_Command_Queue = VkCommandBuffer;
 
 struct GPU_Command_Queue
 {
@@ -116,10 +103,11 @@ struct GPU_Command_Queue
         fbo_handle = INVALID_HANDLE;
     }
 
-    template <typename ...Clears> void begin_render_pass(Render_Pass_Handle pass
-                                                         , Framebuffer_Handle fbo
-                                                         , VkSubpassContents contents
-                                                         , const Clears &...clear_values)
+    template <typename ...Clears> void
+    begin_render_pass(Render_Pass_Handle pass
+                      , Framebuffer_Handle fbo
+                      , VkSubpassContents contents
+                      , const Clears &...clear_values)
     {
         subpass = 0;
 
@@ -129,8 +117,8 @@ struct GPU_Command_Queue
         VkClearValue clears[] = {clear_values...};
 
         auto *fbo_object = g_framebuffer_manager.get(fbo);
-        Vulkan::command_buffer_begin_render_pass(g_render_pass_manager.get(pass), fbo_object
-                                                 , Vulkan::init_render_area({0, 0}, fbo_object->extent)
+        command_buffer_begin_render_pass(g_render_pass_manager.get(pass), fbo_object
+                                                 , init_render_area({0, 0}, fbo_object->extent)
                                                  , {sizeof...(clear_values), clears}
                                                  , contents
                                                  , &q);
@@ -139,7 +127,7 @@ struct GPU_Command_Queue
     void
     next_subpass(VkSubpassContents contents)
     {
-        Vulkan::command_buffer_next_subpass(&q, contents);
+        command_buffer_next_subpass(&q, contents);
 
         ++subpass;
     }
@@ -147,23 +135,22 @@ struct GPU_Command_Queue
     void
     end_render_pass()
     {
-        Vulkan::command_buffer_end_render_pass(&q);
+        command_buffer_end_render_pass(&q);
         invalidate();
     }
 };
 
-using GPU_Command_Queue_Pool = VkCommandPool;
-// Submit level of a Material Submission Queue Manager which will either submit to a secondary queue or directly into the main queue
-using Submit_Level = VkCommandBufferLevel;
+typedef VkCommandPool GPU_Command_Queue_Pool;
+typedef VkCommandBufferLevel Submit_Level;
 
 GPU_Command_Queue
-make_command_queue(VkCommandPool *pool, Submit_Level level, Vulkan::GPU *gpu);
+make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu);
 
 void
-begin_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu);
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu);
     
 void
-end_command_queue(GPU_Command_Queue *queue, Vulkan::GPU *gpu);
+end_command_queue(GPU_Command_Queue *queue, GPU *gpu);
 
 // --------------------- Uniform stuff ---------------------
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
@@ -196,12 +183,12 @@ struct Uniform_Layout_Info // --> VkDescriptorSetLayout
 
 
 Uniform_Layout
-make_uniform_layout(Uniform_Layout_Info *blueprint, Vulkan::GPU *gpu);
+make_uniform_layout(Uniform_Layout_Info *blueprint, GPU *gpu);
 
 
 
 Uniform_Group
-make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, Vulkan::GPU *gpu);
+make_uniform_group(Uniform_Layout *layout, VkDescriptorPool *pool, GPU *gpu);
 
 enum Binding_Type { BUFFER, INPUT_ATTACHMENT, TEXTURE };
 struct Update_Binding
@@ -217,7 +204,7 @@ struct Update_Binding
 
 // Template function, need to define here
 template <typename ...Update_Ts> void
-update_uniform_group(Vulkan::GPU *gpu, Uniform_Group *group, const Update_Ts &...updates)
+update_uniform_group(GPU *gpu, Uniform_Group *group, const Update_Ts &...updates)
 {
     Update_Binding bindings[] = { updates... };
 
@@ -234,40 +221,36 @@ update_uniform_group(Vulkan::GPU *gpu, Uniform_Group *group, const Update_Ts &..
         {
         case Binding_Type::BUFFER:
             {
-                Vulkan::Buffer *ubo = (Vulkan::Buffer *)bindings[i].object;
+                GPU_Buffer *ubo = (GPU_Buffer *)bindings[i].object;
                 buffer_info_buffer[buffer_info_count] = ubo->make_descriptor_info(bindings[i].t_changing_data);
-                Vulkan::init_buffer_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &buffer_info_buffer[buffer_info_count], &writes[i]);
+                init_buffer_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &buffer_info_buffer[buffer_info_count], &writes[i]);
                 ++buffer_info_count;
                 break;
             }
         case Binding_Type::TEXTURE:
             {
-                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                Image2D *tx = (Image2D *)bindings[i].object;
                 image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
-                Vulkan::init_image_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                init_image_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
                 ++image_info_count;
                 break;
             }
         case Binding_Type::INPUT_ATTACHMENT:
             {
-                Vulkan::Image2D *tx = (Vulkan::Image2D *)bindings[i].object;
+                Image2D *tx = (Image2D *)bindings[i].object;
                 image_info_buffer[image_info_count] = tx->make_descriptor_info((VkImageLayout)bindings[i].t_changing_data);
-                Vulkan::init_input_attachment_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
+                init_input_attachment_descriptor_set_write(group, bindings[i].binding, bindings[i].dst_element, bindings[i].count, &image_info_buffer[image_info_count], &writes[i]);
                 ++image_info_count;
                 break;
             }
         }
     }
 
-    Vulkan::update_descriptor_sets({sizeof...(updates), writes}, gpu);
+    update_descriptor_sets({sizeof...(updates), writes}, gpu);
 }
 
 using Uniform_Layout_Handle = Handle;
 using Uniform_Group_Handle = Handle;
-
-
-
-
 
 // --------------------- Rendering stuff ---------------------
 // Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render
@@ -281,8 +264,8 @@ struct Material
     // ---- for sorting
     u32 model_id;
     // ---- ibo information
-    Vulkan::Model_Index_Data index_data;
-    Vulkan::Draw_Indexed_Data draw_index_data;
+    Model_Index_Data index_data;
+    Draw_Indexed_Data draw_index_data;
 };
 
 // Queue of materials to be submitted
@@ -299,15 +282,15 @@ struct GPU_Material_Submission_Queue
     u32
     push_material(void *push_k_ptr, u32 push_k_size
 		  , const Memory_Buffer_View<VkBuffer> &vbo_bindings
-		  , const Vulkan::Model_Index_Data &index_data
-		  , const Vulkan::Draw_Indexed_Data &draw_index_data);
+		  , const Model_Index_Data &index_data
+		  , const Draw_Indexed_Data &draw_index_data);
 
     GPU_Command_Queue *
     get_command_buffer(GPU_Command_Queue *queue = nullptr);
     
     void
     submit_queued_materials(const Memory_Buffer_View<Uniform_Group> &uniform_groups
-			    , Vulkan::Graphics_Pipeline *graphics_pipeline
+			    , Graphics_Pipeline *graphics_pipeline
 			    , GPU_Command_Queue *main_queue
 			    , Submit_Level level);
 	
@@ -320,22 +303,22 @@ struct GPU_Material_Submission_Queue
 
 GPU_Material_Submission_Queue
 make_gpu_material_submission_queue(u32 max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
-				   , Submit_Level level, GPU_Command_Queue_Pool *pool, Vulkan::GPU *gpu);
+				   , Submit_Level level, GPU_Command_Queue_Pool *pool, GPU *gpu);
 
 void
 submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);
 
 void
-make_texture(Vulkan::Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, Vulkan::GPU *gpu);
+make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu);
 
 void
-make_framebuffer(Vulkan::Framebuffer *fbo
+make_framebuffer(Framebuffer *fbo
                  , u32 w, u32 h
                  , u32 layer_count
-                 , Vulkan::Render_Pass *compatible
-                 , const Memory_Buffer_View<Vulkan::Image2D> &colors
-                 , Vulkan::Image2D *depth
-                 , Vulkan::GPU *gpu);
+                 , Render_Pass *compatible
+                 , const Memory_Buffer_View<Image2D> &colors
+                 , Image2D *depth
+                 , GPU *gpu);
 
 struct Render_Pass_Attachment
 {
@@ -412,11 +395,11 @@ make_render_pass_dependency(s32 src_index,
                             u32 dst_access);
 
 void
-make_render_pass(Vulkan::Render_Pass *render_pass
+make_render_pass(Render_Pass *render_pass
                  , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
                  , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
                  , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
-                 , Vulkan::GPU *gpu);
+                 , GPU *gpu);
 
 struct Shader_Module_Info
 {
@@ -485,7 +468,7 @@ struct Dynamic_States
 };
 
 void
-make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
+make_graphics_pipeline(Graphics_Pipeline *ppln
                        , const Shader_Modules &modules
                        , bool primitive_restart, VkPrimitiveTopology topology
                        , VkPolygonMode polygonmode, VkCullModeFlags culling
@@ -493,17 +476,17 @@ make_graphics_pipeline(Vulkan::Graphics_Pipeline *ppln
                        , const Shader_PK_Data &pk
                        , VkExtent2D viewport
                        , const Shader_Blend_States &blends
-                       , Vulkan::Model *model
+                       , Model *model
                        , bool enable_depth
                        , f32 depth_bias
                        , const Dynamic_States &dynamic_states
-                       , Vulkan::Render_Pass *compatible
+                       , Render_Pass *compatible
                        , u32 subpass
-                       , Vulkan::GPU *gpu);
+                       , GPU *gpu);
 
 void
-load_external_graphics_data(Vulkan::Swapchain *swapchain
-                            , Vulkan::GPU *gpu
+load_external_graphics_data(Swapchain *swapchain
+                            , GPU *gpu
                             , VkDescriptorPool *pool
                             , VkCommandPool *cmdpool);
 
@@ -565,7 +548,7 @@ get_camera_bound_to_3D_output(void);
 void
 bind_camera_to_3D_scene_output(Camera_Handle handle);
 
-Memory_Buffer_View<Vulkan::Buffer>
+Memory_Buffer_View<GPU_Buffer>
 get_camera_transform_ubos(void);
 
 Memory_Buffer_View<Uniform_Group>
@@ -590,7 +573,7 @@ make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
                                    const glm::vec4 &debug_vector);
 
 void
-update_3D_output_camera_transforms(u32 image_index, Vulkan::GPU *gpu);
+update_3D_output_camera_transforms(u32 image_index, GPU *gpu);
 
 struct Shadow_Matrices
 {
@@ -657,35 +640,35 @@ end_deferred_rendering(const glm::mat4 &view_matrix
 void
 render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
                   , const glm::vec3 &camera_position // To change to camera structure
-                  , Vulkan::Model *cube
+                  , Model *cube
                   , GPU_Command_Queue *queue);
 
 void
 update_atmosphere(GPU_Command_Queue *queue);
 
 void
-make_postfx_data(Vulkan::GPU *gpu
-                 , Vulkan::Swapchain *swapchain);
+make_postfx_data(GPU *gpu
+                 , Swapchain *swapchain);
 
 void
 apply_pfx_on_scene(GPU_Command_Queue *queue
                    , Uniform_Group *transforms_group
                    , const glm::mat4 &view_matrix
                    , const glm::mat4 &projection_matrix
-                   , Vulkan::GPU *gpu);
+                   , GPU *gpu);
 
 void
-render_final_output(u32 image_index, GPU_Command_Queue *queue, Vulkan::Swapchain *swapchain);
+render_final_output(u32 image_index, GPU_Command_Queue *queue, Swapchain *swapchain);
 
 void
-initialize_game_3D_graphics(Vulkan::GPU *gpu,
-                            Vulkan::Swapchain *swapchain,
+initialize_game_3D_graphics(GPU *gpu,
+                            Swapchain *swapchain,
                             GPU_Command_Queue_Pool *pool);
 
 void
-initialize_game_2D_graphics(Vulkan::GPU *gpu,
-                            Vulkan::Swapchain *swapchain,
+initialize_game_2D_graphics(GPU *gpu,
+                            Swapchain *swapchain,
                             GPU_Command_Queue_Pool *pool);
 
 void
-destroy_graphics(Vulkan::GPU *gpu);
+destroy_graphics(GPU *gpu);

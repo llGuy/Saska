@@ -123,6 +123,9 @@ struct GPU_Buffer
     }
 };
 
+void
+update_gpu_buffer(GPU_Buffer *dst, void *data, u32 size, u32 offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue);
+
 struct Draw_Indexed_Data
 {
     u32 index_count;

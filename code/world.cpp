@@ -21,14 +21,14 @@ enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 // ---- terrain code ----
 struct Morphable_Terrain
 {
-    glm::ivec2 xz_dim;
+    iv2 xz_dim;
     // ---- up vector of the terrain ----
-    glm::vec3 ws_n;
+    v3 ws_n;
     f32 *heights;
 
-    glm::vec3 size;
-    glm::vec3 ws_p;
-    glm::quat gs_r;
+    v3 size;
+    v3 ws_p;
+    q4 gs_r;
 
     u32 offset_into_heights_gpu_buffer;
     // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
@@ -37,12 +37,12 @@ struct Morphable_Terrain
 
     VkBuffer vbos[2];
 
-    glm::mat4 inverse_transform;
+    m4x4 inverse_transform;
     
     struct Push_K
     {
-	glm::mat4 transform;
-	glm::vec3 color;
+	m4x4 transform;
+	v3 color;
     } push_k;
 };
 
@@ -51,8 +51,8 @@ struct Planet
     // planet has 6 faces
     Morphable_Terrain meshes[6];
 
-    glm::vec3 p;
-    glm::quat r;
+    v3 p;
+    q4 r;
 };
 
 global_var struct Morphable_Terrain_Master
@@ -77,7 +77,7 @@ global_var struct Morphable_Terrain_Master
     {
 	Pipeline_Handle ppln;
 	// ts_position
-	glm::ivec2 ts_position{-1};
+	iv2 ts_position{-1};
 	// will not be a pointer in the future
 	Morphable_Terrain *t;
     } terrain_pointer;
@@ -119,35 +119,35 @@ get_terrain_index(s32 x, s32 z, s32 width_x, s32 depth_z)
     }
 }
 
-inline glm::mat4
+inline m4x4
 compute_ws_to_ts_matrix(Morphable_Terrain *t)
 {
-    glm::mat4 inverse_translate = glm::translate(-(t->ws_p));
-    glm::mat4 inverse_rotate = glm::transpose(glm::mat4_cast(t->gs_r));
-    glm::mat4 inverse_scale = glm::scale(1.0f / t->size);
+    m4x4 inverse_translate = glm::translate(-(t->ws_p));
+    m4x4 inverse_rotate = glm::transpose(glm::mat4_cast(t->gs_r));
+    m4x4 inverse_scale = glm::scale(1.0f / t->size);
     return(inverse_scale * inverse_rotate * inverse_translate);
 }
 
-inline glm::mat4
+inline m4x4
 compute_ts_to_ws_matrix(Morphable_Terrain *t)
 {
-    glm::mat4 translate = glm::translate(t->ws_p);
-    glm::mat4 rotate = glm::mat4_cast(t->gs_r);
-    glm::mat4 scale = glm::scale(t->size);
+    m4x4 translate = glm::translate(t->ws_p);
+    m4x4 rotate = glm::mat4_cast(t->gs_r);
+    m4x4 scale = glm::scale(t->size);
     return(translate * rotate * scale);
 }
 
-inline glm::vec3
-transform_from_ws_to_ts(const glm::vec3 &ws_v
+inline v3
+transform_from_ws_to_ts(const v3 &ws_v
 			, Morphable_Terrain *t)
 {
-    glm::vec3 ts_position = t->inverse_transform * glm::vec4(ws_v, 1.0f);
+    v3 ts_position = t->inverse_transform * v4(ws_v, 1.0f);
 
     return(ts_position);
 }
 
 internal bool
-is_on_terrain(const glm::vec3 &ws_position
+is_on_terrain(const v3 &ws_position
 	      , Morphable_Terrain *t)
 {
     f32 max_x = (f32)(t->xz_dim.x);
@@ -156,7 +156,7 @@ is_on_terrain(const glm::vec3 &ws_position
     f32 min_z = 0.0f;
 
     // ---- change ws_position to the space of the terrain space ----
-    glm::vec3 ts_position = transform_from_ws_to_ts(ws_position, t);
+    v3 ts_position = transform_from_ws_to_ts(ws_position, t);
     
     // ---- check if terrain space position is in the xz boundaries ----
     bool is_in_x_boundaries = (ts_position.x > min_x && ts_position.x < max_x);
@@ -172,9 +172,9 @@ distance_squared(const T &v)
     return(glm::dot(v, v));
 }
 
-internal glm::ivec2
-get_coord_pointing_at(glm::vec3 ws_ray_p
-		      , const glm::vec3 &ws_ray_d
+internal iv2
+get_coord_pointing_at(v3 ws_ray_p
+		      , const v3 &ws_ray_d
 		      , Morphable_Terrain *t
 		      , f32 dt
 		      , GPU *gpu)
@@ -183,18 +183,18 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
     persist constexpr f32 STEP_SIZE = 0.3f;
 
-    glm::mat4 ws_to_ts = t->inverse_transform;
-    glm::vec3 ts_ray_p_start = glm::vec3(ws_to_ts * glm::vec4(ws_ray_p, 1.0f));
-    glm::vec3 ts_ray_d = glm::normalize(glm::vec3(ws_to_ts * glm::vec4(ws_ray_d, 0.0f)));
-    glm::vec3 ts_ray_diff = STEP_SIZE * ts_ray_d;
+    m4x4 ws_to_ts = t->inverse_transform;
+    v3 ts_ray_p_start = v3(ws_to_ts * v4(ws_ray_p, 1.0f));
+    v3 ts_ray_d = glm::normalize(v3(ws_to_ts * v4(ws_ray_d, 0.0f)));
+    v3 ts_ray_diff = STEP_SIZE * ts_ray_d;
 
-    glm::ivec2 ts_position = glm::ivec2(-1);
+    iv2 ts_position = iv2(-1);
     
-    for (glm::vec3 ts_ray_step = ts_ray_d
+    for (v3 ts_ray_step = ts_ray_d
 	     ; distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED
 	     ; ts_ray_step += ts_ray_diff)
     {
-	glm::vec3 ts_ray_current_p = ts_ray_step + ts_ray_p_start;
+	v3 ts_ray_current_p = ts_ray_step + ts_ray_p_start;
 
 	if (ts_ray_current_p.x >= 0.0f && ts_ray_current_p.x < (f32)t->xz_dim.x + 0.000001f
 	    && ts_ray_current_p.z >= 0.0f && ts_ray_current_p.z < (f32)t->xz_dim.y + 0.000001f)
@@ -208,7 +208,7 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 	    if (ts_ray_current_p.y < heights_ptr[index])
 	    {
 		// ---- hit terrain at this point ----
-		ts_position = glm::ivec2(x, z);
+		ts_position = iv2(x, z);
 		break;
 	    }
 	}
@@ -219,18 +219,18 @@ get_coord_pointing_at(glm::vec3 ws_ray_p
 
 struct Detected_Collision_Return
 {
-    bool detected; glm::vec3 ws_at;
+    bool detected; v3 ws_at;
 };
 
 internal Detected_Collision_Return
-detect_terrain_collision(const glm::vec3 &ws_p
+detect_terrain_collision(const v3 &ws_p
 			 , Morphable_Terrain *t)
 {
-    glm::mat4 ws_to_ts = t->inverse_transform;
+    m4x4 ws_to_ts = t->inverse_transform;
 
-    glm::vec3 ts_p = glm::vec3(ws_to_ts * glm::vec4(ws_p, 1.0f));
+    v3 ts_p = v3(ws_to_ts * v4(ws_p, 1.0f));
 
-    glm::vec2 ts_p_xz = glm::vec2(ts_p.x, ts_p.z);
+    v2 ts_p_xz = v2(ts_p.x, ts_p.z);
 
     // is outside the terrain
     if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
@@ -240,17 +240,17 @@ detect_terrain_collision(const glm::vec3 &ws_p
     }
 
     // position of the player on one tile (square - two triangles)
-    glm::vec2 ts_position_on_tile = glm::vec2(ts_p_xz.x - glm::floor(ts_p_xz.x)
+    v2 ts_position_on_tile = v2(ts_p_xz.x - glm::floor(ts_p_xz.x)
 					      , ts_p_xz.y - glm::floor(ts_p_xz.y));
 
     // starting from (0, 0)
-    glm::ivec2 ts_tile_corner_position = glm::ivec2(glm::floor(ts_p_xz));
+    iv2 ts_tile_corner_position = iv2(glm::floor(ts_p_xz));
 
 
     // wrong math probably
-    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const glm::vec2 &offset_a
-										     , const glm::vec2 &offset_b
-										     , const glm::vec2 &offset_c) -> f32
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const v2 &offset_a
+										     , const v2 &offset_b
+										     , const v2 &offset_c) -> f32
 	{
 	    f32 tl_x = ts_tile_corner_position.x;
 	    f32 tl_z = ts_tile_corner_position.y;
@@ -263,9 +263,9 @@ detect_terrain_collision(const glm::vec3 &ws_p
 	    };
 
 	    f32 *terrain_heights = (f32 *)t->mapped_gpu_heights.data;
-	    glm::vec3 a = glm::vec3(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
-	    glm::vec3 b = glm::vec3(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
-	    glm::vec3 c = glm::vec3(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
+	    v3 a = v3(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
+	    v3 b = v3(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
+	    v3 c = v3(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
 
 	    return(barry_centric(a, b, c, ts_position_on_tile));
 	};
@@ -278,30 +278,30 @@ detect_terrain_collision(const glm::vec3 &ws_p
 	{
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
-						   , glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 1.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 0.0f)
+						   , v2(0.0f, 1.0f)
+						   , v2(1.0f, 1.0f));
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
-						   , glm::vec2(1.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 0.0f)
+						   , v2(1.0f, 1.0f)
+						   , v2(1.0f, 0.0f));
 	    }
 	}
 	else
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 1.0f)
+						   , v2(1.0f, 1.0f)
+						   , v2(1.0f, 0.0f));
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f)
-						   , glm::vec2(0.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 1.0f)
+						   , v2(1.0f, 0.0f)
+						   , v2(0.0f, 0.0f));
 	    }
 	}
     }
@@ -311,40 +311,40 @@ detect_terrain_collision(const glm::vec3 &ws_p
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 1.0f)
+						   , v2(1.0f, 1.0f)
+						   , v2(1.0f, 0.0f));
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f)
-						   , glm::vec2(0.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 1.0f)
+						   , v2(1.0f, 0.0f)
+						   , v2(0.0f, 0.0f));
 	    }
 	}
 	else
 	{
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
-						   , glm::vec2(0.0f, 1.0f)
-						   , glm::vec2(1.0f, 1.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 0.0f)
+						   , v2(0.0f, 1.0f)
+						   , v2(1.0f, 1.0f));
 
 		
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(glm::vec2(0.0f, 0.0f)
-						   , glm::vec2(1.0f, 1.0f)
-						   , glm::vec2(1.0f, 0.0f));
+		ts_height = get_height_with_offset(v2(0.0f, 0.0f)
+						   , v2(1.0f, 1.0f)
+						   , v2(1.0f, 0.0f));
 	    }
 	}
     }
     
     // result of the terrain collision in terrain space
-    glm::vec3 ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
+    v3 ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
 
-    glm::vec3 ws_at = glm::vec3(compute_ts_to_ws_matrix(t) * glm::vec4(ts_at, 1.0f));
+    v3 ws_at = v3(compute_ts_to_ws_matrix(t) * v4(ts_at, 1.0f));
     
     if (ts_p.y < 0.00000001f + ts_height)
     {
@@ -355,7 +355,7 @@ detect_terrain_collision(const glm::vec3 &ws_p
 }
 
 internal void
-morph_terrain_at(const glm::ivec2 &ts_position
+morph_terrain_at(const iv2 &ts_position
 		 , Morphable_Terrain *t
 		 , f32 morph_zone_radius
 		 , f32 dt
@@ -366,7 +366,7 @@ morph_terrain_at(const glm::ivec2 &ts_position
     
     struct Morph_Point
     {
-	glm::ivec2 xz;
+	iv2 xz;
 	f32 quotient;
     } *morph_quotients_outer_cache = (Morph_Point *)allocate_linear(sizeof(Morph_Point) * morph_quotients_outer_count)
 	  , *morph_quotients_inner_cache = (Morph_Point *)allocate_linear(sizeof(Morph_Point) * morph_quotients_inner_count);
@@ -378,7 +378,7 @@ morph_terrain_at(const glm::ivec2 &ts_position
     {
 	for (s32 x = 0; x < morph_zone_radius; ++x)
 	{
-	    glm::vec2 f_coord = glm::vec2((f32)x, (f32)z);
+	    v2 f_coord = v2((f32)x, (f32)z);
 	    f32 squared_d = distance_squared(f_coord);
 	    if (squared_d >= morph_zone_radius * morph_zone_radius
 		&& abs(squared_d - morph_zone_radius * morph_zone_radius) < 0.000001f) // <---- maybe don't check if d is equal...
@@ -402,11 +402,11 @@ morph_terrain_at(const glm::ivec2 &ts_position
 
 	    if (x == 0 || z == 0)
 	    {
-		morph_quotients_inner_cache[morph_quotients_inner_count++] = Morph_Point{glm::ivec2(x, z), a};
+		morph_quotients_inner_cache[morph_quotients_inner_count++] = Morph_Point{iv2(x, z), a};
 	    }
 	    else
 	    {
-		morph_quotients_outer_cache[morph_quotients_outer_count++] = Morph_Point{glm::ivec2(x, z), a};
+		morph_quotients_outer_cache[morph_quotients_outer_count++] = Morph_Point{iv2(x, z), a};
 	    }
 	}
     }
@@ -433,7 +433,7 @@ morph_terrain_at(const glm::ivec2 &ts_position
     }
 
     // ---- do other 3/4 of the "outer" of the mound ----
-    glm::ivec2 mound_quarter_multipliers[] { glm::ivec2(+1, -1), glm::ivec2(-1, -1), glm::ivec2(-1, +1) };
+    iv2 mound_quarter_multipliers[] { iv2(+1, -1), iv2(-1, -1), iv2(-1, +1) };
     for (u32 m = 0; m < 3; ++m)
     {
 	for (u32 outer = 0; outer < morph_quotients_outer_count; ++outer)
@@ -459,7 +459,7 @@ morph_terrain_at(const glm::ivec2 &ts_position
 }
 
 internal Morphable_Terrain *
-on_which_terrain(const glm::vec3 &ws_position)
+on_which_terrain(const v3 &ws_position)
 {
     for (u32 i = 0; i < g_terrains.terrain_count; ++i)
     {
@@ -596,14 +596,14 @@ internal void
 make_terrain_mesh_data(u32 w, u32 d, Morphable_Terrain *terrain, VkCommandPool *cmdpool, GPU *gpu)
 {
     make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, &terrain->mapped_gpu_heights, cmdpool, gpu);
-    terrain->xz_dim = glm::ivec2(w, d);
+    terrain->xz_dim = iv2(w, d);
 }
 
 
 // TODO : Make this take roughness and metalness to push to pushconstant or whatever 
 internal void
 make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_Queue *queue
-                            , const glm::vec3 &position, const glm::quat &rotation, const glm::vec3 &size, const glm::vec3 &color)
+                            , const v3 &position, const q4 &rotation, const v3 &size, const v3 &color)
 {
     auto *model_info = g_model_manager.get(g_terrains.model_info);
     terrain->vbos[0] = g_terrains.mesh_xz_values.buffer;
@@ -624,7 +624,7 @@ make_terrain_rendering_data(Morphable_Terrain *terrain, GPU_Material_Submission_
         * glm::scale(terrain->size);
     terrain->inverse_transform = compute_ws_to_ts_matrix(terrain);
 
-    terrain->ws_n = glm::vec3(glm::mat4_cast(terrain->gs_r) * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f));
+    terrain->ws_n = v3(glm::mat4_cast(terrain->gs_r) * v4(0.0f, 1.0f, 0.0f, 0.0f));
 }
 
 
@@ -643,18 +643,18 @@ make_terrain_instances(GPU *gpu, VkCommandPool *cmdpool)
     auto *red_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, red_terrain, cmdpool, gpu);
     make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
-                                , glm::vec3(0.0f, 0.0f, 200.0f)
-                                , glm::quat(glm::radians(glm::vec3(30.0f, 20.0f, 0.0f)))
-                                , glm::vec3(15.0f)
-                                , glm::vec3(255.0f, 69.0f, 0.0f) / 256.0f);
+                                , v3(0.0f, 0.0f, 200.0f)
+                                , q4(glm::radians(v3(30.0f, 20.0f, 0.0f)))
+                                , v3(15.0f)
+                                , v3(255.0f, 69.0f, 0.0f) / 256.0f);
 
     auto *green_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, green_terrain, cmdpool, gpu);
     make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
-                                , glm::vec3(200.0f, 0.0f, 0.0f)
-                                , glm::quat(glm::radians(glm::vec3(0.0f, 45.0f, 20.0f)))
-                                , glm::vec3(10.0f)
-                                , glm::vec3(0.1, 0.6, 0.2) * 0.7f);
+                                , v3(200.0f, 0.0f, 0.0f)
+                                , q4(glm::radians(v3(0.0f, 45.0f, 20.0f)))
+                                , v3(10.0f)
+                                , v3(0.1, 0.6, 0.2) * 0.7f);
 }
 
 internal void
@@ -751,16 +751,16 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 
 	struct
 	{
-	    glm::mat4 ts_to_ws_terrain_model;
-	    glm::vec4 color;
-	    glm::vec4 ts_center_position;
+	    m4x4 ts_to_ws_terrain_model;
+	    v4 color;
+	    v4 ts_center_position;
 	    // center first
 	    f32 ts_heights[8];
 	} push_k;
 
 	push_k.ts_to_ws_terrain_model = g_terrains.terrain_pointer.t->push_k.transform;
-	push_k.color = glm::vec4(1.0f);
-	push_k.ts_center_position = glm::vec4((f32)g_terrains.terrain_pointer.ts_position.x
+	push_k.color = v4(1.0f);
+	push_k.ts_center_position = v4((f32)g_terrains.terrain_pointer.ts_position.x
 					      , 0.0f
 					      , (f32)g_terrains.terrain_pointer.ts_position.y
 					      , 1.0f);
@@ -815,7 +815,7 @@ struct Physics_Component
 {
     u32 entity_index;
     
-    glm::vec3 gravity_force_accumulation = {};
+    v3 gravity_force_accumulation = {};
 
     bool enabled;
     
@@ -833,7 +833,7 @@ struct Camera_Component
 
     // Variable allows for smooth animation between up vectors when switching terrains
     bool in_animation = false;
-    glm::quat current_rotation;
+    q4 current_rotation;
 };
 
 struct Input_Component
@@ -849,8 +849,8 @@ struct Rendering_Component
     struct
     {
 	// in world space
-	glm::mat4x4 ws_t{1.0f};
-	glm::vec4 color;
+	m4x4 ws_t{1.0f};
+	v4 color;
     } push_k;
 };
 
@@ -861,9 +861,9 @@ struct Entity
     Constant_String id {""_hash};
     // position, direction, velocity
     // in above entity group space
-    glm::vec3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
-    glm::quat ws_r{0.0f, 0.0f, 0.0f, 0.0f};
-    glm::vec3 size{1.0f};
+    v3 ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
+    q4 ws_r{0.0f, 0.0f, 0.0f, 0.0f};
+    v3 size{1.0f};
 
     // For now is a pointer - is not a component because all entities will have one
     // This is the last terrain that the player was on / is still on
@@ -874,8 +874,8 @@ struct Entity
     static constexpr f32 SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
     
     bool switch_terrain_animation_mode = false;
-    glm::quat previous_terrain_rot;
-    glm::quat current_rot;
+    q4 previous_terrain_rot;
+    q4 current_rot;
     f32 animation_time = 0.0f;
 
     struct Components
@@ -937,9 +937,9 @@ global_var struct Entities
 Entity
 construct_entity(const Constant_String &name
 		 //		 , Entity::Is_Group is_group
-		 , glm::vec3 gs_p
-		 , glm::vec3 ws_d
-		 , glm::quat gs_r)
+		 , v3 gs_p
+		 , v3 ws_d
+		 , q4 gs_r)
 {
     Entity e;
     //    e.is_group = is_group;
@@ -991,13 +991,13 @@ update_camera_components(f32 dt)
         Camera *camera = get_camera(component->camera);
         Entity *e = &g_entities.entity_list[ component->entity_index ];
 
-        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        v3 up = v3(0.0f, 1.0f, 0.0f);
         if (e->on_t)
         {
             up = e->on_t->ws_n;
             if (e->switch_terrain_animation_mode)
             {
-                up = glm::vec3(glm::mat4_cast(e->current_rot) * glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+                up = v3(glm::mat4_cast(e->current_rot) * v4(0.0f, 1.0f, 0.0f, 1.0f));
             }
         }
         
@@ -1075,7 +1075,7 @@ update_physics_components(f32 dt)
             {
                 // Switch terrains!
                 e->is_on_terrain = true;
-                glm::quat previous = glm::quat(glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+                q4 previous = q4(glm::radians(0.0f), v3(0.0f, 0.0f, 0.0f));
                 e->previous_terrain_rot = previous;
                 if (e->on_t)
                 {
@@ -1095,15 +1095,15 @@ update_physics_components(f32 dt)
         {
             Morphable_Terrain *t = e->on_t;
 
-            glm::vec3 gravity_d = -9.5f * t->ws_n;
+            v3 gravity_d = -9.5f * t->ws_n;
 
             Detected_Collision_Return ret = detect_terrain_collision(e->ws_p, e->on_t);
     
             if (ret.detected)
             {
                 // implement coefficient of restitution
-                e->ws_v = glm::vec3(0.0f);
-                gravity_d = glm::vec3(0.0f);
+                e->ws_v = v3(0.0f);
+                gravity_d = v3(0.0f);
                 e->ws_p = ret.ws_at;
             }
     
@@ -1155,7 +1155,7 @@ update_input_components(Window_Data *window
         Entity *e = &g_entities.entity_list[component->entity_index];
         Physics_Component *e_physics = &g_entities.physics_components[e->components.physics_component];
 
-        glm::vec3 up = e->on_t->ws_n;
+        v3 up = e->on_t->ws_n;
         
         // Mouse movement
         if (window->m_moved)
@@ -1163,28 +1163,28 @@ update_input_components(Window_Data *window
             // TODO: Make sensitivity configurable with a file or something, and later menu
             persist constexpr u32 SENSITIVITY = 15.0f;
     
-            glm::vec2 prev_mp = glm::vec2(window->prev_m_x, window->prev_m_y);
-            glm::vec2 curr_mp = glm::vec2(window->m_x, window->m_y);
+            v2 prev_mp = v2(window->prev_m_x, window->prev_m_y);
+            v2 curr_mp = v2(window->m_x, window->m_y);
 
-            glm::vec3 res = e->ws_d;
+            v3 res = e->ws_d;
 	    
-            glm::vec2 d = (curr_mp - prev_mp);
+            v2 d = (curr_mp - prev_mp);
 
             f32 x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
             f32 y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
-            res = glm::mat3(glm::rotate(x_angle, up)) * res;
-            glm::vec3 rotate_y = glm::cross(res, up);
-            res = glm::mat3(glm::rotate(y_angle, rotate_y)) * res;
+            res = m3x3(glm::rotate(x_angle, up)) * res;
+            v3 rotate_y = glm::cross(res, up);
+            res = m3x3(glm::rotate(y_angle, rotate_y)) * res;
 
             e->ws_d = res;
         }
 
         // Mouse input
-        glm::ivec2 ts_coord = get_coord_pointing_at(e->ws_p
-                                                    , e->ws_d
-                                                    , e->on_t
-                                                    , dt
-                                                    , gpu);
+        iv2 ts_coord = get_coord_pointing_at(e->ws_p
+                                             , e->ws_d
+                                             , e->on_t
+                                             , dt
+                                             , gpu);
         g_terrains.terrain_pointer.ts_position = ts_coord;
         g_terrains.terrain_pointer.t = e->on_t;
     
@@ -1201,27 +1201,27 @@ update_input_components(Window_Data *window
         u32 movements = 0;
         f32 accelerate = 1.0f;
     
-        auto acc_v = [&movements, &accelerate](const glm::vec3 &d, glm::vec3 &dst){ ++movements; dst += d * accelerate; };
+        auto acc_v = [&movements, &accelerate](const v3 &d, v3 &dst){ ++movements; dst += d * accelerate; };
 
-        glm::vec3 d = glm::normalize(glm::vec3(e->ws_d.x
+        v3 d = glm::normalize(v3(e->ws_d.x
                                                , e->ws_d.y
                                                , e->ws_d.z));
 
         Morphable_Terrain *t = e->on_t;
-        glm::mat4 inverse = t->inverse_transform;
+        m4x4 inverse = t->inverse_transform;
     
-        glm::vec3 ts_d = inverse * glm::vec4(d, 0.0f);
+        v3 ts_d = inverse * v4(d, 0.0f);
     
         ts_d.y = 0.0f;
 
-        d = glm::vec3(t->push_k.transform * glm::vec4(ts_d, 0.0f));
+        d = v3(t->push_k.transform * v4(ts_d, 0.0f));
         d = glm::normalize(d);
     
-        glm::vec3 res = {};
+        v3 res = {};
 
         bool detected_collision = detect_terrain_collision(e->ws_p, e->on_t).detected;
     
-        if (detected_collision) e->ws_v = glm::vec3(0.0f);
+        if (detected_collision) e->ws_v = v3(0.0f);
     
         //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
         if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
@@ -1257,7 +1257,7 @@ update_input_components(Window_Data *window
         }
         else
         {
-            e->ws_input_v = glm::vec3(0.0f);
+            e->ws_input_v = v3(0.0f);
         }
     }
 }
@@ -1363,9 +1363,9 @@ initialize_entities(GPU *gpu, Swapchain *swapchain, VkCommandPool *cmdpool, Wind
                                                                                  , gpu);
 
     Entity e = construct_entity("entity.bound_group_test0"_hash
-				, glm::vec3(50.0f, 10.0f, 280.0f)
-				, glm::normalize(glm::vec3(1.0f, 0.0f, 1.0f))
-				, glm::quat(0, 0, 0, 0));
+				, v3(50.0f, 10.0f, 280.0f)
+				, glm::normalize(v3(1.0f, 0.0f, 1.0f))
+				, q4(0, 0, 0, 0));
 
     Entity_Handle ev = add_entity(e);
     auto *e_ptr = get_entity(ev);
@@ -1381,11 +1381,11 @@ initialize_entities(GPU *gpu, Swapchain *swapchain, VkCommandPool *cmdpool, Wind
         
     // add rotating entity
     Entity r = construct_entity("entity.rotating"_hash
-				, glm::vec3(200.0f, -40.0f, 300.0f)
-				, glm::vec3(0.0f)
-				, glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+				, v3(200.0f, -40.0f, 300.0f)
+				, v3(0.0f)
+				, q4(glm::radians(45.0f), v3(0.0f, 1.0f, 0.0f)));
 
-    r.size = glm::vec3(10.0f);
+    r.size = v3(10.0f);
 
     Entity_Handle rv = add_entity(r);
     auto *r_ptr = get_entity(rv);
@@ -1395,25 +1395,25 @@ initialize_entities(GPU *gpu, Swapchain *swapchain, VkCommandPool *cmdpool, Wind
     Rendering_Component *r_ptr_rendering = add_rendering_component(r_ptr);
     add_physics_component(r_ptr, true);
     
-    r_ptr_rendering->push_k.color = glm::vec4(0.2f, 0.2f, 0.8f, 1.0f);
+    r_ptr_rendering->push_k.color = v4(0.2f, 0.2f, 0.8f, 1.0f);
     
     push_entity_to_queue(r_ptr
                          , g_model_manager.get_handle("model.cube_model"_hash)
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 
     Entity r2 = construct_entity("entity.rotating2"_hash
-				 , glm::vec3(250.0f, -40.0f, 350.0f)
-				 , glm::vec3(0.0f)
-				 , glm::quat(glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)));
+				 , v3(250.0f, -40.0f, 350.0f)
+				 , v3(0.0f)
+				 , q4(glm::radians(45.0f), v3(0.0f, 1.0f, 0.0f)));
 
-    r2.size = glm::vec3(10.0f);
+    r2.size = v3(10.0f);
     Entity_Handle rv2 = add_entity(r2);
     auto *r2_ptr = get_entity(rv2);
 
     Rendering_Component *r2_ptr_rendering = add_rendering_component(r2_ptr);
     add_physics_component(r2_ptr, false);
     
-    r2_ptr_rendering->push_k.color = glm::vec4(0.6f, 0.0f, 0.6f, 1.0f);
+    r2_ptr_rendering->push_k.color = v4(0.6f, 0.0f, 0.6f, 1.0f);
     r2_ptr->on_t = &g_terrains.terrains[0];
 
     push_entity_to_queue(r2_ptr
@@ -1525,12 +1525,12 @@ handle_input_debug(Window_Data *window
     Camera_Component *e_camera_component = &g_entities.camera_components[e_ptr->components.camera_component];
     Physics_Component *e_physics = &g_entities.physics_components[e_ptr->components.physics_component];
     Camera *e_camera = get_camera(e_camera_component->camera);
-    glm::vec3 up = e_ptr->on_t->ws_n;
+    v3 up = e_ptr->on_t->ws_n;
     
     Shadow_Matrices shadow_data = get_shadow_matrices();
     Shadow_Debug    shadow_debug = get_shadow_debug();
     
-    //    shadow_data.light_view_matrix = glm::lookAt(glm::vec3(0.0f), -glm::normalize(light_pos), glm::vec3(0.0f, 1.0f, 0.0f));
+    //    shadow_data.light_view_matrix = glm::lookAt(v3(0.0f), -glm::normalize(light_pos), v3(0.0f, 1.0f, 0.0f));
 
     if (window->key_map[GLFW_KEY_C])
     {
@@ -1539,15 +1539,15 @@ handle_input_debug(Window_Data *window
 	    e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
 	}
 
-	e_camera->captured_shadow_corners[0] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[1] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[2] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[3] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[0] = v4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[1] = v4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[2] = v4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+	e_camera->captured_shadow_corners[3] = v4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
 
-	e_camera->captured_shadow_corners[4] = glm::vec4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[5] = glm::vec4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[6] = glm::vec4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[7] = glm::vec4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[4] = v4(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[5] = v4(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[6] = v4(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+	e_camera->captured_shadow_corners[7] = v4(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
     }
 }
 

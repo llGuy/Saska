@@ -181,7 +181,7 @@ loop_through_memory(Memory_Buffer_View<T> &memory
 
 #include <glm/glm.hpp>
 
-const glm::mat4x4 IDENTITY_MAT4X4 = glm::mat4x4(1.0f);
+const m4x4 IDENTITY_MAT4X4 = m4x4(1.0f);
 
 extern f32
-barry_centric(const glm::vec3 &p1, const glm::vec3 &p2, const glm::vec3 &p3, const glm::vec2 &pos);
+barry_centric(const v3 &p1, const v3 &p2, const v3 &p3, const v2 &pos);

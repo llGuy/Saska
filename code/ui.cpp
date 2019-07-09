@@ -1,6 +1,6 @@
+#include "utils.hpp"
 #include "graphics.hpp"
 
-// Start from bottom left
 enum Coordinate_Type { PIXEL, GLSL };
 
 struct UI_V2
@@ -16,20 +16,26 @@ struct UI_V2
     UI_V2(f32 x, f32 y) : fx(x), fy(y), type(GLSL) {}
     UI_V2(s32 x, s32 y) : ix(x), iy(y), type(PIXEL) {}
 
-    glm::vec2
+    inline v2
     to_fvec2(void) const
     {
-        return glm::vec2(fx, fy);
+        return v2(fx, fy);
     }
 
-    glm::ivec2
+    inline iv2
     to_ivec2(void) const
     {
-        return glm::ivec2(ix, iy);
+        return iv2(ix, iy);
     }
 };
 
-internal UI_V2
+internal inline v2
+convert_glsl_to_normalized(const v2 &position)
+{
+    return(position * 2.0f - 1.0f);
+}
+
+internal inline UI_V2
 glsl_to_pixel_coord(const UI_V2 &position,
                     const Resolution &resolution)
 {
@@ -37,7 +43,7 @@ glsl_to_pixel_coord(const UI_V2 &position,
     return(ret);
 }
 
-internal UI_V2
+internal inline UI_V2
 pixel_to_glsl_coord(const UI_V2 &position,
                     const Resolution &resolution)
 {
@@ -46,14 +52,15 @@ pixel_to_glsl_coord(const UI_V2 &position,
     return(ret);
 }
 
-// For now, doesn't support the relative to function
+// For now, doesn't support the relative to function (need to add in the fufure)
 enum Relative_To { LEFT_UP, LEFT_DOWN, CENTER, RIGHT_UP, RIGHT_DOWN };
 
 struct UI_Box
 {
     UI_Box *parent {nullptr};
     Relative_To relative_to;
-    UI_V2 position;
+    UI_V2 gls_position;
+    UI_V2 px_position;
     f32 aspect_ratio;
     UI_V2 gls_max_values;
     UI_V2 px_current_size;
@@ -78,20 +85,6 @@ struct UI_Box
         }
         gls_current_size = pixel_to_glsl_coord(this->px_current_size, backbuffer_resolution);
     }
-
-    UI_V2
-    get_glsl_position(Resolution backbuffer_resolution)
-    {
-        if (this->position.type == GLSL) return (UI_V2)this->position;
-        else return pixel_to_glsl_coord((const UI_V2 &)this->position, backbuffer_resolution);
-    }
-
-    UI_V2
-    get_px_position(Resolution backbuffer_resolution)
-    {
-        if (this->position.type == PIXEL) return (UI_V2)this->position;
-        else return glsl_to_pixel_coord((const UI_V2 &)this->position, backbuffer_resolution);
-    }
 };
 
 internal UI_Box
@@ -99,39 +92,62 @@ make_ui_box(Relative_To relative_to, f32 aspect_ratio,
             UI_V2 position /* Coord space agnostic */,
             UI_V2 gls_max_values /* Max X and Y size */,
             UI_Box *parent,
-            Resolution backbuffer_res = {})
+            Resolution backbuffer_resolution = {})
 {
     UI_Box box = {};
     box.parent = parent;
     box.aspect_ratio = aspect_ratio;
     box.gls_max_values = gls_max_values;
-    // Updates current size value
-    box.update_size(backbuffer_res);
+    box.update_size(backbuffer_resolution);
     box.relative_to = relative_to;
-    box.position = position;
+    if (position.type == GLSL)
+    {
+        box.gls_position = position;
+        box.px_position = glsl_to_pixel_coord(position, backbuffer_resolution);
+    }
+    else if (position.type == PIXEL)
+    {
+        box.px_position = position;
+        box.gls_position = pixel_to_glsl_coord(position, backbuffer_resolution);
+    }
+    return(box);
 }
 
 struct UI_State
 {
-    struct Font_Vertex
+    struct GUI_Vertex
     {
-        glm::vec2 position;
-        glm::vec2 uvs;
+        v2 position;
+        v2 uvs;
     };
 
     persist constexpr u32 FONT_VBO_SIZE = 65536;
-    persist constexpr u32 MAX_FONT_VERTICES_PER_UPDATE = FONT_VBO_SIZE / sizeof(Font_Vertex);
+    persist constexpr u32 MAX_FONT_VERTICES_PER_UPDATE = FONT_VBO_SIZE / sizeof(GUI_Vertex);
     persist constexpr u32 MAX_FONT_QUADS_PER_UPDATE = MAX_FONT_VERTICES_PER_UPDATE / 6;
-    persist Font_Vertex cpu_vertex_pool[ MAX_FONT_VERTICES_PER_UPDATE ];
+    GUI_Vertex cpu_vertex_pool[ MAX_FONT_VERTICES_PER_UPDATE ];
+    u32 cpu_vertex_count = 0;
     
-    Model_Handle font_quads_model;
-    GPU_Buffer_Handle font_vbo;
-    Pipeline_Handle font_ppln;
+    Model_Handle ui_quads_model;
+    GPU_Buffer_Handle ui_quads_vbo;
+    Pipeline_Handle ui_ppln;
     Render_Pass_Handle ui_render_pass;
     GPU_Command_Queue secondary_ui_q;
 
     UI_Box box;
 } g_ui;
+
+internal void
+push_box_to_render(UI_Box *box)
+{
+    v2 normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
+    v2 normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y)};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f)};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y)};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f)};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size};
+}
 
 internal void
 initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
@@ -144,51 +160,78 @@ initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
                            backbuffer_resolution);
 }
 
-// Will be rendered to backbuffer first
 void
-initialize_ui(GPU *gpu, GPU_Command_Queue_Pool *qpool, const Resolution &resolution)
+initialize_ui_rendering_state(GPU *gpu, const Resolution &resolution)
 {
-    g_ui.font_quads_model = g_model_manager.add("model.font_quads"_hash);
-    auto *font_quads_ptr = g_model_manager.get(g_ui.font_quads_model);
+    g_ui.ui_quads_model = g_model_manager.add("model.font_quads"_hash);
+    auto *ui_quads_ptr = g_model_manager.get(g_ui.ui_quads_model);
     {
-        font_quads_ptr->attribute_count = 2;
-	font_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
-	font_quads_ptr->binding_count = 1;
-	font_quads_ptr->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding));
+        ui_quads_ptr->attribute_count = 2;
+	ui_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
+	ui_quads_ptr->binding_count = 1;
+	ui_quads_ptr->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding));
 
 	// only one binding
-	Model_Binding *binding = font_quads_ptr->bindings;
-	binding->begin_attributes_creation(font_quads_ptr->attributes_buffer);
+	Model_Binding *binding = ui_quads_ptr->bindings;
+	binding->begin_attributes_creation(ui_quads_ptr->attributes_buffer);
 
-	binding->push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::Font_Vertex::position));
-	binding->push_attribute(1, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::Font_Vertex::uvs));
+	binding->push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::GUI_Vertex::position));
+	binding->push_attribute(1, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::GUI_Vertex::uvs));
 
 	binding->end_attributes_creation();
     }
 
-    g_ui.font_vbo = g_gpu_buffer_manager.add("vbo.font_quads"_hash);
-    auto *vbo = g_gpu_buffer_manager.get(g_ui.font_vbo);
+    g_ui.ui_quads_vbo = g_gpu_buffer_manager.add("vbo.font_quads"_hash);
+    auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
     {
-        auto *main_binding = &font_quads_ptr->bindings[0];
+        auto *main_binding = &ui_quads_ptr->bindings[0];
 	
         init_buffer(UI_State::FONT_VBO_SIZE,
-                            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                            VK_SHARING_MODE_EXCLUSIVE,
-                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                            gpu,
-                            vbo);
+                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    gpu,
+                    vbo);
 
         main_binding->buffer = vbo->buffer;
-        font_quads_ptr->create_vbo_list();
+        ui_quads_ptr->create_vbo_list();
     }
 
+    g_ui.ui_render_pass = g_render_pass_manager.add("render_pass.ui"_hash);
+    auto *ui_render_pass = g_render_pass_manager.get(g_ui.ui_render_pass);
+    {
+        Render_Pass_Attachment color_attachment = {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        Render_Pass_Subpass subpass = {};
+        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        Render_Pass_Dependency dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+}
+
+// Will be rendered to backbuffer first
+void
+initialize_ui(GPU *gpu, GPU_Command_Queue_Pool *qpool, const Resolution &resolution)
+{
     g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY, gpu);
-    
+
+    initialize_ui_rendering_state(gpu, resolution);
     initialize_ui_elements(gpu, resolution);
 }
 
 internal void
-update_ui(GPU *gpu, Framebuffer *framebuffer)
+update_ui(GPU *gpu, Framebuffer *framebuffer, GPU_Command_Queue *parent_q)
 {
-    
+    // Loop through all boxes
+    push_box_to_render(&g_ui.box);
+    begin_command_queue(&g_ui.secondary_ui_q, gpu);
+    {
+        auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
+        update_gpu_buffer(vbo, g_ui.cpu_vertex_pool);
+    }
+    end_command_queue(&g_ui.secondary_ui_q, gpu);
+    g_ui.cpu_vertex_count = 0;
 }

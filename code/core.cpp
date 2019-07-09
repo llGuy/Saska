@@ -1,11 +1,11 @@
-/*   
+/* ------------------------------------------------------------   
 
      TODO
      * Get basic UI working (rendering quads, making sure resizing of window doens't completely distort it, etc...)
-        - Create the render pass for rendering UI
-        - Create VBO for rendering UI boxes
-        - Create shader for rendering UI boxes (maybe just use the font rendering one for now) - delete code for fonts, and just use it for rendering ui boxes
-        - Create CPU side buffer for all the vertices that will get sent to the GPU
+        - Create the render pass for rendering UI /
+        - Create VBO for rendering UI boxes /
+        - Create shader for rendering UI boxes (maybe just use the font rendering one for now) - delete code for fonts, and just use it for rendering ui boxes /
+        - Create CPU side buffer for all the vertices that will get sent to the GPU /
         - Start writing update_ui() function
             - Start with updating GPU side buffer with the vertices with vkCmdUpdateBuffer (secondary queue)
             - Render UI Boxes from there into secondary queue
@@ -17,7 +17,7 @@
      * Start getting the gameplay moving (add better physics, sliding through different terrains, etc...)
      * Add skeletal animation (loading models + animations, etc...)
 
-*/
+  ------------------------------------------------------------ */
 
 #define GLFW_INCLUDE_VULKAN
 
@@ -85,7 +85,7 @@ output_debug(const char *format
 }
 
 f32
-barry_centric(const glm::vec3 &p1, const glm::vec3 &p2, const glm::vec3 &p3, const glm::vec2 &pos)
+barry_centric(const v3 &p1, const v3 &p2, const v3 &p3, const v2 &pos)
 {
     f32 det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
     f32 l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;

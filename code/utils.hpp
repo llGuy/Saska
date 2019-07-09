@@ -15,15 +15,25 @@
 #define internal static
 #define global_var static
 
+#include <glm/glm.hpp>
+
 typedef int8_t s8;
 typedef int16_t s16;
 typedef int32_t s32;
 typedef int64_t s64;
-
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef glm::vec2 v2;
+typedef glm::vec3 v3;
+typedef glm::vec4 v4;
+typedef glm::ivec2 iv2;
+typedef glm::ivec3 iv3;
+typedef glm::ivec4 iv4;
+typedef glm::mat3 m3x3;
+typedef glm::mat4 m4x4;
+typedef glm::quat q4;
 
 typedef float f32;
 typedef double f64;

@@ -3,19 +3,19 @@
 #include "vulkan.hpp"
 
 void
-make_game(Vulkan::State *vk
-	  , Vulkan::GPU *gpu
-	  , Vulkan::Swapchain *swapchain
+make_game(Vulkan_State *vk
+	  , GPU *gpu
+	  , Swapchain *swapchain
 	  , Window_Data *window);
 
 void
-destroy_game(Vulkan::GPU *gpu);
+destroy_game(GPU *gpu);
 
 void
-update_game(Vulkan::GPU *gpu
-	    , Vulkan::Swapchain *swapchain
+update_game(GPU *gpu
+	    , Swapchain *swapchain
 	    , Window_Data *window
-	    , Vulkan::State *vk
+	    , Vulkan_State *vk
 	    , f32 dt);
 
 

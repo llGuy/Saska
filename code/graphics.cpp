@@ -31,7 +31,7 @@ make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu)
 }
 
 void
-begin_command_queue(GPU_Command_Queue *queue, GPU *gpu)
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, GPU_Command_Queue *parent_q)
 {
     begin_command_buffer(&queue->q, 0, nullptr);
 }
@@ -559,11 +559,11 @@ make_camera_data(GPU *gpu, VkDescriptorPool *pool, Swapchain *swapchain)
 
 void
 make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
-                                   const glm::mat4 &view_matrix,
-                                   const glm::mat4 &projection_matrix,
-                                   const glm::mat4 &shadow_view_matrix,
-                                   const glm::mat4 &shadow_projection_matrix,
-                                   const glm::vec4 &debug_vector)
+                                   const m4x4 &view_matrix,
+                                   const m4x4 &projection_matrix,
+                                   const m4x4 &shadow_view_matrix,
+                                   const m4x4 &shadow_projection_matrix,
+                                   const v4 &debug_vector)
 {
     *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector };
 }
@@ -584,14 +584,14 @@ update_3D_output_camera_transforms(u32 image_index, GPU *gpu)
     Shadow_Matrices shadow_data = get_shadow_matrices();
 
     Camera_Transform_Uniform_Data transform_data = {};
-    glm::mat4 projection_matrix = camera->p_m;
+    m4x4 projection_matrix = camera->p_m;
     projection_matrix[1][1] *= -1.0f;
     make_camera_transform_uniform_data(&transform_data,
                                        camera->v_m,
                                        projection_matrix,
                                        shadow_data.light_view_matrix,
                                        shadow_data.projection_matrix,
-                                       glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+                                       v4(1.0f, 0.0f, 0.0f, 1.0f));
     
     GPU_Buffer &current_ubo = *g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos + image_index);
 
@@ -671,7 +671,7 @@ get_backbuffer_resolution(void)
 struct Lighting
 {
     // Default value
-    glm::vec3 ws_light_position {0.00000001f, 10.0f, 0.00000001f};
+    v3 ws_light_position {0.00000001f, 10.0f, 0.00000001f};
 
     // Later, need to add PSSM
     struct Shadows
@@ -685,11 +685,11 @@ struct Lighting
     
         Pipeline_Handle debug_frustum_ppln;
     
-        glm::mat4 light_view_matrix;
-        glm::mat4 projection_matrix;
-        glm::mat4 inverse_light_view;
+        m4x4 light_view_matrix;
+        m4x4 projection_matrix;
+        m4x4 inverse_light_view;
 
-        glm::vec4 ls_corners[8];
+        v4 ls_corners[8];
         
         union
         {
@@ -733,16 +733,16 @@ update_atmosphere(GPU_Command_Queue *queue)
 
     struct Atmos_Push_K
     {
-	alignas(16) glm::mat4 inverse_projection;
-	glm::vec4 light_dir;
-	glm::vec2 viewport;
+	alignas(16) m4x4 inverse_projection;
+	v4 light_dir;
+	v2 viewport;
     } k;
 
-    glm::mat4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 10000.0f);
+    m4x4 atmos_proj = glm::perspective(glm::radians(90.0f), 1000.0f / 1000.0f, 0.1f, 10000.0f);
     k.inverse_projection = glm::inverse(atmos_proj);
-    k.viewport = glm::vec2(1000.0f, 1000.0f);
+    k.viewport = v2(1000.0f, 1000.0f);
 
-    k.light_dir = glm::vec4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
+    k.light_dir = v4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
     
     command_buffer_push_constant(&k
 					 , sizeof(k)
@@ -759,7 +759,7 @@ update_atmosphere(GPU_Command_Queue *queue)
 
 void
 render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
-                  , const glm::vec3 &camera_position // To change to camera structure
+                  , const v3 &camera_position // To change to camera structure
                   , Model *cube
                   , GPU_Command_Queue *queue)
 {
@@ -779,10 +779,10 @@ render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
 
     struct Skybox_Push_Constant
     {
-	glm::mat4 model_matrix;
+	m4x4 model_matrix;
     } push_k;
 
-    push_k.model_matrix = glm::scale(glm::vec3(1000.0f));
+    push_k.model_matrix = glm::scale(v3(1000.0f));
 
     command_buffer_push_constant(&push_k
 					 , sizeof(push_k)
@@ -897,8 +897,8 @@ make_atmosphere_data(GPU *gpu
 internal void
 make_shadow_data(GPU *gpu, Swapchain *swapchain)
 {
-    glm::vec3 light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
-    g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    v3 light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
+    g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, v3(0.0f), v3(0.0f, 1.0f, 0.0f));
     g_lighting.shadows.inverse_light_view = glm::inverse(g_lighting.shadows.light_view_matrix);
 
     // ---- Make shadow render pass ----
@@ -963,8 +963,8 @@ make_shadow_data(GPU *gpu, Swapchain *swapchain)
 }
 
 internal void
-calculate_ws_frustum_corners(glm::vec4 *corners
-			     , glm::vec4 *shadow_corners)
+calculate_ws_frustum_corners(v4 *corners
+			     , v4 *shadow_corners)
 {
     Shadow_Matrices shadow_data = get_shadow_matrices();
 
@@ -1004,14 +1004,14 @@ render_debug_frustum(GPU_Command_Queue *queue
 
     struct Push_K
     {
-	alignas(16) glm::vec4 positions[8];
-	alignas(16) glm::vec4 color;
+	alignas(16) v4 positions[8];
+	alignas(16) v4 color;
     } push_k1, push_k2;
 
     calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
 
-    push_k1.color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-    push_k2.color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    push_k1.color = v4(1.0f, 0.0f, 0.0f, 1.0f);
+    push_k2.color = v4(0.0f, 0.0f, 1.0f, 1.0f);
     
     command_buffer_push_constant(&push_k1
 					 , sizeof(push_k1)
@@ -1075,9 +1075,9 @@ get_shadow_display(void)
 void
 update_shadows(f32 far, f32 near, f32 fov, f32 aspect
                // Later to replace with a Camera structure
-               , const glm::vec3 &ws_p
-               , const glm::vec3 &ws_d
-               , const glm::vec3 &ws_up)
+               , const v3 &ws_p
+               , const v3 &ws_d
+               , const v3 &ws_up)
 {
     f32 far_width, near_width, far_height, near_height;
     
@@ -1086,8 +1086,8 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
     far_height = far_width / aspect;
     near_height = near_width / aspect;
 
-    glm::vec3 right_view_ax = glm::normalize(glm::cross(ws_d, ws_up));
-    glm::vec3 up_view_ax = glm::normalize(glm::cross(ws_d, right_view_ax));
+    v3 right_view_ax = glm::normalize(glm::cross(ws_d, ws_up));
+    v3 up_view_ax = glm::normalize(glm::cross(ws_d, right_view_ax));
 
     f32 far_width_half = far_width / 2.0f;
     f32 near_width_half = near_width / 2.0f;
@@ -1105,17 +1105,17 @@ update_shadows(f32 far, f32 near, f32 fov, f32 aspect
 
     // light space
 
-    g_lighting.shadows.ls_corners[flt] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    g_lighting.shadows.ls_corners[flb] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[flt] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[flb] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    g_lighting.shadows.ls_corners[frt] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    g_lighting.shadows.ls_corners[frb] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[frt] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[frb] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    g_lighting.shadows.ls_corners[nlt] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    g_lighting.shadows.ls_corners[nlb] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[nlt] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[nlb] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
-    g_lighting.shadows.ls_corners[nrt] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    g_lighting.shadows.ls_corners[nrb] = g_lighting.shadows.light_view_matrix * glm::vec4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[nrt] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    g_lighting.shadows.ls_corners[nrb] = g_lighting.shadows.light_view_matrix * v4(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
     f32 x_min, x_max, y_min, y_max, z_min, z_max;
 
@@ -1335,7 +1335,7 @@ begin_deferred_rendering(u32 image_index /* To remove in the future */
 }    
 
 void
-end_deferred_rendering(const glm::mat4 &view_matrix // In future, change this to camera structure
+end_deferred_rendering(const m4x4 &view_matrix // In future, change this to camera structure
                        , GPU_Command_Queue *queue)
 {
     queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
@@ -1355,11 +1355,11 @@ end_deferred_rendering(const glm::mat4 &view_matrix // In future, change this to
     
     struct Deferred_Lighting_Push_K
     {
-	glm::vec4 light_position;
-	glm::mat4 view_matrix;
+	v4 light_position;
+	m4x4 view_matrix;
     } deferred_push_k;
     
-    deferred_push_k.light_position = glm::vec4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
+    deferred_push_k.light_position = v4(glm::normalize(-g_lighting.ws_light_position), 1.0f);
     deferred_push_k.view_matrix = view_matrix;
     
     command_buffer_push_constant(&deferred_push_k
@@ -1490,8 +1490,8 @@ make_postfx_data(GPU *gpu
 void
 apply_pfx_on_scene(GPU_Command_Queue *queue
                    , Uniform_Group *transforms_group
-                   , const glm::mat4 &view_matrix
-                   , const glm::mat4 &projection_matrix
+                   , const m4x4 &view_matrix
+                   , const m4x4 &projection_matrix
                    , GPU *gpu)
 {
     queue->begin_render_pass(g_postfx.pfx_render_pass
@@ -1513,12 +1513,12 @@ apply_pfx_on_scene(GPU_Command_Queue *queue
 
         struct SSR_Lighting_Push_K
         {
-            glm::vec4 ws_light_position;
-            glm::mat4 view;
-            glm::mat4 proj;
+            v4 ws_light_position;
+            m4x4 view;
+            m4x4 proj;
         } ssr_pk;
 
-        ssr_pk.ws_light_position = view_matrix * glm::vec4(glm::normalize(-g_lighting.ws_light_position), 0.0f);
+        ssr_pk.ws_light_position = view_matrix * v4(glm::normalize(-g_lighting.ws_light_position), 0.0f);
         ssr_pk.view = view_matrix;
         ssr_pk.proj = projection_matrix;
         ssr_pk.proj[1][1] *= -1.0f;
@@ -1573,10 +1573,10 @@ render_final_output(u32 image_index, GPU_Command_Queue *queue, Swapchain *swapch
 
         struct SSR_Lighting_Push_K
         {
-            glm::vec4 debug;
+            v4 debug;
         } pk;
 
-        pk.debug = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+        pk.debug = v4(1.0f, 0.0f, 0.0f, 1.0f);
         command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln, &queue->q);
 
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
@@ -1597,7 +1597,7 @@ make_cube_model(GPU *gpu,
 	cube_model_ptr->binding_count = 1;
 	cube_model_ptr->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding));
 
-	struct Vertex { glm::vec3 pos; glm::vec3 color; glm::vec2 uvs; };
+	struct Vertex { v3 pos; v3 color; v2 uvs; };
 	
 	// only one binding
 	Model_Binding *binding = cube_model_ptr->bindings;
@@ -1613,9 +1613,9 @@ make_cube_model(GPU *gpu,
     GPU_Buffer_Handle cube_vbo_hdl = g_gpu_buffer_manager.add("vbo.cube_model_vbo"_hash);
     auto *vbo = g_gpu_buffer_manager.get(cube_vbo_hdl);
     {
-        struct Vertex { glm::vec3 pos, color; glm::vec2 uvs; };
+        struct Vertex { v3 pos, color; v2 uvs; };
 
-        glm::vec3 gray = glm::vec3(0.2);
+        v3 gray = v3(0.2);
 	
         f32 radius = 2.0f;
 	

@@ -11,12 +11,9 @@ typedef s32 Handle;
 template <typename T, u32 Max = 40> struct Object_Manager
 {
     using Type = T;
-    
     u32 count {0};
-    T   objects[ Max ];
-
-    // To be used only in initialization of program.
-    Hash_Table_Inline<u32, Max, 4, 4> object_name_map {""};
+    T objects[ Max ];
+    Hash_Table_Inline<u32, Max, 4, 4> object_name_map {""}; // To be used during initialization only
 
     Handle
     add(const Constant_String &name, u32 allocation_count = 1)
@@ -29,26 +26,26 @@ template <typename T, u32 Max = 40> struct Object_Manager
 	return(prev);
     }
 
-    Handle
+    inline Handle
     get_handle(const Constant_String &name)
     {
 	return(*object_name_map.get(name.hash));
     }
     
-    T *
+    inline T *
     get(Handle handle)
     {
 	return(&objects[handle]);
     }
 
     // To use for convenience, not for performance
-    T *
+    inline T *
     get(const Constant_String &name)
     {
 	return(&objects[ *object_name_map.get(name.hash) ]);
     }
 
-    void
+    inline void
     clean_up(GPU *gpu)
     {
 	for (u32 i = 0; i < count; ++i)
@@ -124,7 +121,7 @@ struct GPU_Command_Queue
                                                  , &q);
     }
 
-    void
+    inline void
     next_subpass(VkSubpassContents contents)
     {
         command_buffer_next_subpass(&q, contents);
@@ -132,7 +129,7 @@ struct GPU_Command_Queue
         ++subpass;
     }
 
-    void
+    inline void
     end_render_pass()
     {
         command_buffer_end_render_pass(&q);
@@ -147,7 +144,7 @@ GPU_Command_Queue
 make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu);
 
 void
-begin_command_queue(GPU_Command_Queue *queue, GPU *gpu);
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, GPU_Command_Queue *parent_q = nullptr);
     
 void
 end_command_queue(GPU_Command_Queue *queue, GPU *gpu);
@@ -493,28 +490,28 @@ load_external_graphics_data(Swapchain *swapchain
 // Rendering pipeline
 struct Camera
 {
-    glm::vec2 mp;
-    glm::vec3 p; // position
-    glm::vec3 d; // direction
-    glm::vec3 u; // up
+    v2 mp;
+    v3 p; // position
+    v3 d; // direction
+    v3 u; // up
 
     f32 fov;
     f32 asp; // aspect ratio
     f32 n, f; // near and far planes
     
-    glm::vec4 captured_frustum_corners[8] {};
-    glm::vec4 captured_shadow_corners[8] {};
+    v4 captured_frustum_corners[8] {};
+    v4 captured_shadow_corners[8] {};
     
-    glm::mat4 p_m;
-    glm::mat4 v_m;
+    m4x4 p_m;
+    m4x4 v_m;
     
     void
     set_default(f32 w, f32 h, f32 m_x, f32 m_y)
     {
-	mp = glm::vec2(m_x, m_y);
-	p = glm::vec3(50.0f, 10.0f, 280.0f);
-	d = glm::vec3(+1, 0.0f, +1);
-	u = glm::vec3(0, 1, 0);
+	mp = v2(m_x, m_y);
+	p = v3(50.0f, 10.0f, 280.0f);
+	d = v3(+1, 0.0f, +1);
+	u = v3(0, 1, 0);
 
 	fov = glm::radians(60.0f);
 	asp = w / h;
@@ -556,30 +553,30 @@ get_camera_transform_uniform_groups(void);
 
 struct Camera_Transform_Uniform_Data
 {
-    alignas(16) glm::mat4 view_matrix;
-    alignas(16) glm::mat4 projection_matrix;
-    alignas(16) glm::mat4 shadow_projection_matrix;
-    alignas(16) glm::mat4 shadow_view_matrix;
+    alignas(16) m4x4 view_matrix;
+    alignas(16) m4x4 projection_matrix;
+    alignas(16) m4x4 shadow_projection_matrix;
+    alignas(16) m4x4 shadow_view_matrix;
     
-    alignas(16) glm::vec4 debug_vector;
+    alignas(16) v4 debug_vector;
 };
 
 void
 make_camera_transform_uniform_data(Camera_Transform_Uniform_Data *data,
-                                   const glm::mat4 &view_matrix,
-                                   const glm::mat4 &projection_matrix,
-                                   const glm::mat4 &shadow_view_matrix,
-                                   const glm::mat4 &shadow_projection_matrix,
-                                   const glm::vec4 &debug_vector);
+                                   const m4x4 &view_matrix,
+                                   const m4x4 &projection_matrix,
+                                   const m4x4 &shadow_view_matrix,
+                                   const m4x4 &shadow_projection_matrix,
+                                   const v4 &debug_vector);
 
 void
 update_3D_output_camera_transforms(u32 image_index, GPU *gpu);
 
 struct Shadow_Matrices
 {
-    glm::mat4 projection_matrix;
-    glm::mat4 light_view_matrix;
-    glm::mat4 inverse_light_view;
+    m4x4 projection_matrix;
+    m4x4 light_view_matrix;
+    m4x4 inverse_light_view;
 };
 
 struct Shadow_Debug
@@ -591,7 +588,7 @@ struct Shadow_Debug
         f32 corner_values[6];
     };
 
-    glm::vec4 frustum_corners[8];
+    v4 frustum_corners[8];
 };
 
 struct Shadow_Display
@@ -615,9 +612,9 @@ get_shadow_display(void);
 void
 update_shadows(f32 far, f32 near, f32 fov, f32 aspect
                // Later to replace with a Camera structure
-               , const glm::vec3 &ws_p
-               , const glm::vec3 &ws_d
-               , const glm::vec3 &ws_up);
+               , const v3 &ws_p
+               , const v3 &ws_d
+               , const v3 &ws_up);
 
 void
 begin_shadow_offscreen(u32 shadow_map_width, u32 shadow_map_height
@@ -634,12 +631,12 @@ begin_deferred_rendering(u32 image_index /* To remove in the future */
                          , GPU_Command_Queue *queue);
 
 void
-end_deferred_rendering(const glm::mat4 &view_matrix
+end_deferred_rendering(const m4x4 &view_matrix
                        , GPU_Command_Queue *queue);
 
 void
 render_atmosphere(const Memory_Buffer_View<Uniform_Group> &sets
-                  , const glm::vec3 &camera_position // To change to camera structure
+                  , const v3 &camera_position // To change to camera structure
                   , Model *cube
                   , GPU_Command_Queue *queue);
 
@@ -653,8 +650,8 @@ make_postfx_data(GPU *gpu
 void
 apply_pfx_on_scene(GPU_Command_Queue *queue
                    , Uniform_Group *transforms_group
-                   , const glm::mat4 &view_matrix
-                   , const glm::mat4 &projection_matrix
+                   , const m4x4 &view_matrix
+                   , const m4x4 &projection_matrix
                    , GPU *gpu);
 
 void

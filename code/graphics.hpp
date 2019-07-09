@@ -55,6 +55,8 @@ template <typename T, u32 Max = 40> struct Object_Manager
     }
 };
 
+typedef VkCommandPool GPU_Command_Queue_Pool;
+typedef VkCommandBufferLevel Submit_Level;
 typedef Handle GPU_Buffer_Handle;
 typedef Handle Image_Handle;
 typedef Handle Framebuffer_Handle;
@@ -91,6 +93,7 @@ struct GPU_Command_Queue
     s32 subpass{-1};
     Render_Pass_Handle current_pass_handle{INVALID_HANDLE};
     Framebuffer_Handle fbo_handle{INVALID_HANDLE};
+    Submit_Level submit_level = Submit_Level::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
     void
     invalidate(void)
@@ -137,14 +140,22 @@ struct GPU_Command_Queue
     }
 };
 
-typedef VkCommandPool GPU_Command_Queue_Pool;
-typedef VkCommandBufferLevel Submit_Level;
-
 GPU_Command_Queue
 make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu);
 
+inline VkCommandBufferInheritanceInfo
+make_queue_inheritance_info(Render_Pass *pass, Framebuffer *framebuffer)
+{
+    VkCommandBufferInheritanceInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    info.renderPass = pass->render_pass;
+    info.framebuffer = framebuffer->framebuffer;
+    info.subpass = 0;
+    return(info);
+}
+
 void
-begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, GPU_Command_Queue *parent_q = nullptr);
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, VkCommandBufferInheritanceInfo *inheritance = nullptr);
     
 void
 end_command_queue(GPU_Command_Queue *queue, GPU *gpu);
@@ -646,6 +657,9 @@ update_atmosphere(GPU_Command_Queue *queue);
 void
 make_postfx_data(GPU *gpu
                  , Swapchain *swapchain);
+
+Framebuffer_Handle
+get_pfx_framebuffer_hdl(void);
 
 void
 apply_pfx_on_scene(GPU_Command_Queue *queue

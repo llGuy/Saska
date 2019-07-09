@@ -3,6 +3,7 @@
 #include "graphics.hpp"
 
 #include "script.hpp"
+#include "ui.hpp"
 
 global_var struct Window_Rendering_Data
 {
@@ -43,8 +44,8 @@ make_game(Vulkan_State *vk, GPU *gpu, Swapchain *swapchain, Window_Data *window)
     // ---- Initialize game data ----
     // Initialize atmosphere, shadow, skeletal animation...
     initialize_game_3D_graphics(gpu, swapchain, &window_rendering.command_pool);
-    // Initialize UI stuff, text, etc...
     initialize_game_2D_graphics(gpu, swapchain, &window_rendering.command_pool);
+    initialize_game_ui(gpu, &window_rendering.command_pool, &vk->swapchain, get_backbuffer_resolution());
     initialize_world(window, vk, &window_rendering.command_pool);
 
     make_lua_scripting();
@@ -110,6 +111,8 @@ update_game(GPU *gpu
     begin_command_buffer(&queue.q, 0, nullptr);
     {
         update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
+        update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl());
+        render_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), &queue);
         render_final_output(next_image_data.image_index, &queue, swapchain);
     }
     end_command_buffer(&queue.q);

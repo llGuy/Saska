@@ -31,9 +31,11 @@ make_command_queue(VkCommandPool *pool, Submit_Level level, GPU *gpu)
 }
 
 void
-begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, GPU_Command_Queue *parent_q)
+begin_command_queue(GPU_Command_Queue *queue, GPU *gpu, VkCommandBufferInheritanceInfo *inheritance)
 {
-    begin_command_buffer(&queue->q, 0, nullptr);
+    begin_command_buffer(&queue->q,
+                         (queue->submit_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0) | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
+                         inheritance);
 }
     
 void
@@ -1485,6 +1487,12 @@ make_postfx_data(GPU *gpu
         update_uniform_group(gpu, ssr_output_group,
                              Update_Binding{TEXTURE, ssr_tx_ptr, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
     }
+}
+
+Framebuffer_Handle
+get_pfx_framebuffer_hdl(void)
+{
+    return(g_postfx.ssr_stage.fbo);
 }
 
 void

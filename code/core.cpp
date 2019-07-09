@@ -9,6 +9,7 @@
         - Start writing update_ui() function
             - Start with updating GPU side buffer with the vertices with vkCmdUpdateBuffer (secondary queue)
             - Render UI Boxes from there into secondary queue
+            - COMMAND_BUFFER_BIND_VBOX()
         - Once finished with update_ui, make sure that scaling works
         - Create UI Box parent system
         - Find way to integrate Font rendering (possibly bound to UI Boxes? - even invisible ones)

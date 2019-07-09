@@ -1343,11 +1343,14 @@ update_gpu_buffer(GPU_Buffer *dst, void *data, u32 size, u32 offset, VkPipelineS
                          &barrier,
                          0,
                          nullptr);
+
+    vkCmdUpdateBuffer(*queue, dst->buffer, offset, size, data);
+    
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = access;
     vkCmdPipelineBarrier(*queue,
-                         stage,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         stage,
                          0,
                          0,
                          nullptr,

@@ -53,18 +53,29 @@ pixel_to_glsl_coord(const UI_V2 &position,
 }
 
 // For now, doesn't support the relative to function (need to add in the fufure)
-enum Relative_To { LEFT_UP, LEFT_DOWN, CENTER, RIGHT_UP, RIGHT_DOWN };
+enum Relative_To { LEFT_DOWN, LEFT_UP, CENTER, RIGHT_DOWN, RIGHT_UP };
+global_var constexpr v2 RELATIVE_TO_ADD_VALUES[] { v2(0.0f, 0.0f),
+        v2(0.0f, 1.0f),
+        v2(0.5f, 0.5f),
+        v2(1.0f, 0.0f),
+        v2(1.0f, 1.0f)};
+global_var constexpr v2 RELATIVE_TO_FACTORS[] { v2(0.0f, 0.0f),
+        v2(0.0f, -1.0f),
+        v2(-0.5f, -0.5f),
+        v2(-1.0f, 0.0f),
+        v2(-1.0f, -1.0f)};
 
 struct UI_Box
 {
     UI_Box *parent {nullptr};
     Relative_To relative_to;
+    UI_V2 relative_position;
     UI_V2 gls_position;
     UI_V2 px_position;
-    f32 aspect_ratio;
     UI_V2 gls_max_values;
     UI_V2 px_current_size;
     UI_V2 gls_current_size;
+    f32 aspect_ratio;
 };
 
 internal void
@@ -87,6 +98,27 @@ update_ui_box_size(UI_Box *box, const Resolution &backbuffer_resolution)
     box->gls_current_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
 }
 
+internal void
+update_ui_box_position(UI_Box *box, const Resolution &backbuffer_resolution)
+{
+    v2 gls_size = box->gls_current_size.to_fvec2();
+    v2 gls_relative_position;
+    if (box->relative_position.type = GLSL)
+    {
+        gls_relative_position = box->relative_position.to_fvec2();
+    }
+    if (box->relative_position.type = PIXEL)
+    {
+        gls_relative_position = pixel_to_glsl_coord(box->relative_position, backbuffer_resolution).to_fvec2();
+    }
+    gls_relative_position += RELATIVE_TO_ADD_VALUES[box->relative_to];
+    gls_relative_position += RELATIVE_TO_FACTORS[box->relative_to] * gls_size;
+
+    box->gls_position = UI_V2(gls_relative_position.x, gls_relative_position.y);
+    box->px_position = glsl_to_pixel_coord(box->gls_position, backbuffer_resolution);
+    
+}
+
 internal UI_Box
 make_ui_box(Relative_To relative_to, f32 aspect_ratio,
             UI_V2 position /* Coord space agnostic */,
@@ -95,21 +127,13 @@ make_ui_box(Relative_To relative_to, f32 aspect_ratio,
             Resolution backbuffer_resolution = {})
 {
     UI_Box box = {};
+    box.relative_position = position;
     box.parent = parent;
     box.aspect_ratio = aspect_ratio;
     box.gls_max_values = gls_max_values;
     update_ui_box_size(&box, backbuffer_resolution);
     box.relative_to = relative_to;
-    if (position.type == GLSL)
-    {
-        box.gls_position = position;
-        box.px_position = glsl_to_pixel_coord(position, backbuffer_resolution);
-    }
-    else if (position.type == PIXEL)
-    {
-        box.px_position = position;
-        box.gls_position = pixel_to_glsl_coord(position, backbuffer_resolution);
-    }
+    update_ui_box_position(&box, backbuffer_resolution);
     return(box);
 }
 
@@ -154,8 +178,8 @@ initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
 {
     //    f32 aspect_ratio = (f32)backbuffer_resolution.width / (f32)backbuffer_resolution.height;
     f32 aspect_ratio = 0.5f;
-    g_ui.box = make_ui_box(LEFT_DOWN, aspect_ratio,
-                           UI_V2(0.05f, 0.05f),
+    g_ui.box = make_ui_box(RIGHT_DOWN, aspect_ratio,
+                           UI_V2(-0.05f, 0.05f),
                            UI_V2(0.5f, 0.5f),
                            nullptr,
                            backbuffer_resolution);

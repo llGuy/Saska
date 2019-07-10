@@ -160,7 +160,7 @@ main(s32 argc
 	
     OUTPUT_DEBUG_LOG("%s\n", "starting session");
 
-    linear_allocator_global.capacity = megabytes(megabytes(10));
+    linear_allocator_global.capacity = megabytes(10);
     linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
 	
     stack_allocator_global.capacity = megabytes(10);

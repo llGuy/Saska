@@ -21,6 +21,8 @@ enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 // ---- terrain code ----
 struct Morphable_Terrain
 {
+    bool is_modified = false;
+    
     iv2 xz_dim;
     // ---- up vector of the terrain ----
     v3 ws_n;
@@ -33,7 +35,6 @@ struct Morphable_Terrain
     u32 offset_into_heights_gpu_buffer;
     // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
     GPU_Buffer heights_gpu_buffer;
-    Mapped_GPU_Memory mapped_gpu_heights;
 
     VkBuffer vbos[2];
 
@@ -202,7 +203,7 @@ get_coord_pointing_at(v3 ws_ray_p
 
 	    u32 index = get_terrain_index(x, z, t->xz_dim.y);
 
-	    f32 *heights_ptr = (f32 *)t->mapped_gpu_heights.data;
+	    f32 *heights_ptr = (f32 *)t->heights;
 	    if (ts_ray_current_p.y < heights_ptr[index])
 	    {
 		// ---- hit terrain at this point ----
@@ -260,7 +261,7 @@ detect_terrain_collision(const v3 &ws_p
 		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.y)
 	    };
 
-	    f32 *terrain_heights = (f32 *)t->mapped_gpu_heights.data;
+	    f32 *terrain_heights = (f32 *)t->heights;
 	    v3 a = v3(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
 	    v3 b = v3(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
 	    v3 c = v3(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
@@ -389,7 +390,7 @@ morph_terrain_at(const iv2 &ts_position
 	    
 	    s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
 	    
-	    f32 *p = (f32 *)t->mapped_gpu_heights.data;
+	    f32 *p = (f32 *)t->heights;
 	    f32 a = cos(squared_d / (morph_zone_radius * morph_zone_radius));
 	    a = a * a * a;
 
@@ -421,7 +422,7 @@ morph_terrain_at(const iv2 &ts_position
 	s32 ts_p_x = x + ts_position.x;
 	s32 ts_p_z = z + ts_position.y;
 	    
-	f32 *p = (f32 *)t->mapped_gpu_heights.data;
+	f32 *p = (f32 *)t->heights;
 	
 	s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
 	if (index >= 0)
@@ -444,7 +445,7 @@ morph_terrain_at(const iv2 &ts_position
 	    s32 ts_p_z = z + ts_position.y;
 	    
 	    s32 index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
-	    f32 *p = (f32 *)t->mapped_gpu_heights.data;
+	    f32 *p = (f32 *)t->heights;
 
 	    if (index >= 0)
 	    {
@@ -453,7 +454,7 @@ morph_terrain_at(const iv2 &ts_position
 	}
     }
 
-    t->mapped_gpu_heights.flush(0, t->mapped_gpu_heights.size, gpu);
+    t->is_modified = true;
 }
 
 internal Morphable_Terrain *
@@ -471,10 +472,25 @@ on_which_terrain(const v3 &ws_position)
 
 // ---- this command happens when rendering (terrain is updated on the cpu side at a different time) ----
 internal void
-update_terrain_on_gpu(Window_Data *wd
-		      , f32 dt)
+update_terrain_on_gpu(GPU_Command_Queue *queue)
 {
-    
+    for (u32 terrain = 0;
+         terrain < g_terrains.terrain_count;
+         ++terrain)
+    {
+        Morphable_Terrain *terrainptr = &g_terrains.terrains[terrain];
+        if (terrainptr->is_modified)
+        {
+            update_gpu_buffer(&terrainptr->heights_gpu_buffer,
+                              terrainptr->heights,
+                              sizeof(f32) * terrainptr->xz_dim.x * terrainptr->xz_dim.y,
+                              0,
+                              VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                              VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                              &queue->q);
+            terrainptr->is_modified = false;
+        }
+    }
 }
 
 internal void
@@ -567,7 +583,6 @@ make_3D_terrain_mesh_instance(u32 width_x
 			      , u32 depth_z
 			      , f32 *&cpu_side_heights
 			      , GPU_Buffer *gpu_side_heights
-			      , Mapped_GPU_Memory *mapped_gpu_heights
 			      , VkCommandPool *cmdpool
 			      , GPU *gpu)
 {
@@ -576,24 +591,17 @@ make_3D_terrain_mesh_instance(u32 width_x
     memset(cpu_side_heights, 0, sizeof(f32) * width_x * depth_z);
 
     init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu)
-			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 			, VK_SHARING_MODE_EXCLUSIVE
-			, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+			, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
 			, gpu
 			, gpu_side_heights);
-
-    *mapped_gpu_heights = gpu_side_heights->construct_map();
-
-    mapped_gpu_heights->begin(gpu);
-    memset(mapped_gpu_heights->data, 0, adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu));
-
-    mapped_gpu_heights->flush(0, adjust_memory_size_for_gpu_alignment(sizeof(f32) * width_x * depth_z, gpu), gpu);
 }
 
 internal void
 make_terrain_mesh_data(u32 w, u32 d, Morphable_Terrain *terrain, VkCommandPool *cmdpool, GPU *gpu)
 {
-    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, &terrain->mapped_gpu_heights, cmdpool, gpu);
+    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, cmdpool, gpu);
     terrain->xz_dim = iv2(w, d);
 }
 
@@ -767,7 +775,7 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 	u32 z = g_terrains.terrain_pointer.ts_position.y;
 	u32 width = g_terrains.terrain_pointer.t->xz_dim.x;
 	u32 depth = g_terrains.terrain_pointer.t->xz_dim.y;
-	f32 *heights = (f32 *)(g_terrains.terrain_pointer.t->mapped_gpu_heights.data);
+	f32 *heights = (f32 *)(g_terrains.terrain_pointer.t->heights);
 
 	auto calculate_height = [width, depth, heights](s32 x, s32 z) -> f32
 	{
@@ -1436,9 +1444,9 @@ render_world(Vulkan_State *vk
     Uniform_Group uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
     Camera *camera = get_camera_bound_to_3D_output();
-    
-    // Start the rendering    
-    //    begin_command_buffer(cmdbuf, 0, nullptr);
+
+    // Update terrain gpu buffers
+    update_terrain_on_gpu(queue);
     
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, queue);

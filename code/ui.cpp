@@ -75,13 +75,24 @@ struct UI_Box
     UI_V2 gls_max_values;
     UI_V2 px_current_size;
     UI_V2 gls_current_size;
+    UI_V2 gls_relative_size;
     f32 aspect_ratio;
 };
 
 internal void
 update_ui_box_size(UI_Box *box, const Resolution &backbuffer_resolution)
 {
-    UI_V2 px_max_values = glsl_to_pixel_coord(box->gls_max_values, backbuffer_resolution);
+    UI_V2 px_max_values;
+    if (box->parent)
+    {
+        // Relative to the parent aspect ratio
+        px_max_values = glsl_to_pixel_coord(box->gls_max_values,
+                                            Resolution{(u32)box->parent->px_current_size.ix, (u32)box->parent->px_current_size.iy});
+    }
+    else
+    {
+        px_max_values = glsl_to_pixel_coord(box->gls_max_values, backbuffer_resolution);
+    }
     UI_V2 px_max_xvalue_coord(px_max_values.ix, (s32)((f32)px_max_values.ix / box->aspect_ratio));
     // Check if, using glsl max x value, the y still fits in the given glsl max y value
     if (px_max_xvalue_coord.iy <= px_max_values.iy)
@@ -95,28 +106,49 @@ update_ui_box_size(UI_Box *box, const Resolution &backbuffer_resolution)
         UI_V2 px_max_yvalue_coord((u32)((f32)px_max_values.iy * box->aspect_ratio), px_max_values.iy);
         box->px_current_size = px_max_yvalue_coord;
     }
-    box->gls_current_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
+    if (box->parent)
+    {
+        box->gls_relative_size = UI_V2((f32)box->px_current_size.ix / (f32)box->parent->px_current_size.ix,
+                                       (f32)box->px_current_size.iy / (f32)box->parent->px_current_size.iy);
+        box->gls_current_size = UI_V2((f32)box->px_current_size.ix / (f32)backbuffer_resolution.width,
+                                       (f32)box->px_current_size.iy / (f32)backbuffer_resolution.height);
+    }
+    else
+    {
+        box->gls_current_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
+        box->gls_relative_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
+    }
 }
 
 internal void
 update_ui_box_position(UI_Box *box, const Resolution &backbuffer_resolution)
 {
-    v2 gls_size = box->gls_current_size.to_fvec2();
+    v2 gls_size = box->gls_relative_size.to_fvec2();
     v2 gls_relative_position;
-    if (box->relative_position.type = GLSL)
+    if (box->relative_position.type == GLSL)
     {
         gls_relative_position = box->relative_position.to_fvec2();
     }
-    if (box->relative_position.type = PIXEL)
+    if (box->relative_position.type == PIXEL)
     {
-        gls_relative_position = pixel_to_glsl_coord(box->relative_position, backbuffer_resolution).to_fvec2();
+        gls_relative_position = pixel_to_glsl_coord(box->relative_position,
+                                                    Resolution{(u32)box->parent->px_current_size.ix, (u32)box->parent->px_current_size.iy}).to_fvec2();
     }
     gls_relative_position += RELATIVE_TO_ADD_VALUES[box->relative_to];
     gls_relative_position += RELATIVE_TO_FACTORS[box->relative_to] * gls_size;
+    if (box->parent)
+    {
+        UI_V2 px_size = glsl_to_pixel_coord(UI_V2(gls_size.x, gls_size.y),
+                                            Resolution{(u32)box->parent->px_current_size.ix, (u32)box->parent->px_current_size.iy});
+        
+        UI_V2 px_relative_position = glsl_to_pixel_coord(UI_V2(gls_relative_position.x, gls_relative_position.y),
+                                                         Resolution{(u32)box->parent->px_current_size.ix, (u32)box->parent->px_current_size.iy});
+        iv2 px_real_position = box->parent->px_position.to_ivec2() + px_relative_position.to_ivec2();
+        gls_relative_position = pixel_to_glsl_coord(UI_V2(px_real_position.x, px_real_position.y), backbuffer_resolution).to_fvec2();
+    }
 
     box->gls_position = UI_V2(gls_relative_position.x, gls_relative_position.y);
     box->px_position = glsl_to_pixel_coord(box->gls_position, backbuffer_resolution);
-    
 }
 
 internal UI_Box
@@ -126,6 +158,12 @@ make_ui_box(Relative_To relative_to, f32 aspect_ratio,
             UI_Box *parent,
             Resolution backbuffer_resolution = {})
 {
+    Resolution dst_resolution = backbuffer_resolution;
+    if (parent)
+    {
+        dst_resolution = Resolution{ (u32)parent->px_current_size.ix, (u32)parent->px_current_size.iy };
+    }
+    
     UI_Box box = {};
     box.relative_position = position;
     box.parent = parent;
@@ -158,31 +196,35 @@ struct UI_State
     GPU_Command_Queue secondary_ui_q;
 
     UI_Box box;
+    UI_Box child;
 } g_ui;
 
 internal void
-push_box_to_render(UI_Box *box)
+push_box_to_render(UI_Box *box, const v2 &uvs)
 {
     v2 normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     v2 normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y)};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f)};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y)};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f)};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position, uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size, uvs};
 }
 
 internal void
 initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
 {
-    //    f32 aspect_ratio = (f32)backbuffer_resolution.width / (f32)backbuffer_resolution.height;
-    f32 aspect_ratio = 0.5f;
-    g_ui.box = make_ui_box(RIGHT_DOWN, aspect_ratio,
-                           UI_V2(-0.05f, 0.05f),
-                           UI_V2(0.5f, 0.5f),
+    g_ui.box = make_ui_box(LEFT_DOWN, 0.5f,
+                           UI_V2(0.05f, 0.05f),
+                           UI_V2(1.0f, 0.9f),
                            nullptr,
                            backbuffer_resolution);
+    g_ui.child = make_ui_box(RIGHT_UP, 1.0f,
+                             UI_V2(0.0f, 0.0f),
+                             UI_V2(0.3f, 0.3f),
+                             &g_ui.box,
+                             backbuffer_resolution);
 }
 
 void
@@ -281,7 +323,8 @@ void
 update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
 {
     // Loop through all boxes
-    push_box_to_render(&g_ui.box);
+    push_box_to_render(&g_ui.box, v2(0.2f, 0.2f));
+    push_box_to_render(&g_ui.child, v2(0.8f, 0.2f));
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
     begin_command_queue(&g_ui.secondary_ui_q, gpu, &inheritance);

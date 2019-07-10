@@ -12,6 +12,7 @@
             - COMMAND_BUFFER_BIND_VBOX()
         - Once finished with update_ui, make sure that scaling works
         - Create UI Box parent system
+            - Make sure that the child position calculation doesn't mess up because of aspect ratio changes... !!!
         - Find way to integrate Font rendering (possibly bound to UI Boxes? - even invisible ones)
      * Get font rendering working, displaying textured images (quads) on the screen
      * Get started working on the in-game console to make gameplay development quicker and easier

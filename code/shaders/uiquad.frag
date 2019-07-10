@@ -18,6 +18,6 @@ void
 main(void)
 {
 //    final_color = texture(font_map, fs_in.uvs);
-    final_color = push_k.color;
+    final_color = vec4(fs_in.uvs.rgg, 0.4);
     final_color.a = 0.4;
 }

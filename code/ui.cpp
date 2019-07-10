@@ -153,10 +153,10 @@ internal void
 initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
 {
     //    f32 aspect_ratio = (f32)backbuffer_resolution.width / (f32)backbuffer_resolution.height;
-    f32 aspect_ratio = 2.0f;
+    f32 aspect_ratio = 0.5f;
     g_ui.box = make_ui_box(LEFT_DOWN, aspect_ratio,
                            UI_V2(0.05f, 0.05f),
-                           UI_V2(0.2f, 0.2f),
+                           UI_V2(0.5f, 0.5f),
                            nullptr,
                            backbuffer_resolution);
 }
@@ -220,7 +220,7 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
         // Later will be the UI texture uniform layout
         Shader_Uniform_Layouts layouts = {};
         Shader_PK_Data pk = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-        Shader_Blend_States blending(false);
+        Shader_Blend_States blending(true);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(ui_pipeline,
                                modules,
@@ -280,7 +280,7 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
         {
             alignas(16) v4 color;
         } pk;
-        pk.color = v4(1.0f, 0.0f, 0.0f, 1.0f);
+        pk.color = v4(0.2f, 0.2f, 0.2f, 1.0f);
 
         command_buffer_push_constant(&pk,
                                      sizeof(pk),

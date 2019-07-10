@@ -56,7 +56,7 @@ struct Planet
     q4 r;
 };
 
-global_var struct Morphable_Terrain_Master
+global_var struct Morphable_Terrains
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
     GPU_Buffer mesh_xz_values;

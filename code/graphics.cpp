@@ -452,15 +452,30 @@ make_graphics_pipeline(Graphics_Pipeline *ppln
     VkPipelineColorBlendAttachmentState blend_states[Shader_Blend_States::MAX_BLEND_STATES];
     for (u32 i = 0; i < blends.count; ++i)
     {
-        init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-                                            , VK_FALSE
-                                            , VK_BLEND_FACTOR_ONE
-                                            , VK_BLEND_FACTOR_ZERO
-                                            , VK_BLEND_OP_ADD
-                                            , VK_BLEND_FACTOR_ONE
-                                            , VK_BLEND_FACTOR_ZERO
-                                            , VK_BLEND_OP_ADD
-                                            , &blend_states[i]);
+        if (blends.blend_states[i])
+        {
+            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+                                        , VK_TRUE
+                                        , VK_BLEND_FACTOR_SRC_ALPHA
+                                        , VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+                                        , VK_BLEND_OP_ADD
+                                        , VK_BLEND_FACTOR_ONE
+                                        , VK_BLEND_FACTOR_ZERO
+                                        , VK_BLEND_OP_ADD
+                                        , &blend_states[i]);
+        }
+        else
+        {
+            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+                                        , VK_FALSE
+                                        , VK_BLEND_FACTOR_ONE
+                                        , VK_BLEND_FACTOR_ZERO
+                                        , VK_BLEND_OP_ADD
+                                        , VK_BLEND_FACTOR_ONE
+                                        , VK_BLEND_FACTOR_ZERO
+                                        , VK_BLEND_OP_ADD
+                                        , &blend_states[i]);
+        }
     }
     init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, {blends.count, blend_states}, &blending_info);
     VkPipelineDynamicStateCreateInfo dynamic_info = {};

@@ -209,4 +209,6 @@ main(void)
 	else final_color = pixel_color;
     }
     else final_color = pixel_color;
+
+    final_color.a = 1.0;
 }

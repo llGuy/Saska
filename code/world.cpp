@@ -67,11 +67,9 @@ global_var struct Morphable_Terrain_Master
     static constexpr u32 MAX_TERRAINS = 10;
     Morphable_Terrain terrains[MAX_TERRAINS];
     u32 terrain_count {0};
-    
 
     Pipeline_Handle terrain_ppln;
     Pipeline_Handle terrain_shadow_ppln;
-    
 
     struct
     {

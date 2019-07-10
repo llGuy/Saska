@@ -114,7 +114,7 @@ struct GPU_Command_Queue
         current_pass_handle = pass;
         fbo_handle = fbo;
 
-        VkClearValue clears[] = {clear_values...};
+        VkClearValue clears[sizeof...(clear_values) + 1] = {clear_values..., VkClearValue{}};
 
         auto *fbo_object = g_framebuffer_manager.get(fbo);
         command_buffer_begin_render_pass(g_render_pass_manager.get(pass), fbo_object
@@ -407,7 +407,8 @@ make_render_pass(Render_Pass *render_pass
                  , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
                  , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
                  , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
-                 , GPU *gpu);
+                 , GPU *gpu
+                 , bool clear_every_frame = true);
 
 struct Shader_Module_Info
 {

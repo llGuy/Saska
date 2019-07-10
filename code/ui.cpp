@@ -152,7 +152,8 @@ push_box_to_render(UI_Box *box)
 internal void
 initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
 {
-    f32 aspect_ratio = (f32)backbuffer_resolution.width / (f32)backbuffer_resolution.height;
+    //    f32 aspect_ratio = (f32)backbuffer_resolution.width / (f32)backbuffer_resolution.height;
+    f32 aspect_ratio = 2.0f;
     g_ui.box = make_ui_box(LEFT_DOWN, aspect_ratio,
                            UI_V2(0.05f, 0.05f),
                            UI_V2(0.2f, 0.2f),
@@ -208,7 +209,7 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, gpu, false /*Don't clear*/);
     }
 
     g_ui.ui_pipeline = g_pipeline_manager.add("pipeline.uibox"_hash);
@@ -262,9 +263,18 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
     begin_command_queue(&g_ui.secondary_ui_q, gpu, &inheritance);
     {
         // May execute other stuf
+        auto *dst_framebuffer = g_framebuffer_manager.get(dst_framebuffer_hdl);
+        command_buffer_set_viewport(dst_framebuffer->extent.width, dst_framebuffer->extent.height, 0.0f, 1.0f, &g_ui.secondary_ui_q.q);
+        
         auto *ui_pipeline = g_pipeline_manager.get(g_ui.ui_pipeline);
         command_buffer_bind_pipeline(ui_pipeline, &g_ui.secondary_ui_q.q);
-        //        command_buffer_bind_vbos(g_ui.ui_quads_model);
+        VkDeviceSize zero = 0;
+        auto *quads_model = g_model_manager.get(g_ui.ui_quads_model);
+        command_buffer_bind_vbos(quads_model->raw_cache_for_rendering,
+                                 {1, &zero},
+                                 0,
+                                 quads_model->binding_count,
+                                 &g_ui.secondary_ui_q.q);
         
         struct UI_PK
         {
@@ -285,7 +295,6 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
                             0);
     }
     end_command_queue(&g_ui.secondary_ui_q, gpu);
-    g_ui.cpu_vertex_count = 0;
 }
 
 void
@@ -299,11 +308,12 @@ render_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl, GPU_Command_Que
                       0,
                       VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                       VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-                      &g_ui.secondary_ui_q.q);
-    g_ui.secondary_ui_q.begin_render_pass(g_ui.ui_render_pass,
+                      &queue->q);
+    queue->begin_render_pass(g_ui.ui_render_pass,
                                           dst_framebuffer_hdl,
-                                          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS,
-                                          init_clear_color_color(0.0f, 0.0f, 0.0f, 0.0f));
+                                          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     command_buffer_execute_commands(&queue->q, {1, &g_ui.secondary_ui_q.q});
-    g_ui.secondary_ui_q.end_render_pass();
+    queue->end_render_pass();
+
+    g_ui.cpu_vertex_count = 0;
 }

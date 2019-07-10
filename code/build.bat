@@ -1,6 +1,7 @@
 @echo off
 
 set CC=cl
+set DB=devenv
 set CFLAGS=-Zi /EHsc /std:c++latest /DEBUG:FULL
 set DEF=/DGLM_ENABLE_EXPERIMENTAL /DUNITY_BUILD /DSTB_IMAGE_IMPLEMENTATION
 set GLFW_INC_DIR=/I C:/dependencies/glfw-3.2.1.bin.WIN64/include

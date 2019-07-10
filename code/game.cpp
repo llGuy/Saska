@@ -111,8 +111,10 @@ update_game(GPU *gpu
     begin_command_buffer(&queue.q, 0, nullptr);
     {
         update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
+        
         update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl());
         render_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), &queue);
+        
         render_final_output(next_image_data.image_index, &queue, swapchain);
     }
     end_command_buffer(&queue.q);

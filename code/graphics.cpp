@@ -347,20 +347,21 @@ make_render_pass(Render_Pass *render_pass
                  , const Memory_Buffer_View<Render_Pass_Attachment> &attachments
                  , const Memory_Buffer_View<Render_Pass_Subpass> &subpasses
                  , const Memory_Buffer_View<Render_Pass_Dependency> &dependencies
-                 , GPU *gpu)
+                 , GPU *gpu
+                 , bool clear_every_instance)
 {
     VkAttachmentDescription descriptions_vk[10] = {};
     u32 att_i = 0;
     for (; att_i < attachments.count; ++att_i)
     {
         descriptions_vk[att_i] = init_attachment_description(attachments[att_i].format
-                                                                     , VK_SAMPLE_COUNT_1_BIT
-                                                                     , VK_ATTACHMENT_LOAD_OP_CLEAR
-                                                                     , VK_ATTACHMENT_STORE_OP_STORE
-                                                                     , VK_ATTACHMENT_LOAD_OP_DONT_CARE
-                                                                     , VK_ATTACHMENT_STORE_OP_DONT_CARE
-                                                                     , VK_IMAGE_LAYOUT_UNDEFINED
-                                                                     , attachments[att_i].final_layout);
+                                                             , VK_SAMPLE_COUNT_1_BIT
+                                                             , clear_every_instance ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE
+                                                             , VK_ATTACHMENT_STORE_OP_STORE
+                                                             , VK_ATTACHMENT_LOAD_OP_DONT_CARE
+                                                             , VK_ATTACHMENT_STORE_OP_DONT_CARE
+                                                             , VK_IMAGE_LAYOUT_UNDEFINED
+                                                             , attachments[att_i].final_layout);
     }
     // Max is 5
     VkSubpassDescription subpasses_vk[5] = {};
@@ -1391,6 +1392,7 @@ struct Post_Processing
 
     Uniform_Layout_Handle pfx_single_tx_layout;
     Render_Pass_Handle pfx_render_pass;
+    Render_Pass_Handle final_render_pass;
 } g_postfx;
 
 void
@@ -1405,14 +1407,28 @@ make_postfx_data(GPU *gpu
         *single_tx_layout_ptr = make_uniform_layout(&info, gpu);
     }
     
-    // ---- Make the final Render Pass ----
     g_postfx.final_stage.fbo = g_framebuffer_manager.add("framebuffer.display_fbo"_hash, swapchain->views.count);
 
+    g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
+    auto *final_render_pass = g_render_pass_manager.get(g_postfx.final_render_pass);
+    {
+        // Only one attachment
+        Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+        Render_Pass_Subpass subpass;
+        subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        Render_Pass_Dependency dependencies[2];
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
+    }
+    
     g_postfx.pfx_render_pass = g_render_pass_manager.add("render_pass.pfx_render_pass"_hash);
     auto *pfx_render_pass = g_render_pass_manager.get(g_postfx.pfx_render_pass);
     {
         // Only one attachment
-        Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+        Render_Pass_Attachment attachment = { swapchain->format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
         Render_Pass_Subpass subpass;
         subpass.set_color_attachment_references(Render_Pass_Attachment_Reference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         Render_Pass_Dependency dependencies[2];
@@ -1485,7 +1501,7 @@ make_postfx_data(GPU *gpu
         Image_Handle ssr_tx_hdl = g_image_manager.get_handle("image2D.pfx_ssr_color"_hash);
         auto *ssr_tx_ptr = g_image_manager.get(ssr_tx_hdl);
         update_uniform_group(gpu, ssr_output_group,
-                             Update_Binding{TEXTURE, ssr_tx_ptr, 0, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR});
+                             Update_Binding{TEXTURE, ssr_tx_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }
 
@@ -1540,7 +1556,7 @@ apply_pfx_on_scene(GPU_Command_Queue *queue
 void
 render_final_output(u32 image_index, GPU_Command_Queue *queue, Swapchain *swapchain)
 {
-    queue->begin_render_pass(g_postfx.pfx_render_pass
+    queue->begin_render_pass(g_postfx.final_render_pass
                              , g_postfx.final_stage.fbo + image_index
                              , VK_SUBPASS_CONTENTS_INLINE
                              , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));

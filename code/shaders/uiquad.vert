@@ -11,17 +11,17 @@ layout(location = 0) out VS_DATA
 vec4
 uint_color_to_v4(uint color)
 {
-  float r = float((color >> 24) & 0xff) / 256.0;
-  float g = float((color >> 16) & 0xff) / 256.0;
-  float b = float((color >> 8) & 0xff) / 256.0;
-  float a = float(color & 0xff) / 256.0;
-  return(vec4(r, g, b, a));
+    float r = float((color >> 24) & 0xff) / 256.0;
+    float g = float((color >> 16) & 0xff) / 256.0;
+    float b = float((color >> 8) & 0xff) / 256.0;
+    float a = float(color & 0xff) / 256.0;
+    return(vec4(r, g, b, a));
 }
 
 void
 main(void)
 {
-  vs_out.color = uint_color_to_v4(color);
-  gl_Position = vec4(position, 0.0, 1.0);
-  gl_Position.y *= -1.0;
+    vs_out.color = uint_color_to_v4(color);
+    gl_Position = vec4(position, 0.0, 1.0);
+    gl_Position.y *= -1.0;
 }

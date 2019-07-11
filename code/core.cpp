@@ -14,6 +14,9 @@
         - Create UI Box parent system
             - Make sure that the child position calculation doesn't mess up because of aspect ratio changes... !!!
         - Find way to integrate Font rendering (possibly bound to UI Boxes? - even invisible ones)
+            - Create font texture. 
+            - Integrate the texture into the game
+            - Create font interface system, to create all the uvs, positions, etc...
      * Get font rendering working, displaying textured images (quads) on the screen
      * Get started working on the in-game console to make gameplay development quicker and easier
      * Start getting the gameplay moving (add better physics, sliding through different terrains, etc...)

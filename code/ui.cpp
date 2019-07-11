@@ -185,19 +185,30 @@ struct UI_State
         v2 position;
         u32 color;
     };
-
-    persist constexpr u32 FONT_VBO_SIZE = 65536;
-    persist constexpr u32 MAX_FONT_VERTICES_PER_UPDATE = FONT_VBO_SIZE / sizeof(GUI_Vertex);
-    persist constexpr u32 MAX_FONT_QUADS_PER_UPDATE = MAX_FONT_VERTICES_PER_UPDATE / 6;
-    GUI_Vertex cpu_vertex_pool[ MAX_FONT_VERTICES_PER_UPDATE ];
+    persist constexpr u32 MAX_QUADS = 10;
+    GUI_Vertex cpu_vertex_pool[ MAX_QUADS * 6 ];
     u32 cpu_vertex_count = 0;
-    
     Model_Handle ui_quads_model;
     GPU_Buffer_Handle ui_quads_vbo;
     Pipeline_Handle ui_pipeline;
+
+    struct Textured_Vertex
+    {
+        v2 position;
+        v2 uvs;
+    };
+    persist constexpr u32 MAX_TX_QUADS = 100;
+    Textured_Vertex cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
+    u32 cpu_tx_vertex_count = 0;    
+    Model_Handle tx_quads_model;
+    GPU_Buffer_Handle tx_quads_vbo;
+    Pipeline_Handle tx_pipeline;
+    // May contain an array of textures
+    Uniform_Group tx_group;
+
     Render_Pass_Handle ui_render_pass;
     GPU_Command_Queue secondary_ui_q;
-
+    
     UI_Box box;
     UI_Box child;
 } g_ui;
@@ -233,9 +244,9 @@ initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
 }
 
 void
-initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolution &resolution)
+initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, Uniform_Pool *uniform_pool, const Resolution &resolution)
 {
-    g_ui.ui_quads_model = g_model_manager.add("model.font_quads"_hash);
+    g_ui.ui_quads_model = g_model_manager.add("model.ui_quads"_hash);
     auto *ui_quads_ptr = g_model_manager.get(g_ui.ui_quads_model);
     {
         ui_quads_ptr->attribute_count = 2;
@@ -252,13 +263,30 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
 
 	binding->end_attributes_creation();
     }
+    g_ui.tx_quads_model = g_model_manager.add("model.tx_quads"_hash);
+    auto *tx_quads_ptr = g_model_manager.get(g_ui.tx_quads_model);
+    {
+        tx_quads_ptr->attribute_count = 2;
+	tx_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
+	tx_quads_ptr->binding_count = 1;
+	tx_quads_ptr->bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding));
 
-    g_ui.ui_quads_vbo = g_gpu_buffer_manager.add("vbo.font_quads"_hash);
+	// only one binding
+	Model_Binding *binding = tx_quads_ptr->bindings;
+	binding->begin_attributes_creation(tx_quads_ptr->attributes_buffer);
+
+	binding->push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::Textured_Vertex::position));
+	binding->push_attribute(1, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::Textured_Vertex::uvs));
+
+	binding->end_attributes_creation();
+    }
+
+    g_ui.ui_quads_vbo = g_gpu_buffer_manager.add("vbo.ui_quads"_hash);
     auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
     {
         auto *main_binding = &ui_quads_ptr->bindings[0];
 	
-        init_buffer(UI_State::FONT_VBO_SIZE,
+        init_buffer(UI_State::MAX_QUADS * 6 * sizeof(UI_State::GUI_Vertex),
                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VK_SHARING_MODE_EXCLUSIVE,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -267,6 +295,21 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
 
         main_binding->buffer = vbo->buffer;
         ui_quads_ptr->create_vbo_list();
+    }
+    g_ui.tx_quads_vbo = g_gpu_buffer_manager.add("vbo.tx_quads"_hash);
+    auto *tx_vbo = g_gpu_buffer_manager.get(g_ui.tx_quads_vbo);
+    {
+        auto *main_binding = &tx_quads_ptr->bindings[0];
+	
+        init_buffer(UI_State::MAX_TX_QUADS * 6 * sizeof(UI_State::Textured_Vertex),
+                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                    gpu,
+                    tx_vbo);
+
+        main_binding->buffer = tx_vbo->buffer;
+        tx_quads_ptr->create_vbo_list();
     }
 
     g_ui.ui_render_pass = g_render_pass_manager.add("render_pass.ui"_hash);
@@ -290,7 +333,7 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
                                Shader_Module_Info{"shaders/SPV/uiquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         // Later will be the UI texture uniform layout
         Shader_Uniform_Layouts layouts = {};
-        Shader_PK_Data pk = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+        Shader_PK_Data pk = {};
         Shader_Blend_States blending(true);
         Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(ui_pipeline,
@@ -311,16 +354,66 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
                                0,
                                gpu);
     }
+    
+    Uniform_Layout_Handle tx_layout_hdl = g_uniform_layout_manager.add("uniform_layout.tx_ui_quad"_hash);
+    auto *tx_layout_ptr = g_uniform_layout_manager.get(tx_layout_hdl);
+    {
+        Uniform_Layout_Info layout_info;
+        layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        *tx_layout_ptr = make_uniform_layout(&layout_info, gpu);
+    }
+    Image_Handle tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
+    auto *tx_ptr = g_image_manager.get(tx_hdl);
+    {
+        
+    }
+    Uniform_Group_Handle tx_group_hdl = g_uniform_group_manager.add("uniform_group.tx_ui_quad"_hash);
+    auto *tx_group_ptr = g_uniform_group_manager.get(tx_group_hdl);
+    {
+        *tx_group_ptr = make_uniform_group(tx_layout_ptr, uniform_pool, gpu);
+        update_uniform_group(gpu, tx_group_ptr,
+                             Update_Binding{ TEXTURE, tx_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+    }
+    
+    g_ui.tx_pipeline = g_pipeline_manager.add("pipeline.txbox"_hash);
+    auto *tx_pipeline = g_pipeline_manager.get(g_ui.tx_pipeline);
+    {
+        Shader_Modules modules(Shader_Module_Info{"shaders/SPV/uifontquad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               Shader_Module_Info{"shaders/SPV/uifontquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        // Later will be the UI texture uniform layout
+        Shader_Uniform_Layouts layouts(tx_layout_hdl);
+        Shader_PK_Data pk = {};
+        Shader_Blend_States blending(true);
+        Dynamic_States dynamic(VK_DYNAMIC_STATE_VIEWPORT);
+        make_graphics_pipeline(tx_pipeline,
+                               modules,
+                               false,
+                               VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                               VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE,
+                               layouts,
+                               pk,
+                               resolution,
+                               blending,
+                               tx_quads_ptr,
+                               false,
+                               0.0f,
+                               dynamic,
+                               ui_render_pass,
+                               0,
+                               gpu);
+    }
+
     g_ui.secondary_ui_q.submit_level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 }
 
 // will be rendered to backbuffer first
 void
-initialize_game_ui(GPU *gpu, GPU_Command_Queue_Pool *qpool, Swapchain *swapchain, const Resolution &resolution)
+initialize_game_ui(GPU *gpu, GPU_Command_Queue_Pool *qpool, Swapchain *swapchain, Uniform_Pool *uniform_pool, const Resolution &resolution)
 {
     g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY, gpu);
 
-    initialize_ui_rendering_state(gpu, swapchain->format, resolution);
+    initialize_ui_rendering_state(gpu, swapchain->format, uniform_pool, resolution);
     initialize_ui_elements(gpu, resolution);
 }
 
@@ -335,7 +428,7 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
     begin_command_queue(&g_ui.secondary_ui_q, gpu, &inheritance);
     {
-        // May execute other stuf
+        // May execute other stuff
         auto *dst_framebuffer = g_framebuffer_manager.get(dst_framebuffer_hdl);
         command_buffer_set_viewport(dst_framebuffer->extent.width, dst_framebuffer->extent.height, 0.0f, 1.0f, &g_ui.secondary_ui_q.q);
         
@@ -355,12 +448,6 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
         } pk;
         pk.color = v4(0.2f, 0.2f, 0.2f, 1.0f);
 
-        command_buffer_push_constant(&pk,
-                                     sizeof(pk),
-                                     0,
-                                     VK_SHADER_STAGE_FRAGMENT_BIT,
-                                     ui_pipeline,
-                                     &g_ui.secondary_ui_q.q);
         command_buffer_draw(&g_ui.secondary_ui_q.q,
                             g_ui.cpu_vertex_count,
                             1,

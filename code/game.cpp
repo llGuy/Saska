@@ -45,7 +45,7 @@ make_game(Vulkan_State *vk, GPU *gpu, Swapchain *swapchain, Window_Data *window)
     // Initialize atmosphere, shadow, skeletal animation...
     initialize_game_3D_graphics(gpu, swapchain, &window_rendering.command_pool);
     initialize_game_2D_graphics(gpu, swapchain, &window_rendering.command_pool);
-    initialize_game_ui(gpu, &window_rendering.command_pool, &vk->swapchain, get_backbuffer_resolution());
+    initialize_game_ui(gpu, &window_rendering.command_pool, &vk->swapchain, &g_uniform_pool, get_backbuffer_resolution());
     initialize_world(window, vk, &window_rendering.command_pool);
 
     make_lua_scripting();

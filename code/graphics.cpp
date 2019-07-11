@@ -267,7 +267,7 @@ submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue)
 }
 
 void
-make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu)
+make_framebuffer_attachment(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
@@ -297,6 +297,28 @@ make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkIma
                                    , 0.0f, 0.0f, 0.0f
                                    , gpu, &img->image_sampler);
     }
+}
+
+void
+make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, u32 dimensions, GPU *gpu)
+{
+    VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
+    VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+    init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
+    init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR
+                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
+                       , VK_FALSE
+                       , 1
+                       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
+                       , VK_FALSE
+                       , (VkCompareOp)0
+                       , VK_SAMPLER_MIPMAP_MODE_LINEAR
+                       , 0.0f, 0.0f, 0.0f
+                       , gpu, &img->image_sampler);
 }
 
 void
@@ -843,7 +865,7 @@ make_atmosphere_data(GPU *gpu
     {
         Image_Handle atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
         auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
-        make_texture(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
+        make_framebuffer_attachment(cubemap, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
 
         make_framebuffer(atmosphere_fbo, Atmosphere::CUBEMAP_W, Atmosphere::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
     }
@@ -941,7 +963,7 @@ make_shadow_data(GPU *gpu, Swapchain *swapchain)
     {
         Image_Handle shadowmap_handle = g_image_manager.add("image2D.shadow_map"_hash);
         auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
-        make_texture(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(shadowmap_texture, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
         
         make_framebuffer(shadow_fbo, Lighting::Shadows::SHADOWMAP_W, Lighting::Shadows::SHADOWMAP_W, 1, shadow_pass, null_buffer<Image2D>(), shadowmap_texture, gpu);
     }
@@ -1218,11 +1240,11 @@ make_dfr_rendering_data(GPU *gpu, Swapchain *swapchain)
         Image_Handle depth_tx_hdl = g_image_manager.add("image2D.fbo_depth"_hash);
         auto *depth_tx = g_image_manager.get(depth_tx_hdl);
 
-        make_texture(final_tx, w, h, swapchain->format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2, gpu);
-        make_texture(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_texture(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_texture(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_texture(depth_tx, w, h, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(final_tx, w, h, swapchain->format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(depth_tx, w, h, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
 
         Image2D color_attachments[4] = {};
         color_attachments[0] = *final_tx;
@@ -1503,7 +1525,7 @@ make_postfx_data(GPU *gpu
     {
         Image_Handle ssr_tx_hdl = g_image_manager.add("image2D.pfx_ssr_color"_hash);
         auto *ssr_tx_ptr = g_image_manager.get(ssr_tx_hdl);
-        make_texture(ssr_tx_ptr, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height,
+        make_framebuffer_attachment(ssr_tx_ptr, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height,
                      swapchain->format, 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 2, gpu);
         make_framebuffer(ssr_fbo, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 1, pfx_render_pass, {1, ssr_tx_ptr}, nullptr, gpu);
     }

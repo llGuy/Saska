@@ -317,7 +317,11 @@ void
 submit_queued_materials_from_secondary_queues(GPU_Command_Queue *queue);
 
 void
-make_texture(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu);
+make_framebuffer_attachment(Image2D *img, u32 w, u32 h, VkFormat format, u32 layer_count, VkImageUsageFlags usage, u32 dimensions, GPU *gpu);
+
+// Need to fill in this texture with data from a separate function
+void
+make_texture(Image2D *img, u32 w, u32 h, VkFormat, u32 layer_count, u32 dimensions, GPU *gpu);
 
 void
 make_framebuffer(Framebuffer *fbo

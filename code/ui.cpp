@@ -211,6 +211,7 @@ struct UI_State
     
     UI_Box box;
     UI_Box child;
+    UI_Box test_character_placeholder;
 } g_ui;
 
 internal void
@@ -224,6 +225,19 @@ push_box_to_render(UI_Box *box)
     g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), box->color};
     g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), box->color};
     g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
+}
+
+internal void
+push_font_character_to_render(UI_Box *box)
+{
+    v2 normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
+    v2 normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position, v2(0.0f, 0.0f)};
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), v2(0.0f, 1.0f)};
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), v2(1.0f, 0.0f)};
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), v2(0.0f, 1.0f)};
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), v2(1.0f, 0.0f)};
+    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, v2(1.0f)};
 }
 
 internal void
@@ -241,6 +255,12 @@ initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
                              &g_ui.box,
                              0xaa000036,
                              backbuffer_resolution);
+    g_ui.test_character_placeholder = make_ui_box(LEFT_DOWN, 1.0f,
+                                                  UI_V2(0.0f, 0.0f),
+                                                  UI_V2(0.3f, 0.3f),
+                                                  &g_ui.box,
+                                                  0xaa000036,
+                                                  backbuffer_resolution);
 }
 
 void
@@ -365,7 +385,7 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, Uniform_Pool 
     Image_Handle tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager.get(tx_hdl);
     {
-        
+        make_texture(tx_ptr, 500, 500, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, gpu);
     }
     Uniform_Group_Handle tx_group_hdl = g_uniform_group_manager.add("uniform_group.tx_ui_quad"_hash);
     auto *tx_group_ptr = g_uniform_group_manager.get(tx_group_hdl);
@@ -423,6 +443,7 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
     // Loop through all boxes
     push_box_to_render(&g_ui.box);
     push_box_to_render(&g_ui.child);
+    push_font_character_to_render(&g_ui.test_character_placeholder);
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
@@ -453,6 +474,21 @@ update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
                             1,
                             0,
                             0);
+
+        auto *font_pipeline = g_pipeline_manager.get(g_ui.tx_pipeline);
+        command_buffer_bind_pipeline(font_pipeline, &g_ui.secondary_ui_q.q);
+        
+        auto *tx_quads_model = g_model_manager.get(g_ui.tx_quads_model);
+        command_buffer_bind_vbos(tx_quads_model->raw_cache_for_rendering,
+                                 {1, &zero},
+                                 0,
+                                 tx_quads_model->binding_count,
+                                 &g_ui.secondary_ui_q.q);
+        command_buffer_draw(&g_ui.secondary_ui_q.q,
+                            g_ui.cpu_tx_vertex_count,
+                            1,
+                            0,
+                            0);
     }
     end_command_queue(&g_ui.secondary_ui_q, gpu);
 }
@@ -469,6 +505,14 @@ render_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl, GPU_Command_Que
                       VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                       VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
                       &queue->q);
+    auto *tx_vbo = g_gpu_buffer_manager.get(g_ui.tx_quads_vbo);
+    update_gpu_buffer(tx_vbo,
+                      g_ui.cpu_tx_vertex_pool,
+                      sizeof(UI_State::Textured_Vertex) * g_ui.cpu_tx_vertex_count,
+                      0,
+                      VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                      &queue->q);
     queue->begin_render_pass(g_ui.ui_render_pass,
                                           dst_framebuffer_hdl,
                                           VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
@@ -476,4 +520,5 @@ render_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl, GPU_Command_Que
     queue->end_render_pass();
 
     g_ui.cpu_vertex_count = 0;
+    g_ui.cpu_tx_vertex_count = 0;
 }

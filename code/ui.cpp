@@ -77,6 +77,7 @@ struct UI_Box
     UI_V2 gls_current_size;
     UI_V2 gls_relative_size;
     f32 aspect_ratio;
+    u32 color;
 };
 
 internal void
@@ -156,6 +157,7 @@ make_ui_box(Relative_To relative_to, f32 aspect_ratio,
             UI_V2 position /* Coord space agnostic */,
             UI_V2 gls_max_values /* Max X and Y size */,
             UI_Box *parent,
+            const u32 &color,
             Resolution backbuffer_resolution = {})
 {
     Resolution dst_resolution = backbuffer_resolution;
@@ -172,6 +174,7 @@ make_ui_box(Relative_To relative_to, f32 aspect_ratio,
     update_ui_box_size(&box, backbuffer_resolution);
     box.relative_to = relative_to;
     update_ui_box_position(&box, backbuffer_resolution);
+    box.color = color;
     return(box);
 }
 
@@ -180,7 +183,7 @@ struct UI_State
     struct GUI_Vertex
     {
         v2 position;
-        v2 uvs;
+        u32 color;
     };
 
     persist constexpr u32 FONT_VBO_SIZE = 65536;
@@ -200,16 +203,16 @@ struct UI_State
 } g_ui;
 
 internal void
-push_box_to_render(UI_Box *box, const v2 &uvs)
+push_box_to_render(UI_Box *box)
 {
     v2 normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     v2 normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position, uvs};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), uvs};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), uvs};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), uvs};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), uvs};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size, uvs};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position, box->color};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), box->color};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), box->color};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(0.0f, normalized_size.y), box->color};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + v2(normalized_size.x, 0.0f), box->color};
+    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
 }
 
 internal void
@@ -219,11 +222,13 @@ initialize_ui_elements(GPU *gpu, const Resolution &backbuffer_resolution)
                            UI_V2(0.05f, 0.05f),
                            UI_V2(1.0f, 0.9f),
                            nullptr,
+                           0x16161636,
                            backbuffer_resolution);
     g_ui.child = make_ui_box(RIGHT_UP, 1.0f,
                              UI_V2(0.0f, 0.0f),
                              UI_V2(0.3f, 0.3f),
                              &g_ui.box,
+                             0xaa000036,
                              backbuffer_resolution);
 }
 
@@ -243,7 +248,7 @@ initialize_ui_rendering_state(GPU *gpu, VkFormat swapchain_format, const Resolut
 	binding->begin_attributes_creation(ui_quads_ptr->attributes_buffer);
 
 	binding->push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::GUI_Vertex::position));
-	binding->push_attribute(1, VK_FORMAT_R32G32_SFLOAT, sizeof(UI_State::GUI_Vertex::uvs));
+	binding->push_attribute(1, VK_FORMAT_R32_UINT, sizeof(UI_State::GUI_Vertex::color));
 
 	binding->end_attributes_creation();
     }
@@ -323,8 +328,9 @@ void
 update_game_ui(GPU *gpu, Framebuffer_Handle dst_framebuffer_hdl)
 {
     // Loop through all boxes
-    push_box_to_render(&g_ui.box, v2(0.2f, 0.2f));
-    push_box_to_render(&g_ui.child, v2(0.8f, 0.2f));
+    push_box_to_render(&g_ui.box);
+    push_box_to_render(&g_ui.child);
+    
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
     begin_command_queue(&g_ui.secondary_ui_q, gpu, &inheritance);

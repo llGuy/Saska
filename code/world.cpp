@@ -42,8 +42,8 @@ struct Morphable_Terrain
     
     struct Push_K
     {
-	m4x4 transform;
-	v3 color;
+        m4x4 transform;
+        v3 color;
     } push_k;
 };
 
@@ -74,11 +74,11 @@ global_var struct Morphable_Terrains
 
     struct
     {
-	Pipeline_Handle ppln;
-	// ts_position
-	iv2 ts_position{-1};
-	// will not be a pointer in the future
-	Morphable_Terrain *t;
+        Pipeline_Handle ppln;
+        // ts_position
+        iv2 ts_position{-1};
+        // will not be a pointer in the future
+        Morphable_Terrain *t;
     } terrain_pointer;
 } g_terrains;
 
@@ -108,13 +108,13 @@ inline s32
 get_terrain_index(s32 x, s32 z, s32 width_x, s32 depth_z)
 {
     if (x >= 0 && x < width_x
-	&& z >= 0 && z < depth_z)
+        && z >= 0 && z < depth_z)
     {
-	return(x + z * depth_z);
+        return(x + z * depth_z);
     }
     else
     {
-	return(-1);
+        return(-1);
     }
 }
 
@@ -137,8 +137,8 @@ compute_ts_to_ws_matrix(Morphable_Terrain *t)
 }
 
 inline v3
-transform_from_ws_to_ts(const v3 &ws_v
-			, Morphable_Terrain *t)
+transform_from_ws_to_ts(const v3 &ws_v,
+                        Morphable_Terrain *t)
 {
     v3 ts_position = t->inverse_transform * v4(ws_v, 1.0f);
 
@@ -146,8 +146,8 @@ transform_from_ws_to_ts(const v3 &ws_v
 }
 
 internal bool
-is_on_terrain(const v3 &ws_position
-	      , Morphable_Terrain *t)
+is_on_terrain(const v3 &ws_position,
+              Morphable_Terrain *t)
 {
     f32 max_x = (f32)(t->xz_dim.x);
     f32 max_z = (f32)(t->xz_dim.y);
@@ -172,11 +172,11 @@ distance_squared(const T &v)
 }
 
 internal iv2
-get_coord_pointing_at(v3 ws_ray_p
-		      , const v3 &ws_ray_d
-		      , Morphable_Terrain *t
-		      , f32 dt
-		      , GPU *gpu)
+get_coord_pointing_at(v3 ws_ray_p,
+                      const v3 &ws_ray_d,
+                      Morphable_Terrain *t,
+                      f32 dt,
+                      GPU *gpu)
 {
     persist constexpr f32 MAX_DISTANCE = 6.0f;
     persist constexpr f32 MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -188,10 +188,10 @@ get_coord_pointing_at(v3 ws_ray_p
     v3 ts_ray_diff = STEP_SIZE * ts_ray_d;
 
     iv2 ts_position = iv2(-1);
-    
-    for (v3 ts_ray_step = ts_ray_d
-	     ; distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED
-	     ; ts_ray_step += ts_ray_diff)
+
+    for (v3 ts_ray_step = ts_ray_d;
+         distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED;
+         ts_ray_step += ts_ray_diff)
     {
 	v3 ts_ray_current_p = ts_ray_step + ts_ray_p_start;
 
@@ -222,8 +222,8 @@ struct Detected_Collision_Return
 };
 
 internal Detected_Collision_Return
-detect_terrain_collision(const v3 &ws_p
-			 , Morphable_Terrain *t)
+detect_terrain_collision(const v3 &ws_p,
+                         Morphable_Terrain *t)
 {
     m4x4 ws_to_ts = t->inverse_transform;
 
@@ -240,7 +240,7 @@ detect_terrain_collision(const v3 &ws_p
 
     // position of the player on one tile (square - two triangles)
     v2 ts_position_on_tile = v2(ts_p_xz.x - glm::floor(ts_p_xz.x)
-					      , ts_p_xz.y - glm::floor(ts_p_xz.y));
+                                , ts_p_xz.y - glm::floor(ts_p_xz.y));
 
     // starting from (0, 0)
     iv2 ts_tile_corner_position = iv2(glm::floor(ts_p_xz));
@@ -800,17 +800,17 @@ prepare_terrain_pointer_for_render(GPU_Command_Queue *queue
 	push_k.ts_heights[7] = calculate_height(x - 1, z + 1);
     
 	command_buffer_push_constant(&push_k
-					     , sizeof(push_k)
-					     , 0
-					     , VK_SHADER_STAGE_VERTEX_BIT
-					     , ppln
-					     , &queue->q);
+                                     , sizeof(push_k)
+                                     , 0
+                                     , VK_SHADER_STAGE_VERTEX_BIT
+                                     , ppln
+                                     , &queue->q);
 
 	command_buffer_draw(&queue->q
-				    , 8
-				    , 1
-				    , 0
-				    , 0);
+                            , 8
+                            , 1
+                            , 0
+                            , 0);
     }
     // else don't render the pointer at all
 }

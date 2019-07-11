@@ -4,7 +4,7 @@ layout(location = 0) out vec4 final_color;
 
 layout(location = 0) in VS_DATA
 {
-    vec2 uvs;
+    vec4 color;
 } fs_in;
 
 layout(push_constant) uniform PK
@@ -18,6 +18,5 @@ void
 main(void)
 {
 //    final_color = texture(font_map, fs_in.uvs);
-    final_color = vec4(fs_in.uvs.rgg, 0.4);
-    final_color.a = 0.4;
+    final_color = fs_in.color;
 }

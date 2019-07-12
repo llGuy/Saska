@@ -834,6 +834,40 @@ copy_buffer(gpu_buffer_t *src_buffer
 }
 
 void
+invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
+                                             VkCommandPool *transfer_command_pool,
+                                             image2d_t *dst_image,
+                                             int32_t width, int32_t height,
+                                             gpu_t *gpu)
+{
+    VkDeviceSize staging_buffer_size = items.size;
+	
+    gpu_buffer_t staging_buffer;
+    staging_buffer.size = staging_buffer_size;
+
+    init_buffer(staging_buffer_size
+                , VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+                , VK_SHARING_MODE_EXCLUSIVE
+                , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+                , gpu
+                , &staging_buffer);
+
+    mapped_gpu_memory_t mapped_memory = staging_buffer.construct_map();
+    mapped_memory.begin(gpu);
+    mapped_memory.fill(items);
+    mapped_memory.end(gpu);
+
+    copy_buffer_into_image(&staging_buffer,
+                           dst_image,
+                           width, height,
+                           transfer_command_pool,
+                           gpu);
+
+    vkDestroyBuffer(gpu->logical_device, staging_buffer.buffer, nullptr);
+    vkFreeMemory(gpu->logical_device, staging_buffer.memory, nullptr);    
+}
+
+void
 invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , VkBufferUsageFlags usage
                                               , VkCommandPool *transfer_command_pool

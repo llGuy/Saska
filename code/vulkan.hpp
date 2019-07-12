@@ -1039,7 +1039,11 @@ invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , gpu_t *gpu);
 
 void
-invoke_staging_buffer_for_device_local_image();
+invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
+                                             VkCommandPool *transfer_command_pool,
+                                             image2d_t *dst_image,
+                                             int32_t width, int32_t height,
+                                             gpu_t *gpu);
     
 struct framebuffer_t
 {

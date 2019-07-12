@@ -264,7 +264,11 @@ initialize_ui_elements(gpu_t *gpu, const resolution_t &backbuffer_resolution)
 }
 
 void
-initialize_ui_rendering_state(gpu_t *gpu, VkFormat swapchain_format, uniform_pool_t *uniform_pool, const resolution_t &resolution)
+initialize_ui_rendering_state(gpu_t *gpu,
+                              VkFormat swapchain_format,
+                              uniform_pool_t *uniform_pool,
+                              const resolution_t &resolution,
+                              gpu_command_queue_pool_t *queue_pool)
 {
     g_ui.ui_quads_model = g_model_manager.add("model.ui_quads"_hash);
     auto *ui_quads_ptr = g_model_manager.get(g_ui.ui_quads_model);
@@ -386,6 +390,13 @@ initialize_ui_rendering_state(gpu_t *gpu, VkFormat swapchain_format, uniform_poo
     auto *tx_ptr = g_image_manager.get(tx_hdl);
     {
         make_texture(tx_ptr, 500, 500, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, gpu);
+        external_image_data_t image_data = read_image("font/consolas.png");
+        invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                     queue_pool,
+                                                     tx_ptr,
+                                                     (uint32_t)image_data.width,
+                                                     (uint32_t)image_data.height,
+                                                     gpu);
     }
     g_ui.tx_group = g_uniform_group_manager.add("uniform_group.tx_ui_quad"_hash);
     auto *tx_group_ptr = g_uniform_group_manager.get(g_ui.tx_group);
@@ -433,7 +444,7 @@ initialize_game_ui(gpu_t *gpu, gpu_command_queue_pool_t *qpool, swapchain_t *swa
 {
     g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY, gpu);
 
-    initialize_ui_rendering_state(gpu, swapchain->format, uniform_pool, resolution);
+    initialize_ui_rendering_state(gpu, swapchain->format, uniform_pool, resolution, qpool);
     initialize_ui_elements(gpu, resolution);
 }
 

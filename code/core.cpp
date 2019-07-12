@@ -30,6 +30,7 @@
 
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <stb_image.h>
 
 #if defined(UNITY_BUILD)
 #include "memory.cpp"
@@ -54,12 +55,56 @@
 #include "vulkan.hpp"
 #endif
 
+// \b[A-Z][a-z0-9]+\(_[A-Z][a-z0-9]*\)*\b
+
 #define DEBUG_FILE ".debug"
 
-Debug_Output output_file;
-Window_Data window;
+debug_output_t output_file;
+window_data_t window;
 
 internal bool running;
+
+file_contents_t
+read_file(const char *filename
+	  , const char *flags
+	  , stack_allocator_t *allocator)
+{
+    FILE *file = fopen(filename, flags);
+    if (file == nullptr)
+    {
+	OUTPUT_DEBUG_LOG("error - couldnt load file \"%s\"\n", filename);
+	assert(false);
+    }
+    fseek(file, 0, SEEK_END);
+    uint32_t size = ftell(file);
+    rewind(file);
+
+    byte_t *buffer = (byte_t *)allocate_stack(size + 1
+                                            , 1
+                                            , filename
+					  , allocator);
+    fread(buffer, 1, size, file);
+
+    buffer[size] = '\0';
+    
+    fclose(file);
+
+    file_contents_t contents { size, buffer };
+    
+    return(contents);
+}
+
+external_image_data_t
+read_image(const char *filename)
+{
+    external_image_data_t external_image_data;
+    external_image_data.pixels = stbi_load(filename,
+                                           &external_image_data.width,
+                                           &external_image_data.height,
+                                           &external_image_data.channels,
+                                           STBI_rgb_alpha);
+    return(external_image_data);
+}
 
 internal void
 open_debug_file(void)
@@ -91,13 +136,13 @@ output_debug(const char *format
     fflush(output_file.fp);
 }
 
-f32
-barry_centric(const v3 &p1, const v3 &p2, const v3 &p3, const v2 &pos)
+float32_t
+barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
 {
-    f32 det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
-    f32 l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
-    f32 l2 = ((p3.z - p1.z) * (pos.x - p3.x) + (p1.x - p3.x) * (pos.y - p3.z)) / det;
-    f32 l3 = 1.0f - l1 - l2;
+    float32_t det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
+    float32_t l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
+    float32_t l2 = ((p3.z - p1.z) * (pos.x - p3.x) + (p1.x - p3.x) * (pos.y - p3.z)) / det;
+    float32_t l3 = 1.0f - l1 - l2;
     return l1 * p1.y + l2 * p2.y + l3 * p3.y;
 }
 
@@ -106,29 +151,29 @@ barry_centric(const v3 &p1, const v3 &p2, const v3 &p3, const v2 &pos)
 #define MAX_MB 5
 
 internal void
-glfw_window_resize_proc(GLFWwindow *win, s32 w, s32 h)
+glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
 {
-    Window_Data *w_data = (Window_Data *)glfwGetWindowUserPointer(win);
+    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
     w_data->w = w;
     w_data->h = h;
     w_data->window_resized = true;
 }
 
 internal void
-glfw_keyboard_input_proc(GLFWwindow *win, s32 key, s32 scancode, s32 action, s32 mods)
+glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t scancode, int32_t action, int32_t mods)
 {
     if (key < MAX_KEYS)
     {
-	Window_Data *w_data = (Window_Data *)glfwGetWindowUserPointer(win);
+	window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
 	if (action == GLFW_PRESS) w_data->key_map[key] = true;
 	else if (action == GLFW_RELEASE) w_data->key_map[key] = false;
     }
 }
 
 internal void
-glfw_mouse_position_proc(GLFWwindow *win, f64 x, f64 y)
+glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
 {
-    Window_Data *w_data = (Window_Data *)glfwGetWindowUserPointer(win);
+    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
 
     w_data->prev_m_x = w_data->m_x;
     w_data->prev_m_y = w_data->m_y;
@@ -139,11 +184,11 @@ glfw_mouse_position_proc(GLFWwindow *win, f64 x, f64 y)
 }
 
 internal void
-glfw_mouse_button_proc(GLFWwindow *win, s32 button, s32 action, s32 mods)
+glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t mods)
 {
     if (button < MAX_MB)
     {
-	Window_Data *w_data = (Window_Data *)glfwGetWindowUserPointer(win);
+	window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
 	if (action == GLFW_PRESS) w_data->mb_map[button] = true;
 	else if (action == GLFW_RELEASE) w_data->mb_map[button] = false;
     }
@@ -152,21 +197,21 @@ glfw_mouse_button_proc(GLFWwindow *win, s32 button, s32 action, s32 mods)
 #include <chrono>
 
 internal void
-init_free_list_allocator_head(Free_List_Allocator *allocator = &free_list_allocator_global)
+init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
 {
-    allocator->free_block_head = (Free_Block_Header *)allocator->start;
+    allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
-s32
-main(s32 argc
+int32_t
+main(int32_t argc
      , char * argv[])
 {
     open_debug_file();
 	
     OUTPUT_DEBUG_LOG("%s\n", "starting session");
 
-    linear_allocator_global.capacity = megabytes(10);
+    linear_allocator_global.capacity = megabytes(30);
     linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
 	
     stack_allocator_global.capacity = megabytes(10);
@@ -210,7 +255,7 @@ main(s32 argc
     glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
     glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
 
-    Vulkan_State vk = {};
+    vulkan_state_t vk = {};
 
     init_vulkan_state(&vk, window.window);
 
@@ -222,13 +267,13 @@ main(s32 argc
 	
 	
 
-    f32 fps = 0.0f;
+    float32_t fps = 0.0f;
 
     {
-        f64 m_x, m_y;
+        float64_t m_x, m_y;
         glfwGetCursorPos(window.window, &m_x, &m_y);
-        window.m_x = (f32)m_x;
-        window.m_y = (f32)m_y;
+        window.m_x = (float32_t)m_x;
+        window.m_y = (float32_t)m_y;
     }
         
     auto now = std::chrono::high_resolution_clock::now();
@@ -247,13 +292,13 @@ main(s32 argc
         window.m_moved = false;
             
         auto new_now = std::chrono::high_resolution_clock::now();
-        window.dt = std::chrono::duration<f32, std::chrono::seconds::period>(new_now - now).count();
+        window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();
 
         now = new_now;
     }
 
     OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);
-    OUTPUT_DEBUG_LOG("stack allocator allocated %d bytes\n", (u32)((u8 *)stack_allocator_global.current - (u8 *)stack_allocator_global.start));
+    OUTPUT_DEBUG_LOG("stack allocator allocated %d bytes\n", (uint32_t)((u8 *)stack_allocator_global.current - (u8 *)stack_allocator_global.start));
 	
     OUTPUT_DEBUG_LOG("finished session : FPS : %f\n", fps);
 

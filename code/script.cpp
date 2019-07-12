@@ -39,7 +39,7 @@ end_file(void)
 }
 
 void
-push_to_stack(const char *name, Stack_Item_Type type, s32 stack_index = 0, s32 array_index = 0)
+push_to_stack(const char *name, Stack_Item_Type type, int32_t stack_index = 0, int32_t array_index = 0)
 {
     switch(type)
     {
@@ -52,7 +52,7 @@ push_to_stack(const char *name, Stack_Item_Type type, s32 stack_index = 0, s32 a
 template <typename T> T *cast_ptr(void *ptr) {return((T *)ptr);}
 
 void
-get_from_stack(Script_Primitive_Type type, s32 stack_index, void *dst)
+get_from_stack(Script_Primitive_Type type, int32_t stack_index, void *dst)
 {
     switch(type)
     {

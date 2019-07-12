@@ -17,30 +17,22 @@
 
 #include <glm/glm.hpp>
 
-typedef int8_t s8;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef glm::vec2 v2;
-typedef glm::vec3 v3;
-typedef glm::vec4 v4;
-typedef glm::ivec2 iv2;
-typedef glm::ivec3 iv3;
-typedef glm::ivec4 iv4;
-typedef glm::mat3 m3x3;
-typedef glm::mat4 m4x4;
-typedef glm::quat q4;
+typedef glm::vec2 vector2_t;
+typedef glm::vec3 vector3_t;
+typedef glm::vec4 vector4_t;
+typedef glm::ivec2 ivector2_t;
+typedef glm::ivec3 ivector3_t;
+typedef glm::ivec4 ivector4_t;
+typedef glm::mat3 matrix3_t;
+typedef glm::mat4 matrix4_t;
+typedef glm::quat quaternion_t;
 
-typedef float f32;
-typedef double f64;
+typedef float float32_t;
+typedef double float64_t;
 
-typedef u8 byte;
+typedef uint8_t byte_t;
 
-extern struct Debug_Output
+extern struct debug_output_t
 {
     FILE *fp;
 } output_file; // defined in core.cpp but going to move in the future to a more suitable place
@@ -52,46 +44,46 @@ extern struct Debug_Output
 
 #define OUTPUT_DEBUG_LOG(str, ...)
 
-struct Constant_String
+struct constant_string_t
 {
     const char* str;
-    u32 size;
-    u32 hash;
+    uint32_t size;
+    uint32_t hash;
 
     inline bool
-    operator==(const Constant_String &other) {return(other.hash == this->hash);}
+    operator==(const constant_string_t &other) {return(other.hash == this->hash);}
 };
 
-inline constexpr u32
-compile_hash(const char *string, u32 size)
+inline constexpr uint32_t
+compile_hash(const char *string, uint32_t size)
 {
     return ((size ? compile_hash(string, size - 1) : 2166136261u) ^ string[size]) * 16777619u;
 }
 
-inline constexpr Constant_String
+inline constexpr constant_string_t
 operator""_hash(const char *string, size_t size)
 {
-    return(Constant_String{string, (u32)size, compile_hash(string, (u32)size)});
+    return(constant_string_t{string, (uint32_t)size, compile_hash(string, (uint32_t)size)});
 }
 
-inline Constant_String
-make_constant_string(const char *str, u32 count)
+inline constant_string_t
+make_constant_string(const char *str, uint32_t count)
 {
-    return(Constant_String{str, count, compile_hash(str, count)});
+    return(constant_string_t{str, count, compile_hash(str, count)});
 }
 
-inline Constant_String
-init_const_str(const char *str, u32 count)
+inline constant_string_t
+init_const_str(const char *str, uint32_t count)
 {
-    return(Constant_String{str, count, compile_hash(str, count)});
+    return(constant_string_t{str, count, compile_hash(str, count)});
 }
 
-enum Memory_Buffer_View_Allocation { LINEAR, FREE_LIST, STACK };
+enum memory_buffer_view_allocation_t { LINEAR, FREE_LIST, STACK };
 
 template <typename T>
-struct Memory_Buffer_View
+struct memory_buffer_view_t
 {
-    u32 count;
+    uint32_t count;
     T *buffer;
 
     void
@@ -101,13 +93,13 @@ struct Memory_Buffer_View
     }
     
     T &
-    operator[](u32 i)
+    operator[](uint32_t i)
     {
 	return(buffer[i]);
     }
 
     const T &
-    operator[](u32 i) const
+    operator[](uint32_t i) const
     {
 	return(buffer[i]);
     }
@@ -115,44 +107,44 @@ struct Memory_Buffer_View
 
 // fast and relatively cheap hash table
 template <typename T
-	  , u32 Bucket_Count
-	  , u32 Bucket_Size
-	  , u32 Bucket_Search_Count> struct Hash_Table_Inline
+	  , uint32_t Bucket_Count
+	  , uint32_t Bucket_Size
+	  , uint32_t Bucket_Search_Count> struct hash_table_inline_t
 {
     enum { UNINITIALIZED_HASH = 0xFFFFFFFF };
     enum { ITEM_POUR_LIMIT    = Bucket_Search_Count };
 
-    struct Item
+    struct item_t
     {
-	u32 hash = UNINITIALIZED_HASH;
+	uint32_t hash = UNINITIALIZED_HASH;
 	T value = T();
     };
 
-    struct Bucket
+    struct bucket_t
     {
-	u32 bucket_usage_count = 0;
-	Item items[Bucket_Size] = {};
+	uint32_t bucket_usage_count = 0;
+	item_t items[Bucket_Size] = {};
     };
 
     const char *map_debug_name;
-    Bucket buckets[Bucket_Count] = {};
+    bucket_t buckets[Bucket_Count] = {};
 
-    Hash_Table_Inline(const char *name) : map_debug_name(name) {}
+    hash_table_inline_t(const char *name) : map_debug_name(name) {}
 
     void
-    insert(u32 hash, T value, const char *debug_name = "")
+    insert(uint32_t hash, T value, const char *debug_name = "")
     {
-	u32 start_index = hash % Bucket_Count;
-	u32 limit = start_index + ITEM_POUR_LIMIT;
-	for (Bucket *bucket = &buckets[start_index]
+	uint32_t start_index = hash % Bucket_Count;
+	uint32_t limit = start_index + ITEM_POUR_LIMIT;
+	for (bucket_t *bucket = &buckets[start_index]
 		 ; bucket->bucket_usage_count != Bucket_Size && start_index < limit
 		 ; ++bucket)
 	{
-	    for (u32 bucket_item = 0
+	    for (uint32_t bucket_item = 0
 		     ; bucket_item < Bucket_Size
 		     ; ++bucket_item)
 	    {
-		Item *item = &bucket->items[bucket_item];
+		item_t *item = &bucket->items[bucket_item];
 		if (item->hash == UNINITIALIZED_HASH)
 		{
 		    /* found a slot for the object */
@@ -169,19 +161,19 @@ template <typename T
     }
 
     void
-    remove(u32 hash)
+    remove(uint32_t hash)
     {
-	u32 start_index = hash % Bucket_Count;
-	u32 limit = start_index + ITEM_POUR_LIMIT;
-	for (Bucket *bucket = &buckets[start_index]
+	uint32_t start_index = hash % Bucket_Count;
+	uint32_t limit = start_index + ITEM_POUR_LIMIT;
+	for (bucket_t *bucket = &buckets[start_index]
 		 ; bucket->bucket_usage_count != Bucket_Size && start_index < limit
 		 ; ++bucket)
 	{
-	    for (u32 bucket_item = 0
+	    for (uint32_t bucket_item = 0
 		     ; bucket_item < Bucket_Size
 		     ; ++bucket_item)
 	    {
-		Item *item = &bucket->items[bucket_item];
+		item_t *item = &bucket->items[bucket_item];
 		if (item->hash == hash && item->hash != UNINITIALIZED_HASH)
 		{
 		    item->hash = UNINITIALIZED_HASH;
@@ -193,19 +185,19 @@ template <typename T
     }
 
     T *
-    get(u32 hash)
+    get(uint32_t hash)
     {
-	u32 start_index = hash % Bucket_Count;
-	u32 limit = start_index + ITEM_POUR_LIMIT;
-	for (Bucket *bucket = &buckets[start_index]
+	uint32_t start_index = hash % Bucket_Count;
+	uint32_t limit = start_index + ITEM_POUR_LIMIT;
+	for (bucket_t *bucket = &buckets[start_index]
 		 ; bucket->bucket_usage_count != Bucket_Size && start_index < limit
 		 ; ++bucket)
 	{
-	    for (u32 bucket_item = 0
+	    for (uint32_t bucket_item = 0
 		     ; bucket_item < Bucket_Size
 		     ; ++bucket_item)
 	    {
-		Item *item = &bucket->items[bucket_item];
+		item_t *item = &bucket->items[bucket_item];
 		if (item->hash != UNINITIALIZED_HASH && hash == item->hash)
 		{
 		    return(&item->value);

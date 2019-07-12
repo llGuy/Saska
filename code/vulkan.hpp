@@ -6,10 +6,10 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-struct Queue_Families
+struct queue_families_t
 {
-    s32 graphics_family = -1;
-    s32 present_family = 1;
+    int32_t graphics_family = -1;
+    int32_t present_family = 1;
 
     inline bool
     complete(void)
@@ -18,18 +18,18 @@ struct Queue_Families
     }
 };
 
-struct Swapchain_Details
+struct swapchain_details_t
 {
     VkSurfaceCapabilitiesKHR capabilities;
 
-    u32 available_formats_count;
+    uint32_t available_formats_count;
     VkSurfaceFormatKHR *available_formats;
 	
-    u32 available_present_modes_count;
+    uint32_t available_present_modes_count;
     VkPresentModeKHR *available_present_modes;
 };
     
-struct GPU
+struct gpu_t
 {
     VkPhysicalDevice hardware;
     VkDevice logical_device;
@@ -37,11 +37,11 @@ struct GPU
     VkPhysicalDeviceMemoryProperties memory_properties;
     VkPhysicalDeviceProperties properties;
 
-    Queue_Families queue_families;
+    queue_families_t queue_families;
     VkQueue graphics_queue;
     VkQueue present_queue;
 
-    Swapchain_Details swapchain_support;
+    swapchain_details_t swapchain_support;
     VkFormat supported_depth_format;
 
     void
@@ -52,30 +52,30 @@ struct GPU
 void
 allocate_gpu_memory(VkMemoryPropertyFlags properties
                     , VkMemoryRequirements memory_requirements
-                    , GPU *gpu
+                    , gpu_t *gpu
                     , VkDeviceMemory *dest_memory);
 
-struct Mapped_GPU_Memory
+struct mapped_gpu_memory_t
 {
-    u32 offset;
+    uint32_t offset;
     VkDeviceSize size;
     VkDeviceMemory *memory;
     void *data;
 
     inline void
-    begin(GPU *gpu)
+    begin(gpu_t *gpu)
     {
         vkMapMemory(gpu->logical_device, *memory, offset, size, 0, &data);
     }
 
     inline void
-    fill(Memory_Byte_Buffer byte_buffer)
+    fill(memory_byte_buffer_t byte_buffer)
     {
         memcpy(data, byte_buffer.ptr, size);
     }
 
     inline void
-    flush(u32 offset, u32 size, GPU *gpu)
+    flush(uint32_t offset, uint32_t size, gpu_t *gpu)
     {
         VkMappedMemoryRange range = {};
         range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -86,27 +86,27 @@ struct Mapped_GPU_Memory
     }
 	
     inline void
-    end(GPU *gpu)
+    end(gpu_t *gpu)
     {
         vkUnmapMemory(gpu->logical_device, *memory);
     }
 };
 
-struct GPU_Buffer
+struct gpu_buffer_t
 {
     VkBuffer buffer;
 	
     VkDeviceMemory memory;
     VkDeviceSize size;
 
-    inline Mapped_GPU_Memory
+    inline mapped_gpu_memory_t
     construct_map(void)
     {
-        return(Mapped_GPU_Memory{0, size, &memory});
+        return(mapped_gpu_memory_t{0, size, &memory});
     }
 
     inline VkDescriptorBufferInfo
-    make_descriptor_info(u32 offset_into_buffer)
+    make_descriptor_info(uint32_t offset_into_buffer)
     {
         VkDescriptorBufferInfo info = {};
         info.buffer = buffer;
@@ -116,7 +116,7 @@ struct GPU_Buffer
     }
 
     void
-    destroy(GPU *gpu)
+    destroy(gpu_t *gpu)
     {
         vkDestroyBuffer(gpu->logical_device, buffer, nullptr);
         vkFreeMemory(gpu->logical_device, memory, nullptr);
@@ -124,21 +124,21 @@ struct GPU_Buffer
 };
 
 void
-update_gpu_buffer(GPU_Buffer *dst, void *data, u32 size, u32 offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue);
+update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue);
 
-struct Draw_Indexed_Data
+struct draw_indexed_data_t
 {
-    u32 index_count;
-    u32 instance_count;
-    u32 first_index;
-    u32 vertex_offset;
-    u32 first_instance;
+    uint32_t index_count;
+    uint32_t instance_count;
+    uint32_t first_index;
+    uint32_t vertex_offset;
+    uint32_t first_instance;
 };
 
-internal inline Draw_Indexed_Data
-init_draw_indexed_data_default(u32 instance_count, u32 index_count)
+internal inline draw_indexed_data_t
+init_draw_indexed_data_default(uint32_t instance_count, uint32_t index_count)
 {
-    Draw_Indexed_Data index_data = {};
+    draw_indexed_data_t index_data = {};
     index_data.index_count = index_count;
     index_data.instance_count = instance_count;
     index_data.first_index = 0;
@@ -147,19 +147,19 @@ init_draw_indexed_data_default(u32 instance_count, u32 index_count)
     return(index_data);
 }
     
-struct Model_Index_Data
+struct model_index_data_t
 {
     VkBuffer index_buffer;
 	
-    u32 index_count;
-    u32 index_offset;
+    uint32_t index_count;
+    uint32_t index_offset;
     VkIndexType index_type;
 
-    Draw_Indexed_Data
-    init_draw_indexed_data(u32 first_index
-                           , u32 offset)
+    draw_indexed_data_t
+    init_draw_indexed_data(uint32_t first_index
+                           , uint32_t offset)
     {
-        Draw_Indexed_Data data;
+        draw_indexed_data_t data;
         data.index_count = index_count;
         // default the instance_count to 0
         data.instance_count = 1;
@@ -172,7 +172,7 @@ struct Model_Index_Data
 };
     
 internal inline void
-command_buffer_bind_ibo(const Model_Index_Data &index_data
+command_buffer_bind_ibo(const model_index_data_t &index_data
                         , VkCommandBuffer *command_buffer)
 {
     vkCmdBindIndexBuffer(*command_buffer
@@ -182,9 +182,9 @@ command_buffer_bind_ibo(const Model_Index_Data &index_data
 }
     
 internal inline void
-command_buffer_bind_vbos(const Memory_Buffer_View<VkBuffer> &buffers
-                         , const Memory_Buffer_View<VkDeviceSize> &offsets
-                         , u32 first_binding, u32 binding_count
+command_buffer_bind_vbos(const memory_buffer_view_t<VkBuffer> &buffers
+                         , const memory_buffer_view_t<VkDeviceSize> &offsets
+                         , uint32_t first_binding, uint32_t binding_count
                          , VkCommandBuffer *command_buffer)
 {
     vkCmdBindVertexBuffers(*command_buffer
@@ -196,7 +196,7 @@ command_buffer_bind_vbos(const Memory_Buffer_View<VkBuffer> &buffers
 
 internal inline void
 command_buffer_execute_commands(VkCommandBuffer *cmdbuf
-                                , const Memory_Buffer_View<VkCommandBuffer> &cmds)
+                                , const memory_buffer_view_t<VkCommandBuffer> &cmds)
 {
     vkCmdExecuteCommands(*cmdbuf
                          , cmds.count
@@ -204,14 +204,14 @@ command_buffer_execute_commands(VkCommandBuffer *cmdbuf
 }
 
     
-struct Graphics_Pipeline
+struct graphics_pipeline_t
 {
-    enum Shader_Stages_Bits : s32 { VERTEX_SHADER_BIT = 1 << 0
+    enum shader_stages_bits_t : int32_t { VERTEX_SHADER_BIT = 1 << 0
                                     , GEOMETRY_SHADER_BIT = 1 << 1
                                     , TESSELATION_SHADER_BIT = 1 << 2
                                     , FRAGMENT_SHADER_BIT = 1 << 3};
 
-    s32 stages;
+    int32_t stages;
 
     const char *base_dir_and_name;
 
@@ -220,7 +220,7 @@ struct Graphics_Pipeline
     VkPipeline pipeline;
 
     inline void
-    destroy(GPU *gpu)
+    destroy(gpu_t *gpu)
     {
         vkDestroyPipelineLayout(gpu->logical_device, layout, nullptr);
         vkDestroyPipeline(gpu->logical_device, pipeline, nullptr);
@@ -229,10 +229,10 @@ struct Graphics_Pipeline
     
 internal inline void
 command_buffer_push_constant(void *data
-                             , u32 size
-                             , u32 offset
+                             , uint32_t size
+                             , uint32_t offset
                              , VkShaderStageFlags stage
-                             , Graphics_Pipeline *ppln
+                             , graphics_pipeline_t *ppln
                              , VkCommandBuffer *command_buffer)
 {
     vkCmdPushConstants(*command_buffer
@@ -248,11 +248,11 @@ init_buffer(VkDeviceSize buffer_size
             , VkBufferUsageFlags usage
             , VkSharingMode sharing_mode
             , VkMemoryPropertyFlags memory_properties
-            , GPU *gpu
-            , GPU_Buffer *dest_buffer);
+            , gpu_t *gpu
+            , gpu_buffer_t *dest_buffer);
 
     
-struct Image2D
+struct image2d_t
 {
     VkImage image			= VK_NULL_HANDLE;
     VkImageView image_view		= VK_NULL_HANDLE;
@@ -262,7 +262,7 @@ struct Image2D
     VkFormat format;
 	
     inline VkMemoryRequirements
-    get_memory_requirements(GPU *gpu)
+    get_memory_requirements(gpu_t *gpu)
     {
         VkMemoryRequirements requirements = {};
         vkGetImageMemoryRequirements(gpu->logical_device, image, &requirements);
@@ -281,7 +281,7 @@ struct Image2D
     }
 
     inline void
-    destroy(GPU *gpu)
+    destroy(gpu_t *gpu)
     {
         if (image != VK_NULL_HANDLE) vkDestroyImage(gpu->logical_device, image, nullptr);
         if (image_view != VK_NULL_HANDLE) vkDestroyImageView(gpu->logical_device, image_view, nullptr);
@@ -291,25 +291,25 @@ struct Image2D
 }; 
     
 void
-init_image(u32 width
-           , u32 height
+init_image(uint32_t width
+           , uint32_t height
            , VkFormat format
            , VkImageTiling tiling
            , VkImageUsageFlags usage
            , VkMemoryPropertyFlags properties
-           , u32 layers
-           , GPU *gpu
-           , Image2D *dest_image
+           , uint32_t layers
+           , gpu_t *gpu
+           , image2d_t *dest_image
            , VkImageCreateFlags flags = 0);
 
 void
 init_image_view(VkImage *image
                 , VkFormat format
                 , VkImageAspectFlags aspect_flags
-                , GPU *gpu
+                , gpu_t *gpu
                 , VkImageView *dest_image_view
                 , VkImageViewType type
-                , u32 layers);
+                , uint32_t layers);
 
 void
 init_image_sampler(VkFilter mag_filter
@@ -318,35 +318,35 @@ init_image_sampler(VkFilter mag_filter
                    , VkSamplerAddressMode v_sampler_address_mode
                    , VkSamplerAddressMode w_sampler_address_mode
                    , VkBool32 anisotropy_enable
-                   , u32 max_anisotropy
+                   , uint32_t max_anisotropy
                    , VkBorderColor clamp_border_color
                    , VkBool32 compare_enable
                    , VkCompareOp compare_op
                    , VkSamplerMipmapMode mipmap_mode
-                   , f32 mip_lod_bias
-                   , f32 min_lod
-                   , f32 max_lod
-                   , GPU *gpu
+                   , float32_t mip_lod_bias
+                   , float32_t min_lod
+                   , float32_t max_lod
+                   , gpu_t *gpu
                    , VkSampler *dest_sampler);
 
-struct Swapchain
+struct swapchain_t
 {
     VkFormat format;
     VkPresentModeKHR present_mode;
     VkSwapchainKHR swapchain;
     VkExtent2D extent;
 	
-    Memory_Buffer_View<VkImage> imgs;
-    Memory_Buffer_View<VkImageView> views;
+    memory_buffer_view_t<VkImage> imgs;
+    memory_buffer_view_t<VkImageView> views;
 };
     
-struct Render_Pass
+struct render_pass_t
 {
     VkRenderPass render_pass;
-    u32 subpass_count;
+    uint32_t subpass_count;
 
     inline void
-    destroy(GPU *gpu)
+    destroy(gpu_t *gpu)
     {
         vkDestroyRenderPass(gpu->logical_device, render_pass, nullptr);
     }
@@ -372,7 +372,7 @@ init_attachment_description(VkFormat format
 }
 
 internal inline VkAttachmentReference
-init_attachment_reference(u32 attachment
+init_attachment_reference(uint32_t attachment
                           , VkImageLayout layout)
 {
     VkAttachmentReference ref = {};
@@ -382,9 +382,9 @@ init_attachment_reference(u32 attachment
 }
 
 internal inline VkSubpassDescription
-init_subpass_description(const Memory_Buffer_View<VkAttachmentReference> &color_refs
+init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &color_refs
                          , VkAttachmentReference *depth
-                         , const Memory_Buffer_View<VkAttachmentReference> &input_refs)
+                         , const memory_buffer_view_t<VkAttachmentReference> &input_refs)
 {
     VkSubpassDescription subpass	= {};
     subpass.pipelineBindPoint	= VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -397,12 +397,12 @@ init_subpass_description(const Memory_Buffer_View<VkAttachmentReference> &color_
 }
 
 internal inline VkSubpassDependency
-init_subpass_dependency(u32 src_subpass
-                        , u32 dst_subpass
+init_subpass_dependency(uint32_t src_subpass
+                        , uint32_t dst_subpass
                         , VkPipelineStageFlags src_stage
-                        , u32 src_access_mask
+                        , uint32_t src_access_mask
                         , VkPipelineStageFlags dst_stage
-                        , u32 dst_access_mask
+                        , uint32_t dst_access_mask
                         , VkDependencyFlagBits flags = (VkDependencyFlagBits)0)
 {
     VkSubpassDependency dependency	= {};
@@ -421,7 +421,7 @@ init_subpass_dependency(u32 src_subpass
 }
 
 internal inline VkClearValue
-init_clear_color_color(f32 r, f32 g, f32 b, f32 a)
+init_clear_color_color(float32_t r, float32_t g, float32_t b, float32_t a)
 {
     VkClearValue value {};
     value.color = {r, g, b, a};
@@ -429,7 +429,7 @@ init_clear_color_color(f32 r, f32 g, f32 b, f32 a)
 }
 
 internal inline VkClearValue
-init_clear_color_depth(f32 d, u32 s)
+init_clear_color_depth(float32_t d, uint32_t s)
 {
     VkClearValue value {};
     value.depthStencil = {d, s};
@@ -446,10 +446,10 @@ init_render_area(const VkOffset2D &offset, const VkExtent2D &extent)
 }
     
 void
-command_buffer_begin_render_pass(Render_Pass *render_pass
-                                 , struct Framebuffer *fbo
+command_buffer_begin_render_pass(render_pass_t *render_pass
+                                 , struct framebuffer_t *fbo
                                  , VkRect2D render_area
-                                 , const Memory_Buffer_View<VkClearValue> &clear_colors
+                                 , const memory_buffer_view_t<VkClearValue> &clear_colors
                                  , VkSubpassContents subpass_contents
                                  , VkCommandBuffer *command_buffer);
 
@@ -464,28 +464,28 @@ command_buffer_end_render_pass(VkCommandBuffer *command_buffer)
 }
     
 void
-init_render_pass(const Memory_Buffer_View<VkAttachmentDescription> &attachment_descriptions
-                 , const Memory_Buffer_View<VkSubpassDescription> &subpass_descriptions
-                 , const Memory_Buffer_View<VkSubpassDependency> &subpass_dependencies
-                 , GPU *gpu
-                 , Render_Pass *dest_render_pass);
+init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions
+                 , const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions
+                 , const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies
+                 , gpu_t *gpu
+                 , render_pass_t *dest_render_pass);
 void
 init_shader(VkShaderStageFlagBits stage_bits
-            , u32 content_size
-            , byte *file_contents
-            , GPU *gpu
+            , uint32_t content_size
+            , byte_t *file_contents
+            , gpu_t *gpu
             , VkShaderModule *dest_shader_module);
 
 // describes the binding of a buffer to a model VAO
-struct Model_Binding
+struct model_binding_t
 {
     // buffer that stores all the attributes
     VkBuffer buffer;
-    u32 binding;
+    uint32_t binding;
     VkVertexInputRate input_rate;
 
     VkVertexInputAttributeDescription *attribute_list = nullptr;
-    u32 stride = 0;
+    uint32_t stride = 0;
 	
     void
     begin_attributes_creation(VkVertexInputAttributeDescription *attribute_list)
@@ -494,7 +494,7 @@ struct Model_Binding
     }
 	
     void
-    push_attribute(u32 location, VkFormat format, u32 size)
+    push_attribute(uint32_t location, VkFormat format, uint32_t size)
     {
         VkVertexInputAttributeDescription *attribute = &attribute_list[location];
 	    
@@ -514,23 +514,23 @@ struct Model_Binding
 };
     
 // describes the attributes and bindings of the model
-struct Model
+struct model_t
 {
     // model bindings
-    u32 binding_count;
+    uint32_t binding_count;
     // allocated on free list allocator
-    Model_Binding *bindings;
+    model_binding_t *bindings;
     // model attriutes
-    u32 attribute_count;
+    uint32_t attribute_count;
     // allocated on free list also | multiple bindings can push to this buffer
     VkVertexInputAttributeDescription *attributes_buffer;
 
-    Model_Index_Data index_data;
+    model_index_data_t index_data;
 
-    Memory_Buffer_View<VkBuffer> raw_cache_for_rendering;
+    memory_buffer_view_t<VkBuffer> raw_cache_for_rendering;
 
     void
-    prepare_bindings(u32 binding_count)
+    prepare_bindings(uint32_t binding_count)
     {
 	    
     }
@@ -541,7 +541,7 @@ struct Model
         VkVertexInputBindingDescription *descriptions = (VkVertexInputBindingDescription *)allocate_stack(sizeof(VkVertexInputBindingDescription) * binding_count
                                                                                                           , 1
                                                                                                           , "binding_total_list_allocation");
-        for (u32 i = 0; i < binding_count; ++i)
+        for (uint32_t i = 0; i < binding_count; ++i)
         {
             descriptions[i].binding = bindings[i].binding;
             descriptions[i].stride = bindings[i].stride;
@@ -568,21 +568,21 @@ struct Model
     {
         allocate_memory_buffer(raw_cache_for_rendering, binding_count);
 	    
-        for (u32 i = 0; i < binding_count; ++i)
+        for (uint32_t i = 0; i < binding_count; ++i)
         {
             raw_cache_for_rendering[i] = bindings[i].buffer;
         }
     }
 
-    Model
+    model_t
     copy(void)
     {
-        Model ret = {};
+        model_t ret = {};
         ret.binding_count = this->binding_count;
         ret.attribute_count = this->attribute_count;
         ret.index_data = this->index_data;
-        ret.bindings = (Model_Binding *)allocate_free_list(sizeof(Model_Binding) * ret.binding_count);
-        memcpy(ret.bindings, this->bindings, sizeof(Model_Binding) * ret.binding_count);
+        ret.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t) * ret.binding_count);
+        memcpy(ret.bindings, this->bindings, sizeof(model_binding_t) * ret.binding_count);
         ret.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * ret.attribute_count);
         memcpy(ret.attributes_buffer, this->attributes_buffer, ret.attribute_count * sizeof(VkVertexInputAttributeDescription));
         return(ret);
@@ -591,22 +591,22 @@ struct Model
     
 internal inline void
 command_buffer_draw_indexed(VkCommandBuffer *command_buffer
-                            , const Draw_Indexed_Data &data)
+                            , const draw_indexed_data_t &data)
 {
     vkCmdDrawIndexed(*command_buffer
                      , data.index_count
                      , data.instance_count
                      , data.first_index
-                     , (s32)data.vertex_offset
+                     , (int32_t)data.vertex_offset
                      , data.first_instance);
 }
 
 internal inline void
 command_buffer_draw(VkCommandBuffer *cmdbuf
-                    , u32 v_count
-                    , u32 i_count
-                    , u32 first_v
-                    , u32 first_i)
+                    , uint32_t v_count
+                    , uint32_t i_count
+                    , uint32_t first_v
+                    , uint32_t first_i)
 {
     vkCmdDraw(*cmdbuf
               , v_count
@@ -616,7 +616,7 @@ command_buffer_draw(VkCommandBuffer *cmdbuf
 }
 
 internal inline void
-command_buffer_bind_pipeline(Graphics_Pipeline *pipeline
+command_buffer_bind_pipeline(graphics_pipeline_t *pipeline
                              , VkCommandBuffer *command_buffer)
 {
     vkCmdBindPipeline(*command_buffer
@@ -637,7 +637,7 @@ init_shader_pipeline_info(VkShaderModule *module
 }
     
 internal inline void
-init_pipeline_vertex_input_info(Model *model /* model contains input information required */
+init_pipeline_vertex_input_info(model_t *model /* model contains input information required */
                                 , VkPipelineVertexInputStateCreateInfo *info)
 {
     if (model)
@@ -651,10 +651,10 @@ init_pipeline_vertex_input_info(Model *model /* model contains input information
 }
 
 internal inline VkVertexInputAttributeDescription
-init_attribute_description(u32 binding
-                           , u32 location
+init_attribute_description(uint32_t binding
+                           , uint32_t location
                            , VkFormat format
-                           , u32 offset)
+                           , uint32_t offset)
 {
     VkVertexInputAttributeDescription info = {};
 
@@ -667,8 +667,8 @@ init_attribute_description(u32 binding
 }
     
 internal inline VkVertexInputBindingDescription
-init_binding_description(u32 binding
-                         , u32 stride
+init_binding_description(uint32_t binding
+                         , uint32_t stride
                          , VkVertexInputRate input_rate)
 {
     VkVertexInputBindingDescription info = {};
@@ -681,8 +681,8 @@ init_binding_description(u32 binding
 }
     
 internal inline VkPipelineVertexInputStateCreateInfo
-init_pipeline_vertex_input_info(const Memory_Buffer_View<VkVertexInputBindingDescription> &bindings
-                                , const Memory_Buffer_View<VkVertexInputAttributeDescription> & attributes)
+init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingDescription> &bindings
+                                , const memory_buffer_view_t<VkVertexInputAttributeDescription> & attributes)
 {
     VkPipelineVertexInputStateCreateInfo info = {};
 
@@ -708,10 +708,10 @@ init_pipeline_input_assembly_info(VkPipelineInputAssemblyStateCreateFlags flags
 }
 
 internal inline VkRect2D
-make_rect2D(s32 startx,
-            s32 starty,
-            u32 width,
-            u32 height)
+make_rect2D(int32_t startx,
+            int32_t starty,
+            uint32_t width,
+            uint32_t height)
 {
     VkRect2D dst = {};
     dst.offset = VkOffset2D{startx, starty};
@@ -720,17 +720,17 @@ make_rect2D(s32 startx,
 }
     
 internal inline void
-init_viewport(u32 x, u32 y
-              , u32 width
-              , u32 height
-              , f32 min_depth
-              , f32 max_depth
+init_viewport(uint32_t x, uint32_t y
+              , uint32_t width
+              , uint32_t height
+              , float32_t min_depth
+              , float32_t max_depth
               , VkViewport *viewport)
 {
     viewport->x = x;
     viewport->y = y;
-    viewport->width = (f32)width;
-    viewport->height = (f32)height;
+    viewport->width = (float32_t)width;
+    viewport->height = (float32_t)height;
     viewport->minDepth = min_depth;
     viewport->maxDepth = max_depth;
 }
@@ -748,7 +748,7 @@ command_buffer_set_viewport(VkViewport *viewport, VkCommandBuffer *cmdbuf)
 }
     
 inline void
-command_buffer_set_viewport(u32 width, u32 height, f32 depth_min, f32 depth_max, VkCommandBuffer *cmdbuf)
+command_buffer_set_viewport(uint32_t width, uint32_t height, float32_t depth_min, float32_t depth_max, VkCommandBuffer *cmdbuf)
 {
     VkViewport viewport = {};
     init_viewport(0, 0, width, height, depth_min, depth_max, &viewport);
@@ -757,7 +757,7 @@ command_buffer_set_viewport(u32 width, u32 height, f32 depth_min, f32 depth_max,
 }
 
 inline void
-command_buffer_set_line_width(f32 width, VkCommandBuffer *cmdbuf)
+command_buffer_set_line_width(float32_t width, VkCommandBuffer *cmdbuf)
 {
     vkCmdSetLineWidth(*cmdbuf, width);
 }
@@ -772,8 +772,8 @@ init_rect2D(VkOffset2D offset
 }
 
 inline void
-init_pipeline_viewport_info(const Memory_Buffer_View<VkViewport> &viewports
-                            , const Memory_Buffer_View<VkRect2D> &scissors
+init_pipeline_viewport_info(const memory_buffer_view_t<VkViewport> &viewports
+                            , const memory_buffer_view_t<VkRect2D> &scissors
                             , VkPipelineViewportStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -784,8 +784,8 @@ init_pipeline_viewport_info(const Memory_Buffer_View<VkViewport> &viewports
 }
     
 inline void
-init_pipeline_viewport_info(Memory_Buffer_View<VkViewport> *viewports
-                            , Memory_Buffer_View<VkRect2D> *scissors
+init_pipeline_viewport_info(memory_buffer_view_t<VkViewport> *viewports
+                            , memory_buffer_view_t<VkRect2D> *scissors
                             , VkPipelineViewportStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -798,12 +798,12 @@ init_pipeline_viewport_info(Memory_Buffer_View<VkViewport> *viewports
 internal inline void
 init_pipeline_rasterization_info(VkPolygonMode polygon_mode
                                  , VkCullModeFlags cull_flags
-                                 , f32 line_width
+                                 , float32_t line_width
                                  , VkPipelineRasterizationStateCreateFlags flags
                                  , VkPipelineRasterizationStateCreateInfo *info
                                  , VkBool32 enable_depth_bias = VK_FALSE
-                                 , f32 bias_constant = 0.0f
-                                 , f32 bias_slope = 0.0f)
+                                 , float32_t bias_constant = 0.0f
+                                 , float32_t bias_slope = 0.0f)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     info->depthClampEnable = VK_FALSE;
@@ -859,7 +859,7 @@ init_blend_state_attachment(VkColorComponentFlags color_write_flags
 internal inline void
 init_pipeline_blending_info(VkBool32 enable_logic_op
                             , VkLogicOp logic_op
-                            , const Memory_Buffer_View<VkPipelineColorBlendAttachmentState> &states
+                            , const memory_buffer_view_t<VkPipelineColorBlendAttachmentState> &states
                             , VkPipelineColorBlendStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -876,7 +876,7 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
 internal inline void
 init_pipeline_blending_info(VkBool32 enable_logic_op
                             , VkLogicOp logic_op
-                            , Memory_Buffer_View<VkPipelineColorBlendAttachmentState> *states
+                            , memory_buffer_view_t<VkPipelineColorBlendAttachmentState> *states
                             , VkPipelineColorBlendStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -891,7 +891,7 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
 }
 
 internal inline void
-init_pipeline_dynamic_states_info(Memory_Buffer_View<VkDynamicState> *dynamic_states
+init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicState> *dynamic_states
                                   , VkPipelineDynamicStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -900,21 +900,21 @@ init_pipeline_dynamic_states_info(Memory_Buffer_View<VkDynamicState> *dynamic_st
 }
 
 void
-init_pipeline_layout(Memory_Buffer_View<VkDescriptorSetLayout> *layouts
-                     , Memory_Buffer_View<VkPushConstantRange> *ranges
-                     , GPU *gpu
+init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts
+                     , memory_buffer_view_t<VkPushConstantRange> *ranges
+                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout);
 
 void
-init_pipeline_layout(const Memory_Buffer_View<VkDescriptorSetLayout> &layouts
-                     , const Memory_Buffer_View<VkPushConstantRange> &ranges
-                     , GPU *gpu
+init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
+                     , const memory_buffer_view_t<VkPushConstantRange> &ranges
+                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout);
 
 internal inline void
 init_push_constant_range(VkShaderStageFlags stage_flags
-                         , u32 size
-                         , u32 offset
+                         , uint32_t size
+                         , uint32_t offset
                          , VkPushConstantRange *rng)
 {
     rng->stageFlags = stage_flags;
@@ -925,8 +925,8 @@ init_push_constant_range(VkShaderStageFlags stage_flags
 internal inline void
 init_pipeline_depth_stencil_info(VkBool32 depth_test_enable
                                  , VkBool32 depth_write_enable
-                                 , f32 min_depth_bounds
-                                 , f32 max_depth_bounds
+                                 , float32_t min_depth_bounds
+                                 , float32_t max_depth_bounds
                                  , VkBool32 stencil_enable
                                  , VkPipelineDepthStencilStateCreateInfo *info)
 {
@@ -943,7 +943,7 @@ init_pipeline_depth_stencil_info(VkBool32 depth_test_enable
 }
 
 void
-init_graphics_pipeline(Memory_Buffer_View<VkPipelineShaderStageCreateInfo> *shaders
+init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *shaders
                        , VkPipelineVertexInputStateCreateInfo *vertex_input_info
                        , VkPipelineInputAssemblyStateCreateInfo *input_assembly_info
                        , VkPipelineViewportStateCreateInfo *viewport_info
@@ -953,26 +953,26 @@ init_graphics_pipeline(Memory_Buffer_View<VkPipelineShaderStageCreateInfo> *shad
                        , VkPipelineDynamicStateCreateInfo *dynamic_state_info
                        , VkPipelineDepthStencilStateCreateInfo *depth_stencil_info
                        , VkPipelineLayout *layout
-                       , Render_Pass *render_pass
-                       , u32 subpass
-                       , GPU *gpu
+                       , render_pass_t *render_pass
+                       , uint32_t subpass
+                       , gpu_t *gpu
                        , VkPipeline *pipeline);
 
 void
-allocate_command_pool(u32 queue_family_index
-                      , GPU *gpu
+allocate_command_pool(uint32_t queue_family_index
+                      , gpu_t *gpu
                       , VkCommandPool *command_pool);
 
 void
 allocate_command_buffers(VkCommandPool *command_pool_source
                          , VkCommandBufferLevel level
-                         , GPU *gpu
-                         , const Memory_Buffer_View<VkCommandBuffer> &command_buffers);
+                         , gpu_t *gpu
+                         , const memory_buffer_view_t<VkCommandBuffer> &command_buffers);
 
 internal inline void
-free_command_buffer(const Memory_Buffer_View<VkCommandBuffer> &command_buffers
+free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
                     , VkCommandPool *pool
-                    , GPU *gpu)
+                    , gpu_t *gpu)
 {
     vkFreeCommandBuffers(gpu->logical_device
                          , *pool
@@ -992,22 +992,22 @@ end_command_buffer(VkCommandBuffer *command_buffer)
 }
 
 void
-submit(const Memory_Buffer_View<VkCommandBuffer> &command_buffers
-       , const Memory_Buffer_View<VkSemaphore> &wait_semaphores
-       , const Memory_Buffer_View<VkSemaphore> &signal_semaphores
-       , const Memory_Buffer_View<VkPipelineStageFlags> &wait_stages
+submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
+       , const memory_buffer_view_t<VkSemaphore> &wait_semaphores
+       , const memory_buffer_view_t<VkSemaphore> &signal_semaphores
+       , const memory_buffer_view_t<VkPipelineStageFlags> &wait_stages
        , VkFence *fence
        , VkQueue *queue);
 
 void
 init_single_use_command_buffer(VkCommandPool *command_pool
-                               , GPU *gpu
+                               , gpu_t *gpu
                                , VkCommandBuffer *dst);
 
 void
 destroy_single_use_command_buffer(VkCommandBuffer *command_buffer
                                   , VkCommandPool *command_pool
-                                  , GPU *gpu);
+                                  , gpu_t *gpu);
     
 void
 transition_image_layout(VkImage *image
@@ -1015,73 +1015,73 @@ transition_image_layout(VkImage *image
                         , VkImageLayout old_layout
                         , VkImageLayout new_layout
                         , VkCommandPool *graphics_command_pool
-                        , GPU *gpu);
+                        , gpu_t *gpu);
 
 void
-copy_buffer_into_image(GPU_Buffer *src_buffer
-                       , Image2D *dst_image
-                       , u32 width
-                       , u32 height
+copy_buffer_into_image(gpu_buffer_t *src_buffer
+                       , image2d_t *dst_image
+                       , uint32_t width
+                       , uint32_t height
                        , VkCommandPool *command_pool
-                       , GPU *gpu);
+                       , gpu_t *gpu);
 
 void
-copy_buffer(GPU_Buffer *src_buffer
-            , GPU_Buffer *dst_buffer
+copy_buffer(gpu_buffer_t *src_buffer
+            , gpu_buffer_t *dst_buffer
             , VkCommandPool *command_pool
-            , GPU *gpu);
+            , gpu_t *gpu);
 
 void
-invoke_staging_buffer_for_device_local_buffer(Memory_Byte_Buffer items
+invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , VkBufferUsageFlags usage
                                               , VkCommandPool *transfer_command_pool
-                                              , GPU_Buffer *dst_buffer
-                                              , GPU *gpu);
+                                              , gpu_buffer_t *dst_buffer
+                                              , gpu_t *gpu);
 
 void
 invoke_staging_buffer_for_device_local_image();
     
-struct Framebuffer
+struct framebuffer_t
 {
     VkFramebuffer framebuffer;
 
     VkExtent2D extent;
 
     // for color attachments only
-    Memory_Buffer_View<VkImageView> color_attachments;
+    memory_buffer_view_t<VkImageView> color_attachments;
     VkImageView depth_attachment;
 
     void
-    destroy(GPU *gpu)
+    destroy(gpu_t *gpu)
     {
         vkDestroyFramebuffer(gpu->logical_device, framebuffer, nullptr);
     }
 };
 
 void
-init_framebuffer_attachment(u32 width
-                            , u32 height
+init_framebuffer_attachment(uint32_t width
+                            , uint32_t height
                             , VkFormat format
                             , VkImageUsageFlags usage
-                            , GPU *gpu
-                            , Image2D *attachment
-                            // For cubemap targets
-                            , u32 layers = 1
+                            , gpu_t *gpu
+                            , image2d_t *attachment
+                            // for_t cubemap targets
+                            , uint32_t layers = 1
                             , VkImageCreateFlags create_flags = 0
                             , VkImageViewType image_view_type = VK_IMAGE_VIEW_TYPE_2D);
     
 void
-init_framebuffer(Render_Pass *compatible_render_pass
-                 , u32 width
-                 , u32 height
-                 , u32 layers
-                 , GPU *gpu
-                 , Framebuffer *framebuffer); // need to initialize the attachment handles
+init_framebuffer(render_pass_t *compatible_render_pass
+                 , uint32_t width
+                 , uint32_t height
+                 , uint32_t layers
+                 , gpu_t *gpu
+                 , framebuffer_t *framebuffer); // need to initialize the attachment handles
 
 internal inline VkDescriptorSetLayoutBinding
 init_descriptor_set_layout_binding(VkDescriptorType type
-                                   , u32 binding
-                                   , u32 count
+                                   , uint32_t binding
+                                   , uint32_t count
                                    , VkShaderStageFlags stage)
 {
     VkDescriptorSetLayoutBinding ubo_binding	= {};
@@ -1094,13 +1094,13 @@ init_descriptor_set_layout_binding(VkDescriptorType type
 }
 
 void
-init_descriptor_set_layout(const Memory_Buffer_View<VkDescriptorSetLayoutBinding> &bindings
-                           , GPU *gpu
+init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings
+                           , gpu_t *gpu
                            , VkDescriptorSetLayout *dst);
 
 internal inline void
-command_buffer_bind_descriptor_sets(Graphics_Pipeline *pipeline
-                                    , const Memory_Buffer_View<VkDescriptorSet> &sets
+command_buffer_bind_descriptor_sets(graphics_pipeline_t *pipeline
+                                    , const memory_buffer_view_t<VkDescriptorSet> &sets
                                     , VkCommandBuffer *command_buffer)
 {
     vkCmdBindDescriptorSets(*command_buffer
@@ -1114,19 +1114,19 @@ command_buffer_bind_descriptor_sets(Graphics_Pipeline *pipeline
 }
     
 void
-allocate_descriptor_sets(Memory_Buffer_View<VkDescriptorSet> &descriptor_sets
-                         , const Memory_Buffer_View<VkDescriptorSetLayout> &layouts
-                         , GPU *gpu
+allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets
+                         , const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
+                         , gpu_t *gpu
                          , VkDescriptorPool *descriptor_pool);
 
 VkDescriptorSet
 allocate_descriptor_set(VkDescriptorSetLayout *layout
-                        , GPU *gpu
+                        , gpu_t *gpu
                         , VkDescriptorPool *descriptor_pool);
     
 internal void
-init_descriptor_set_buffer_info(GPU_Buffer *buffer
-                                , u32 offset_in_ubo
+init_descriptor_set_buffer_info(gpu_buffer_t *buffer
+                                , uint32_t offset_in_ubo
                                 , VkDescriptorBufferInfo *buffer_info)
 {
     buffer_info->buffer = buffer->buffer;
@@ -1136,9 +1136,9 @@ init_descriptor_set_buffer_info(GPU_Buffer *buffer
 
 internal void
 init_buffer_descriptor_set_write(VkDescriptorSet *set
-                                 , u32 binding
-                                 , u32 dst_array_element
-                                 , u32 count
+                                 , uint32_t binding
+                                 , uint32_t dst_array_element
+                                 , uint32_t count
                                  , VkDescriptorBufferInfo *infos
                                  , VkWriteDescriptorSet *write)
 {
@@ -1153,9 +1153,9 @@ init_buffer_descriptor_set_write(VkDescriptorSet *set
 
 internal void
 init_input_attachment_descriptor_set_write(VkDescriptorSet *set
-                                           , u32 binding
-                                           , u32 dst_array_element
-                                           , u32 count
+                                           , uint32_t binding
+                                           , uint32_t dst_array_element
+                                           , uint32_t count
                                            , VkDescriptorImageInfo *infos
                                            , VkWriteDescriptorSet *write)
 {
@@ -1170,9 +1170,9 @@ init_input_attachment_descriptor_set_write(VkDescriptorSet *set
     
 internal void
 init_image_descriptor_set_write(VkDescriptorSet *set
-                                , u32 binding
-                                , u32 dst_array_element
-                                , u32 count
+                                , uint32_t binding
+                                , uint32_t dst_array_element
+                                , uint32_t count
                                 , VkDescriptorImageInfo *infos
                                 , VkWriteDescriptorSet *write)
 {
@@ -1198,37 +1198,37 @@ init_descriptor_set_image_info(VkSampler sampler
 
 internal void
 init_descriptor_pool_size(VkDescriptorType type
-                          , u32 count
+                          , uint32_t count
                           , VkDescriptorPoolSize *size)
 {
     size->type = type;
     size->descriptorCount = count;
 }
 
-struct Descriptor_Pool
+struct descriptor_pool_t
 {
     VkDescriptorPool pool;
 };
 
 void
-init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes
-                     , u32 max_sets
-                     , GPU *gpu
+init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
+                     , uint32_t max_sets
+                     , gpu_t *gpu
                      , VkDescriptorPool *pool);
     
 void
-init_descriptor_pool(const Memory_Buffer_View<VkDescriptorPoolSize> &sizes
-                     , u32 max_sets
-                     , GPU *gpu
-                     , Descriptor_Pool *pool);
+init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
+                     , uint32_t max_sets
+                     , gpu_t *gpu
+                     , descriptor_pool_t *pool);
     
     
 void
-update_descriptor_sets(const Memory_Buffer_View<VkWriteDescriptorSet> &writes
-                       , GPU *gpu);
+update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes
+                       , gpu_t *gpu);
 
 internal inline void
-init_semaphore(GPU *gpu
+init_semaphore(gpu_t *gpu
                , VkSemaphore *semaphore)
 {
     VkSemaphoreCreateInfo semaphore_info = {};
@@ -1241,7 +1241,7 @@ init_semaphore(GPU *gpu
 }
 
 internal inline void
-init_fence(GPU *gpu
+init_fence(gpu_t *gpu
            , VkFenceCreateFlags flags
            , VkFence *fence)
 {
@@ -1256,8 +1256,8 @@ init_fence(GPU *gpu
 }
 
 internal inline void
-wait_fences(GPU *gpu
-            , const Memory_Buffer_View<VkFence> &fences)
+wait_fences(gpu_t *gpu
+            , const memory_buffer_view_t<VkFence> &fences)
 {
     vkWaitForFences(gpu->logical_device
                     , fences.count
@@ -1266,64 +1266,64 @@ wait_fences(GPU *gpu
                     , std::numeric_limits<uint64_t>::max());
 }
 
-struct Next_Image_Return {VkResult result; u32 image_index;};
-internal inline Next_Image_Return
-acquire_next_image(Swapchain *swapchain
-                   , GPU *gpu
+struct next_image_return_t {VkResult result; uint32_t image_index;};
+internal inline next_image_return_t
+acquire_next_image(swapchain_t *swapchain
+                   , gpu_t *gpu
                    , VkSemaphore *semaphore
                    , VkFence *fence)
 {
-    u32 image_index = 0;
+    uint32_t image_index = 0;
     VkResult result = vkAcquireNextImageKHR(gpu->logical_device
                                             , swapchain->swapchain
                                             , std::numeric_limits<uint64_t>::max()
                                             , *semaphore
                                             , *fence
                                             , &image_index);
-    return(Next_Image_Return{result, image_index});
+    return(next_image_return_t{result, image_index});
 }
 
 VkResult
-present(const Memory_Buffer_View<VkSemaphore> &signal_semaphores
-        , const Memory_Buffer_View<VkSwapchainKHR> &swapchains
-        , u32 *image_index
+present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
+        , const memory_buffer_view_t<VkSwapchainKHR> &swapchains
+        , uint32_t *image_index
         , VkQueue *present_queue);
 
 internal inline void
-reset_fences(GPU *gpu
-             , const Memory_Buffer_View<VkFence> &fences)
+reset_fences(gpu_t *gpu
+             , const memory_buffer_view_t<VkFence> &fences)
 {
     vkResetFences(gpu->logical_device, fences.count, fences.buffer);
 }
 
-internal inline u32
-adjust_memory_size_for_gpu_alignment(u32 size
-                                     , GPU *gpu)
+internal inline uint32_t
+adjust_memory_size_for_gpu_alignment(uint32_t size
+                                     , gpu_t *gpu)
 {
-    u32 alignment = gpu->properties.limits.nonCoherentAtomSize;
+    uint32_t alignment = gpu->properties.limits.nonCoherentAtomSize;
 
-    u32 mod = size % alignment;
+    uint32_t mod = size % alignment;
 	
     if (mod == 0) return size;
     else return size + alignment - mod;
 }
     
-struct Vulkan_State
+struct vulkan_state_t
 {
     VkInstance instance;
     VkDebugUtilsMessengerEXT debug_messenger;
-    GPU gpu;
+    gpu_t gpu;
     VkSurfaceKHR surface;
-    Swapchain swapchain;
+    swapchain_t swapchain;
 };
 
 /* entry point for vulkan stuff */
 void
-init_vulkan_state(Vulkan_State *state
+init_vulkan_state(vulkan_state_t *state
                   , GLFWwindow *window);
 
 void
-destroy_swapchain(Vulkan_State *state);
+destroy_swapchain(vulkan_state_t *state);
     
 void
-destroy_vulkan_state(Vulkan_State *state);
+destroy_vulkan_state(vulkan_state_t *state);

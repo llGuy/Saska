@@ -23,8 +23,8 @@
      assert(false);	  \
      } 
 
-inline constexpr u32
-left_shift(u32 n)
+inline constexpr uint32_t
+left_shift(uint32_t n)
 {
     return 1 << n;
 }
@@ -33,22 +33,22 @@ void
 output_debug(const char *format
 	     , ...);
 
-struct Window_Data
+struct window_data_t
 {
-    s32 w, h;
+    int32_t w, h;
     struct GLFWwindow *window;
-    f32 dt = 0.0f;
+    float32_t dt = 0.0f;
 
-    Memory_Buffer_View<bool> key_map;
-    Memory_Buffer_View<bool> mb_map;
+    memory_buffer_view_t<bool> key_map;
+    memory_buffer_view_t<bool> mb_map;
 
     // Mouse position
-    s32 m_x = 0;
-    s32 m_y = 0;
+    int32_t m_x = 0;
+    int32_t m_y = 0;
 
     // Previous mouse position
-    s32 prev_m_x = 0;
-    s32 prev_m_y;
+    int32_t prev_m_x = 0;
+    int32_t prev_m_y;
 
     bool m_moved = false;
     bool window_resized = false;
@@ -56,48 +56,34 @@ struct Window_Data
 
 
 
-struct File_Contents
+struct file_contents_t
 {
-    u32 size;
-    byte *content;
+    uint32_t size;
+    byte_t *content;
 };
 
-internal File_Contents
-read_file(const char *filename
-	  , const char *flags = "rb"
-	  , Stack_Allocator *allocator = &stack_allocator_global)
+file_contents_t
+read_file(const char *filename,
+          const char *flags = "rb",
+          stack_allocator_t *allocator = &stack_allocator_global);
+
+struct external_image_data_t
 {
-    FILE *file = fopen(filename, flags);
-    if (file == nullptr)
-    {
-	OUTPUT_DEBUG_LOG("error - couldnt load file \"%s\"\n", filename);
-	assert(false);
-    }
-    fseek(file, 0, SEEK_END);
-    u32 size = ftell(file);
-    rewind(file);
+    int32_t width;
+    int32_t height;
+    void *pixels;
+    int32_t channels;
+};
 
-    byte *buffer = (byte *)allocate_stack(size + 1
-					  , 1
-					  , filename
-					  , allocator);
-    fread(buffer, 1, size, file);
-
-    buffer[size] = '\0';
-    
-    fclose(file);
-
-    File_Contents contents { size, buffer };
-    
-    return(contents);
-} 
+external_image_data_t
+read_image(const char *filename);
 
 template <typename T>
 inline void
 destroy(T *ptr
-	, u32 size = 1)
+	, uint32_t size = 1)
 {
-    for (u32 i = 0
+    for (uint32_t i = 0
 	     ; i < size
 	     ; ++i)
     {
@@ -109,11 +95,11 @@ destroy(T *ptr
 #include <intrin.h>
 #endif
 
-struct Bitset_32
+struct bitset32_t
 {
-    u32 bitset = 0;
+    uint32_t bitset = 0;
 
-    inline u32
+    inline uint32_t
     pop_count(void)
     {
 #ifndef __GNUC__
@@ -124,56 +110,56 @@ struct Bitset_32
     }
 
     inline void
-    set1(u32 bit)
+    set1(uint32_t bit)
     {
 	bitset |= left_shift(bit);
     }
 
     inline void
-    set0(u32 bit)
+    set0(uint32_t bit)
     {
 	bitset &= ~(left_shift(bit));
     }
 
     inline bool
-    get(u32 bit)
+    get(uint32_t bit)
     {
 	return bitset & left_shift(bit);
     }
 };
 
-template <typename T> internal constexpr Memory_Buffer_View<T>
-null_buffer(void) {return(Memory_Buffer_View<T>{0, nullptr});}
+template <typename T> internal constexpr memory_buffer_view_t<T>
+null_buffer(void) {return(memory_buffer_view_t<T>{0, nullptr});}
 
-template <typename T> internal constexpr Memory_Buffer_View<T>
-single_buffer(T *address) {return(Memory_Buffer_View<T>{1, address});}
+template <typename T> internal constexpr memory_buffer_view_t<T>
+single_buffer(T *address) {return(memory_buffer_view_t<T>{1, address});}
 
 template <typename T> void
-allocate_memory_buffer(Memory_Buffer_View<T> &view, u32 count)
+allocate_memory_buffer(memory_buffer_view_t<T> &view, uint32_t count)
 {
     view.count = count;
     view.buffer = (T *)allocate_free_list(count * sizeof(T));
 }
 
 template <typename T> void
-allocate_memory_buffer_tmp(Memory_Buffer_View<T> &view, u32 count)
+allocate_memory_buffer_tmp(memory_buffer_view_t<T> &view, uint32_t count)
 {
     view.count = count;
     view.buffer = (T *)allocate_linear(count * sizeof(T));
 }
 
-struct Memory_Byte_Buffer
+struct memory_byte_buffer_t
 {
-    u32 size;
+    uint32_t size;
     void *ptr;
 };
 
 // predicate needs as param T &
 template <typename T, typename Pred> void
-loop_through_memory(Memory_Buffer_View<T> &memory
+loop_through_memory(memory_buffer_view_t<T> &memory
 		    , Pred &&predicate)
 {
-    for (u32 i = 0; i < memory.count; ++i)
+    for (uint32_t i = 0; i < memory.count; ++i)
     {
 	predicate(i);
     }
@@ -181,7 +167,7 @@ loop_through_memory(Memory_Buffer_View<T> &memory
 
 #include <glm/glm.hpp>
 
-const m4x4 IDENTITY_MAT4X4 = m4x4(1.0f);
+const matrix4_t IDENTITY_MAT4X4 = matrix4_t(1.0f);
 
-extern f32
-barry_centric(const v3 &p1, const v3 &p2, const v3 &p3, const v2 &pos);
+extern float32_t
+barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos);

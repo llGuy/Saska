@@ -67,7 +67,7 @@ internal bool running;
 file_contents_t
 read_file(const char *filename
 	  , const char *flags
-	  , stack_allocator_t *allocator)
+	  , linear_allocator_t *allocator)
 {
     FILE *file = fopen(filename, flags);
     if (file == nullptr)
@@ -79,10 +79,8 @@ read_file(const char *filename
     uint32_t size = ftell(file);
     rewind(file);
 
-    byte_t *buffer = (byte_t *)allocate_stack(size + 1
-                                            , 1
-                                            , filename
-					  , allocator);
+    byte_t *buffer = (byte_t *)allocate_linear(size + 1);
+    
     fread(buffer, 1, size, file);
 
     buffer[size] = '\0';

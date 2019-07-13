@@ -321,7 +321,7 @@ make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat for
 
 // Need to fill in this texture with data from a separate function
 void
-make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t dimensions, gpu_t *gpu, VkImageUsageFlags usage = 0);
+make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter, gpu_t *gpu);
 
 void
 make_framebuffer(framebuffer_t *fbo

@@ -129,6 +129,7 @@ template <typename T
     const char *map_debug_name;
     bucket_t buckets[Bucket_Count] = {};
 
+    hash_table_inline_t(void) = default;
     hash_table_inline_t(const char *name) : map_debug_name(name) {}
 
     void

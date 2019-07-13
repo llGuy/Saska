@@ -65,7 +65,7 @@ struct file_contents_t
 file_contents_t
 read_file(const char *filename,
           const char *flags = "rb",
-          stack_allocator_t *allocator = &stack_allocator_global);
+          linear_allocator_t *allocator = &linear_allocator_global);
 
 struct external_image_data_t
 {

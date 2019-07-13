@@ -435,16 +435,26 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
 
         font_character_t *character = &font_ptr->font_characters[char_id];
         character->character_value = (char)char_id;
-        character->uvs_base = vector2_t((float32_t)x / (float32_t)FNT_MAP_W, (float32_t)y / (float32_t)FNT_MAP_H);
+        // ----------------------------------------------------------------------------- \/ Do y - height so that base position is at bottom of character
+        character->uvs_base = vector2_t((float32_t)x / (float32_t)FNT_MAP_W, (float32_t)(y - height) / (float32_t)FNT_MAP_H);
         character->uvs_size = vector2_t((float32_t)width / (float32_t)FNT_MAP_W, (float32_t)height / (float32_t)FNT_MAP_H);
         character->display_size = vector2_t((float32_t)width / (float32_t)xadvance, (float32_t)height / (float32_t)xadvance);
         character->offset = vector2_t((float32_t)xoffset / (float32_t)xadvance, (float32_t)yoffset / (float32_t)xadvance);
+        character->offset.y *= -1.0f;
         character->advance = (float32_t)xadvance / (float32_t)xadvance;
         
         current_char = fnt_skip_line(current_char);
     }
 
     return(font_ptr);
+}
+
+internal void
+draw_string(ui_text_t *text, const char *string)
+{
+    uint32_t string_length = strlen(string);
+    memcpy(text->characters + text->char_count, string, sizeof(char) * string_length);
+    text->char_count += string_length;
 }
 
 struct ui_state_t
@@ -498,13 +508,13 @@ push_text(ui_text_t *text, const resolution_t &resolution)
     case ui_text_t::font_stream_box_relative_to_t::TOP:
         {
         uint32_t px_box_top = box->px_position.iy + box->px_current_size.iy;
-        px_cursor_position = ivector2_t(text->x_start_px, px_box_top - text->y_start_px - px_char_height);
+        px_cursor_position = ivector2_t(text->x_start_px + box->px_position.ix, px_box_top - text->y_start_px - px_char_height);
         break;
         }
     case ui_text_t::font_stream_box_relative_to_t::BOTTOM:
         {
         uint32_t px_box_bottom = box->px_position.iy;
-        px_cursor_position = ivector2_t(text->x_start_px, px_box_bottom + text->y_start_px);
+        px_cursor_position = ivector2_t(text->x_start_px + box->px_position.ix, px_box_bottom + text->y_start_px);
         break;
         }
     }
@@ -514,13 +524,29 @@ push_text(ui_text_t *text, const resolution_t &resolution)
          ++character)
     {
         char current_char_value = text->characters[character];
+        if (current_char_value == '\n')
+        {
+            px_cursor_position.y -= px_char_height;
+            px_cursor_position.x = text->x_start_px + box->px_position.ix;
+            continue;
+        }
+        if (character % text->chars_per_line == 0)
+        {
+            px_cursor_position.y -= px_char_height;
+            px_cursor_position.x = text->x_start_px + box->px_position.ix;
+        }
+        
         font_character_t *font_character_data = &text->font->font_characters[(uint32_t)current_char_value];
 
         // Top left
-        ivector2_t px_character_base_position =  px_cursor_position + ivector2_t(font_character_data->offset * (float32_t)px_char_width);
-        ivector2_t px_character_size = ivector2_t(font_character_data->display_size * (float32_t)px_char_width);
-        vector2_t normalized_base_position = convert_glsl_to_normalized(pixel_to_glsl_coord(ui_vector2_t(px_character_base_position), resolution).to_fvec2());
-        vector2_t normalized_size = pixel_to_glsl_coord(ui_vector2_t(px_character_size), resolution).to_fvec2() * 2.0f;
+        
+        vector2_t px_character_size = vector2_t(vector2_t(font_character_data->display_size) * (float32_t)px_char_width);
+        vector2_t px_character_base_position =  vector2_t(px_cursor_position) + vector2_t(vector2_t(font_character_data->offset) * (float32_t)px_char_width);
+        vector2_t normalized_base_position = px_character_base_position;
+        normalized_base_position /= vector2_t((float32_t)resolution.width, (float32_t)resolution.height);
+        normalized_base_position *= 2.0f;
+        normalized_base_position -= vector2_t(1.0f);
+        vector2_t normalized_size = (px_character_size / vector2_t((float32_t)resolution.width, (float32_t)resolution.height)) * 2.0f;
         vector2_t adjust = vector2_t(0, -normalized_size.y);
         
         vector2_t current_uvs = font_character_data->uvs_base;
@@ -552,6 +578,8 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
                                                                current_uvs};
+
+        px_cursor_position += ivector2_t(px_char_width, 0.0f);
     }
 }
 
@@ -603,15 +631,17 @@ initialize_ui_elements(gpu_t *gpu, const resolution_t &backbuffer_resolution)
                                                   0xaa000036,
                                                   backbuffer_resolution);
 
-    font_t *font_ptr = load_font("debug_font"_hash, "font/menlo.fnt", "");
+    font_t *font_ptr = load_font("debug_font"_hash, "font/fixedsys.fnt", "");
     make_text(&g_ui.box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::TOP,
               3,
-              3,
-              10,
+              0,
+              30,
               1.2f,
               &g_fonts.test_text);
+
+    draw_string(&g_fonts.test_text, "hello world!");
 }
 
 void
@@ -740,7 +770,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
     image_handle_t tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager.get(tx_hdl);
     {
-        external_image_data_t image_data = read_image("font/menlo.png");
+        external_image_data_t image_data = read_image("font/fixedsys.png");
         make_texture(tx_ptr,
                      image_data.width,
                      image_data.height,
@@ -826,6 +856,7 @@ update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl)
     push_box_to_render(&g_ui.box);
     push_box_to_render(&g_ui.child);
     push_font_character_to_render(&g_ui.test_character_placeholder);
+    push_text(&g_fonts.test_text, get_backbuffer_resolution());
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));

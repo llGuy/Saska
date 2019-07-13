@@ -13,5 +13,5 @@ void
 main(void)
 {
     final_color = texture(fontmap, fs_in.uvs);
-    //final_color = vec4(fs_in.uvs, 0.0, 1.0);
+    //final_color = vec4(1.0, 1.0, 1.0, 1.0);
 }

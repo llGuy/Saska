@@ -15,7 +15,8 @@ struct ui_vector2_t
     ui_vector2_t(void) = default;
     ui_vector2_t(float32_t x, float32_t y) : fx(x), fy(y), type(GLSL) {}
     ui_vector2_t(int32_t x, int32_t y) : ix(x), iy(y), type(PIXEL) {}
-
+    ui_vector2_t(const ivector2_t &iv) : ix(iv.x), iy(iv.y) {}
+    
     inline vector2_t
     to_fvec2(void) const
     {
@@ -182,7 +183,8 @@ struct font_character_t
 {
     char character_value;
     vector2_t uvs_base;
-    vector2_t uvs_max;
+    vector2_t uvs_size;
+    vector2_t display_size;
     vector2_t offset;
     float32_t advance;
 };
@@ -197,6 +199,46 @@ struct font_t
 
 typedef handle_t font_handle_t;
 
+struct ui_text_t
+{
+    ui_box_t *dst_box;
+    font_t *font;
+    
+    // Max characters = 256
+    char characters[256] = {};
+    uint32_t char_count = 0;
+
+    enum font_stream_box_relative_to_t { TOP, BOTTOM /* add CENTER in the future */ };
+
+    font_stream_box_relative_to_t relative_to;
+    uint32_t x_start_px;
+    uint32_t y_start_px;
+
+    uint32_t chars_per_line;
+
+    // Relative to xadvance
+    float32_t line_height;
+};
+
+internal void
+make_text(ui_box_t *box,
+          font_t *font,
+          ui_text_t::font_stream_box_relative_to_t relative_to,
+          uint32_t px_x_start,
+          uint32_t px_y_start,
+          uint32_t chars_per_line,
+          float32_t line_height,
+          ui_text_t *dst_text)
+{
+    dst_text->dst_box = box;
+    dst_text->font = font;
+    dst_text->relative_to = relative_to;
+    dst_text->x_start_px = px_x_start;
+    dst_text->y_start_px = px_y_start;
+    dst_text->chars_per_line = chars_per_line;
+    dst_text->line_height = line_height;
+}
+
 struct fonts_t
 {
     persist constexpr uint32_t MAX_FONTS = 5;
@@ -204,6 +246,8 @@ struct fonts_t
     uint32_t font_count;
 
     hash_table_inline_t<uint32_t, 10, 3, 4> font_map;
+
+    ui_text_t test_text;
 } g_fonts;
 
 struct fnt_word_t
@@ -341,7 +385,7 @@ get_font(font_handle_t handle)
     return(&g_fonts.fonts[handle]);
 }
 
-void
+font_t *
 load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
 {
     // TODO : Make sure this is parameterised, not fixed!
@@ -367,7 +411,8 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
         // X value
         int32_t y = 0;
         current_char = fnt_get_font_attribute_value(current_char, &y);
-
+        y = FNT_MAP_H - y;
+        
         // Width value
         int32_t width = 0;
         current_char = fnt_get_font_attribute_value(current_char, &width);
@@ -390,13 +435,16 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
 
         font_character_t *character = &font_ptr->font_characters[char_id];
         character->character_value = (char)char_id;
-        character->uvs_base = vector2_t((float32_t)x / FNT_MAP_W, (float32_t)y / FNT_MAP_H);
-        character->uvs_max = vector2_t((float32_t)width / FNT_MAP_W, (float32_t)height / FNT_MAP_H);
-        character->offset = vector2_t((float32_t)xoffset / FNT_MAP_W, (float32_t)yoffset / FNT_MAP_H);
-        character->advance = xadvance / FNT_MAP_W;
+        character->uvs_base = vector2_t((float32_t)x / (float32_t)FNT_MAP_W, (float32_t)y / (float32_t)FNT_MAP_H);
+        character->uvs_size = vector2_t((float32_t)width / (float32_t)FNT_MAP_W, (float32_t)height / (float32_t)FNT_MAP_H);
+        character->display_size = vector2_t((float32_t)width / (float32_t)xadvance, (float32_t)height / (float32_t)xadvance);
+        character->offset = vector2_t((float32_t)xoffset / (float32_t)xadvance, (float32_t)yoffset / (float32_t)xadvance);
+        character->advance = (float32_t)xadvance / (float32_t)xadvance;
         
         current_char = fnt_skip_line(current_char);
     }
+
+    return(font_ptr);
 }
 
 struct ui_state_t
@@ -436,6 +484,78 @@ struct ui_state_t
 } g_ui;
 
 internal void
+push_text(ui_text_t *text, const resolution_t &resolution)
+{
+    ui_box_t *box = text->dst_box;
+
+    uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start_px) / text->chars_per_line;
+    // line_height is relative to the xadvance (px_char_width)
+    uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width);
+
+    ivector2_t px_cursor_position;
+    switch(text->relative_to)
+    {
+    case ui_text_t::font_stream_box_relative_to_t::TOP:
+        {
+        uint32_t px_box_top = box->px_position.iy + box->px_current_size.iy;
+        px_cursor_position = ivector2_t(text->x_start_px, px_box_top - text->y_start_px - px_char_height);
+        break;
+        }
+    case ui_text_t::font_stream_box_relative_to_t::BOTTOM:
+        {
+        uint32_t px_box_bottom = box->px_position.iy;
+        px_cursor_position = ivector2_t(text->x_start_px, px_box_bottom + text->y_start_px);
+        break;
+        }
+    }
+    
+    for (uint32_t character = 0;
+         character < text->char_count;
+         ++character)
+    {
+        char current_char_value = text->characters[character];
+        font_character_t *font_character_data = &text->font->font_characters[(uint32_t)current_char_value];
+
+        // Top left
+        ivector2_t px_character_base_position =  px_cursor_position + ivector2_t(font_character_data->offset * (float32_t)px_char_width);
+        ivector2_t px_character_size = ivector2_t(font_character_data->display_size * (float32_t)px_char_width);
+        vector2_t normalized_base_position = convert_glsl_to_normalized(pixel_to_glsl_coord(ui_vector2_t(px_character_base_position), resolution).to_fvec2());
+        vector2_t normalized_size = pixel_to_glsl_coord(ui_vector2_t(px_character_size), resolution).to_fvec2() * 2.0f;
+        vector2_t adjust = vector2_t(0, -normalized_size.y);
+        
+        vector2_t current_uvs = font_character_data->uvs_base;
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust,
+                                                               current_uvs};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               current_uvs};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               current_uvs};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               current_uvs};
+
+        current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               current_uvs};
+
+        current_uvs = font_character_data->uvs_base + font_character_data->uvs_size;
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
+                                                               current_uvs};
+    }
+}
+
+internal void
 push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
@@ -463,9 +583,7 @@ push_font_character_to_render(ui_box_t *box)
 
 internal void
 initialize_ui_elements(gpu_t *gpu, const resolution_t &backbuffer_resolution)
-{
-    load_font("debug_font"_hash, "font/menlo.fnt", "");
-    
+{    
     g_ui.box = make_ui_box(LEFT_DOWN, 0.5f,
                            ui_vector2_t(0.05f, 0.05f),
                            ui_vector2_t(1.0f, 0.9f),
@@ -484,6 +602,16 @@ initialize_ui_elements(gpu_t *gpu, const resolution_t &backbuffer_resolution)
                                                   &g_ui.box,
                                                   0xaa000036,
                                                   backbuffer_resolution);
+
+    font_t *font_ptr = load_font("debug_font"_hash, "font/menlo.fnt", "");
+    make_text(&g_ui.box,
+              font_ptr,
+              ui_text_t::font_stream_box_relative_to_t::TOP,
+              3,
+              3,
+              10,
+              1.2f,
+              &g_fonts.test_text);
 }
 
 void

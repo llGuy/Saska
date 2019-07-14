@@ -12,7 +12,7 @@ extern "C"
 lua_State *g_lua_state = nullptr;
 
 void
-make_lua_scripting(void)
+initialize_scripting(void)
 {
     g_lua_state = luaL_newstate();
 
@@ -39,26 +39,26 @@ end_file(void)
 }
 
 void
-push_to_stack(const char *name, Stack_Item_Type type, int32_t stack_index = 0, int32_t array_index = 0)
+push_to_stack(const char *name, stack_item_type_t type, int32_t stack_index = 0, int32_t array_index = 0)
 {
     switch(type)
     {
-    case Stack_Item_Type::GLOBAL:      {lua_getglobal(g_lua_state, name); break;}
-    case Stack_Item_Type::FIELD:       {lua_getfield(g_lua_state, stack_index, name); break;}
-    case Stack_Item_Type::ARRAY_INDEX: {lua_rawgeti(g_lua_state, stack_index, array_index); break;}
+    case stack_item_type_t::GLOBAL:      {lua_getglobal(g_lua_state, name); break;}
+    case stack_item_type_t::FIELD:       {lua_getfield(g_lua_state, stack_index, name); break;}
+    case stack_item_type_t::ARRAY_INDEX: {lua_rawgeti(g_lua_state, stack_index, array_index); break;}
     }
 }
 
 template <typename T> T *cast_ptr(void *ptr) {return((T *)ptr);}
 
 void
-get_from_stack(Script_Primitive_Type type, int32_t stack_index, void *dst)
+get_from_stack(script_primitive_type_t type, int32_t stack_index, void *dst)
 {
     switch(type)
     {
-    case Script_Primitive_Type::NUMBER:  {*cast_ptr<int>(dst) = lua_tonumber(g_lua_state, stack_index); break;}
-    case Script_Primitive_Type::STRING:  {*cast_ptr<const char *>(dst) = lua_tostring(g_lua_state, stack_index); break;}
-    case Script_Primitive_Type::BOOLEAN: {*cast_ptr<bool>(dst) = lua_toboolean(g_lua_state, stack_index); break;}
+    case script_primitive_type_t::NUMBER:  {*cast_ptr<int>(dst) = lua_tonumber(g_lua_state, stack_index); break;}
+    case script_primitive_type_t::STRING:  {*cast_ptr<const char *>(dst) = lua_tostring(g_lua_state, stack_index); break;}
+    case script_primitive_type_t::BOOLEAN: {*cast_ptr<bool>(dst) = lua_toboolean(g_lua_state, stack_index); break;}
     }
 }
 
@@ -75,4 +75,16 @@ test_script(void)
         
         printf("%d\n", result);
     }    
+}
+
+void
+execute_lua(const char *code)
+{
+    int error = luaL_loadbuffer(g_lua_state, code, strlen(code), code) || lua_pcall(g_lua_state, 0, 0, 0);
+
+    if (error)
+    {
+        printf("%s", lua_tostring(g_lua_state, -1));
+        lua_pop(g_lua_state, 1);
+    }
 }

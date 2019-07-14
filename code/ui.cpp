@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "script.hpp"
 #include "graphics.hpp"
 
 enum coordinate_type_t { PIXEL, GLSL };
@@ -48,8 +49,8 @@ internal inline ui_vector2_t
 pixel_to_glsl_coord(const ui_vector2_t &position,
                     const resolution_t &resolution)
 {
-    ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width
-                   , (float32_t)position.iy / (float32_t)resolution.height);
+    ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width,
+                     (float32_t)position.iy / (float32_t)resolution.height);
     return(ret);
 }
 
@@ -653,6 +654,10 @@ struct console_t
     ui_text_t console_output;
 } g_console;
 
+// Lua function declarations
+internal int32_t
+lua_console_out(lua_State *state);
+
 bool
 console_is_receiving_input(void)
 {
@@ -721,6 +726,8 @@ initialize_console(void)
 
     output_to_input_section("> ");
     output_to_output_section("");
+
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "c_out", &lua_console_out);
 }
 
 internal void
@@ -750,6 +757,10 @@ handle_console_input(window_data_t *window)
             g_console.input_characters[g_console.input_character_count] = '\0';
             output_to_output_section(g_console.input_characters);
             output_char_to_output_section('\n');
+            // Register this to the Lua API
+            execute_lua(g_console.input_characters);
+            output_char_to_output_section('\n');
+           
             clear_input_section();
         }
     }
@@ -1165,4 +1176,13 @@ render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command
 
     g_ui.cpu_vertex_count = 0;
     g_ui.cpu_tx_vertex_count = 0;
+}
+
+// All console-and-ui-linked commands (e.g. printing, ui stuff)
+internal int32_t
+lua_console_out(lua_State *state)
+{
+    const char *string = lua_tostring(state, -1);
+    output_to_output_section(string);
+    return(0);
 }

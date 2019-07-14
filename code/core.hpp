@@ -42,6 +42,10 @@ struct window_data_t
     memory_buffer_view_t<bool> key_map;
     memory_buffer_view_t<bool> mb_map;
 
+    persist constexpr uint32_t MAX_CHARS = 10;
+    char char_stack[MAX_CHARS];
+    uint32_t char_count = 0;
+
     // Mouse position
     int32_t m_x = 0;
     int32_t m_y = 0;

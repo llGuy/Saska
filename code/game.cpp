@@ -112,7 +112,7 @@ update_game(gpu_t *gpu
     {
         update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
         
-        update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl());
+        update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), window);
         render_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), &queue);
         
         render_final_output(next_image_data.image_index, &queue, swapchain);

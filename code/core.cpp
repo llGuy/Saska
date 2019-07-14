@@ -192,6 +192,16 @@ glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t 
     }
 }
 
+internal void
+glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
+{
+    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
+    if (w_data->char_count != window_data_t::MAX_CHARS)
+    {
+        w_data->char_stack[w_data->char_count++] = (char)code_point;
+    }
+}
+
 #include <chrono>
 
 internal void
@@ -252,6 +262,7 @@ main(int32_t argc
     glfwSetMouseButtonCallback(window.window, glfw_mouse_button_proc);
     glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
     glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
+    glfwSetCharCallback(window.window, glfw_char_input_proc);
 
     vulkan_state_t vk = {};
 
@@ -288,6 +299,8 @@ main(int32_t argc
         clear_linear();
 
         window.m_moved = false;
+
+        window.char_count = 0;
             
         auto new_now = std::chrono::high_resolution_clock::now();
         window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();

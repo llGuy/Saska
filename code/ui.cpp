@@ -205,14 +205,16 @@ struct ui_text_t
     font_t *font;
     
     // Max characters = 256
-    char characters[256] = {};
+    char characters[500] = {};
     uint32_t char_count = 0;
 
     enum font_stream_box_relative_to_t { TOP, BOTTOM /* add CENTER in the future */ };
 
     font_stream_box_relative_to_t relative_to;
-    uint32_t x_start_px;
-    uint32_t y_start_px;
+
+    // Relative to xadvance
+    float32_t x_start;
+    float32_t y_start;
 
     uint32_t chars_per_line;
 
@@ -224,8 +226,8 @@ internal void
 make_text(ui_box_t *box,
           font_t *font,
           ui_text_t::font_stream_box_relative_to_t relative_to,
-          uint32_t px_x_start,
-          uint32_t px_y_start,
+          float32_t px_x_start,
+          float32_t px_y_start,
           uint32_t chars_per_line,
           float32_t line_height,
           ui_text_t *dst_text)
@@ -233,8 +235,8 @@ make_text(ui_box_t *box,
     dst_text->dst_box = box;
     dst_text->font = font;
     dst_text->relative_to = relative_to;
-    dst_text->x_start_px = px_x_start;
-    dst_text->y_start_px = px_y_start;
+    dst_text->x_start = px_x_start;
+    dst_text->y_start = px_y_start;
     dst_text->chars_per_line = chars_per_line;
     dst_text->line_height = line_height;
 }
@@ -450,6 +452,12 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
 }
 
 internal void
+draw_char(ui_text_t *text, char character)
+{
+    text->characters[text->char_count++] = character;
+}
+
+internal void
 draw_string(ui_text_t *text, const char *string)
 {
     uint32_t string_length = strlen(string);
@@ -496,23 +504,24 @@ struct ui_state_t
 internal ivector2_t
 get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
 {
-    uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start_px) / text->chars_per_line;
-    // line_height is relative to the xadvance (px_char_width)
+    uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
+    uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
+    px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
     uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width);
-
+    
     ivector2_t px_cursor_position;
     switch(text->relative_to)
     {
     case ui_text_t::font_stream_box_relative_to_t::TOP:
         {
             uint32_t px_box_top = box->px_position.iy + box->px_current_size.iy;
-            px_cursor_position = ivector2_t(text->x_start_px + box->px_position.ix, px_box_top - text->y_start_px);
+            px_cursor_position = ivector2_t(x_start + box->px_position.ix, px_box_top - (uint32_t)(text->y_start * (float32_t)px_char_width));
             break;
         }
     case ui_text_t::font_stream_box_relative_to_t::BOTTOM:
         {
             uint32_t px_box_bottom = box->px_position.iy;
-            px_cursor_position = ivector2_t(text->x_start_px + box->px_position.ix, px_box_bottom + text->y_start_px + px_char_height);
+            px_cursor_position = ivector2_t(x_start + box->px_position.ix, px_box_bottom + ((uint32_t)(text->y_start * (float32_t)(px_char_width)) + px_char_height));
             break;
         }
     }
@@ -524,10 +533,11 @@ push_text(ui_text_t *text, const resolution_t &resolution)
 {
     ui_box_t *box = text->dst_box;
 
-    uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start_px) / text->chars_per_line;
-    // line_height is relative to the xadvance (px_char_width)
+    uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
+    uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
+    px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
     uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width);
-
+    
     ivector2_t px_cursor_position = get_px_cursor_position(box, text, resolution);
     
     for (uint32_t character = 0;
@@ -537,7 +547,8 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         if (current_char_value == '\n')
         {
             px_cursor_position.y -= px_char_height;
-            px_cursor_position.x = text->x_start_px + box->px_position.ix;
+            px_cursor_position.x = x_start + box->px_position.ix;
+            ++character;
             continue;
         }
         
@@ -590,7 +601,7 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         if (character % text->chars_per_line == 0)
         {
             px_cursor_position.y -= px_char_height;
-            px_cursor_position.x = text->x_start_px + box->px_position.ix;
+            px_cursor_position.x = text->x_start + box->px_position.ix;
         }
     }
 }
@@ -656,12 +667,24 @@ output_to_input_section(const char *string)
 }
 
 internal void
+output_to_output_section(const char *string)
+{
+    draw_string(&g_console.console_output, string);
+}
+
+internal void
+output_char_to_output_section(char character)
+{
+    draw_char(&g_console.console_output, character);
+}
+
+internal void
 clear_input_section(void)
 {
     g_console.input_character_count = 0;
     g_console.console_input.char_count = 0;
     g_console.cursor_position = 0;
-    output_to_input_section("command: ");
+    output_to_input_section("> ");
 }
 
 internal void
@@ -680,19 +703,57 @@ initialize_console(void)
     font_t *font_ptr = load_font("console_font"_hash, "font/fixedsys.fnt", "");
     make_text(&g_console.back_box,
               font_ptr,
-              ui_text_t::font_stream_box_relative_to_t::TOP,
-              3,
-              3,
+              ui_text_t::font_stream_box_relative_to_t::BOTTOM,
+              0.7f,
+              1.0f,
               55,
-              1.2f,
+              1.5f,
               &g_console.console_input);
 
-    output_to_input_section("command: ");
+    make_text(&g_console.back_box,
+              font_ptr,
+              ui_text_t::font_stream_box_relative_to_t::TOP,
+              0.7f,
+              0.7f,
+              55,
+              1.5f,
+              &g_console.console_output);
+
+    output_to_input_section("> ");
+    output_to_output_section("");
 }
 
 internal void
 handle_console_input(window_data_t *window)
 {
+    if (g_console.receive_input)
+    {
+        for (uint32_t i = 0; i < window->char_count; ++i)
+        {
+            output_to_input_section(&window->char_stack[i]);
+            g_console.input_characters[g_console.input_character_count++] = window->char_stack[i];
+            window->char_stack[i] = 0;
+        }
+
+        if (window->key_map[GLFW_KEY_BACKSPACE])
+        {
+            if (g_console.input_character_count)
+            {
+                --g_console.cursor_position;
+                --g_console.console_input.char_count;
+                --g_console.input_character_count;
+            }
+        }
+
+        if (window->key_map[GLFW_KEY_ENTER])
+        {
+            g_console.input_characters[g_console.input_character_count] = '\0';
+            output_to_output_section(g_console.input_characters);
+            output_char_to_output_section('\n');
+            clear_input_section();
+        }
+    }
+
     if (window->key_map[GLFW_KEY_ESCAPE])
     {
         g_console.receive_input = false;
@@ -707,28 +768,6 @@ handle_console_input(window_data_t *window)
     {
         g_console.render_console ^= 0x1;
         window->char_stack[0] = 0;
-    }
-
-    if (g_console.receive_input)
-    {
-        for (uint32_t i = 0; i < window->char_count; ++i)
-        {
-            output_to_input_section(&window->char_stack[i]);
-            g_console.input_characters[g_console.input_character_count++] = window->char_stack[i];
-            window->char_stack[i] = 0;
-        }
-
-        if (window->key_map[GLFW_KEY_BACKSPACE])
-        {
-            --g_console.cursor_position;
-            --g_console.console_input.char_count;
-            --g_console.input_character_count;
-        }
-
-        if (window->key_map[GLFW_KEY_ENTER])
-        {
-            clear_input_section();
-        }
     }
 }
 
@@ -765,18 +804,26 @@ push_console_to_render(window_data_t *window)
     // Push input text
     push_box_to_render(&g_console.back_box);
     push_text(&g_console.console_input, resolution);
+    push_text(&g_console.console_output, resolution);
     // Push cursor quad
     {
         ui_box_t *box = &g_console.back_box;
         ui_text_t *text = &g_console.console_input;
         
-        uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start_px) / text->chars_per_line;
+        /*        uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start) / text->chars_per_line;
         // TODO: get rid of magic
-        float32_t magic = 1.6f;
+        uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
+        ivector2_t px_cursor_start = get_px_cursor_position(&g_console.back_box, &g_console.console_input, get_backbuffer_resolution());
+        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console.cursor_position;*/
+
+        float32_t magic = 1.4f;
+        uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
+        uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
+        px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
         uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
         ivector2_t px_cursor_start = get_px_cursor_position(&g_console.back_box, &g_console.console_input, get_backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console.cursor_position;
-
+        
         vector2_t px_cursor_size = vector2_t((float32_t)px_char_width, (float32_t)px_char_height);
         vector2_t px_cursor_base_position =  vector2_t(px_cursor_position) + vector2_t(vector2_t(0.0f, 0.0f));
         vector2_t normalized_cursor_position = px_cursor_base_position;

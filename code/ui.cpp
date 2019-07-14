@@ -1,3 +1,4 @@
+#include "core.hpp"
 #include "utils.hpp"
 #include "script.hpp"
 #include "graphics.hpp"
@@ -206,6 +207,7 @@ struct ui_text_t
     font_t *font;
     
     // Max characters = 256
+    uint32_t colors[500] = {};
     char characters[500] = {};
     uint32_t char_count = 0;
 
@@ -453,16 +455,21 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
 }
 
 internal void
-draw_char(ui_text_t *text, char character)
+draw_char(ui_text_t *text, char character, uint32_t color)
 {
+    text->colors[text->char_count] = color;
     text->characters[text->char_count++] = character;
 }
 
 internal void
-draw_string(ui_text_t *text, const char *string)
+draw_string(ui_text_t *text, const char *string, uint32_t color)
 {
     uint32_t string_length = strlen(string);
     memcpy(text->characters + text->char_count, string, sizeof(char) * string_length);
+    for (uint32_t i = 0; i < string_length; ++i)
+    {
+        text->colors[text->char_count + i] = color;
+    }
     text->char_count += string_length;
 }
 
@@ -484,6 +491,7 @@ struct ui_state_t
     {
         vector2_t position;
         vector2_t uvs;
+        uint32_t color;
     };
     persist constexpr uint32_t MAX_TX_QUADS = 100;
     textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
@@ -554,6 +562,7 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         }
         
         font_character_t *font_character_data = &text->font->font_characters[(uint32_t)current_char_value];
+        uint32_t color = text->colors[character];
 
         // Top left
         
@@ -569,32 +578,32 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         vector2_t current_uvs = font_character_data->uvs_base;
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust,
-                                                               current_uvs};
+                                                               current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
-                                                               current_uvs};
+                                                               current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
-                                                               current_uvs};
+                                                               current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
-                                                               current_uvs};
+                                                               current_uvs, color};
 
         current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
-                                                               current_uvs};
+                                                               current_uvs, color};
 
         current_uvs = font_character_data->uvs_base + font_character_data->uvs_size;
         current_uvs.y = 1.0f - current_uvs.y;
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
-                                                               current_uvs};
+                                                               current_uvs, color};
 
         px_cursor_position += ivector2_t(px_char_width, 0.0f);
 
@@ -652,11 +661,23 @@ struct console_t
     int32_t cursor_fade;
     
     ui_text_t console_output;
+
+    uint32_t input_color = 0xFFFFBBFF;
+    uint32_t output_color = 0xBBFFFFFF;
 } g_console;
 
 // Lua function declarations
 internal int32_t
 lua_console_out(lua_State *state);
+
+internal int32_t
+lua_console_clear(lua_State *state);
+
+internal int32_t
+lua_get_fps(lua_State *state);
+
+internal int32_t
+lua_print_fps(lua_State *state);
 
 bool
 console_is_receiving_input(void)
@@ -665,22 +686,22 @@ console_is_receiving_input(void)
 }
 
 internal void
-output_to_input_section(const char *string)
+output_to_input_section(const char *string, uint32_t color)
 {
     g_console.cursor_position += strlen(string);
-    draw_string(&g_console.console_input, string);
+    draw_string(&g_console.console_input, string, color);
 }
 
 internal void
-output_to_output_section(const char *string)
+output_to_output_section(const char *string, uint32_t color)
 {
-    draw_string(&g_console.console_output, string);
+    draw_string(&g_console.console_output, string, color);
 }
 
 internal void
 output_char_to_output_section(char character)
 {
-    draw_char(&g_console.console_output, character);
+    draw_char(&g_console.console_output, character, 0x00000000);
 }
 
 internal void
@@ -689,7 +710,7 @@ clear_input_section(void)
     g_console.input_character_count = 0;
     g_console.console_input.char_count = 0;
     g_console.cursor_position = 0;
-    output_to_input_section("> ");
+    output_to_input_section("> ", g_console.input_color);
 }
 
 internal void
@@ -721,13 +742,15 @@ initialize_console(void)
               0.7f,
               0.7f,
               55,
-              1.5f,
+              1.8f,
               &g_console.console_output);
 
-    output_to_input_section("> ");
-    output_to_output_section("");
+    output_to_input_section("> ", g_console.input_color);
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "c_out", &lua_console_out);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "c_clear", &lua_console_clear);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "get_fps", &lua_get_fps);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "print_fps", &lua_print_fps);
 }
 
 internal void
@@ -737,7 +760,8 @@ handle_console_input(window_data_t *window)
     {
         for (uint32_t i = 0; i < window->char_count; ++i)
         {
-            output_to_input_section(&window->char_stack[i]);
+            char character[2] = {window->char_stack[i], 0};
+            output_to_input_section(character, g_console.input_color);
             g_console.input_characters[g_console.input_character_count++] = window->char_stack[i];
             window->char_stack[i] = 0;
         }
@@ -755,7 +779,7 @@ handle_console_input(window_data_t *window)
         if (window->key_map[GLFW_KEY_ENTER])
         {
             g_console.input_characters[g_console.input_character_count] = '\0';
-            output_to_output_section(g_console.input_characters);
+            output_to_output_section(g_console.input_characters, g_console.input_color);
             output_char_to_output_section('\n');
             // Register this to the Lua API
             execute_lua(g_console.input_characters);
@@ -898,7 +922,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
     g_ui.tx_quads_model = g_model_manager.add("model.tx_quads"_hash);
     auto *tx_quads_ptr = g_model_manager.get(g_ui.tx_quads_model);
     {
-        tx_quads_ptr->attribute_count = 2;
+        tx_quads_ptr->attribute_count = 3;
 	tx_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
 	tx_quads_ptr->binding_count = 1;
 	tx_quads_ptr->bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
@@ -909,6 +933,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
 
 	binding->push_attribute(0, VK_FORMAT_R32G32_SFLOAT, sizeof(ui_state_t::textured_vertex_t::position));
 	binding->push_attribute(1, VK_FORMAT_R32G32_SFLOAT, sizeof(ui_state_t::textured_vertex_t::uvs));
+        binding->push_attribute(2, VK_FORMAT_R32_UINT, sizeof(ui_state_t::textured_vertex_t::color));
 
 	binding->end_attributes_creation();
     }
@@ -1182,7 +1207,51 @@ render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command
 internal int32_t
 lua_console_out(lua_State *state)
 {
-    const char *string = lua_tostring(state, -1);
-    output_to_output_section(string);
+    int32_t type = lua_type(state, -1);
+    switch(type)
+    {
+    case LUA_TNUMBER:
+        {
+            int32_t number =  lua_tonumber(state, -1);
+            char buffer[20] = {};
+            sprintf(buffer, "%d", number);
+            output_to_output_section(buffer, g_console.output_color);
+            break;
+        }
+    case LUA_TSTRING:
+        {
+            const char *string = lua_tostring(state, -1);
+            output_to_output_section(string, g_console.output_color);            
+            break;
+        }
+    }
+
+    return(0);
+}
+
+internal int32_t
+lua_console_clear(lua_State *state)
+{
+    g_console.console_output.char_count = 0;
+    return(0);
+}
+
+internal int32_t
+lua_get_fps(lua_State *state)
+{
+    window_data_t *win = get_window_data();
+    lua_pushnumber(state, 1.0f / win->dt);
+    return(1);
+}
+
+internal int32_t
+lua_print_fps(lua_State *state)
+{
+    window_data_t *win = get_window_data();
+    float32_t fps = 1.0f / win->dt;
+    uint32_t fps_ui = (uint32_t)fps;
+    char buffer[20] = {};
+    sprintf(buffer, "%d", fps_ui);
+    output_to_output_section(buffer, g_console.output_color);
     return(0);
 }

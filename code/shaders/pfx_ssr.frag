@@ -20,17 +20,6 @@ layout(binding = 2, set = 0) uniform sampler2D g_normal;
 
 layout(binding = 0, set = 1) uniform samplerCube atmosphere_cubemap;
 
-layout(binding = 0, set = 2) uniform Camera_Transforms
-{
-    mat4 view;
-    mat4 proj;
-
-    mat4 shadow_view;
-    mat4 shadow_proj;
-
-    vec4 debug_vector;
-} camera_ubo;
-
 const int num_marches = 30;
 
 vec3 hash33(vec3 p3)
@@ -146,7 +135,8 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
 void
 main(void)
 {
-    vec4 position = (textureLod(g_position, fs_in.uvs, 2));
+    final_color = texture(g_final, fs_in.uvs);
+    /*    vec4 position = (textureLod(g_position, fs_in.uvs, 2));
     vec3 view_position = vec3(position);
     vec4 vnormal = (textureLod(g_normal, fs_in.uvs, 2));
     vec3 view_normal = vnormal.xyz;
@@ -208,7 +198,7 @@ main(void)
 	}
 	else final_color = pixel_color;
     }
-    else final_color = pixel_color;
+    else final_color = pixel_color;*/
 
     final_color.a = 1.0;
 }

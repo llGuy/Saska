@@ -1418,6 +1418,28 @@ struct pfx_stage_t
     uniform_group_handle_t output_group; // For next one
 };
 
+struct pfx_frame_capture_t
+{
+    // Debug a shader with this data:
+    void *pk_ptr;
+    uint32_t pk_size;
+
+    // Create a blitted image with uniform sampler to display
+    image2d_t blitted_image;
+    uniform_group_t blitted_image_uniform;
+
+    // Create blitted images (tiling linear) of input attachments / samplers
+    struct sampler2d_t
+    {
+        image_handle_t original_image;
+        image2d_t blitted_linear_image;
+        uint32_t index;
+    };
+
+    uint32_t sampler_count;
+    sampler2d_t *samplers;
+};
+
 struct post_processing_t
 {
     pfx_stage_t ssr_stage;
@@ -1743,6 +1765,9 @@ make_cube_model(gpu_t *gpu,
     }
 }
 
+internal int32_t
+lua_begin_frame_capture(lua_State *state);
+
 void
 initialize_game_3d_graphics(gpu_t *gpu,
                             swapchain_t *swapchain,
@@ -1756,6 +1781,8 @@ initialize_game_3d_graphics(gpu_t *gpu,
     make_shadow_data(gpu, swapchain);
     make_cube_model(gpu, swapchain, pool);
     make_atmosphere_data(gpu, &g_uniform_pool, swapchain, pool);
+
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
 }
 
 // 2D Graphics
@@ -1773,4 +1800,12 @@ void
 destroy_graphics(gpu_t *gpu)
 {
     vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
+}
+
+internal int32_t
+lua_begin_frame_capture(lua_State *state)
+{
+    
+    
+    return(0);
 }

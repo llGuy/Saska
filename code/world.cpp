@@ -1,5 +1,6 @@
 #include "ui.hpp"
 #include <chrono>
+#include "script.hpp"
 #include <iostream>
 #include "world.hpp"
 #include <glm/glm.hpp>
@@ -57,6 +58,15 @@ struct planet_t
     quaternion_t r;
 };
 
+struct terrain_create_staging
+{
+    uint32_t dimensions;
+    float32_t size;
+    vector3_t ws_p;
+    vector3_t rotation;
+    vector3_t color;
+};
+
 global_var struct morphable_terrains_t
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
@@ -70,6 +80,9 @@ global_var struct morphable_terrains_t
     morphable_terrain_t terrains[MAX_TERRAINS];
     uint32_t terrain_count {0};
 
+    terrain_create_staging create_stagings[10];
+    uint32_t create_count = 0;
+    
     pipeline_handle_t terrain_ppln;
     pipeline_handle_t terrain_shadow_ppln;
 
@@ -88,7 +101,6 @@ add_terrain(void)
 {
     return(&g_terrains.terrains[g_terrains.terrain_count++]);
 }    
-
 
 internal void
 clean_up_terrain(gpu_t *gpu)
@@ -148,7 +160,8 @@ transform_from_ws_to_ts(const vector3_t &ws_v,
 
 internal bool
 is_on_terrain(const vector3_t &ws_position,
-              morphable_terrain_t *t)
+              morphable_terrain_t *t,
+              float32_t *distance)
 {
     float32_t max_x = (float32_t)(t->xz_dim.x);
     float32_t max_z = (float32_t)(t->xz_dim.y);
@@ -163,6 +176,8 @@ is_on_terrain(const vector3_t &ws_position,
     bool is_in_z_boundaries = (ts_position.z > min_z && ts_position.z < max_z);
     bool is_on_top          = (ts_position.y > -0.1f);
 
+    *distance = ts_position.y;
+    
     return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
 }
 
@@ -461,14 +476,39 @@ morph_terrain_at(const ivector2_t &ts_position
 internal morphable_terrain_t *
 on_which_terrain(const vector3_t &ws_position)
 {
+    struct distance_terrain_data_t { float32_t distance; morphable_terrain_t *terrain; };
+    distance_terrain_data_t *distances = ALLOCA_T(distance_terrain_data_t, g_terrains.terrain_count);
+    uint32_t distance_count = 0;
+    
     for (uint32_t i = 0; i < g_terrains.terrain_count; ++i)
     {
-        if (is_on_terrain(ws_position, &g_terrains.terrains[i]))
+        float32_t distance;
+        if (is_on_terrain(ws_position, &g_terrains.terrains[i], &distance))
         {
-            return(&g_terrains.terrains[i]);
+            distances[distance_count].distance = distance;
+            distances[distance_count].terrain = &g_terrains.terrains[i];
+            ++distance_count;
         }
     }
-    return(nullptr);
+
+    // Look for the smallest one
+    distance_terrain_data_t *smallest = &distances[0];
+    for (uint32_t i = 1; i < distance_count; ++i)
+    {
+        if (distances[i].distance < smallest->distance)
+        {
+            smallest = &distances[i];
+        }
+    }
+
+    if (distance_count)
+    {
+        return(smallest->terrain);
+    }
+    else
+    {
+        return(nullptr);
+    }
 }
 
 // ---- this command happens when rendering (terrain is updated on the cpu side at a different time) ----
@@ -584,7 +624,6 @@ make_3D_terrain_mesh_instance(uint32_t width_x
 			      , uint32_t depth_z
 			      , float32_t *&cpu_side_heights
 			      , gpu_buffer_t *gpu_side_heights
-			      , VkCommandPool *cmdpool
 			      , gpu_t *gpu)
 {
     // don_t't need in the future
@@ -600,9 +639,9 @@ make_3D_terrain_mesh_instance(uint32_t width_x
 }
 
 internal void
-make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, VkCommandPool *cmdpool, gpu_t *gpu)
+make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, gpu_t *gpu)
 {
-    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, cmdpool, gpu);
+    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, gpu);
     terrain->xz_dim = ivector2_t(w, d);
 }
 
@@ -648,7 +687,7 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                                                     , gpu);
 
     auto *red_terrain = add_terrain();
-    make_terrain_mesh_data(21, 21, red_terrain, cmdpool, gpu);
+    make_terrain_mesh_data(21, 21, red_terrain, gpu);
     make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(0.0f, 0.0f, 200.0f)
                                 , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
@@ -656,12 +695,29 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                 , vector3_t(255.0f, 69.0f, 0.0f) / 256.0f);
 
     auto *green_terrain = add_terrain();
-    make_terrain_mesh_data(21, 21, green_terrain, cmdpool, gpu);
+    make_terrain_mesh_data(21, 21, green_terrain, gpu);
     make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(200.0f, 0.0f, 0.0f)
                                 , quaternion_t(glm::radians(vector3_t(0.0f, 45.0f, 20.0f)))
                                 , vector3_t(10.0f)
                                 , vector3_t(0.1, 0.6, 0.2) * 0.7f);
+}
+
+internal void
+add_staged_creation_terrains(gpu_t *gpu)
+{
+    for (uint32_t i = 0; i < g_terrains.create_count; ++i)
+    {
+        auto *create_staging_info = &g_terrains.create_stagings[i];
+        auto *new_terrain = add_terrain();
+        make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain, gpu);
+        make_terrain_rendering_data(new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
+                                    , create_staging_info->ws_p
+                                    , quaternion_t(create_staging_info->rotation)
+                                    , vector3_t(create_staging_info->size)
+                                    , create_staging_info->color);
+    }
+    g_terrains.create_count = 0;
 }
 
 internal void
@@ -1492,11 +1548,24 @@ render_world(vulkan_state_t *vk
     apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m, &vk->gpu);
 }
 
+internal int32_t
+lua_get_player_position(lua_State *state);
+
+internal int32_t
+lua_set_player_position(lua_State *state);
+
+internal int32_t
+lua_spawn_terrain(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
                  , VkCommandPool *cmdpool)
 {
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);   
+    
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
 }
@@ -1512,7 +1581,8 @@ update_world(window_data_t *window
     handle_input_debug(window, dt, &vk->gpu);
     
     update_entities(window, dt, &vk->gpu);
-    
+
+    add_staged_creation_terrains(&vk->gpu);
 
     // ---- Actually rendering the frame ----
     update_3d_output_camera_transforms(image_index, &vk->gpu);
@@ -1584,4 +1654,50 @@ destroy_world(gpu_t *gpu)
     }
 
     destroy_graphics(gpu);
+}
+
+internal int32_t
+lua_get_player_position(lua_State *state)
+{
+    // For now, just sets the main player's position
+    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    lua_pushnumber(state, main_entity->ws_p.x);
+    lua_pushnumber(state, main_entity->ws_p.y);
+    lua_pushnumber(state, main_entity->ws_p.z);
+    return(3);
+}
+
+internal int32_t
+lua_set_player_position(lua_State *state)
+{
+    float32_t x = lua_tonumber(state, -3);
+    float32_t y = lua_tonumber(state, -2);
+    float32_t z = lua_tonumber(state, -1);
+    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    main_entity->ws_p.x = x;
+    main_entity->ws_p.y = y;
+    main_entity->ws_p.z = z;
+    return(0);
+}
+
+internal int32_t
+lua_spawn_terrain(lua_State *state)
+{
+    uint32_t dimensions = lua_tonumber(state, -2);
+    float32_t size = lua_tonumber(state, -1);
+    
+    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+
+    uint32_t xrotation = rand() % 90;
+    uint32_t yrotation = rand() % 90;
+    uint32_t zrotation = rand() % 90;
+    
+    auto *create = &g_terrains.create_stagings[g_terrains.create_count++];
+    create->dimensions = dimensions;
+    create->size = size;
+    create->ws_p = main_entity->ws_p;
+    create->rotation = glm::radians(vector3_t(xrotation, yrotation, zrotation));
+    create->color = vector3_t(0.4f, 0.4f, 0.6f);
+
+    return(0);
 }

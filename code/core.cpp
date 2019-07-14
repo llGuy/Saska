@@ -21,6 +21,14 @@
      * Get font rendering working, displaying textured images (quads) on the screen
      * Get started working on the in-game console to make gameplay development quicker and easier
      * Start working on debugging post processing system (VML)
+        - At start of frame capture: 
+            - Blit screen into texture and display it in "freeze-mode"
+            - Create way to bind samplers to the frame capture (in setup code)
+            - Blit the bound textures into the sampler2d_t structs which contain the linearly formatted image
+        - Get pointed coordinate with mouse (make sure the math is correct)
+        - Integrate VML:
+            - Find a way to bind samplers to their respective images (memory)
+            - Find a way to bind push_constant to some memory
      * Start getting the gameplay moving (add better physics, sliding through different terrains, etc...)
      * Add skeletal animation (loading models + animations, etc...)
 
@@ -59,6 +67,12 @@
 
 debug_output_t output_file;
 window_data_t window;
+
+window_data_t *
+get_window_data(void)
+{
+    return(&window);
+}
 
 internal bool running;
 
@@ -239,8 +253,8 @@ main(int32_t argc
     allocate_memory_buffer(window.key_map, MAX_KEYS);
     allocate_memory_buffer(window.mb_map, MAX_MB);
 	
-    window.w = 2800;
-    window.h = 1650;
+    window.w = 1700;
+    window.h = 800;
 	
     window.window = glfwCreateWindow(window.w
                                      , window.h
@@ -289,11 +303,6 @@ main(int32_t argc
         glfwPollEvents();
         update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
 
-        if (glfwGetKey(window.window, GLFW_KEY_F))
-        {
-            printf("%f\n", 1.0f / window.dt);
-        }
-	    
         clear_linear();
 
         window.m_moved = false;
@@ -302,6 +311,7 @@ main(int32_t argc
         window.key_map[GLFW_KEY_BACKSPACE] = false;
         window.key_map[GLFW_KEY_ENTER] = false;
         window.key_map[GLFW_KEY_ESCAPE] = false;
+        window.key_map[GLFW_KEY_LEFT_CONTROL] = false;
             
         auto new_now = std::chrono::high_resolution_clock::now();
         window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();
@@ -334,4 +344,3 @@ main(int32_t argc
 
     return(0);
 }
-

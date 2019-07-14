@@ -58,6 +58,8 @@ struct window_data_t
     bool window_resized = false;
 };
 
+window_data_t *
+get_window_data(void);
 
 
 struct file_contents_t

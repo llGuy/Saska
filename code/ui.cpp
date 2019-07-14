@@ -641,7 +641,7 @@ struct console_t
     ui_box_t back_box;
     
     ui_text_t console_input;
-    char input_characters[60];
+    char input_characters[60] = {};
     uint32_t input_character_count = 0;
 
     persist constexpr float32_t BLINK_SPEED = 2.0f;

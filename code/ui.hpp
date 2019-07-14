@@ -13,3 +13,6 @@ render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command
 
 void
 load_font(const constant_string_t &font_name, const char *fmt_file);
+
+bool
+console_is_receiving_input(void);

@@ -1,3 +1,4 @@
+#include "ui.hpp"
 #include <chrono>
 #include <iostream>
 #include "world.hpp"
@@ -1155,115 +1156,119 @@ update_input_components(window_data_t *window
                         , float32_t dt
                         , gpu_t *gpu)
 {
-    for (uint32_t i = 0; i < g_entities.input_component_count; ++i)
+    // TODO: organise input handling better to take into account console being opened
+    if (!console_is_receiving_input())
     {
-        input_component_t *component = &g_entities.input_components[i];
-        entity_t *e = &g_entities.entity_list[component->entity_index];
-        physics_component_t *e_physics = &g_entities.physics_components[e->components.physics_component];
+        for (uint32_t i = 0; i < g_entities.input_component_count; ++i)
+        {
+            input_component_t *component = &g_entities.input_components[i];
+            entity_t *e = &g_entities.entity_list[component->entity_index];
+            physics_component_t *e_physics = &g_entities.physics_components[e->components.physics_component];
 
-        vector3_t up = e->on_t->ws_n;
+            vector3_t up = e->on_t->ws_n;
         
-        // Mouse movement
-        if (window->m_moved)
-        {
-            // TODO: Make sensitivity configurable with a file or something, and later menu
-            persist constexpr uint32_t SENSITIVITY = 15.0f;
+            // Mouse movement
+            if (window->m_moved)
+            {
+                // TODO: Make sensitivity configurable with a file or something, and later menu
+                persist constexpr uint32_t SENSITIVITY = 15.0f;
     
-            vector2_t prev_mp = vector2_t(window->prev_m_x, window->prev_m_y);
-            vector2_t curr_mp = vector2_t(window->m_x, window->m_y);
+                vector2_t prev_mp = vector2_t(window->prev_m_x, window->prev_m_y);
+                vector2_t curr_mp = vector2_t(window->m_x, window->m_y);
 
-            vector3_t res = e->ws_d;
+                vector3_t res = e->ws_d;
 	    
-            vector2_t d = (curr_mp - prev_mp);
+                vector2_t d = (curr_mp - prev_mp);
 
-            float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
-            float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
-            res = matrix3_t(glm::rotate(x_angle, up)) * res;
-            vector3_t rotate_y = glm::cross(res, up);
-            res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
+                float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
+                float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
+                res = matrix3_t(glm::rotate(x_angle, up)) * res;
+                vector3_t rotate_y = glm::cross(res, up);
+                res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
 
-            e->ws_d = res;
-        }
-
-        // Mouse input
-        ivector2_t ts_coord = get_coord_pointing_at(e->ws_p
-                                             , e->ws_d
-                                             , e->on_t
-                                             , dt
-                                             , gpu);
-        g_terrains.terrain_pointer.ts_position = ts_coord;
-        g_terrains.terrain_pointer.t = e->on_t;
-    
-        // ---- modify the terrain ----
-        if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
-        {
-            if (ts_coord.x >= 0)
-            {
-                morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
+                e->ws_d = res;
             }
-        }
 
-        // Keyboard input for entity
-        uint32_t movements = 0;
-        float32_t accelerate = 1.0f;
+            // Mouse input
+            ivector2_t ts_coord = get_coord_pointing_at(e->ws_p
+                                                        , e->ws_d
+                                                        , e->on_t
+                                                        , dt
+                                                        , gpu);
+            g_terrains.terrain_pointer.ts_position = ts_coord;
+            g_terrains.terrain_pointer.t = e->on_t;
     
-        auto acc_v = [&movements, &accelerate](const vector3_t &d, vector3_t &dst){ ++movements; dst += d * accelerate; };
-
-        vector3_t d = glm::normalize(vector3_t(e->ws_d.x
-                                               , e->ws_d.y
-                                               , e->ws_d.z));
-
-        morphable_terrain_t *t = e->on_t;
-        matrix4_t inverse = t->inverse_transform;
-    
-        vector3_t ts_d = inverse * vector4_t(d, 0.0f);
-    
-        ts_d.y = 0.0f;
-
-        d = vector3_t(t->push_k.transform * vector4_t(ts_d, 0.0f));
-        d = glm::normalize(d);
-    
-        vector3_t res = {};
-
-        bool detected_collision = detect_terrain_collision(e->ws_p, e->on_t).detected;
-    
-        if (detected_collision) e->ws_v = vector3_t(0.0f);
-    
-        //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
-        if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
-        if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
-        if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
-        if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
-        if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
-    
-        if (window->key_map[GLFW_KEY_SPACE])
-        {
-            if (e_physics->enabled)
+            // ---- modify the terrain ----
+            if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
             {
-                if (detected_collision)
+                if (ts_coord.x >= 0)
                 {
-                    // give some velotity towards the up vector
-                    e->ws_v += up * 5.0f;
-                    e->ws_p += e->ws_v * dt;
+                    morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
                 }
+            }
+
+            // Keyboard input for entity
+            uint32_t movements = 0;
+            float32_t accelerate = 1.0f;
+    
+            auto acc_v = [&movements, &accelerate](const vector3_t &d, vector3_t &dst){ ++movements; dst += d * accelerate; };
+
+            vector3_t d = glm::normalize(vector3_t(e->ws_d.x
+                                                   , e->ws_d.y
+                                                   , e->ws_d.z));
+
+            morphable_terrain_t *t = e->on_t;
+            matrix4_t inverse = t->inverse_transform;
+    
+            vector3_t ts_d = inverse * vector4_t(d, 0.0f);
+    
+            ts_d.y = 0.0f;
+
+            d = vector3_t(t->push_k.transform * vector4_t(ts_d, 0.0f));
+            d = glm::normalize(d);
+    
+            vector3_t res = {};
+
+            bool detected_collision = detect_terrain_collision(e->ws_p, e->on_t).detected;
+    
+            if (detected_collision) e->ws_v = vector3_t(0.0f);
+    
+            //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
+            if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
+            if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
+            if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
+            if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
+            if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
+    
+            if (window->key_map[GLFW_KEY_SPACE])
+            {
+                if (e_physics->enabled)
+                {
+                    if (detected_collision)
+                    {
+                        // give some velotity towards the up vector
+                        e->ws_v += up * 5.0f;
+                        e->ws_p += e->ws_v * dt;
+                    }
+                }
+                else
+                {
+                    acc_v(up, res);
+                }
+            }
+    
+            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
+
+            if (movements > 0)
+            {
+                res = res * 15.0f;
+
+                e->ws_input_v = res;
             }
             else
             {
-                acc_v(up, res);
+                e->ws_input_v = vector3_t(0.0f);
             }
-        }
-    
-        if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
-
-        if (movements > 0)
-        {
-            res = res * 15.0f;
-
-            e->ws_input_v = res;
-        }
-        else
-        {
-            e->ws_input_v = vector3_t(0.0f);
         }
     }
 }
@@ -1525,35 +1530,38 @@ handle_input_debug(window_data_t *window
                    , float32_t dt
                    , gpu_t *gpu)
 {
-    // ---- get bound entity ----
-    // TODO make sure to check if main_entity < 0
-    entity_t *e_ptr = &g_entities.entity_list[g_entities.main_entity];
-    camera_component_t *e_camera_component = &g_entities.camera_components[e_ptr->components.camera_component];
-    physics_component_t *e_physics = &g_entities.physics_components[e_ptr->components.physics_component];
-    camera_t *e_camera = get_camera(e_camera_component->camera);
-    vector3_t up = e_ptr->on_t->ws_n;
-    
-    shadow_matrices_t shadow_data = get_shadow_matrices();
-    shadow_debug_t    shadow_debug = get_shadow_debug();
-    
-    //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
-
-    if (window->key_map[GLFW_KEY_C])
+    if (!console_is_receiving_input())
     {
-	for (uint32_t i = 0; i < 8; ++i)
-	{
-	    e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
-	}
+        // ---- get bound entity ----
+        // TODO make sure to check if main_entity < 0
+        entity_t *e_ptr = &g_entities.entity_list[g_entities.main_entity];
+        camera_component_t *e_camera_component = &g_entities.camera_components[e_ptr->components.camera_component];
+        physics_component_t *e_physics = &g_entities.physics_components[e_ptr->components.physics_component];
+        camera_t *e_camera = get_camera(e_camera_component->camera);
+        vector3_t up = e_ptr->on_t->ws_n;
+    
+        shadow_matrices_t shadow_data = get_shadow_matrices();
+        shadow_debug_t    shadow_debug = get_shadow_debug();
+    
+        //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
 
-	e_camera->captured_shadow_corners[0] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[1] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[2] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
-	e_camera->captured_shadow_corners[3] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+        if (window->key_map[GLFW_KEY_P])
+        {
+            for (uint32_t i = 0; i < 8; ++i)
+            {
+                e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
+            }
 
-	e_camera->captured_shadow_corners[4] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[5] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[6] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-	e_camera->captured_shadow_corners[7] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+            e_camera->captured_shadow_corners[0] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+            e_camera->captured_shadow_corners[1] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+            e_camera->captured_shadow_corners[2] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+            e_camera->captured_shadow_corners[3] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+
+            e_camera->captured_shadow_corners[4] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+            e_camera->captured_shadow_corners[5] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+            e_camera->captured_shadow_corners[6] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+            e_camera->captured_shadow_corners[7] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+        }
     }
 }
 

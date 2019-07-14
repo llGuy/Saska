@@ -624,16 +624,29 @@ push_font_character_to_render(ui_box_t *box)
 struct console_t
 {
     bool render_console;
+    bool receive_input;
 
     ui_box_t back_box;
     
     ui_text_t console_input;
-    char input_characters[50];
+    char input_characters[60];
+    uint32_t input_character_count = 0;
+
+    persist constexpr float32_t BLINK_SPEED = 2.0f;
+    enum fade_t { IN = false, OUT = true };
+    bool fade_in_or_out = OUT;
     uint32_t cursor_position = 0;
     uint32_t cursor_color;
+    int32_t cursor_fade;
     
     ui_text_t console_output;
 } g_console;
+
+bool
+console_is_receiving_input(void)
+{
+    return(g_console.receive_input);
+}
 
 internal void
 output_to_input_section(const char *string)
@@ -643,9 +656,19 @@ output_to_input_section(const char *string)
 }
 
 internal void
+clear_input_section(void)
+{
+    g_console.input_character_count = 0;
+    g_console.console_input.char_count = 0;
+    g_console.cursor_position = 0;
+    output_to_input_section("command: ");
+}
+
+internal void
 initialize_console(void)
 {
     g_console.cursor_color = 0x00ee00ff;
+    g_console.cursor_fade = 0xff;
     
     g_console.back_box = make_ui_box(LEFT_DOWN, 0.8f,
                                      ui_vector2_t(0.05f, 0.05f),
@@ -660,7 +683,7 @@ initialize_console(void)
               ui_text_t::font_stream_box_relative_to_t::TOP,
               3,
               3,
-              47,
+              55,
               1.2f,
               &g_console.console_input);
 
@@ -670,16 +693,72 @@ initialize_console(void)
 internal void
 handle_console_input(window_data_t *window)
 {
-    for (uint32_t i = 0; i < window->char_count; ++i)
+    if (window->key_map[GLFW_KEY_ESCAPE])
     {
-        output_to_input_section(&window->char_stack[i]);
+        g_console.receive_input = false;
+    }
+    if (window->char_stack[0] == 't' && !g_console.receive_input)
+    {
+        g_console.receive_input = true;
+        window->char_stack[0] = 0;
+    }
+    // Open console
+    if (window->char_stack[0] == 'c' && !g_console.receive_input)
+    {
+        g_console.render_console ^= 0x1;
+        window->char_stack[0] = 0;
+    }
+
+    if (g_console.receive_input)
+    {
+        for (uint32_t i = 0; i < window->char_count; ++i)
+        {
+            output_to_input_section(&window->char_stack[i]);
+            g_console.input_characters[g_console.input_character_count++] = window->char_stack[i];
+            window->char_stack[i] = 0;
+        }
+
+        if (window->key_map[GLFW_KEY_BACKSPACE])
+        {
+            --g_console.cursor_position;
+            --g_console.console_input.char_count;
+            --g_console.input_character_count;
+        }
+
+        if (window->key_map[GLFW_KEY_ENTER])
+        {
+            clear_input_section();
+        }
     }
 }
 
 internal void
 push_console_to_render(window_data_t *window)
 {
-    handle_console_input(window);
+    if (g_console.cursor_fade > 0xff || g_console.cursor_fade <= 0x00)
+    {
+        g_console.fade_in_or_out ^= 0x1;
+        int32_t adjust = (int32_t)g_console.fade_in_or_out * 2 - 1;
+        g_console.cursor_fade -= adjust;
+    }
+    if (g_console.fade_in_or_out == console_t::fade_t::OUT)
+    {
+        g_console.cursor_fade -= (int32_t)(console_t::BLINK_SPEED * window->dt * (float32_t)0xff);
+        if (g_console.cursor_fade < 0x00)
+        {
+            g_console.cursor_fade = 0x00;
+        }
+        g_console.cursor_color >>= 8;
+        g_console.cursor_color <<= 8;
+        g_console.cursor_color |= g_console.cursor_fade;
+    }
+    else
+    {
+        g_console.cursor_fade += (int32_t)(console_t::BLINK_SPEED * window->dt * (float32_t)0xff);
+        g_console.cursor_color >>= 8;
+        g_console.cursor_color <<= 8;
+        g_console.cursor_color |= g_console.cursor_fade;
+    }
     
     resolution_t resolution = get_backbuffer_resolution();
     
@@ -942,7 +1021,11 @@ initialize_game_ui(gpu_t *gpu, gpu_command_queue_pool_t *qpool, swapchain_t *swa
 void
 update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, window_data_t *window)
 {
-    push_console_to_render(window);
+    handle_console_input(window);
+    if (g_console.render_console)
+    {
+        push_console_to_render(window);
+    }
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
@@ -968,11 +1051,14 @@ update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, window_data
         } pk;
         pk.color = vector4_t(0.2f, 0.2f, 0.2f, 1.0f);
 
-        command_buffer_draw(&g_ui.secondary_ui_q.q,
-                            g_ui.cpu_vertex_count,
-                            1,
-                            0,
-                            0);
+        if (g_ui.cpu_vertex_count)
+        {
+            command_buffer_draw(&g_ui.secondary_ui_q.q,
+                                g_ui.cpu_vertex_count,
+                                1,
+                                0,
+                                0);
+        }
 
         auto *font_pipeline = g_pipeline_manager.get(g_ui.tx_pipeline);
         command_buffer_bind_pipeline(font_pipeline, &g_ui.secondary_ui_q.q);
@@ -986,11 +1072,14 @@ update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, window_data
                                  0,
                                  tx_quads_model->binding_count,
                                  &g_ui.secondary_ui_q.q);
-        command_buffer_draw(&g_ui.secondary_ui_q.q,
-                            g_ui.cpu_tx_vertex_count,
-                            1,
-                            0,
-                            0);
+        if (g_ui.cpu_tx_vertex_count)
+        {
+            command_buffer_draw(&g_ui.secondary_ui_q.q,
+                                g_ui.cpu_tx_vertex_count,
+                                1,
+                                0,
+                                0);
+        }
     }
     end_command_queue(&g_ui.secondary_ui_q, gpu);
 }
@@ -1000,21 +1089,27 @@ render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command
 {
     // for_t the moment, this just executes one command buffer
     auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
-    update_gpu_buffer(vbo,
-                      g_ui.cpu_vertex_pool,
-                      sizeof(ui_state_t::gui_vertex_t) * g_ui.cpu_vertex_count,
-                      0,
-                      VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-                      &queue->q);
+    if (g_ui.cpu_vertex_count)
+    {
+        update_gpu_buffer(vbo,
+                          g_ui.cpu_vertex_pool,
+                          sizeof(ui_state_t::gui_vertex_t) * g_ui.cpu_vertex_count,
+                          0,
+                          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                          VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                          &queue->q);
+    }
     auto *tx_vbo = g_gpu_buffer_manager.get(g_ui.tx_quads_vbo);
-    update_gpu_buffer(tx_vbo,
-                      g_ui.cpu_tx_vertex_pool,
-                      sizeof(ui_state_t::textured_vertex_t) * g_ui.cpu_tx_vertex_count,
-                      0,
-                      VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-                      &queue->q);
+    if (g_ui.cpu_tx_vertex_count)
+    {
+        update_gpu_buffer(tx_vbo,
+                          g_ui.cpu_tx_vertex_pool,
+                          sizeof(ui_state_t::textured_vertex_t) * g_ui.cpu_tx_vertex_count,
+                          0,
+                          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                          VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                          &queue->q);
+    }
     queue->begin_render_pass(g_ui.ui_render_pass,
                                           dst_framebuffer_hdl,
                                           VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);

@@ -1748,7 +1748,7 @@ initialize_game_3d_graphics(gpu_t *gpu,
                             swapchain_t *swapchain,
                             gpu_command_queue_pool_t *pool)
 {
-    g_dfr_rendering.backbuffer_res = {1280, 900};
+    g_dfr_rendering.backbuffer_res = {1500, 1000};
     
     make_uniform_pool(gpu);
     make_dfr_rendering_data(gpu, swapchain);

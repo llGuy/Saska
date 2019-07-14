@@ -55,8 +55,6 @@
 #include "vulkan.hpp"
 #endif
 
-// \b[A-Z][a-z0-9]+\(_[A-Z][a-z0-9]*\)*\b
-
 #define DEBUG_FILE ".debug"
 
 debug_output_t output_file;
@@ -301,6 +299,9 @@ main(int32_t argc
         window.m_moved = false;
 
         window.char_count = 0;
+        window.key_map[GLFW_KEY_BACKSPACE] = false;
+        window.key_map[GLFW_KEY_ENTER] = false;
+        window.key_map[GLFW_KEY_ESCAPE] = false;
             
         auto new_now = std::chrono::high_resolution_clock::now();
         window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();

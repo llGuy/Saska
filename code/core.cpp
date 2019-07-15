@@ -314,7 +314,11 @@ main(int32_t argc
         window.key_map[GLFW_KEY_ENTER] = false;
         window.key_map[GLFW_KEY_ESCAPE] = false;
         window.key_map[GLFW_KEY_LEFT_CONTROL] = false;
-            
+
+        double xpos, ypos;
+        glfwGetCursorPos(window.window, &xpos, &ypos);
+        window.normalized_cursor_position = vector2_t((float32_t)xpos, (float32_t)ypos);
+        
         auto new_now = std::chrono::high_resolution_clock::now();
         window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();
 

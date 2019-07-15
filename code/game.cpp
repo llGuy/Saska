@@ -108,7 +108,8 @@ update_game(gpu_t *gpu
     begin_command_buffer(&queue.q, 0, nullptr);
     {
         update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
-        
+
+        dbg_handle_input(window, &vk->gpu);
         update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), window);
         render_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), &queue);
         

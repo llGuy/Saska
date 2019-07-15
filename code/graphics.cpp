@@ -1443,6 +1443,8 @@ struct dbg_pfx_frame_capture_t
 
     // Create a blitted image with uniform sampler to display
     image2d_t blitted_image;
+    image2d_t blitted_image_linear;
+    mapped_gpu_memory_t mapped_image;
     uniform_group_t blitted_image_uniform;
 
     // Create blitted images (tiling linear) of input attachments / samplers
@@ -1458,6 +1460,10 @@ struct dbg_pfx_frame_capture_t
     uint32_t sampler_count;
     // Maximum is 10 samplers
     dbg_sampler2d_t samplers[10];
+
+    bool selected_pixel = false;
+    vector2_t window_cursor_position;
+    vector2_t backbuffer_cursor_position;
 };
 
 struct post_processing_t
@@ -1474,7 +1480,83 @@ struct post_processing_t
     bool dbg_requested_capture = false;
     bool dbg_in_frame_capture_mode = false;
     dbg_pfx_frame_capture_t dbg_capture;
+
+    rect2D_t render_rect2D;
 } g_postfx;
+
+internal uint32_t
+get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, const resolution_t &resolution, gpu_t *gpu)
+{
+    uint32_t ui_x = (uint32_t)(x * (float32_t)resolution.width);
+    uint32_t ui_y = (uint32_t)(y * (float32_t)resolution.height);
+    
+    ui_y = resolution.height - ui_y;
+    uint32_t pixel_size = sizeof(uint8_t) * 4;
+    uint8_t *pixels = (uint8_t *)memory->data;
+
+    VkImageSubresource subresources { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+    VkSubresourceLayout layout;
+    vkGetImageSubresourceLayout(gpu->logical_device,
+                                image->image,
+                                &subresources,
+                                &layout);
+
+    pixels += layout.offset;
+
+    pixels += ui_y * (layout.rowPitch);
+
+    uint8_t *pixel = (uint8_t *)(ui_x * 4 + pixels);
+
+    // convert from bgra to rgba
+    uint32_t r = *(pixel + 2);
+    uint32_t g = *(pixel + 1);
+    uint32_t b = *(pixel + 0);
+    uint32_t a = *(pixel + 3);
+
+    uint32_t final_color = (r << 24) | (g << 16) | (b << 8) | a;
+    
+    return(final_color);
+}
+
+void
+dbg_handle_input(window_data_t *window, gpu_t *gpu)
+{
+    if (g_postfx.dbg_in_frame_capture_mode)
+    {
+        if (window->mb_map[GLFW_MOUSE_BUTTON_LEFT])
+        {
+            // Isn't normalized
+            g_postfx.dbg_capture.window_cursor_position = window->normalized_cursor_position;
+            g_postfx.dbg_capture.window_cursor_position.y = window->h - g_postfx.dbg_capture.window_cursor_position.y;
+
+            g_postfx.dbg_capture.backbuffer_cursor_position = g_postfx.dbg_capture.window_cursor_position -
+                vector2_t(g_postfx.render_rect2D.offset.x, g_postfx.render_rect2D.offset.y);
+
+            g_postfx.dbg_capture.backbuffer_cursor_position /= vector2_t(g_postfx.render_rect2D.extent.width, g_postfx.render_rect2D.extent.height);
+            g_postfx.dbg_capture.backbuffer_cursor_position = g_postfx.dbg_capture.backbuffer_cursor_position * 2.0f - vector2_t(1.0f);
+
+            g_postfx.dbg_capture.mapped_image = g_postfx.dbg_capture.blitted_image_linear.construct_map(gpu);
+            g_postfx.dbg_capture.mapped_image.begin(gpu);
+            
+            uint32_t pixel_color = get_pixel_color(&g_postfx.dbg_capture.blitted_image_linear,
+                                                   &g_postfx.dbg_capture.mapped_image,
+                                                   (g_postfx.dbg_capture.backbuffer_cursor_position.x + 1.0f) / 2.0f,
+                                                   (g_postfx.dbg_capture.backbuffer_cursor_position.y + 1.0f) / 2.0f,
+                                                   get_backbuffer_resolution(),
+                                                   gpu);
+
+            g_postfx.dbg_capture.mapped_image.end(gpu);
+            // Print cursor position and the color of the pixel
+            persist char buffer[100];
+            sprintf(buffer, "cursor (%f, %f)\n", g_postfx.dbg_capture.backbuffer_cursor_position.x, g_postfx.dbg_capture.backbuffer_cursor_position.y);
+            console_out_color_override(buffer, pixel_color);
+
+            g_postfx.dbg_capture.mapped_image = g_postfx.dbg_capture.blitted_image_linear.construct_map(gpu);
+
+            window->mb_map[GLFW_MOUSE_BUTTON_LEFT] = false;
+        }
+    }
+}
 
 internal void
 dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect, gpu_t *gpu)
@@ -1497,6 +1579,13 @@ dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, Vk
                     &dst_img->image_view,
                     VK_IMAGE_VIEW_TYPE_2D,
                     1);
+}
+
+internal void
+dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect, gpu_t *gpu)
+{
+    make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2, gpu);
+    dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, gpu);
 }
 
 internal void
@@ -1524,7 +1613,7 @@ dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *cap
         dbg_make_frame_capture_blit_image(&sampler->blitted_linear_image,
                                           stage_fbo->extent.width,
                                           stage_fbo->extent.height,
-                                          VK_FORMAT_R8G8B8A8_UNORM,
+                                          VK_FORMAT_B8G8R8A8_UNORM,
                                           VK_IMAGE_ASPECT_COLOR_BIT,
                                           gpu);
     }
@@ -1547,16 +1636,25 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool, gpu_t *gpu)
 
     dbg_pfx_frame_capture_t *frame_capture = &g_postfx.dbg_capture;
     // Initialize what will later on be the blitted image of the output
-    make_framebuffer_attachment(&frame_capture->blitted_image,
+    /*make_framebuffer_attachment(&frame_capture->blitted_image,
                                 stage_fbo->extent.width,
                                 stage_fbo->extent.height,
                                 VK_FORMAT_R8G8B8A8_UNORM,
                                 1,
                                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                 2,
-                                gpu);
+                                gpu);*/
+    
+    dbg_make_frame_capture_output_blit_image(&frame_capture->blitted_image,
+                                             &frame_capture->blitted_image_linear,
+                                             stage_fbo->extent.width,
+                                             stage_fbo->extent.height,
+                                             VK_FORMAT_B8G8R8A8_UNORM,
+                                             VK_IMAGE_ASPECT_COLOR_BIT,
+                                             gpu);
+    
     transition_image_layout(&frame_capture->blitted_image.image,
-                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_FORMAT_B8G8R8A8_UNORM,
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             pool,
@@ -1781,8 +1879,17 @@ render_to_pre_final(gpu_command_queue_t *queue,
         g_postfx.dbg_requested_capture = false;
 
         // Do image copy
-        copy_image(g_image_manager.get(g_postfx.ssr_stage.output),
+        blit_image(g_image_manager.get(g_postfx.ssr_stage.output),
                    &g_postfx.dbg_capture.blitted_image,
+                   g_dfr_rendering.backbuffer_res.width,
+                   g_dfr_rendering.backbuffer_res.height,
+                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                   &queue->q,
+                   gpu);
+        copy_image(g_image_manager.get(g_postfx.ssr_stage.output),
+                   &g_postfx.dbg_capture.blitted_image_linear,
                    g_dfr_rendering.backbuffer_res.width,
                    g_dfr_rendering.backbuffer_res.height,
                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1826,7 +1933,14 @@ render_to_pre_final(gpu_command_queue_t *queue,
             vector4_t db;
         } pk;
 
-        pk.db = vector4_t(0.5f);
+        if (g_postfx.dbg_in_frame_capture_mode)
+        {
+            pk.db = vector4_t(0.0f);
+        }
+        else
+        {
+            pk.db = vector4_t(-10.0f);
+        }
         command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_pre_final_ppln, &queue->q);
 
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
@@ -1887,6 +2001,7 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue, swapchain_
 
         auto rect2D = make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
         command_buffer_set_rect2D(&rect2D, &queue->q);
+        g_postfx.render_rect2D = rect2D;
         
         uniform_group_t groups[] = { *g_uniform_group_manager.get(g_postfx.pre_final_stage.output_group) };
         command_buffer_bind_descriptor_sets(pfx_final_ppln, {1, groups}, &queue->q);
@@ -1896,7 +2011,7 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue, swapchain_
             vector4_t debug;
         } pk;
 
-        pk.debug = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
+        pk.debug = vector4_t(0.0f, 0.0f, 0.0f, -10.0f);
         command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln, &queue->q);
 
         command_buffer_draw(&queue->q, 4, 1, 0, 0);

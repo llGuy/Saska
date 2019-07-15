@@ -1050,6 +1050,16 @@ copy_image(image2d_t *src_image,
            gpu_t *gpu);
 
 void
+blit_image(image2d_t *src_image,
+           image2d_t *dst_image,
+           uint32_t width, uint32_t height,
+           VkPipelineStageFlags flags_before,
+           VkPipelineStageFlags flags_after,
+           VkImageLayout layout_before,
+           VkCommandBuffer *cmdbuf,
+           gpu_t *gpu);
+
+void
 invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , VkBufferUsageFlags usage
                                               , VkCommandPool *transfer_command_pool

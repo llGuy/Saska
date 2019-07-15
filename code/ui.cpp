@@ -206,7 +206,7 @@ struct ui_text_t
     ui_box_t *dst_box;
     font_t *font;
     
-    // Max characters = 256
+    // Max characters = 500
     uint32_t colors[500] = {};
     char characters[500] = {};
     uint32_t char_count = 0;
@@ -493,7 +493,7 @@ struct ui_state_t
         vector2_t uvs;
         uint32_t color;
     };
-    persist constexpr uint32_t MAX_TX_QUADS = 300;
+    persist constexpr uint32_t MAX_TX_QUADS = 1000;
     textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
     uint32_t cpu_tx_vertex_count = 0;    
     model_handle_t tx_quads_model;
@@ -548,6 +548,8 @@ push_text(ui_text_t *text, const resolution_t &resolution)
     uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width);
     
     ivector2_t px_cursor_position = get_px_cursor_position(box, text, resolution);
+
+    uint32_t chars_since_new_line = 0;
     
     for (uint32_t character = 0;
          character < text->char_count;)
@@ -558,6 +560,7 @@ push_text(ui_text_t *text, const resolution_t &resolution)
             px_cursor_position.y -= px_char_height;
             px_cursor_position.x = x_start + box->px_position.ix;
             ++character;
+            chars_since_new_line = 0;
             continue;
         }
         
@@ -577,6 +580,7 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         
         vector2_t current_uvs = font_character_data->uvs_base;
         current_uvs.y = 1.0f - current_uvs.y;
+        
         g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust,
                                                                current_uvs, color};
         
@@ -608,7 +612,8 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         px_cursor_position += ivector2_t(px_char_width, 0.0f);
 
         ++character;
-        if (character % text->chars_per_line == 0)
+        ++chars_since_new_line;
+        if (chars_since_new_line % text->chars_per_line == 0)
         {
             px_cursor_position.y -= px_char_height;
             px_cursor_position.x = text->x_start + box->px_position.ix;
@@ -705,6 +710,12 @@ void
 console_out(const char *string)
 {
     draw_string(&g_console.console_output, string, g_console.output_color);
+}
+
+void
+console_out_color_override(const char *string, uint32_t color)
+{
+    draw_string(&g_console.console_output, string, color);
 }
 
 internal void

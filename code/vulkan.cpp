@@ -406,7 +406,7 @@ init_device(physical_device_extensions_params_t *gpu_extensions
     device_info.ppEnabledExtensionNames = gpu_extensions->r_extension_names;
     device_info.ppEnabledLayerNames = validation_layers->o_layer_names;
     device_info.enabledLayerCount = validation_layers->o_layer_count;
-
+    
     VK_CHECK(vkCreateDevice(gpu->hardware
                             , &device_info
                             , nullptr
@@ -843,6 +843,111 @@ copy_buffer(gpu_buffer_t *src_buffer
 
 void
 copy_image(image2d_t *src_image,
+           image2d_t *dst_image,
+           uint32_t width, uint32_t height,
+           VkPipelineStageFlags flags_before,
+           VkPipelineStageFlags flags_after,
+           VkImageLayout layout_before,
+           VkCommandBuffer *cmdbuf,
+           gpu_t *gpu)
+{
+    VkImageMemoryBarrier image_barrier = {};
+    image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_barrier.oldLayout = layout_before;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    image_barrier.image = src_image->image;
+    image_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_barrier.subresourceRange.baseMipLevel = 0;
+    image_barrier.subresourceRange.levelCount = 1;
+    image_barrier.subresourceRange.baseArrayLayer = 0;
+    image_barrier.subresourceRange.layerCount = 1;
+    
+    vkCmdPipelineBarrier(*cmdbuf,
+                         flags_before,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &image_barrier);
+
+    image_barrier.image = dst_image->image;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+    // Just perform layout transition
+    vkCmdPipelineBarrier(*cmdbuf,
+                         flags_before,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &image_barrier);
+
+    VkImageCopy image_copy = {};
+    image_copy.srcSubresource.mipLevel = 0;
+    image_copy.srcSubresource.layerCount = 1;
+    image_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_copy.srcSubresource.baseArrayLayer = 0;
+    image_copy.srcOffset.x = 0;
+    image_copy.srcOffset.y = 0;
+    image_copy.srcOffset.z = 0;
+    
+    image_copy.dstSubresource.mipLevel = 0;
+    image_copy.dstSubresource.layerCount = 1;
+    image_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    image_copy.dstSubresource.baseArrayLayer = 0;
+    image_copy.dstOffset.x = 0;
+    image_copy.dstOffset.y = 0;
+    image_copy.dstOffset.z = 0;
+
+    image_copy.extent.width = width;
+    image_copy.extent.height = height;
+    image_copy.extent.depth = 1;
+    
+    vkCmdCopyImage(*cmdbuf,
+                   src_image->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   dst_image->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1,
+                   &image_copy);
+
+    image_barrier.image = src_image->image;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    image_barrier.newLayout = layout_before;
+    vkCmdPipelineBarrier(*cmdbuf,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         flags_after,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &image_barrier);
+
+    image_barrier.image = dst_image->image;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.newLayout = layout_before;
+    vkCmdPipelineBarrier(*cmdbuf,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         flags_after,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &image_barrier);
+}
+
+void
+blit_image(image2d_t *src_image,
            image2d_t *dst_image,
            uint32_t width, uint32_t height,
            VkPipelineStageFlags flags_before,

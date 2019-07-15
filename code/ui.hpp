@@ -19,3 +19,6 @@ console_is_receiving_input(void);
 
 void
 console_out(const char *string);
+
+void
+console_out_color_override(const char *string, uint32_t color);

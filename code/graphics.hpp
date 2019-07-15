@@ -666,6 +666,10 @@ make_postfx_data(gpu_t *gpu
 framebuffer_handle_t
 get_pfx_framebuffer_hdl(void);
 
+// For debug purposes like capture frame
+void
+dbg_handle_input(window_data_t *window, gpu_t *gpu);
+
 void
 apply_pfx_on_scene(gpu_command_queue_t *queue
                    , uniform_group_t *transforms_group

@@ -56,6 +56,8 @@ struct window_data_t
 
     bool m_moved = false;
     bool window_resized = false;
+
+    vector2_t normalized_cursor_position;
 };
 
 window_data_t *

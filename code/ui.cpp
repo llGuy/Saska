@@ -493,7 +493,7 @@ struct ui_state_t
         vector2_t uvs;
         uint32_t color;
     };
-    persist constexpr uint32_t MAX_TX_QUADS = 100;
+    persist constexpr uint32_t MAX_TX_QUADS = 300;
     textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
     uint32_t cpu_tx_vertex_count = 0;    
     model_handle_t tx_quads_model;
@@ -679,6 +679,9 @@ lua_get_fps(lua_State *state);
 internal int32_t
 lua_print_fps(lua_State *state);
 
+internal int32_t
+lua_break(lua_State *state);
+
 bool
 console_is_receiving_input(void)
 {
@@ -751,6 +754,7 @@ initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "c_clear", &lua_console_clear);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_fps", &lua_get_fps);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_fps", &lua_print_fps);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "debug_break", &lua_break);
 }
 
 internal void
@@ -1253,5 +1257,12 @@ lua_print_fps(lua_State *state)
     char buffer[20] = {};
     sprintf(buffer, "%d", fps_ui);
     output_to_output_section(buffer, g_console.output_color);
+    return(0);
+}
+
+internal int32_t
+lua_break(lua_State *state)
+{
+    __debugbreak();
     return(0);
 }

@@ -227,6 +227,8 @@ int32_t
 main(int32_t argc
      , char * argv[])
 {
+
+    
     open_debug_file();
 	
     OUTPUT_DEBUG_LOG("%s\n", "starting session");

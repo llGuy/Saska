@@ -1413,12 +1413,20 @@ end_deferred_rendering(const matrix4_t &view_matrix // In future, change this to
 
 struct pfx_stage_t
 {
+    // Max inputs is 10
+    image_handle_t inputs[10] = {};
+    uint32_t input_count;
+    // One input for now
+    image_handle_t output;
+    
     pipeline_handle_t ppln;
-    pipeline_handle_t fbo;
+    framebuffer_handle_t fbo;
     uniform_group_handle_t output_group; // For next one
 };
 
-struct pfx_frame_capture_t
+// For debugging
+// TODO: Make sure that this functionality doesn't use Saska's abstraction of vulkan and uses pure and raw vulkan code for possible future users in their projects (if this thing works well)
+struct dbg_pfx_frame_capture_t
 {
     // Debug a shader with this data:
     void *pk_ptr;
@@ -1429,7 +1437,7 @@ struct pfx_frame_capture_t
     uniform_group_t blitted_image_uniform;
 
     // Create blitted images (tiling linear) of input attachments / samplers
-    struct sampler2d_t
+    struct dbg_sampler2d_t
     {
         image_handle_t original_image;
         image2d_t blitted_linear_image;
@@ -1437,7 +1445,8 @@ struct pfx_frame_capture_t
     };
 
     uint32_t sampler_count;
-    sampler2d_t *samplers;
+    // Maximum is 10 samplers
+    dbg_sampler2d_t samplers[10];
 };
 
 struct post_processing_t
@@ -1448,7 +1457,94 @@ struct post_processing_t
     uniform_layout_handle_t pfx_single_tx_layout;
     render_pass_handle_t pfx_render_pass;
     render_pass_handle_t final_render_pass;
+
+    // For debugging
+    dbg_pfx_frame_capture_t dbg_capture;
 } g_postfx;
+
+internal void
+dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect, gpu_t *gpu)
+{
+    init_image(w,
+               h,
+               format,
+               VK_IMAGE_TILING_LINEAR,
+               VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+               1,
+               gpu,
+               dst_img,
+               0);
+    VkImageAspectFlags aspect_flags = aspect;
+    init_image_view(&dst_img->image,
+                    format,
+                    aspect_flags,
+                    gpu,
+                    &dst_img->image_view,
+                    VK_IMAGE_VIEW_TYPE_2D,
+                    1);
+}
+
+internal void
+dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture, gpu_t *gpu)
+{
+    uniform_layout_handle_t layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.pfx_single_tx_output"_hash);
+    uniform_layout_t *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
+    
+    capture->blitted_image_uniform = make_uniform_group(layout_ptr, &g_uniform_pool, gpu);
+    update_uniform_group(gpu,
+                         &capture->blitted_image_uniform,
+                         update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+}
+
+internal void
+dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture, gpu_t *gpu)
+{
+    capture->sampler_count = stage->input_count;
+    framebuffer_t *stage_fbo = g_framebuffer_manager.get(stage->fbo);
+    for (uint32_t i = 0; i < capture->sampler_count; ++i)
+    {
+        dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler = &capture->samplers[i];
+        sampler->index = 0;
+        sampler->original_image = stage->inputs[i];
+        dbg_make_frame_capture_blit_image(&sampler->blitted_linear_image,
+                                          stage_fbo->extent.width,
+                                          stage_fbo->extent.height,
+                                          VK_FORMAT_R8G8B8A8_UNORM,
+                                          VK_IMAGE_ASPECT_COLOR_BIT,
+                                          gpu);
+    }
+}
+
+internal void
+dbg_make_frame_capture_data(gpu_t *gpu)
+{
+    // Trying to debug the SSR stage
+    pfx_stage_t *stage = &g_postfx.ssr_stage;
+    framebuffer_t *stage_fbo = g_framebuffer_manager.get(stage->fbo);
+    
+    g_postfx.ssr_stage.input_count = 3;
+    
+    g_postfx.ssr_stage.inputs[0] = g_image_manager.get_handle("image2D.fbo_final"_hash);
+    g_postfx.ssr_stage.inputs[1] = g_image_manager.get_handle("image2D.fbo_position"_hash);
+    g_postfx.ssr_stage.inputs[2] = g_image_manager.get_handle("image2D.fbo_normal"_hash);
+
+    dbg_pfx_frame_capture_t *frame_capture = &g_postfx.dbg_capture;
+    // Initialize what will later on be the blitted image of the output
+    make_framebuffer_attachment(&frame_capture->blitted_image,
+                                stage_fbo->extent.width,
+                                stage_fbo->extent.height,
+                                VK_FORMAT_R8G8B8A8_UNORM,
+                                1,
+                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                                2,
+                                gpu);
+    // Initialize the uniform group for the blitted image
+    dbg_make_frame_capture_uniform_data(frame_capture,
+                                        gpu);
+    // Initialize the samplers
+    
+}
 
 void
 make_postfx_data(gpu_t *gpu
@@ -1522,6 +1618,8 @@ make_postfx_data(gpu_t *gpu
                                false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
     }
 
+
+    
     g_postfx.ssr_stage.ppln = g_pipeline_manager.add("graphics_pipeline.pfx_ssr"_hash);
     auto *ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_stage.ppln);
     {

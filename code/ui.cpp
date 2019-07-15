@@ -701,6 +701,12 @@ output_to_output_section(const char *string, uint32_t color)
     draw_string(&g_console.console_output, string, color);
 }
 
+void
+console_out(const char *string)
+{
+    draw_string(&g_console.console_output, string, g_console.output_color);
+}
+
 internal void
 output_char_to_output_section(char character)
 {
@@ -1198,8 +1204,8 @@ render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command
                           &queue->q);
     }
     queue->begin_render_pass(g_ui.ui_render_pass,
-                                          dst_framebuffer_hdl,
-                                          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+                             dst_framebuffer_hdl,
+                             VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     command_buffer_execute_commands(&queue->q, {1, &g_ui.secondary_ui_q.q});
     queue->end_render_pass();
 

@@ -16,3 +16,6 @@ load_font(const constant_string_t &font_name, const char *fmt_file);
 
 bool
 console_is_receiving_input(void);
+
+void
+console_out(const char *string);

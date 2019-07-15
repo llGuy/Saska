@@ -288,6 +288,14 @@ struct image2d_t
         if (image_sampler != VK_NULL_HANDLE) vkDestroySampler(gpu->logical_device, image_sampler, nullptr);
         if (device_memory != VK_NULL_HANDLE) vkFreeMemory(gpu->logical_device, device_memory, nullptr);
     }
+
+    inline mapped_gpu_memory_t
+    construct_map(gpu_t *gpu)
+    {
+        VkMemoryRequirements requirements = {};
+        vkGetImageMemoryRequirements(gpu->logical_device, image, &requirements);
+        return(mapped_gpu_memory_t{0, requirements.size, &device_memory});
+    }
 }; 
     
 void
@@ -1030,6 +1038,16 @@ copy_buffer(gpu_buffer_t *src_buffer
             , gpu_buffer_t *dst_buffer
             , VkCommandPool *command_pool
             , gpu_t *gpu);
+
+void
+copy_image(image2d_t *src_image,
+           image2d_t *dst_image,
+           uint32_t width, uint32_t height,
+           VkPipelineStageFlags flags_before,
+           VkPipelineStageFlags flags_after,
+           VkImageLayout layout_before,
+           VkCommandBuffer *cmdbuf,
+           gpu_t *gpu);
 
 void
 invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items

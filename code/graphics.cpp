@@ -269,9 +269,8 @@ make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat for
     
     init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
 
-    VkImageAspectFlags aspect_flags;
+    VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     
-    if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
@@ -1422,6 +1421,16 @@ struct pfx_stage_t
     pipeline_handle_t ppln;
     framebuffer_handle_t fbo;
     uniform_group_handle_t output_group; // For next one
+
+    inline void
+    introduce_to_managers(const constant_string_t &ppln_name,
+                          const constant_string_t &fbo_name,
+                          const constant_string_t &group_name)
+    {
+        ppln = g_pipeline_manager.add(ppln_name);
+        fbo = g_framebuffer_manager.add(fbo_name);
+        output_group = g_uniform_group_manager.add(group_name);        
+    }
 };
 
 // For debugging
@@ -1442,6 +1451,8 @@ struct dbg_pfx_frame_capture_t
         image_handle_t original_image;
         image2d_t blitted_linear_image;
         uint32_t index;
+
+        mapped_gpu_memory_t mapped;
     };
 
     uint32_t sampler_count;
@@ -1452,6 +1463,7 @@ struct dbg_pfx_frame_capture_t
 struct post_processing_t
 {
     pfx_stage_t ssr_stage;
+    pfx_stage_t pre_final_stage;
     pfx_stage_t final_stage;
 
     uniform_layout_handle_t pfx_single_tx_layout;
@@ -1459,6 +1471,8 @@ struct post_processing_t
     render_pass_handle_t final_render_pass;
 
     // For debugging
+    bool dbg_requested_capture = false;
+    bool dbg_in_frame_capture_mode = false;
     dbg_pfx_frame_capture_t dbg_capture;
 } g_postfx;
 
@@ -1469,7 +1483,7 @@ dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, Vk
                h,
                format,
                VK_IMAGE_TILING_LINEAR,
-               VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+               VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                1,
                gpu,
@@ -1517,7 +1531,7 @@ dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *cap
 }
 
 internal void
-dbg_make_frame_capture_data(gpu_t *gpu)
+dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool, gpu_t *gpu)
 {
     // Trying to debug the SSR stage
     pfx_stage_t *stage = &g_postfx.ssr_stage;
@@ -1529,6 +1543,8 @@ dbg_make_frame_capture_data(gpu_t *gpu)
     g_postfx.ssr_stage.inputs[1] = g_image_manager.get_handle("image2D.fbo_position"_hash);
     g_postfx.ssr_stage.inputs[2] = g_image_manager.get_handle("image2D.fbo_normal"_hash);
 
+    g_postfx.ssr_stage.output = g_image_manager.get_handle("image2D.pfx_ssr_color"_hash);
+
     dbg_pfx_frame_capture_t *frame_capture = &g_postfx.dbg_capture;
     // Initialize what will later on be the blitted image of the output
     make_framebuffer_attachment(&frame_capture->blitted_image,
@@ -1536,19 +1552,67 @@ dbg_make_frame_capture_data(gpu_t *gpu)
                                 stage_fbo->extent.height,
                                 VK_FORMAT_R8G8B8A8_UNORM,
                                 1,
-                                VK_IMAGE_USAGE_SAMPLED_BIT,
+                                VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                 2,
                                 gpu);
+    transition_image_layout(&frame_capture->blitted_image.image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            pool,
+                            gpu);
+    
     // Initialize the uniform group for the blitted image
     dbg_make_frame_capture_uniform_data(frame_capture,
                                         gpu);
     // Initialize the samplers
-    
+    dbg_make_frame_capture_samplers(stage, frame_capture, gpu);
+}
+
+internal void
+make_pfx_stage(pfx_stage_t *dst_stage,
+               const shader_modules_t &shader_modules,
+               const shader_uniform_layouts_t &uniform_layouts,
+               const resolution_t &resolution,
+               image2d_t *stage_output,
+               gpu_t *gpu,
+               swapchain_t *swapchain,
+               uniform_layout_t *single_tx_layout_ptr,
+               render_pass_t *pfx_render_pass)
+{
+    auto *stage_pipeline = g_pipeline_manager.get(dst_stage->ppln);
+    {
+        resolution_t backbuffer_res = resolution;
+        shader_modules_t modules = shader_modules;
+        shader_uniform_layouts_t layouts = uniform_layouts;
+        shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+        shader_blend_states_t blending(false);
+        dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT);
+        make_graphics_pipeline(stage_pipeline, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
+                               , VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr
+                               , false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
+    }
+
+    auto *stage_framebuffer = g_framebuffer_manager.get(dst_stage->fbo);
+    {
+        auto *tx_ptr = stage_output;
+        make_framebuffer_attachment(tx_ptr, resolution.width, resolution.height,
+                                    swapchain->format, 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 2, gpu);
+        make_framebuffer(stage_framebuffer, resolution.width, resolution.height, 1, pfx_render_pass, {1, tx_ptr}, nullptr, gpu);
+    }
+
+    auto *output_group = g_uniform_group_manager.get(dst_stage->output_group);
+    {
+        *output_group = make_uniform_group(single_tx_layout_ptr, &g_uniform_pool, gpu);
+        update_uniform_group(gpu, output_group,
+                             update_binding_t{TEXTURE, stage_output, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
 }
 
 void
-make_postfx_data(gpu_t *gpu
-                 , swapchain_t *swapchain)
+make_postfx_data(gpu_t *gpu,
+                 swapchain_t *swapchain,
+                 gpu_command_queue_pool_t *pool)
 {
     g_postfx.pfx_single_tx_layout = g_uniform_layout_manager.add("uniform_layout.pfx_single_tx_output"_hash);
     auto *single_tx_layout_ptr = g_uniform_layout_manager.get(g_postfx.pfx_single_tx_layout);
@@ -1617,59 +1681,60 @@ make_postfx_data(gpu_t *gpu
                                VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
                                false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
     }
-
-
     
-    g_postfx.ssr_stage.ppln = g_pipeline_manager.add("graphics_pipeline.pfx_ssr"_hash);
-    auto *ssr_ppln = g_pipeline_manager.get(g_postfx.ssr_stage.ppln);
-    {
-        resolution_t backbuffer_res = {g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height};
-        shader_modules_t modules(shader_module_info_t{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT}, shader_module_info_t{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("descriptor_set_layout.g_buffer_layout"_hash)
-                                       , g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash)
-                                       , g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
-        shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-        shader_blend_states_t blending(false);
-        dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(ssr_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
-                               , VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr
-                               , false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
-    }
+    shader_modules_t modules(shader_module_info_t{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT},
+                             shader_module_info_t{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("descriptor_set_layout.g_buffer_layout"_hash),
+                                     g_uniform_layout_manager.get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                     g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+    image_handle_t ssr_tx_hdl = g_image_manager.add("image2D.pfx_ssr_color"_hash);
+    auto *ssr_tx_ptr = g_image_manager.get(ssr_tx_hdl);
+    g_postfx.ssr_stage.introduce_to_managers("graphics_pipeline.pfx_ssr"_hash,
+                                             "framebuffer.pfx_ssr"_hash,
+                                             "uniform_group.pfx_ssr_output"_hash);
+    make_pfx_stage(&g_postfx.ssr_stage,
+                   modules,
+                   layouts,
+                   get_backbuffer_resolution(),
+                   ssr_tx_ptr,
+                   gpu,
+                   swapchain,
+                   single_tx_layout_ptr,
+                   pfx_render_pass);
 
-    g_postfx.ssr_stage.fbo = g_framebuffer_manager.add("framebuffer.pfx_ssr"_hash);
-    auto *ssr_fbo = g_framebuffer_manager.get(g_postfx.ssr_stage.fbo);
-    {
-        image_handle_t ssr_tx_hdl = g_image_manager.add("image2D.pfx_ssr_color"_hash);
-        auto *ssr_tx_ptr = g_image_manager.get(ssr_tx_hdl);
-        make_framebuffer_attachment(ssr_tx_ptr, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height,
-                     swapchain->format, 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 2, gpu);
-        make_framebuffer(ssr_fbo, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 1, pfx_render_pass, {1, ssr_tx_ptr}, nullptr, gpu);
-    }
+    shader_modules_t pre_final_modules(shader_module_info_t{"shaders/SPV/pfx_final.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                       shader_module_info_t{"shaders/SPV/pfx_final.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+    shader_uniform_layouts_t pre_final_layouts(g_postfx.pfx_single_tx_layout);
+    image_handle_t pre_final_tx_hdl = g_image_manager.add("image2D.pre_final_color"_hash);
+    auto *pre_final_tx_ptr = g_image_manager.get(pre_final_tx_hdl);
+    g_postfx.pre_final_stage.introduce_to_managers("graphics_pipeline.pre_final"_hash,
+                                             "framebuffer.pre_final"_hash,
+                                             "uniform_group.pre_final_output"_hash);
+    make_pfx_stage(&g_postfx.pre_final_stage,
+                   pre_final_modules,
+                   pre_final_layouts,
+                   get_backbuffer_resolution(),
+                   pre_final_tx_ptr,
+                   gpu,
+                   swapchain,
+                   single_tx_layout_ptr,
+                   pfx_render_pass);
 
-    // make SSR uniform data for the next stage
-    g_postfx.ssr_stage.output_group = g_uniform_group_manager.add("uniform_group.pfx_ssr_output"_hash);
-    auto *ssr_output_group = g_uniform_group_manager.get(g_postfx.ssr_stage.output_group);
-    {
-        *ssr_output_group = make_uniform_group(single_tx_layout_ptr, &g_uniform_pool, gpu);
-        image_handle_t ssr_tx_hdl = g_image_manager.get_handle("image2D.pfx_ssr_color"_hash);
-        auto *ssr_tx_ptr = g_image_manager.get(ssr_tx_hdl);
-        update_uniform_group(gpu, ssr_output_group,
-                             update_binding_t{TEXTURE, ssr_tx_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
-    }
+    dbg_make_frame_capture_data(pool, gpu);
 }
 
 framebuffer_handle_t
 get_pfx_framebuffer_hdl(void)
 {
-    return(g_postfx.ssr_stage.fbo);
+    return(g_postfx.pre_final_stage.fbo);
 }
 
-void
-apply_pfx_on_scene(gpu_command_queue_t *queue
-                   , uniform_group_t *transforms_group
-                   , const matrix4_t &view_matrix
-                   , const matrix4_t &projection_matrix
-                   , gpu_t *gpu)
+inline void
+apply_ssr(gpu_command_queue_t *queue
+          , uniform_group_t *transforms_group
+          , const matrix4_t &view_matrix
+          , const matrix4_t &projection_matrix
+          , gpu_t *gpu)
 {
     queue->begin_render_pass(g_postfx.pfx_render_pass
                              , g_postfx.ssr_stage.fbo
@@ -1704,6 +1769,84 @@ apply_pfx_on_scene(gpu_command_queue_t *queue
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
+}
+
+inline void
+render_to_pre_final(gpu_command_queue_t *queue,
+                    gpu_t *gpu)
+{
+    if (g_postfx.dbg_requested_capture)
+    {
+        g_postfx.dbg_in_frame_capture_mode = true;
+        g_postfx.dbg_requested_capture = false;
+
+        // Do image copy
+        copy_image(g_image_manager.get(g_postfx.ssr_stage.output),
+                   &g_postfx.dbg_capture.blitted_image,
+                   g_dfr_rendering.backbuffer_res.width,
+                   g_dfr_rendering.backbuffer_res.height,
+                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                   &queue->q,
+                   gpu);
+    }
+    
+    queue->begin_render_pass(g_postfx.pfx_render_pass
+                             , g_postfx.pre_final_stage.fbo
+                             , VK_SUBPASS_CONTENTS_INLINE
+                             , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
+
+    uniform_group_t tx_to_render = {};
+    
+    // TODO: If requested capture mode -> go into capture mode
+    if (g_postfx.dbg_in_frame_capture_mode)
+    {
+        tx_to_render = g_postfx.dbg_capture.blitted_image_uniform;
+    }
+    else
+    {
+        tx_to_render = *g_uniform_group_manager.get(g_postfx.ssr_stage.output_group);
+    }
+    
+    VkViewport v = {};
+    init_viewport(0, 0, g_dfr_rendering.backbuffer_res.width, g_dfr_rendering.backbuffer_res.height, 0.0f, 1.0f, &v);
+    command_buffer_set_viewport(&v, &queue->q);
+    {
+        auto *pfx_pre_final_ppln = g_pipeline_manager.get(g_postfx.pre_final_stage.ppln);
+        command_buffer_bind_pipeline(pfx_pre_final_ppln, &queue->q);
+
+        auto *ssr_group = g_uniform_group_manager.get(g_postfx.ssr_stage.output_group);
+        
+        uniform_group_t groups[] = { tx_to_render };
+        command_buffer_bind_descriptor_sets(pfx_pre_final_ppln, {1, groups}, &queue->q);
+
+        struct push_k
+        {
+            vector4_t db;
+        } pk;
+
+        pk.db = vector4_t(0.5f);
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_pre_final_ppln, &queue->q);
+
+        command_buffer_draw(&queue->q, 4, 1, 0, 0);
+    }
+    queue->end_render_pass();
+}
+
+void
+apply_pfx_on_scene(gpu_command_queue_t *queue
+                   , uniform_group_t *transforms_group
+                   , const matrix4_t &view_matrix
+                   , const matrix4_t &projection_matrix
+                   , gpu_t *gpu)
+{
+    apply_ssr(queue, transforms_group,
+              view_matrix,
+              projection_matrix,
+              gpu);
+
+    render_to_pre_final(queue, gpu);
 }
 
 void
@@ -1745,7 +1888,7 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue, swapchain_
         auto rect2D = make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
         command_buffer_set_rect2D(&rect2D, &queue->q);
         
-        uniform_group_t groups[] = { *g_uniform_group_manager.get(g_postfx.ssr_stage.output_group) };
+        uniform_group_t groups[] = { *g_uniform_group_manager.get(g_postfx.pre_final_stage.output_group) };
         command_buffer_bind_descriptor_sets(pfx_final_ppln, {1, groups}, &queue->q);
 
         struct ssr_lighting_push_k_t
@@ -1866,6 +2009,9 @@ make_cube_model(gpu_t *gpu,
 internal int32_t
 lua_begin_frame_capture(lua_State *state);
 
+internal int32_t
+lua_end_frame_capture(lua_State *state);
+
 void
 initialize_game_3d_graphics(gpu_t *gpu,
                             swapchain_t *swapchain,
@@ -1881,6 +2027,7 @@ initialize_game_3d_graphics(gpu_t *gpu,
     make_atmosphere_data(gpu, &g_uniform_pool, swapchain, pool);
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);    
 }
 
 // 2D Graphics
@@ -1891,7 +2038,7 @@ initialize_game_2d_graphics(gpu_t *gpu,
                             swapchain_t *swapchain,
                             gpu_command_queue_pool_t *pool)
 {
-    make_postfx_data(gpu, swapchain);
+    make_postfx_data(gpu, swapchain, pool);
 }
 
 void
@@ -1900,10 +2047,31 @@ destroy_graphics(gpu_t *gpu)
     vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }
 
+#include <GLFW/glfw3.h>
+
 internal int32_t
 lua_begin_frame_capture(lua_State *state)
 {
+    // Copy images into samplers blitted images
+    g_postfx.dbg_requested_capture = true;
+
+    console_out("=== Begin frame capture ===\n");
     
+    window_data_t *window = get_window_data();
+    glfwSetInputMode(window->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    
+    return(0);
+}
+
+internal int32_t
+lua_end_frame_capture(lua_State *state)
+{
+    g_postfx.dbg_in_frame_capture_mode = false;
+
+    console_out("=== End frame capture ===\n");
+    
+    window_data_t *window = get_window_data();
+    glfwSetInputMode(window->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     
     return(0);
 }

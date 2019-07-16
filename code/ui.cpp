@@ -95,7 +95,6 @@ vec4_color_to_ui32b(const vector4_t &color)
     uint32_t zui = (uint32_t)zf;
     uint32_t wui = (uint32_t)wf;
     return (xui << 24) | (yui << 16) | (zui << 8) | wui;
-    
 }
 
 internal void

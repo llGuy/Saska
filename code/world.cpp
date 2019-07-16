@@ -872,7 +872,18 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
     // else don't render the pointer at all
 }
 
+// TODO: Possibly remove the component system and just stick all the entity data into one big block of memory
+
 using entity_handle_t = int32_t;
+
+struct hitbox_t
+{
+    // Relative to the size of the entity
+    // These are the values of when the entity size = 1
+    float32_t x_max, x_min;
+    float32_t y_max, y_min;
+    float32_t z_max, z_min;
+};
 
 struct physics_component_t
 {
@@ -881,6 +892,8 @@ struct physics_component_t
     vector3_t gravity_force_accumulation = {};
 
     bool enabled;
+
+    hitbox_t hitbox;
     
     // other forces (friction...)
 };
@@ -966,6 +979,8 @@ struct entity_t
 
 global_var struct entities_t
 {
+    bool dbg_hit_box_display = false;
+    
     static constexpr uint32_t MAX_ENTITIES = 30;
     
     int32_t entity_count = {};
@@ -988,6 +1003,7 @@ global_var struct entities_t
 
     pipeline_handle_t entity_ppln;
     pipeline_handle_t entity_shadow_ppln;
+    pipeline_handle_t dbg_hitbox_ppln;
 
     model_handle_t entity_model;
 
@@ -1405,6 +1421,21 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
 
+    g_entities.dbg_hitbox_ppln = g_pipeline_manager.add("pipeline.hitboxes"_hash);
+    auto *hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+    {
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/hitbox_render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(false, false, false, false);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(hitbox_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+    }
+
     g_entities.entity_shadow_ppln = g_pipeline_manager.add("pipeline.model_shadow"_hash);
     auto *entity_shadow_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
     {
@@ -1440,7 +1471,13 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
-    add_physics_component(e_ptr, false);    
+    physics_component_t *physics = add_physics_component(e_ptr, false);
+    physics->hitbox.x_min = -1.001f;
+    physics->hitbox.x_max = 1.001f;
+    physics->hitbox.y_min = -1.001f;
+    physics->hitbox.y_max = 1.001f;
+    physics->hitbox.z_min = -1.001f;
+    physics->hitbox.z_max = 1.001f;
     auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window, get_backbuffer_resolution()));
     add_input_component(e_ptr);
 
@@ -1460,7 +1497,13 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     r_ptr->on_t = &g_terrains.terrains[0];
 
     rendering_component_t *r_ptr_rendering = add_rendering_component(r_ptr);
-    add_physics_component(r_ptr, true);
+    physics = add_physics_component(r_ptr, true);
+    physics->hitbox.x_min = -1.001f;
+    physics->hitbox.x_max = 1.001f;
+    physics->hitbox.y_min = -1.001f;
+    physics->hitbox.y_max = 1.001f;
+    physics->hitbox.z_min = -1.001f;
+    physics->hitbox.z_max = 1.001f;
     
     r_ptr_rendering->push_k.color = vector4_t(0.2f, 0.2f, 0.8f, 1.0f);
     
@@ -1479,6 +1522,14 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 
     rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
     add_physics_component(r2_ptr, false);
+
+    physics = add_physics_component(r2_ptr, false);
+    physics->hitbox.x_min = -1.001f;
+    physics->hitbox.x_max = 1.001f;
+    physics->hitbox.y_min = -1.001f;
+    physics->hitbox.y_max = 1.001f;
+    physics->hitbox.z_min = -1.001f;
+    physics->hitbox.z_max = 1.001f;
     
     r2_ptr_rendering->push_k.color = vector4_t(0.6f, 0.0f, 0.6f, 1.0f);
     r2_ptr->on_t = &g_terrains.terrains[0];
@@ -1491,6 +1542,64 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 // ---- rendering of the entire world happens here ----
 internal void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, framebuffer_t *fbo);
+
+internal void
+dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
+{
+    if (g_entities.dbg_hit_box_display)
+    {
+        auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+        command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+
+        command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+
+        for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
+        {
+            struct push_k_t
+            {
+                alignas(16) matrix4_t model_matrix;
+                alignas(16) vector4_t positions[8];
+                alignas(16) vector4_t color;
+            } pk;
+            physics_component_t *physics_component = &g_entities.physics_components[i];
+            entity_t *entity = get_entity(physics_component->entity_index);
+
+            if (entity->index != g_entities.main_entity)
+            {
+                if (entity->on_t)
+                {
+                    pk.model_matrix = glm::translate(entity->ws_p) * glm::mat4_cast(entity->current_rot) * glm::scale(entity->size);
+                }
+                else
+                {
+                    pk.model_matrix = glm::translate(entity->ws_p) * glm::scale(entity->size);
+                }
+
+                hitbox_t *hit = &physics_component->hitbox;
+                pk.positions[0] = vector4_t(hit->x_min, hit->y_min, hit->z_min, 1.0f);
+                pk.positions[1] = vector4_t(hit->x_min, hit->y_max, hit->z_min, 1.0f);
+                pk.positions[2] = vector4_t(hit->x_min, hit->y_max, hit->z_max, 1.0f);
+                pk.positions[3] = vector4_t(hit->x_min, hit->y_min, hit->z_max, 1.0f);
+
+                pk.positions[4] = vector4_t(hit->x_max, hit->y_min, hit->z_min, 1.0f);
+                pk.positions[5] = vector4_t(hit->x_max, hit->y_max, hit->z_min, 1.0f);
+                pk.positions[6] = vector4_t(hit->x_max, hit->y_max, hit->z_max, 1.0f);
+                pk.positions[7] = vector4_t(hit->x_max, hit->y_min, hit->z_max, 1.0f);
+
+                pk.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
+
+                command_buffer_push_constant(&pk,
+                                             sizeof(pk),
+                                             0,
+                                             VK_SHADER_STAGE_VERTEX_BIT,
+                                             dbg_hitbox_ppln,
+                                             &queue->q);
+
+                command_buffer_draw(&queue->q, 24, 1, 0, 0);
+            }
+        }
+    }
+}
 
 internal void
 render_world(vulkan_state_t *vk
@@ -1538,6 +1647,7 @@ render_world(vulkan_state_t *vk
         prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
 
         render_3d_frustum_debug_information(queue, image_index);
+        dbg_render_hitboxes(&uniform_groups[0], queue);
         
         // ---- render skybox ----
         auto *cube_model = g_model_manager.get(g_entities.entity_model);
@@ -1557,6 +1667,9 @@ lua_set_player_position(lua_State *state);
 internal int32_t
 lua_spawn_terrain(lua_State *state);
 
+internal int32_t
+lua_toggle_collision_box_render(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
@@ -1564,7 +1677,8 @@ initialize_world(window_data_t *window
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);   
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);   
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -1699,5 +1813,12 @@ lua_spawn_terrain(lua_State *state)
     create->rotation = glm::radians(vector3_t(xrotation, yrotation, zrotation));
     create->color = vector3_t(0.4f, 0.4f, 0.6f);
 
+    return(0);
+}
+
+internal int32_t
+lua_toggle_collision_box_render(lua_State *state)
+{
+    g_entities.dbg_hit_box_display ^= true;
     return(0);
 }

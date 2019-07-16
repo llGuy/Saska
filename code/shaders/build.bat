@@ -42,3 +42,6 @@ C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/uiquad.frag.spv uiqu
 
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/uifontquad.vert.spv uifontquad.vert
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/uifontquad.frag.spv uifontquad.frag
+
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/hitbox_render.vert.spv hitbox_render.vert
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/hitbox_render.frag.spv hitbox_render.frag

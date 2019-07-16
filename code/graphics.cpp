@@ -2184,7 +2184,7 @@ make_cube_model(gpu_t *gpu,
 
         vector3_t gray = vector3_t(0.2);
 	
-        float32_t radius = 2.0f;
+        float32_t radius = 1.0f;
 	
         persist vertex_t vertices[]
         {

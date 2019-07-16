@@ -17,7 +17,7 @@ layout(push_constant) uniform Push_K
     mat4 proj;
 } light_info_pk;
 
-layout(binding = 0, set = 0) uniform sampler2D g_final;
+layout(binding = 0, set = 0) uniform sampler2D g_final; 
 layout(binding = 1, set = 0) uniform sampler2D g_position;
 layout(binding = 2, set = 0) uniform sampler2D g_normal;
 

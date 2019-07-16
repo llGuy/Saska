@@ -176,10 +176,10 @@ main(void)
 
 	vec4 reflected_color = texture(g_final, coords.xy);
 
-        //	pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt)
-        //						, view_normal
-        //						, pixel_color
-        //						, fresnel);
+        pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt)
+        					, view_normal
+        					, pixel_color
+        					, fresnel);
 
 	//check if is skybox
 	vec3 check_skybox = texture(g_normal, coords.xy).xyz;

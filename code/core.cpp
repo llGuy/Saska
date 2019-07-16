@@ -30,6 +30,9 @@
             - Find a way to bind samplers to their respective images (memory)
             - Find a way to bind push_constant to some memory
      * Start getting the gameplay moving (add better physics, sliding through different terrains, etc...)
+        - Add terrain noise
+        - Change terrain morphing point to triangle
+        - Add physics
      * Add skeletal animation (loading models + animations, etc...)
 
   ------------------------------------------------------------ */

@@ -232,18 +232,32 @@ get_coord_pointing_at(vector3_t ws_ray_p,
     return(ts_position);
 }
 
+struct hitbox_t
+{
+    // Relative to the size of the entity
+    // These are the values of when the entity size = 1
+    float32_t x_max, x_min;
+    float32_t y_max, y_min;
+    float32_t z_max, z_min;
+};
+
 struct detected_collision_return_t
 {
     bool detected; vector3_t ws_at;
 };
 
 internal detected_collision_return_t
-detect_terrain_collision(const vector3_t &ws_p,
+detect_terrain_collision(hitbox_t *hitbox,
+                         const vector3_t &size,
+                         const vector3_t &ws_p,
                          morphable_terrain_t *t)
 {
     matrix4_t ws_to_ts = t->inverse_transform;
 
-    vector3_t ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f));
+    // TODO: Make this more accurate (this is just for testing purposes at the moment)
+    vector3_t contact_point = ws_p + vector3_t(0.0f, hitbox->y_min, 0.0f) * size;
+    
+    vector3_t ts_p = vector3_t(ws_to_ts * vector4_t(contact_point, 1.0f));
 
     vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
 
@@ -363,7 +377,7 @@ detect_terrain_collision(const vector3_t &ws_p,
     
     if (ts_p.y < 0.00000001f + ts_height)
     {
-	return {true, ws_at};
+	return {true, ws_at - vector3_t(0.0f, hitbox->y_min, 0.0f) * size};
     }
 
     return {false};
@@ -534,6 +548,14 @@ update_terrain_on_gpu(gpu_command_queue_t *queue)
     }
 }
 
+internal float32_t
+terrain_noise()
+{
+    float32_t r = (float32_t)(rand() % 100);
+    r /= 500.0f;
+    return(r);
+}
+
 internal void
 make_3D_terrain_base(uint32_t width_x
 		     , uint32_t depth_z
@@ -557,6 +579,11 @@ make_3D_terrain_base(uint32_t width_x
 	    uint32_t index = (x + depth_z * z) * 2;
 	    vtx[index] = (float32_t)x;
 	    vtx[index + 1] = (float32_t)z;
+            if (x != 0 && z != 0 && x != width_x - 1 && z != depth_z - 1)
+            {
+                vtx[index] += terrain_noise();
+                vtx[index + 1] += terrain_noise();
+            }
 	}	
     }
 
@@ -876,15 +903,6 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 
 using entity_handle_t = int32_t;
 
-struct hitbox_t
-{
-    // Relative to the size of the entity
-    // These are the values of when the entity size = 1
-    float32_t x_max, x_min;
-    float32_t y_max, y_min;
-    float32_t z_max, z_min;
-};
-
 struct physics_component_t
 {
     uint32_t entity_index;
@@ -1176,7 +1194,7 @@ update_physics_components(float32_t dt)
 
             vector3_t gravity_d = -9.5f * t->ws_n;
 
-            detected_collision_return_t ret = detect_terrain_collision(e->ws_p, e->on_t);
+            detected_collision_return_t ret = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
     
             if (ret.detected)
             {
@@ -1301,7 +1319,7 @@ update_input_components(window_data_t *window
     
             vector3_t res = {};
 
-            bool detected_collision = detect_terrain_collision(e->ws_p, e->on_t).detected;
+            bool detected_collision = detect_terrain_collision(&e_physics->hitbox, e->size, e->ws_p, e->on_t).detected;
     
             if (detected_collision) e->ws_v = vector3_t(0.0f);
     
@@ -1465,13 +1483,15 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 				, glm::normalize(vector3_t(1.0f, 0.0f, 1.0f))
 				, quaternion_t(0, 0, 0, 0));
 
+    e.size = vector3_t(10.0f);
+    
     entity_handle_t ev = add_entity(e);
     auto *e_ptr = get_entity(ev);
     g_entities.main_entity = ev;
 
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
-    physics_component_t *physics = add_physics_component(e_ptr, false);
+    physics_component_t *physics = add_physics_component(e_ptr, true);
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;

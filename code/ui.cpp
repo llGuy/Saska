@@ -83,6 +83,21 @@ struct ui_box_t
     uint32_t color;
 };
 
+uint32_t
+vec4_color_to_ui32b(const vector4_t &color)
+{
+    float32_t xf = color.x * 255.0f;
+    float32_t yf = color.y * 255.0f;
+    float32_t zf = color.z * 255.0f;
+    float32_t wf = color.w * 255.0f;
+    uint32_t xui = (uint32_t)xf;
+    uint32_t yui = (uint32_t)yf;
+    uint32_t zui = (uint32_t)zf;
+    uint32_t wui = (uint32_t)wf;
+    return (xui << 24) | (yui << 16) | (zui << 8) | wui;
+    
+}
+
 internal void
 update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
 {

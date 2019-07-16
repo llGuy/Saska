@@ -1,11 +1,14 @@
-#version 450
+#pragma once
+
+typedef float float32_t;
+typedef bool bool_t;
 
 layout(location = 0) in VS_DATA
 {
     vec2 uvs;
 } fs_in;
 
-layout(location = 0) out vec4 final_color;
+layout(location = 0) out vec4 final_color = vec4();
 
 layout(push_constant) uniform Push_K
 {
@@ -18,8 +21,6 @@ layout(binding = 0, set = 0) uniform sampler2D g_final;
 layout(binding = 1, set = 0) uniform sampler2D g_position;
 layout(binding = 2, set = 0) uniform sampler2D g_normal;
 
-layout(binding = 0, set = 1) uniform samplerCube atmosphere_cubemap;
-
 const int num_marches = 30;
 
 vec3 hash33(vec3 p3)
@@ -31,7 +32,7 @@ vec3 hash33(vec3 p3)
 
 vec3 binary_search(inout vec3 dir
 		   , inout vec3 hit_coord
-		   , inout float depth_difference)
+		   , inout float32_t depth_difference)
 {
     float depth;
 
@@ -40,10 +41,11 @@ vec3 binary_search(inout vec3 dir
     for (int i = 0; i < 8; ++i)
     {
 	projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
-	projected_coord.xy /= projected_coord.w;
+	projected_coord.xy = projected_coord.xy / projected_coord.w;
 	projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
 
-	depth = textureLod(g_position, projected_coord.xy, 2).z;
+        vec2 tx_uvs = projected_coord.xy;
+	depth = texture(g_position, tx_uvs).z;
 
 	depth_difference = hit_coord.z - depth;
 
@@ -53,7 +55,7 @@ vec3 binary_search(inout vec3 dir
     }
 
     projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
-    projected_coord.xy /= projected_coord.w;
+    projected_coord.xy = projected_coord.xy / projected_coord.w;
     projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
 
     return vec3(projected_coord.xy, depth);
@@ -61,9 +63,9 @@ vec3 binary_search(inout vec3 dir
 
 vec4 ray_cast(inout vec3 direction
 	      , inout vec3 hit_coord
-	      , out float depth_difference
-	      , out bool success
-	      , inout float d)
+	      , out float32_t depth_difference
+	      , out bool_t success
+	      , inout float32_t d)
 {
     vec3 original_coord = hit_coord;
 
@@ -81,10 +83,11 @@ vec4 ray_cast(inout vec3 direction
 
 	projected_coord = light_info_pk.proj * vec4(hit_coord, 1.0);
 
-	projected_coord.xy /= projected_coord.w;
+	projected_coord.xy = projected_coord.xy / projected_coord.w;
 	projected_coord.xy = projected_coord.xy * 0.5 + 0.5;
 
-	sampled_depth = textureLod(g_position, projected_coord.xy, 2).z;
+        vec2 tx_uvs = projected_coord.xy;
+	sampled_depth = texture(g_position, tx_uvs).z;
 
 	if (sampled_depth > 1000.0) continue;
 
@@ -95,7 +98,8 @@ vec4 ray_cast(inout vec3 direction
 	    vec4 result	= vec4(binary_search(direction,	hit_coord, depth_difference), 0.0);
 	    {
 		success = true;
-		d = texture(g_position, result.xy).z;
+                tx_uvs = result.xy;
+		d = texture(g_position, tx_uvs).z;
 		return result;
 	    }
 	}
@@ -110,7 +114,7 @@ vec3 fresnel_schlick(float cos_theta
     return F0 + (1.0 - F0) * pow(1.0 - cos_theta, 5.0);
 }
 
-vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
+/*vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
 			       , in vec3 vs_normal
 			       , inout vec4 pixel_color
 			       , in vec4 fresnel)
@@ -130,15 +134,15 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector
     pixel_color = pixel_color + (envi_color * 0.2);
 
     return pixel_color;
-}
+}*/
 
 void
 main(void)
 {
     final_color = texture(g_final, fs_in.uvs);
-    vec4 position = (textureLod(g_position, fs_in.uvs, 2));
+    vec4 position = (texture(g_position, fs_in.uvs));
     vec3 view_position = vec3(position);
-    vec4 vnormal = (textureLod(g_normal, fs_in.uvs, 2));
+    vec4 vnormal = (texture(g_normal, fs_in.uvs));
     vec3 view_normal = vnormal.xyz;
     vec4 pixel_color = texture(g_final, fs_in.uvs);
     float metallic = 0.5;
@@ -174,21 +178,24 @@ main(void)
 	float factor = (d_coords.x + d_coords.y);
 	float edge_factor = clamp(1.0 - factor, 0.0, 1.0);
 
-	vec4 reflected_color = texture(g_final, coords.xy);
+        vec2 refl_tx_uvs = coords.xy;
+	vec4 reflected_color = texture(g_final, refl_tx_uvs);
 
-        //	pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt)
-        //						, view_normal
-        //						, pixel_color
-        //						, fresnel);
+            //	pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt)
+            //						, view_normal
+            //						, pixel_color
+            //						, fresnel);
 
 	//check if is skybox
-	vec3 check_skybox = texture(g_normal, coords.xy).xyz;
+        vec2 check_skybox_uvs = coords.xy;
+	vec3 check_skybox = texture(g_normal, check_skybox_uvs).xyz;
 	bool is_skybox = (check_skybox.x < -10.0 && check_skybox.y < -10.0 && check_skybox.z < -10.0);
 
 	if (hit && !is_skybox)
 	{
 	    vec3 vs_reflected_dir = normalize(ray_dir);
-	    vec3 vs_reflected_point = texture(g_position, coords.xy).xyz;
+            vec2 refl_point_uvs = coords.xy;
+	    vec3 vs_reflected_point = texture(g_position, refl_point_uvs).xyz;
 	    vec3 vs_reflected_point_to_original = normalize(vs_reflected_point - original_position);
 
 	    float dotted = dot(vs_reflected_dir, vs_reflected_point_to_original);

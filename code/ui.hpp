@@ -22,3 +22,6 @@ console_out(const char *string);
 
 void
 console_out_color_override(const char *string, uint32_t color);
+
+uint32_t
+vec4_color_to_ui32b(const vector4_t &color);

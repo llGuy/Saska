@@ -23,6 +23,9 @@ enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 // ---- terrain code ----
 struct morphable_terrain_t
 {
+    // Gravity constant
+    float32_t k_g;
+    
     bool is_modified = false;
     
     ivector2_t xz_dim;
@@ -401,9 +404,10 @@ detect_terrain_collision(hitbox_t *hitbox,
 
 internal vector3_t
 get_sliding_down_direction(const vector3_t &ws_view_direction,
+                           const vector3_t &ws_up_vector,
                            const vector3_t &ws_normal)
 {
-    vector3_t ws_right = glm::cross(ws_view_direction, ws_normal);
+    vector3_t ws_right = glm::cross(ws_view_direction, ws_up_vector);
     vector3_t ws_down = glm::cross(ws_normal, ws_right);
     return(ws_down);
 }
@@ -745,6 +749,7 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                 , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
                                 , vector3_t(15.0f)
                                 , vector3_t(255.0f, 69.0f, 0.0f) / 256.0f);
+    red_terrain->k_g = -11.5f;
 
     auto *green_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, green_terrain, gpu);
@@ -753,6 +758,8 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                 , quaternion_t(glm::radians(vector3_t(0.0f, 45.0f, 20.0f)))
                                 , vector3_t(10.0f)
                                 , vector3_t(0.1, 0.6, 0.2) * 0.7f);
+
+    green_terrain->k_g = -9.5f;
 }
 
 internal void
@@ -1231,7 +1238,7 @@ update_physics_components(float32_t dt)
         {
             morphable_terrain_t *t = e->on_t;
 
-            vector3_t gravity_d = -11.5f * t->ws_n;
+            vector3_t gravity_d = t->k_g * t->ws_n;
 
             detected_collision_return_t ret = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
 
@@ -1548,7 +1555,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     // add rotating entity
     entity_t r = construct_entity("entity.blue"_hash
 				, vector3_t(200.0f, -40.0f, 300.0f)
-                                  , vector3_t(1.0f, 0.0f, 0.0f)
+                                  , vector3_t(1.0f, 0.0f, -1.0f)
 				, quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r.size = vector3_t(10.0f);
@@ -1557,6 +1564,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     auto *r_ptr = get_entity(rv); 
     
     r_ptr->on_t = &g_terrains.terrains[0];
+    r_ptr->ws_d = vector3_t(glm::mat4_cast(g_terrains.terrains[0].gs_r) * vector4_t(r_ptr->ws_d, 0.0f));
 
     rendering_component_t *r_ptr_rendering = add_rendering_component(r_ptr);
     physics = add_physics_component(r_ptr, true);
@@ -1713,7 +1721,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
 
         command_buffer_draw(&queue->q, 2, 1, 0, 0);
 
-        vector3_t down = get_sliding_down_direction(entity->ws_d, physics->surface_normal);
+        vector3_t down = get_sliding_down_direction(entity->ws_d, entity->on_t->ws_n, physics->surface_normal);
         pk.positions[0] = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
         pk.positions[1] = vector4_t(down, 1.0f);
 

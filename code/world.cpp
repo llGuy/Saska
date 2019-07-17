@@ -243,7 +243,9 @@ struct hitbox_t
 
 struct detected_collision_return_t
 {
-    bool detected; vector3_t ws_at;
+    bool detected;
+    vector3_t ws_at;
+    vector3_t ws_normal;
 };
 
 internal detected_collision_return_t
@@ -277,9 +279,10 @@ detect_terrain_collision(hitbox_t *hitbox,
 
 
     // wrong math probably
-    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a
-										     , const vector2_t &offset_b
-										     , const vector2_t &offset_c) -> float32_t
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a,
+										     const vector2_t &offset_b,
+										     const vector2_t &offset_c,
+                                                                                     vector3_t &normal) -> float32_t
 	{
 	    float32_t tl_x = ts_tile_corner_position.x;
 	    float32_t tl_z = ts_tile_corner_position.y;
@@ -296,10 +299,14 @@ detect_terrain_collision(hitbox_t *hitbox,
 	    vector3_t b = vector3_t(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
 	    vector3_t c = vector3_t(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
 
+            normal = glm::normalize(glm::cross(glm::normalize(a - c), glm::normalize(b - c)));
+            
 	    return(barry_centric(a, b, c, ts_position_on_tile));
 	};
     
     float32_t ts_height;
+
+    vector3_t normal;
     
     if (ts_tile_corner_position.x % 2 == 0)
     {
@@ -307,30 +314,34 @@ detect_terrain_collision(hitbox_t *hitbox,
 	{
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f)
-						   , vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 1.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   normal);
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f)
-						   , vector2_t(1.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
 	    }
 	}
 	else
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f)
-						   , vector2_t(0.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+						   vector2_t(0.0f, 0.0f),
+                                                   normal);
 	    }
 	}
     }
@@ -340,32 +351,36 @@ detect_terrain_collision(hitbox_t *hitbox,
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f)
-						   , vector2_t(0.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+						   vector2_t(0.0f, 0.0f),
+                                                   normal);
 	    }
 	}
 	else
 	{
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f)
-						   , vector2_t(0.0f, 1.0f)
-						   , vector2_t(1.0f, 1.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   normal);
 
 		
 	    }
 	    else
 	    {
-		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f)
-						   , vector2_t(1.0f, 1.0f)
-						   , vector2_t(1.0f, 0.0f));
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
 	    }
 	}
     }
@@ -374,13 +389,23 @@ detect_terrain_collision(hitbox_t *hitbox,
     vector3_t ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
 
     vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
+    normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
     
     if (ts_p.y < 0.00000001f + ts_height)
     {
-	return {true, ws_at - vector3_t(0.0f, hitbox->y_min, 0.0f) * size};
+	return {true, ws_at, normal};
     }
 
     return {false};
+}
+
+internal vector3_t
+get_sliding_down_direction(const vector3_t &ws_view_direction,
+                           const vector3_t &ws_normal)
+{
+    vector3_t ws_right = glm::cross(ws_view_direction, ws_normal);
+    vector3_t ws_down = glm::cross(ws_normal, ws_right);
+    return(ws_down);
 }
 
 internal void
@@ -579,11 +604,11 @@ make_3D_terrain_base(uint32_t width_x
 	    uint32_t index = (x + depth_z * z) * 2;
 	    vtx[index] = (float32_t)x;
 	    vtx[index + 1] = (float32_t)z;
-            if (x != 0 && z != 0 && x != width_x - 1 && z != depth_z - 1)
+            /*            if (x != 0 && z != 0 && x != width_x - 1 && z != depth_z - 1)
             {
                 vtx[index] += terrain_noise();
                 vtx[index + 1] += terrain_noise();
-            }
+                }*/
 	}	
     }
 
@@ -906,12 +931,11 @@ using entity_handle_t = int32_t;
 struct physics_component_t
 {
     uint32_t entity_index;
-    
     vector3_t gravity_force_accumulation = {};
-
     bool enabled;
-
     hitbox_t hitbox;
+    vector3_t surface_normal;
+    vector3_t surface_position;
     
     // other forces (friction...)
 };
@@ -946,6 +970,8 @@ struct rendering_component_t
 	matrix4_t ws_t{1.0f};
 	vector4_t color;
     } push_k;
+
+    bool enabled = true;
 };
 
 struct entity_t
@@ -995,10 +1021,16 @@ struct entity_t
     };
 };
 
+struct dbg_entities_t
+{
+    bool hit_box_display = false;
+    entity_t *render_sliding_vector_entity = nullptr;
+};
+
 global_var struct entities_t
 {
-    bool dbg_hit_box_display = false;
-    
+    dbg_entities_t dbg;
+
     static constexpr uint32_t MAX_ENTITIES = 30;
     
     int32_t entity_count = {};
@@ -1129,14 +1161,21 @@ update_rendering_component(float32_t dt)
     {
         rendering_component_t *component = &g_entities.rendering_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
-        
-        if (e->on_t)
+
+        if (component->enabled)
         {
-            component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->current_rot) * glm::scale(e->size);
+            if (e->on_t)
+            {
+                component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->current_rot) * glm::scale(e->size);
+            }
+            else
+            {
+                component->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
+            }
         }
         else
         {
-            component->push_k.ws_t = glm::translate(e->ws_p) * glm::scale(e->size);
+            component->push_k.ws_t = matrix4_t(0.0f);
         }
     }
 }
@@ -1192,16 +1231,19 @@ update_physics_components(float32_t dt)
         {
             morphable_terrain_t *t = e->on_t;
 
-            vector3_t gravity_d = -9.5f * t->ws_n;
+            vector3_t gravity_d = -11.5f * t->ws_n;
 
             detected_collision_return_t ret = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
-    
+
+            component->surface_normal = ret.ws_normal;
+            component->surface_position = ret.ws_at;
+            
             if (ret.detected)
             {
                 // implement coefficient of restitution
                 e->ws_v = vector3_t(0.0f);
                 gravity_d = vector3_t(0.0f);
-                e->ws_p = ret.ws_at;
+                e->ws_p = ret.ws_at - vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size;
             }
     
             e->ws_v += gravity_d * dt;
@@ -1337,7 +1379,7 @@ update_input_components(window_data_t *window
                     if (detected_collision)
                     {
                         // give some velotity towards the up vector
-                        e->ws_v += up * 5.0f;
+                        e->ws_v += up * 10.0f;
                         e->ws_p += e->ws_v * dt;
                     }
                 }
@@ -1478,7 +1520,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
                                                                                  , cmdpool
                                                                                  , gpu);
 
-    entity_t e = construct_entity("entity.bound_group_test0"_hash
+    entity_t e = construct_entity("entity.main"_hash
 				, vector3_t(50.0f, 10.0f, 280.0f)
 				, glm::normalize(vector3_t(1.0f, 0.0f, 1.0f))
 				, quaternion_t(0, 0, 0, 0));
@@ -1491,10 +1533,10 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
-    physics_component_t *physics = add_physics_component(e_ptr, true);
+    physics_component_t *physics = add_physics_component(e_ptr, false);
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
-    physics->hitbox.y_min = -1.001f;
+    physics->hitbox.y_min = -2.001f;
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
@@ -1504,15 +1546,15 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);
         
     // add rotating entity
-    entity_t r = construct_entity("entity.rotating"_hash
+    entity_t r = construct_entity("entity.blue"_hash
 				, vector3_t(200.0f, -40.0f, 300.0f)
-				, vector3_t(0.0f)
+                                  , vector3_t(1.0f, 0.0f, 0.0f)
 				, quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r.size = vector3_t(10.0f);
 
     entity_handle_t rv = add_entity(r);
-    auto *r_ptr = get_entity(rv);
+    auto *r_ptr = get_entity(rv); 
     
     r_ptr->on_t = &g_terrains.terrains[0];
 
@@ -1531,7 +1573,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
                          , g_model_manager.get_handle("model.cube_model"_hash)
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 
-    entity_t r2 = construct_entity("entity.rotating2"_hash
+    entity_t r2 = construct_entity("entity.purple"_hash
 				 , vector3_t(250.0f, -40.0f, 350.0f)
 				 , vector3_t(0.0f)
 				 , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
@@ -1566,7 +1608,7 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set
 internal void
 dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
-    if (g_entities.dbg_hit_box_display)
+    if (g_entities.dbg.hit_box_display)
     {
         auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
         command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
@@ -1622,6 +1664,73 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 }
 
 internal void
+dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
+{
+    if (g_entities.dbg.render_sliding_vector_entity)
+    {
+        auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+        command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+
+        command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+
+        struct push_k_t
+        {
+            alignas(16) matrix4_t model_matrix;
+            alignas(16) vector4_t positions[8];
+            alignas(16) vector4_t color;
+        } pk;
+        
+        entity_t *entity = g_entities.dbg.render_sliding_vector_entity;
+        physics_component_t *physics = &g_entities.physics_components[entity->components.physics_component];
+
+        pk.model_matrix = glm::translate(physics->surface_position) * glm::scale(entity->size * 3.5f);
+
+        pk.positions[0] = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
+        pk.positions[1] = vector4_t(entity->ws_d, 1.0f);
+
+        pk.color = vector4_t(0.0f, 1.0f, 0.0f, 1.0f);
+
+        command_buffer_push_constant(&pk,
+                                     sizeof(pk),
+                                     0,
+                                     VK_SHADER_STAGE_VERTEX_BIT,
+                                     dbg_hitbox_ppln,
+                                     &queue->q);
+
+        command_buffer_draw(&queue->q, 2, 1, 0, 0);
+
+        pk.positions[0] = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
+        pk.positions[1] = vector4_t(physics->surface_normal, 1.0f);
+
+        pk.color = vector4_t(0.0f, 0.0f, 1.0f, 1.0f);
+
+        command_buffer_push_constant(&pk,
+                                     sizeof(pk),
+                                     0,
+                                     VK_SHADER_STAGE_VERTEX_BIT,
+                                     dbg_hitbox_ppln,
+                                     &queue->q);
+
+        command_buffer_draw(&queue->q, 2, 1, 0, 0);
+
+        vector3_t down = get_sliding_down_direction(entity->ws_d, physics->surface_normal);
+        pk.positions[0] = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
+        pk.positions[1] = vector4_t(down, 1.0f);
+
+        pk.color = vector4_t(1.0f, 1.0f, 0.0f, 1.0f);
+
+        command_buffer_push_constant(&pk,
+                                     sizeof(pk),
+                                     0,
+                                     VK_SHADER_STAGE_VERTEX_BIT,
+                                     dbg_hitbox_ppln,
+                                     &queue->q);
+
+        command_buffer_draw(&queue->q, 2, 1, 0, 0);
+    }
+}
+
+internal void
 render_world(vulkan_state_t *vk
 	     , uint32_t image_index
 	     , uint32_t current_frame
@@ -1668,6 +1777,7 @@ render_world(vulkan_state_t *vk
 
         render_3d_frustum_debug_information(queue, image_index);
         dbg_render_hitboxes(&uniform_groups[0], queue);
+        dbg_render_sliding_vectors(&uniform_groups[0], queue);
         
         // ---- render skybox ----
         auto *cube_model = g_model_manager.get(g_entities.entity_model);
@@ -1690,6 +1800,12 @@ lua_spawn_terrain(lua_State *state);
 internal int32_t
 lua_toggle_collision_box_render(lua_State *state);
 
+internal int32_t
+lua_render_entity_direction_information(lua_State *state);
+
+internal int32_t
+lua_toggle_entity_model_display(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
@@ -1698,7 +1814,9 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);   
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_entity_direction_information);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_entity_model_display", &lua_toggle_entity_model_display);   
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -1839,6 +1957,34 @@ lua_spawn_terrain(lua_State *state)
 internal int32_t
 lua_toggle_collision_box_render(lua_State *state)
 {
-    g_entities.dbg_hit_box_display ^= true;
+    g_entities.dbg.hit_box_display ^= true;
+    return(0);
+}
+
+internal int32_t
+lua_render_entity_direction_information(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    g_entities.dbg.render_sliding_vector_entity = get_entity(kname);
+
+    persist char buffer[50];
+    sprintf(buffer, "rendering for entity: %s", name);
+    console_out(buffer);
+    
+    return(0);
+}
+
+internal int32_t
+lua_toggle_entity_model_display(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    entity_t *entity = get_entity(kname);
+
+    g_entities.rendering_components[entity->components.rendering_component].enabled ^= true;
+
     return(0);
 }

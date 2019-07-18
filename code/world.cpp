@@ -40,11 +40,10 @@ struct morphable_terrain_t
     uint32_t offset_into_heights_gpu_buffer;
     // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
     gpu_buffer_t heights_gpu_buffer;
-
+    
     VkBuffer vbos[2];
 
-    matrix4_t inverse_transform;
-    
+    matrix4_t inverse_transform;    
     struct push_k_t
     {
         matrix4_t transform;
@@ -260,9 +259,10 @@ detect_terrain_collision(hitbox_t *hitbox,
     matrix4_t ws_to_ts = t->inverse_transform;
 
     // TODO: Make this more accurate (this is just for testing purposes at the moment)
-    vector3_t contact_point = ws_p + vector3_t(0.0f, hitbox->y_min, 0.0f) * size;
-    
-    vector3_t ts_p = vector3_t(ws_to_ts * vector4_t(contact_point, 1.0f));
+    //    vector3_t contact_point = ws_p + vector3_t(0.0f, hitbox->y_min, 0.0f) * size;
+
+    vector3_t ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
+    vector3_t ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f)) + ts_entity_height_offset;
 
     vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
 
@@ -375,8 +375,6 @@ detect_terrain_collision(hitbox_t *hitbox,
 						   vector2_t(0.0f, 1.0f),
 						   vector2_t(1.0f, 1.0f),
                                                    normal);
-
-		
 	    }
 	    else
 	    {
@@ -394,7 +392,7 @@ detect_terrain_collision(hitbox_t *hitbox,
     vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
     normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
     
-    if (ts_p.y < 0.00000001f + ts_height)
+    if (ts_p.y < 0.1f + ts_height)
     {
 	return {true, ws_at, normal};
     }
@@ -749,7 +747,7 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                 , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
                                 , vector3_t(15.0f)
                                 , vector3_t(255.0f, 69.0f, 0.0f) / 256.0f);
-    red_terrain->k_g = -11.5f;
+    red_terrain->k_g = -8.5f;
 
     auto *green_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, green_terrain, gpu);
@@ -759,7 +757,7 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
                                 , vector3_t(10.0f)
                                 , vector3_t(0.1, 0.6, 0.2) * 0.7f);
 
-    green_terrain->k_g = -9.5f;
+    green_terrain->k_g = -8.5f;
 }
 
 internal void
@@ -937,12 +935,20 @@ using entity_handle_t = int32_t;
 
 struct physics_component_t
 {
+    float32_t weight = 1.0f; // KG
+    
     uint32_t entity_index;
-    vector3_t gravity_force_accumulation = {};
+    
+    vector3_t gravity_accumulation = {};
+    vector3_t friction_accumulation = {};
+    vector3_t slide_accumulation = {};
+    
     bool enabled;
     hitbox_t hitbox;
     vector3_t surface_normal;
     vector3_t surface_position;
+
+    vector3_t force;
     
     // other forces (friction...)
 };
@@ -964,6 +970,9 @@ struct camera_component_t
 struct input_component_t
 {
     uint32_t entity_index;
+
+    enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN };
+    uint8_t movement_flags = 0;
 };
 
 struct rendering_component_t
@@ -989,6 +998,7 @@ struct entity_t
     // position, direction, velocity
     // in above entity group space
     vector3_t ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
+    vector3_t ws_acceleration {0.0f};
     quaternion_t ws_r{0.0f, 0.0f, 0.0f, 0.0f};
     vector3_t size{1.0f};
 
@@ -1010,7 +1020,7 @@ struct entity_t
 
         int32_t camera_component;
         int32_t physics_component;
-        int32_t input_component;
+        int32_t input_component = -1;
         int32_t rendering_component;
         
     } components;
@@ -1238,24 +1248,77 @@ update_physics_components(float32_t dt)
         {
             morphable_terrain_t *t = e->on_t;
 
-            vector3_t gravity_d = t->k_g * t->ws_n;
+            // See if there was collision
+            detected_collision_return_t collision = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
+            component->surface_normal = collision.ws_normal;
+            component->surface_position = collision.ws_at;
 
-            detected_collision_return_t ret = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
-
-            component->surface_normal = ret.ws_normal;
-            component->surface_position = ret.ws_at;
-            
-            if (ret.detected)
+            // If collision with terrain was detected
+            if (collision.detected)
             {
-                // implement coefficient of restitution
-                e->ws_v = vector3_t(0.0f);
-                gravity_d = vector3_t(0.0f);
-                e->ws_p = ret.ws_at - vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size;
-            }
-    
-            e->ws_v += gravity_d * dt;
+                component->gravity_accumulation = vector3_t(0.0f);
+                
+                // If input is enabled on the entity
+                vector3_t ws_input_v = vector3_t(0.0f);
+                if (e->components.input_component >= 0)
+                {
+                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
 
-            e->ws_p += (e->ws_v + e->ws_input_v) * dt;
+                    float32_t speed = 40.0f;
+                    
+                    input_component_t *input = &g_entities.input_components[e->components.input_component];
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
+                    {
+                        ws_input_v += forward;
+                    }
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
+                    {
+                        ws_input_v += -glm::cross(forward, component->surface_normal);
+                    }
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
+                    {
+                        ws_input_v += -forward;
+                    }
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
+                    {
+                        ws_input_v += glm::cross(forward, component->surface_normal);
+                    }
+
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
+                    {
+                        persist constexpr float32_t TEST_ROUGHNESS = 0.5f;
+                        //                        component->friction_accumulation += -forward * TEST_ROUGHNESS * glm::dot(-component->surface_normal, -e->on_t->ws_n);
+                        component->slide_accumulation += forward * glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
+                        input->movement_flags = 0;
+                    }
+                    else
+                    {
+                        //                        component->friction_accumulation = vector3_t(0.0f);
+                    }
+                    
+                    if (input->movement_flags)
+                    {
+                        ws_input_v = glm::normalize(ws_input_v) * speed;
+                        input->movement_flags = 0;
+                    }
+                }
+
+                //                e->ws_v += ws_input_v;
+
+                vector3_t height_offset = vector3_t(glm::mat4_cast(e->on_t->gs_r) * vector4_t(-vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size, 0.0f));
+
+                e->ws_p = collision.ws_at + height_offset; /*- vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size + ws_input_v * dt*/
+                e->ws_v += ws_input_v;
+            }
+            else
+            {
+                component->gravity_accumulation += t->k_g * e->on_t->ws_n;
+            }
+
+            e->ws_v += component->gravity_accumulation + component->friction_accumulation + component->slide_accumulation;
+
+            e->ws_p += e->ws_v * dt;
+            e->ws_v = vector3_t(0.0f);
         }
         else
         {
@@ -1276,6 +1339,7 @@ update_physics_components(float32_t dt)
         {
             e->current_rot = e->on_t->gs_r;
         }
+        e->ws_acceleration = vector3_t(0.0f);
     }
 }
 
@@ -1370,23 +1434,23 @@ update_input_components(window_data_t *window
 
             bool detected_collision = detect_terrain_collision(&e_physics->hitbox, e->size, e->ws_p, e->on_t).detected;
     
-            if (detected_collision) e->ws_v = vector3_t(0.0f);
+ //            if (detected_collision) e->ws_v = vector3_t(0.0f);
     
             //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
-            if (window->key_map[GLFW_KEY_R]) accelerate = 10.0f;
-            if (window->key_map[GLFW_KEY_W]) acc_v(d, res);
-            if (window->key_map[GLFW_KEY_A]) acc_v(-glm::cross(d, up), res);
-            if (window->key_map[GLFW_KEY_S]) acc_v(-d, res);
-            if (window->key_map[GLFW_KEY_D]) acc_v(glm::cross(d, up), res);
+            if (window->key_map[GLFW_KEY_R]) {accelerate = 10.0f;}
+            if (window->key_map[GLFW_KEY_W]) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
+            if (window->key_map[GLFW_KEY_A]) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
+            if (window->key_map[GLFW_KEY_S]) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
+            if (window->key_map[GLFW_KEY_D]) {acc_v(glm::cross(d, up), res); component->movement_flags |= (1 << input_component_t::movement_flags_t::RIGHT);}
     
-            if (window->key_map[GLFW_KEY_SPACE])
+            /*            if (window->key_map[GLFW_KEY_SPACE])
             {
                 if (e_physics->enabled)
                 {
                     if (detected_collision)
                     {
                         // give some velotity towards the up vector
-                        e->ws_v += up * 10.0f;
+                        e->ws_v += up * 100.0f;
                         e->ws_p += e->ws_v * dt;
                     }
                 }
@@ -1394,9 +1458,10 @@ update_input_components(window_data_t *window
                 {
                     acc_v(up, res);
                 }
-            }
+                }*/
     
             if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
+            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
 
             if (movements > 0)
             {
@@ -1540,7 +1605,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
-    physics_component_t *physics = add_physics_component(e_ptr, false);
+    physics_component_t *physics = add_physics_component(e_ptr, true);
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -2.001f;
@@ -1814,6 +1879,12 @@ lua_render_entity_direction_information(lua_State *state);
 internal int32_t
 lua_toggle_entity_model_display(lua_State *state);
 
+internal int32_t
+lua_set_veclocity_in_view_direction(lua_State *state);
+
+internal int32_t
+lua_get_player_ts_view_direction(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
@@ -1824,7 +1895,9 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_entity_direction_information);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_entity_model_display", &lua_toggle_entity_model_display);   
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_entity_model_display", &lua_toggle_entity_model_display);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "set_velocity", &lua_toggle_entity_model_display);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "get_ts_view_dir", &lua_get_player_ts_view_direction);
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -1995,4 +2068,27 @@ lua_toggle_entity_model_display(lua_State *state)
     g_entities.rendering_components[entity->components.rendering_component].enabled ^= true;
 
     return(0);
+}
+
+internal int32_t
+lua_set_veclocity_in_view_direction(lua_State *state)
+{
+    const char *name = lua_tostring(state, -2);
+    float32_t velocity = lua_tonumber(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+    entity_t *entity = get_entity(kname);
+    entity->ws_v += entity->ws_d * velocity;
+    return(0);
+}
+
+internal int32_t
+lua_get_player_ts_view_direction(lua_State *state)
+{
+    // For now, just sets the main player's position
+    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    vector4_t dir = glm::scale(main_entity->on_t->size) * main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_d, 0.0f);
+    lua_pushnumber(state, dir.x);
+    lua_pushnumber(state, dir.y);
+    lua_pushnumber(state, dir.z);
+    return(3);
 }

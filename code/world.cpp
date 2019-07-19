@@ -189,6 +189,201 @@ distance_squared(const T &v)
     return(glm::dot(v, v));
 }
 
+struct terrain_triangle_t
+{
+    float32_t height;
+    glm::vec3 ws_triangle_position[3];
+    uint32_t idx[3];
+};
+
+internal terrain_triangle_t
+get_triangle_from_pos(const vector3_t ts_p,
+                      morphable_terrain *t)
+{
+    vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+
+    // is outside the terrain
+    if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
+        ||  ts_p_xz.y < 0.0f || ts_p_xz.y > t->xz_dim.y)
+    {
+	return {false};
+    }
+
+    // position of the player on one tile (square - two triangles)
+    vector2_t ts_position_on_tile = vector2_t(ts_p_xz.x - glm::floor(ts_p_xz.x)
+                                              , ts_p_xz.y - glm::floor(ts_p_xz.y));
+
+    // starting from (0, 0)
+    ivector2_t ts_tile_corner_position = ivector2_t(glm::floor(ts_p_xz));
+
+
+    // wrong math probably
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a,
+										     const vector2_t &offset_b,
+										     const vector2_t &offset_c) -> terrain_triangle_t
+	{
+	    float32_t tl_x = ts_tile_corner_position.x;
+	    float32_t tl_z = ts_tile_corner_position.y;
+	
+	    uint32_t triangle_indices[3] =
+	    {
+		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.y)
+		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.y)
+		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.y)
+	    };
+
+	    float32_t *terrain_heights = (float32_t *)t->heights;
+	    vector3_t a = vector3_t(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
+	    vector3_t b = vector3_t(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
+	    vector3_t c = vector3_t(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
+
+            terrain_triangle_t triangle = {};
+            triangle.height = barry_centric(a, b, c, ts_position_on_tile);
+            triangle.idx[0] = triangle_indices[0];
+            triangle.idx[1] = triangle_indices[1];
+            triangle.idx[2] = triangle_indices[2];
+	    return(triangle);
+	};
+    
+    terrain_triangle_t ret = {};
+
+    vector3_t normal;
+    
+    if (ts_tile_corner_position.x % 2 == 0)
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+	else
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+						   vector2_t(0.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+    }
+    else
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+						   vector2_t(0.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+	else
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(0.0f, 1.0f),
+						   vector2_t(1.0f, 1.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+						   vector2_t(1.0f, 1.0f),
+						   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+    }
+    
+    // result of the terrain collision in terrain space
+    vector3_t ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
+
+    vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
+    normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
+    
+    if (ts_p.y < 0.1f + ts_height)
+    {
+	return {true, ws_at, normal};
+    }
+
+    return {false};
+}
+
+internal terrain_triangle_t
+get_terrain_triangle_pointed_at(const vector3_t &ws_ray_p,
+                                const vector3_t &ws_ray_d,
+                                morphable_terrain_t *t,
+                                float32_t dt,
+                                gpu_t *gpu)
+{
+    persist constexpr float32_t MAX_DISTANCE = 6.0f;
+    persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
+    persist constexpr float32_t STEP_SIZE = 0.3f;
+
+    matrix4_t ws_to_ts = t->inverse_transform;
+    vector3_t ts_ray_p_start = vector3_t(ws_to_ts * vector4_t(ws_ray_p, 1.0f));
+    vector3_t ts_ray_d = glm::normalize(vector3_t(ws_to_ts * vector4_t(ws_ray_d, 0.0f)));
+    vector3_t ts_ray_diff = STEP_SIZE * ts_ray_d;
+
+    ivector2_t ts_position = ivector2_t(-1);
+
+    for (vector3_t ts_ray_step = ts_ray_d;
+         distance_squared(ts_ray_step) < MAX_DISTANCE_SQUARED;
+         ts_ray_step += ts_ray_diff)
+    {
+	vector3_t ts_ray_current_p = ts_ray_step + ts_ray_p_start;
+
+        // If the ray is within the terrain limits
+	if (ts_ray_current_p.x >= 0.0f && ts_ray_current_p.x < (float32_t)t->xz_dim.x + 0.000001f
+	    && ts_ray_current_p.z >= 0.0f && ts_ray_current_p.z < (float32_t)t->xz_dim.y + 0.000001f)
+	{
+            //	    uint32_t x = (uint32_t)glm::round(ts_ray_current_p.x / 2.0f) * 2;
+            //	    uint32_t z = (uint32_t)glm::round(ts_ray_current_p.z / 2.0f) * 2;
+
+            //	    uint32_t index = get_terrain_index(x, z, t->xz_dim.y);
+
+	    float32_t *heights_ptr = (float32_t *)t->heights;
+	    if (ts_ray_current_p.y < heights_ptr[index])
+	    {
+		// ---- hit terrain at this point ----
+		ts_position = ivector2_t(x, z);
+		break;
+	    }
+	}
+    }
+
+    return(ts_position);
+}
+
 internal ivector2_t
 get_coord_pointing_at(vector3_t ws_ray_p,
                       const vector3_t &ws_ray_d,

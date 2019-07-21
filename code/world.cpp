@@ -69,6 +69,15 @@ struct terrain_create_staging
     vector3_t color;
 };
 
+struct terrain_triangle_t
+{
+    bool triangle_exists;
+    float32_t ts_height;
+    vector3_t ws_exact_pointed_at;
+    vector3_t ws_triangle_position[3];
+    uint32_t idx[3];
+};
+
 global_var struct morphable_terrains_t
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
@@ -91,12 +100,18 @@ global_var struct morphable_terrains_t
     struct
     {
         pipeline_handle_t ppln;
-        // ts_position
-        ivector2_t ts_position{-1};
+        terrain_triangle_t triangle;
         // will not be a pointer in the future
         morphable_terrain_t *t;
     } terrain_pointer;
 } g_terrains;
+
+internal vector3_t
+get_ws_terrain_vertex_position(uint32_t idx,
+                               morphable_terrain_t *terrain)
+{
+    return(vector3_t());
+}
 
 internal morphable_terrain_t *
 add_terrain(void)
@@ -189,16 +204,9 @@ distance_squared(const T &v)
     return(glm::dot(v, v));
 }
 
-struct terrain_triangle_t
-{
-    float32_t height;
-    glm::vec3 ws_triangle_position[3];
-    uint32_t idx[3];
-};
-
 internal terrain_triangle_t
 get_triangle_from_pos(const vector3_t ts_p,
-                      morphable_terrain *t)
+                      morphable_terrain_t *t)
 {
     vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
 
@@ -238,10 +246,14 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    vector3_t c = vector3_t(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
 
             terrain_triangle_t triangle = {};
-            triangle.height = barry_centric(a, b, c, ts_position_on_tile);
+            triangle.ts_height = barry_centric(a, b, c, ts_position_on_tile);
             triangle.idx[0] = triangle_indices[0];
             triangle.idx[1] = triangle_indices[1];
             triangle.idx[2] = triangle_indices[2];
+            // For now still in terrain space, get converted later
+            triangle.ws_triangle_position[0] = vector3_t(offset_a.x + tl_x, a.y, offset_a.y + tl_z);
+            triangle.ws_triangle_position[1] = vector3_t(offset_b.x + tl_x, b.y, offset_b.y + tl_z);
+            triangle.ws_triangle_position[2] = vector3_t(offset_c.x + tl_x, c.y, offset_c.y + tl_z);
 	    return(triangle);
 	};
     
@@ -257,15 +269,13 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
 						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
-                                                   normal);
+						   vector2_t(1.0f, 1.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
 						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-                                                   normal);
+						   vector2_t(1.0f, 0.0f));
 	    }
 	}
 	else
@@ -274,15 +284,13 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
 						   vector2_t(1.0f, 1.0f),
-                                                   vector2_t(1.0f, 0.0f),
-                                                   normal);
+                                                   vector2_t(1.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
 						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f),
-                                                   normal);
+						   vector2_t(0.0f, 0.0f));
 	    }
 	}
     }
@@ -294,15 +302,13 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
 						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-                                                   normal);
+						   vector2_t(1.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
 						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f),
-                                                   normal);
+						   vector2_t(0.0f, 0.0f));
 	    }
 	}
 	else
@@ -311,39 +317,45 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
 						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
-                                                   normal);
+						   vector2_t(1.0f, 1.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
 						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-                                                   normal);
+						   vector2_t(1.0f, 0.0f));
 	    }
 	}
     }
     
     // result of the terrain collision in terrain space
-    vector3_t ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
+    vector3_t ts_at (ts_p_xz.x, ret.ts_height, ts_p_xz.y);
 
-    vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
-    normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
+    matrix4_t ts_to_ws = compute_ts_to_ws_matrix(t);
     
-    if (ts_p.y < 0.1f + ts_height)
+    vector3_t ws_at = vector3_t(ts_to_ws * vector4_t(ts_at, 1.0f));
+    normal = glm::normalize(vector3_t(ts_to_ws * vector4_t(normal, 0.0f)));
+    
+    if (ts_p.y < 0.1f + ret.ts_height)
     {
-	return {true, ws_at, normal};
+        ret.triangle_exists = true;
+        ret.ws_exact_pointed_at = ws_at;
+        // Convert to world space
+        ret.ws_triangle_position[0] = vector3_t(ts_to_ws * vector4_t(ret.ws_triangle_position[0], 1.0f));
+        ret.ws_triangle_position[1] = vector3_t(ts_to_ws * vector4_t(ret.ws_triangle_position[1], 1.0f));
+        ret.ws_triangle_position[2] = vector3_t(ts_to_ws * vector4_t(ret.ws_triangle_position[2], 1.0f));
+        return(ret);
     }
 
     return {false};
 }
 
 internal terrain_triangle_t
-get_terrain_triangle_pointed_at(const vector3_t &ws_ray_p,
-                                const vector3_t &ws_ray_d,
-                                morphable_terrain_t *t,
-                                float32_t dt,
-                                gpu_t *gpu)
+get_triangle_pointing_at(vector3_t ws_ray_p,
+                         const vector3_t &ws_ray_d,
+                         morphable_terrain_t *t,
+                         float32_t dt,
+                         gpu_t *gpu)
 {
     persist constexpr float32_t MAX_DISTANCE = 6.0f;
     persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -362,26 +374,19 @@ get_terrain_triangle_pointed_at(const vector3_t &ws_ray_p,
     {
 	vector3_t ts_ray_current_p = ts_ray_step + ts_ray_p_start;
 
-        // If the ray is within the terrain limits
+        // If the ray is even on the terrain
 	if (ts_ray_current_p.x >= 0.0f && ts_ray_current_p.x < (float32_t)t->xz_dim.x + 0.000001f
 	    && ts_ray_current_p.z >= 0.0f && ts_ray_current_p.z < (float32_t)t->xz_dim.y + 0.000001f)
 	{
-            //	    uint32_t x = (uint32_t)glm::round(ts_ray_current_p.x / 2.0f) * 2;
-            //	    uint32_t z = (uint32_t)glm::round(ts_ray_current_p.z / 2.0f) * 2;
-
-            //	    uint32_t index = get_terrain_index(x, z, t->xz_dim.y);
-
-	    float32_t *heights_ptr = (float32_t *)t->heights;
-	    if (ts_ray_current_p.y < heights_ptr[index])
-	    {
-		// ---- hit terrain at this point ----
-		ts_position = ivector2_t(x, z);
-		break;
-	    }
+            terrain_triangle_t triangle = get_triangle_from_pos(ts_ray_current_p, t);
+            if (triangle.triangle_exists)
+            {
+                return(triangle);
+            }
 	}
     }
 
-    return(ts_position);
+    return(terrain_triangle_t{false});
 }
 
 internal ivector2_t
@@ -801,11 +806,11 @@ make_3D_terrain_base(uint32_t width_x
 	    uint32_t index = (x + depth_z * z) * 2;
 	    vtx[index] = (float32_t)x;
 	    vtx[index + 1] = (float32_t)z;
-            /*            if (x != 0 && z != 0 && x != width_x - 1 && z != depth_z - 1)
+            /*if (x != 0 && z != 0 && x != width_x - 1 && z != depth_z - 1)
             {
                 vtx[index] += terrain_noise();
                 vtx[index + 1] += terrain_noise();
-                }*/
+            }*/
 	}	
     }
 
@@ -984,10 +989,10 @@ make_terrain_pointer(gpu_t *gpu, swapchain_t *swapchain)
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain_pointer.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain_pointer.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_pk_data_t push_k = {200, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+        make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
     }
@@ -1054,8 +1059,8 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 				   , VkDescriptorSet *ubo_set)
 {
     // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
-    if (g_terrains.terrain_pointer.ts_position.x >= 0)
-    {
+    //    if (g_terrains.terrain_pointer.ts_position.x >= 0)
+    /*    {
 	auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
 	command_buffer_bind_pipeline(ppln
 					     , &queue->q);
@@ -1121,7 +1126,55 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
                             , 0
                             , 0);
     }
-    // else don't render the pointer at all
+    // else don't render the pointer at all*/
+}
+
+// Is just a triangle
+internal void
+render_terrain_pointer(gpu_command_queue_t *queue,
+                       uniform_group_t *ubo_transforms_group)
+{
+    if (g_terrains.terrain_pointer.triangle.triangle_exists)
+    {
+        vkCmdSetLineWidth(queue->q, 4.0f);
+        
+        auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
+        command_buffer_bind_pipeline(ppln, &queue->q);
+
+	command_buffer_bind_descriptor_sets(ppln,
+                                            {1, ubo_transforms_group},
+                                            &queue->q);
+
+	struct
+	{
+	    matrix4_t ts_to_ws_terrain_model;
+	    vector4_t color;
+	    vector4_t ts_center_position;
+	    // center first
+	    float32_t ts_heights[8];
+            vector4_t new_pointer_system[3];
+	} push_k;
+
+	push_k.ts_to_ws_terrain_model = g_terrains.terrain_pointer.t->push_k.transform;
+	push_k.color = vector4_t(1.0f);
+        // The positions are already in world space (no need to push a world space matrix)
+        push_k.new_pointer_system[0] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[0], 1.0f);
+        push_k.new_pointer_system[1] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[1], 1.0f);
+        push_k.new_pointer_system[2] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[2], 1.0f);
+    
+	command_buffer_push_constant(&push_k,
+                                     sizeof(push_k),
+                                     0,
+                                     VK_SHADER_STAGE_VERTEX_BIT,
+                                     ppln,
+                                     &queue->q);
+
+	command_buffer_draw(&queue->q,
+                            3,
+                            1,
+                            0,
+                            0);
+    }
 }
 
 // TODO: Possibly remove the component system and just stick all the entity data into one big block of memory
@@ -1593,7 +1646,8 @@ update_input_components(window_data_t *window
                                                         , e->on_t
                                                         , dt
                                                         , gpu);
-            g_terrains.terrain_pointer.ts_position = ts_coord;
+            g_terrains.terrain_pointer.triangle = get_triangle_pointing_at(e->ws_p, e->ws_d, e->on_t, dt, gpu);
+            //            g_terrains.terrain_pointer.ts_position = ts_coord;
             g_terrains.terrain_pointer.t = e->on_t;
     
             // ---- modify the terrain ----
@@ -2041,7 +2095,8 @@ render_world(vulkan_state_t *vk
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
+        //        prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
+        render_terrain_pointer(queue, &transforms_ubo_uniform_groups[image_index]);
 
         render_3d_frustum_debug_information(queue, image_index);
         dbg_render_hitboxes(&uniform_groups[0], queue);

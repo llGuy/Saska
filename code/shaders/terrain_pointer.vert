@@ -18,6 +18,8 @@ layout(push_constant) uniform Push_Constants
     vec4 ts_center_position;
     // center first
     float ts_heights[8];
+
+    vec4 new_terrain_pointer[3];
 } push_k;
 
 layout(location = 0) out VS_OUT
@@ -34,9 +36,17 @@ const vec2 VTX[] = vec2[]( vec2(0, 0)
 			   , vec2(0, 0)
 			   , vec2(-1, +1) );
 
+#define NEW_POINTER
+
 void
 main(void)
 {
+#if defined(NEW_POINTER)
+
+    gl_Position = ubo.proj * ubo.view * push_k.new_terrain_pointer[gl_VertexIndex];
+    vs_out.color = push_k.color;
+    
+#else
     int vertex_index = gl_VertexIndex;
 
     // ---- calculate position of the lines ----
@@ -54,4 +64,5 @@ main(void)
     gl_Position = ubo.proj * ubo.view * push_k.ts_to_ws_terrain_model * vec4(ts_line_point_position, 1.0);
     
     vs_out.color = push_k.color;
+#endif
 }

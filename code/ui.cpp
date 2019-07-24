@@ -760,7 +760,7 @@ initialize_console(void)
                                      0x16161636,
                                      get_backbuffer_resolution());
 
-    font_t *font_ptr = load_font("console_font"_hash, "font/fixedsys.fnt", "");
+    font_t *font_ptr = load_font("console_font"_hash, "font/liberation_mono.fnt", "");
     make_text(&g_console.back_box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::BOTTOM,
@@ -1057,7 +1057,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
     image_handle_t tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager.get(tx_hdl);
     {
-        external_image_data_t image_data = read_image("font/fixedsys.png");
+        external_image_data_t image_data = read_image("font/liberation_mono.png");
         make_texture(tx_ptr,
                      image_data.width,
                      image_data.height,

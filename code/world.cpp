@@ -75,7 +75,10 @@ struct terrain_triangle_t
     float32_t ts_height;
     vector3_t ws_exact_pointed_at;
     vector3_t ws_triangle_position[3];
-    uint32_t idx[3];
+    // Used for morphing function
+    ivector2_t offsets[4];
+    // Indices
+    uint32_t idx[4];
 };
 
 global_var struct morphable_terrains_t
@@ -129,9 +132,9 @@ clean_up_terrain(gpu_t *gpu)
 }
 
 inline uint32_t
-get_terrain_index(uint32_t x, uint32_t z, uint32_t depth_z)
+get_terrain_index(uint32_t x, uint32_t z, uint32_t width_x)
 {
-    return(x + z * depth_z);
+    return(x + z * width_x);
 }
 
 inline int32_t
@@ -146,6 +149,15 @@ get_terrain_index(int32_t x, int32_t z, int32_t width_x, int32_t depth_z)
     {
         return(-1);
     }
+}
+
+inline ivector2_t
+get_ts_xz_coord_from_idx(uint32_t idx, morphable_terrain_t *t)
+{
+    ivector2_t ret = {};
+    ret.x = idx % t->xz_dim.x;
+    ret.y = (idx - ret.x) / t->xz_dim.x;
+    return(ret);
 }
 
 inline matrix4_t
@@ -228,16 +240,18 @@ get_triangle_from_pos(const vector3_t ts_p,
     // wrong math probably
     auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a,
 										     const vector2_t &offset_b,
-										     const vector2_t &offset_c) -> terrain_triangle_t
+										     const vector2_t &offset_c,
+                                                                                     // For morphing function
+                                                                                     const vector2_t &offset_d) -> terrain_triangle_t
 	{
 	    float32_t tl_x = ts_tile_corner_position.x;
 	    float32_t tl_z = ts_tile_corner_position.y;
 	
 	    uint32_t triangle_indices[3] =
 	    {
-		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.y)
-		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.y)
-		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.y)
+		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.x)
 	    };
 
 	    float32_t *terrain_heights = (float32_t *)t->heights;
@@ -250,10 +264,18 @@ get_triangle_from_pos(const vector3_t ts_p,
             triangle.idx[0] = triangle_indices[0];
             triangle.idx[1] = triangle_indices[1];
             triangle.idx[2] = triangle_indices[2];
+            // For morphing function
+            triangle.idx[3] = get_terrain_index(offset_d.x + tl_x, offset_d.y + tl_z, t->xz_dim.x);
+            
             // For now still in terrain space, get converted later
             triangle.ws_triangle_position[0] = vector3_t(offset_a.x + tl_x, a.y, offset_a.y + tl_z);
             triangle.ws_triangle_position[1] = vector3_t(offset_b.x + tl_x, b.y, offset_b.y + tl_z);
             triangle.ws_triangle_position[2] = vector3_t(offset_c.x + tl_x, c.y, offset_c.y + tl_z);
+            // For morphing function
+            triangle.offsets[0] = ivector2_t(offset_a.x, offset_a.y);
+            triangle.offsets[1] = ivector2_t(offset_b.x, offset_b.y);
+            triangle.offsets[2] = ivector2_t(offset_c.x, offset_c.y);
+            triangle.offsets[3] = ivector2_t(offset_d.x, offset_d.y);
 	    return(triangle);
 	};
     
@@ -268,14 +290,16 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f));
+                                             vector2_t(0.0f, 1.0f),
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f));
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 1.0f));
 	    }
 	}
 	else
@@ -283,14 +307,16 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
-                                                   vector2_t(1.0f, 0.0f));
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f));
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 0.0f),
+                                             vector2_t(1.0f, 1.0f));
 	    }
 	}
     }
@@ -301,14 +327,16 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f));
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f));
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 0.0f),
+                                             vector2_t(1.0f, 1.0f));
 	    }
 	}
 	else
@@ -316,14 +344,16 @@ get_triangle_from_pos(const vector3_t ts_p,
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f));
+                                             vector2_t(0.0f, 1.0f),
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f));
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 1.0f));
 	    }
 	}
     }
@@ -419,7 +449,7 @@ get_coord_pointing_at(vector3_t ws_ray_p,
 	    uint32_t x = (uint32_t)glm::round(ts_ray_current_p.x / 2.0f) * 2;
 	    uint32_t z = (uint32_t)glm::round(ts_ray_current_p.z / 2.0f) * 2;
 
-	    uint32_t index = get_terrain_index(x, z, t->xz_dim.y);
+	    uint32_t index = get_terrain_index(x, z, t->xz_dim.x);
 
 	    float32_t *heights_ptr = (float32_t *)t->heights;
 	    if (ts_ray_current_p.y < heights_ptr[index])
@@ -492,9 +522,9 @@ detect_terrain_collision(hitbox_t *hitbox,
 	
 	    uint32_t triangle_indices[3] =
 	    {
-		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.y)
-		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.y)
-		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.y)
+		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.x)
 	    };
 
 	    float32_t *terrain_heights = (float32_t *)t->heights;
@@ -611,6 +641,42 @@ get_sliding_down_direction(const vector3_t &ws_view_direction,
 }
 
 internal void
+morpha_terrain_at_triangle(terrain_triangle_t *triangle,
+                           morphable_terrain_t *t,
+                           float32_t morph_zone_radius,
+                           float32_t dt,
+                           gpu_t *gpu)
+{
+    uint32_t morph_quotients_radius_count = (morph_zone_radius) * (morph_zone_radius);
+
+    // TODO: Terraform the new way.
+    struct morph_point_t
+    {
+        // In terrain space
+        ivector2_t xz;
+        // Probably like sin() or smoothstep or something to do with the distance from center
+        float32_t quotient;
+    } *morph_quotients = (morph_point_t *)allocate_linear(sizeof(morph_point_t) * morph_quotients_radius_count);
+
+    morph_quotients_radius_count = 0;
+    
+    // Quarter of the mound
+    // Dictated by the triangle positions
+    struct mound_quarter_start_t
+    {
+        // Positive or negative ones only
+        ivector2_t direction;
+        // Terrain space
+        ivector2_t coord;
+    }  quarter_starts[4] = { mound_quarter_start_t{ triangle->offsets[0], get_ts_xz_coord_from_idx(triangle->idx[0], t) },
+                             mound_quarter_start_t{ triangle->offsets[1], get_ts_xz_coord_from_idx(triangle->idx[1], t) },
+                             mound_quarter_start_t{ triangle->offsets[2], get_ts_xz_coord_from_idx(triangle->idx[2], t) },
+                             mound_quarter_start_t{ triangle->offsets[3], get_ts_xz_coord_from_idx(triangle->idx[3], t) }};
+          
+    t->is_modified = true;
+}
+
+internal void
 morph_terrain_at(const ivector2_t &ts_position
 		 , morphable_terrain_t *t
 		 , float32_t morph_zone_radius
@@ -645,7 +711,7 @@ morph_terrain_at(const ivector2_t &ts_position
 	    int32_t ts_p_x = x + ts_position.x;
 	    int32_t ts_p_z = z + ts_position.y;
 	    
-	    int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	    int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.x);
 	    
 	    float32_t *p = (float32_t *)t->heights;
 	    float32_t a = cos(squared_d / (morph_zone_radius * morph_zone_radius));
@@ -681,7 +747,7 @@ morph_terrain_at(const ivector2_t &ts_position
 	    
 	float32_t *p = (float32_t *)t->heights;
 	
-	int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.x);
 	if (index >= 0)
 	{
 	    p[index] += morph_quotients_inner_cache[inner].quotient * dt;
@@ -701,7 +767,7 @@ morph_terrain_at(const ivector2_t &ts_position
 	    int32_t ts_p_x = x + ts_position.x;
 	    int32_t ts_p_z = z + ts_position.y;
 	    
-	    int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.y);
+	    int32_t index = get_terrain_index(ts_p_x, ts_p_z, t->xz_dim.x, t->xz_dim.x);
 	    float32_t *p = (float32_t *)t->heights;
 
 	    if (index >= 0)
@@ -820,16 +886,16 @@ make_3D_terrain_base(uint32_t width_x
     {
         for (uint32_t x = 1; x < width_x - 1; x += 2)
 	{
-	    idx[crnt_idx++] = get_terrain_index(x, z, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x - 1, z - 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x - 1, z, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x - 1, z + 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x, z + 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x + 1, z + 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x + 1, z, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x + 1, z - 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x, z - 1, depth_z);
-	    idx[crnt_idx++] = get_terrain_index(x - 1, z - 1, depth_z);
+	    idx[crnt_idx++] = get_terrain_index(x, z, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x - 1, z - 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x - 1, z, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x - 1, z + 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x, z + 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x + 1, z + 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x + 1, z, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x + 1, z - 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x, z - 1, width_x);
+	    idx[crnt_idx++] = get_terrain_index(x - 1, z - 1, width_x);
 	    // ---- vulkan_t API special value for UINT32_T index type ----
 	    idx[crnt_idx++] = 0XFFFFFFFF;
 	}

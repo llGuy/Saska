@@ -1,4 +1,3 @@
-
 #include "core.hpp"
 #include "vulkan.hpp"
 

@@ -1,6 +1,6 @@
 /* ------------------------------------------------------------   
 
-     TODO
+     TODO:
      * Get basic UI working (rendering quads, making sure resizing of window doens't completely distort it, etc...)
         - Create the render pass for rendering UI /
         - Create VBO for rendering UI boxes /
@@ -34,6 +34,7 @@
         - Change terrain morphing point to triangle
         - Add physics
      * Add skeletal animation (loading models + animations, etc...)
+     * Refactor code: separate the stuff a bit better
 
   ------------------------------------------------------------ */
 

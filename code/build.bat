@@ -9,9 +9,9 @@ set CFLAGS=-Zi /EHsc /std:c++latest /DEBUG:FULL
 set DEF=/DGLM_ENABLE_EXPERIMENTAL /DUNITY_BUILD /DSTB_IMAGE_IMPLEMENTATION
 
 set GLFW_INC_DIR=/I C:/dependencies/glfw-3.2.1.bin.WIN64/include
-set GLM_INC_DIR=/I C:/dependencies
+set GLM_INC_DIR=/I C:/dependencies/
 set VULKAN_INC_DIR=/I C:/VulkanSDK/1.1.108.0/Include
-set STB_INC_DIR=/I C:/dependencies/stb-master
+set STB_INC_DIR=/I C:/dependencies/stb-master/
 set LUA_INC_DIR=/I C:/dependencies/Lua/include/
 set VML_INC_DIR=/I C:/dependencies/vml/vml/
 

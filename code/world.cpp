@@ -43,7 +43,7 @@ struct morphable_terrain_t
     
     VkBuffer vbos[2];
 
-    matrix4_t inverse_transform;    
+    matrix4_t inverse_transform;
     struct push_k_t
     {
         matrix4_t transform;
@@ -540,7 +540,8 @@ detect_terrain_collision(hitbox_t *hitbox,
     float32_t ts_height;
 
     vector3_t normal;
-    
+
+    // BUG: Investigate possible error to do with calculating position on a certain type of tile
     if (ts_tile_corner_position.x % 2 == 0)
     {
 	if (ts_tile_corner_position.y % 2 == 0)
@@ -868,7 +869,7 @@ make_3D_terrain_base(uint32_t width_x
     {
 	for (uint32_t x = 0; x < width_x; ++x)
 	{
-	    // TODO : apply displacement factor to make terrain less perfect
+	    // TODO: apply displacement factor to make terrain less perfect
 	    uint32_t index = (x + depth_z * z) * 2;
 	    vtx[index] = (float32_t)x;
 	    vtx[index + 1] = (float32_t)z;
@@ -966,7 +967,7 @@ make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, gpu
 }
 
 
-// TODO : make this take roughness and metalness to push to pushconstant or whatever 
+// TODO: make this take roughness and metalness to push to pushconstant or whatever 
 internal void
 make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue
                             , const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color)
@@ -1247,10 +1248,25 @@ render_terrain_pointer(gpu_command_queue_t *queue,
 
 using entity_handle_t = int32_t;
 
+// Gravity acceleration on earth = 9.81 m/s^2
 struct physics_component_t
 {
-    float32_t weight = 1.0f; // KG
+    // Sum of mass of all particles
+    float32_t mass = 1.0f; // KG
+    // Sum ( all points of mass (vector quantity) * all masses of each point of mass ) / total body mass
+    vector3_t center_of_gravity;
+    // Depending on the shape of the body (see formula for rectangle if using hitbox, and for sphere if using bounding sphere)
+    vector3_t moment_of_inertia;
+
+    vector3_t acceleration;
+    vector3_t velocity;
+    vector3_t displacement;
     
+    // F = ma
+    vector3_t total_force_on_body;
+    // G = mv
+    vector3_t momentum;
+
     uint32_t entity_index;
     
     vector3_t gravity_accumulation = {};
@@ -1304,6 +1320,12 @@ struct rendering_component_t
     bool enabled = true;
 };
 
+struct entity_body_t
+{
+    float32_t weight = 1.0f;
+    hitbox_t hitbox;
+};
+
 struct entity_t
 {
     entity_t(void) = default;
@@ -1319,16 +1341,19 @@ struct entity_t
     // For now is a pointer - is not a component because all entities will have one
     // This is the last terrain that the player was on / is still on
     // Is used for collision detection and also the camera view matrix (up vector...)
-    morphable_terrain_t *on_t = nullptr;
+    struct morphable_terrain_t *on_t = nullptr;
     bool is_on_terrain = false;
+    vector3_t surface_normal;
+    vector3_t surface_position;
 
     static constexpr float32_t SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
-    
     bool switch_terrain_animation_mode = false;
     quaternion_t previous_terrain_rot;
     quaternion_t current_rot;
     float32_t animation_time = 0.0f;
 
+    //    struct entity_body_t body;
+    
     struct components_t
     {
 
@@ -1340,16 +1365,6 @@ struct entity_t
     } components;
     
     entity_handle_t index;
-
-    // Not needed for now because there aren't any entity groups needed yet
-    union
-    {
-	struct
-	{
-	    uint32_t below_count;
-	    memory_buffer_view_t<entity_handle_t> below;
-	};
-    };
 };
 
 struct dbg_entities_t
@@ -1369,18 +1384,18 @@ global_var struct entities_t
 
     // All possible components: 
     int32_t physics_component_count = {};
-    physics_component_t physics_components[MAX_ENTITIES] = {};
+    struct physics_component_t physics_components[MAX_ENTITIES] = {};
 
     int32_t camera_component_count = {};
-    camera_component_t camera_components[MAX_ENTITIES] = {};
+    struct camera_component_t camera_components[MAX_ENTITIES] = {};
 
     int32_t input_component_count = {};
-    input_component_t input_components[MAX_ENTITIES] = {};
+    struct input_component_t input_components[MAX_ENTITIES] = {};
 
     int32_t rendering_component_count = {};
-    rendering_component_t rendering_components[MAX_ENTITIES] = {};
+    struct rendering_component_t rendering_components[MAX_ENTITIES] = {};
 
-    hash_table_inline_t<entity_handle_t, 30, 5, 5> name_map{"map.entities"};
+    struct hash_table_inline_t<entity_handle_t, 30, 5, 5> name_map{"map.entities"};
 
     pipeline_handle_t entity_ppln;
     pipeline_handle_t entity_shadow_ppln;
@@ -1430,7 +1445,7 @@ attach_camera_to_entity(entity_t *e
     
 }
 
-internal camera_component_t *
+internal struct camera_component_t *
 add_camera_component(entity_t *e
                      , uint32_t camera_index)
 {
@@ -1447,8 +1462,8 @@ update_camera_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.camera_component_count; ++i)
     {
-        camera_component_t *component = &g_entities.camera_components[ i ];
-        camera_t *camera = get_camera(component->camera);
+        struct camera_component_t *component = &g_entities.camera_components[ i ];
+        struct camera_t *camera = get_camera(component->camera);
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
         vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
@@ -1474,7 +1489,7 @@ update_camera_components(float32_t dt)
     }
 }
 
-internal rendering_component_t *
+internal struct rendering_component_t *
 add_rendering_component(entity_t *e)
 {
     e->components.rendering_component = g_entities.rendering_component_count++;
@@ -1490,7 +1505,7 @@ update_rendering_component(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.rendering_component_count; ++i)
     {
-        rendering_component_t *component = &g_entities.rendering_components[ i ];
+        struct rendering_component_t *component = &g_entities.rendering_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
         if (component->enabled)
@@ -1511,12 +1526,12 @@ update_rendering_component(float32_t dt)
     }
 }
 
-internal physics_component_t *
+internal struct physics_component_t *
 add_physics_component(entity_t *e
                       , bool enabled)
 {
     e->components.physics_component = g_entities.physics_component_count++;
-    physics_component_t *component = &g_entities.physics_components[ e->components.physics_component ];
+    struct physics_component_t *component = &g_entities.physics_components[ e->components.physics_component ];
     component->entity_index = e->index;
     component->enabled = enabled;
 
@@ -1528,7 +1543,7 @@ update_physics_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
     {
-        physics_component_t *component = &g_entities.physics_components[ i ];
+        struct physics_component_t *component = &g_entities.physics_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
         auto *which_terrain = on_which_terrain(e->ws_p);
@@ -1558,10 +1573,10 @@ update_physics_components(float32_t dt)
             e->is_on_terrain = false;
         }
         
+        morphable_terrain_t *t = e->on_t;
         if (component->enabled)
         {
-            morphable_terrain_t *t = e->on_t;
-
+            /*
             // See if there was collision
             detected_collision_return_t collision = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
             component->surface_normal = collision.ws_normal;
@@ -1602,7 +1617,12 @@ update_physics_components(float32_t dt)
                     {
                         persist constexpr float32_t TEST_ROUGHNESS = 0.5f;
                         //                        component->friction_accumulation += -forward * TEST_ROUGHNESS * glm::dot(-component->surface_normal, -e->on_t->ws_n);
-                        component->slide_accumulation += forward * glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
+                        float32_t dot = glm::dot(-component->surface_normal, -e->on_t->ws_n);
+                        float32_t cross = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
+                        
+                        vector3_t friction_d = -forward * TEST_ROUGHNESS * cross;
+                        vector3_t slide_d = forward * TEST_ROUGHNESS * dot;
+                        component->slide_accumulation += friction_d + slide_d;
                         input->movement_flags = 0;
                     }
                     else
@@ -1621,7 +1641,7 @@ update_physics_components(float32_t dt)
 
                 vector3_t height_offset = vector3_t(glm::mat4_cast(e->on_t->gs_r) * vector4_t(-vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size, 0.0f));
 
-                e->ws_p = collision.ws_at + height_offset; /*- vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size + ws_input_v * dt*/
+                e->ws_p = collision.ws_at + height_offset; //- vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size + ws_input_v * dt
                 e->ws_v += ws_input_v;
             }
             else
@@ -1629,10 +1649,10 @@ update_physics_components(float32_t dt)
                 component->gravity_accumulation += t->k_g * e->on_t->ws_n;
             }
 
-            e->ws_v += component->gravity_accumulation + component->friction_accumulation + component->slide_accumulation;
+            e->ws_v += component->gravity_accumulation + component->slide_accumulation;
 
             e->ws_p += e->ws_v * dt;
-            e->ws_v = vector3_t(0.0f);
+            e->ws_v = vector3_t(0.0f);*/
         }
         else
         {
@@ -1921,6 +1941,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     e_ptr->on_t = on_which_terrain(e.ws_p);
 
     physics_component_t *physics = add_physics_component(e_ptr, true);
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -2.001f;

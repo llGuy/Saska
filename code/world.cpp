@@ -306,17 +306,17 @@ get_triangle_from_pos(const vector3_t ts_p,
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-                                             vector2_t(1.0f, 1.0f),
-                                             vector2_t(1.0f, 0.0f),
-                                             vector2_t(0.0f, 0.0f));
-	    }
-	    else
-	    {
-		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
                                              vector2_t(1.0f, 0.0f),
                                              vector2_t(0.0f, 0.0f),
                                              vector2_t(1.0f, 1.0f));
+	    }
+	    else
+	    {
+                ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                             vector2_t(1.0f, 1.0f),
+                                             vector2_t(1.0f, 0.0f),
+                                             vector2_t(0.0f, 0.0f));
 	    }
 	}
     }
@@ -326,31 +326,31 @@ get_triangle_from_pos(const vector3_t ts_p,
 	{
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
-                                             vector2_t(1.0f, 1.0f),
+                ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
                                              vector2_t(1.0f, 0.0f),
-                                             vector2_t(0.0f, 0.0f));
+                                             vector2_t(0.0f, 0.0f),
+                                             vector2_t(1.0f, 1.0f));
 	    }
 	    else
 	    {
 		ret = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                             vector2_t(1.0f, 1.0f),
                                              vector2_t(1.0f, 0.0f),
-                                             vector2_t(0.0f, 0.0f),
-                                             vector2_t(1.0f, 1.0f));
+                                             vector2_t(0.0f, 0.0f));
 	    }
 	}
 	else
 	{
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
-		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
                                              vector2_t(0.0f, 1.0f),
                                              vector2_t(1.0f, 1.0f),
                                              vector2_t(1.0f, 0.0f));
 	    }
 	    else
 	    {
-		ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                ret = get_height_with_offset(vector2_t(0.0f, 0.0f),
                                              vector2_t(1.0f, 1.0f),
                                              vector2_t(1.0f, 0.0f),
                                              vector2_t(0.0f, 1.0f));
@@ -541,7 +541,6 @@ detect_terrain_collision(hitbox_t *hitbox,
 
     vector3_t normal;
 
-    // BUG: Investigate possible error to do with calculating position on a certain type of tile
     if (ts_tile_corner_position.x % 2 == 0)
     {
 	if (ts_tile_corner_position.y % 2 == 0)
@@ -549,15 +548,15 @@ detect_terrain_collision(hitbox_t *hitbox,
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
                                                    normal);
 	    }
 	    else
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
                                                    normal);
 	    }
 	}
@@ -566,15 +565,15 @@ detect_terrain_collision(hitbox_t *hitbox,
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
                                                    vector2_t(1.0f, 0.0f),
+                                                   vector2_t(0.0f, 0.0f),
                                                    normal);
 	    }
 	    else
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
                                                    normal);
 	    }
 	}
@@ -586,15 +585,15 @@ detect_terrain_collision(hitbox_t *hitbox,
 	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(0.0f, 0.0f),
                                                    normal);
 	    }
 	    else
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
-						   vector2_t(0.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
                                                    normal);
 	    }
 	}
@@ -603,15 +602,15 @@ detect_terrain_collision(hitbox_t *hitbox,
 	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(0.0f, 1.0f),
-						   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
                                                    normal);
 	    }
 	    else
 	    {
 		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
-						   vector2_t(1.0f, 1.0f),
-						   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
                                                    normal);
 	    }
 	}
@@ -1778,22 +1777,22 @@ update_input_components(window_data_t *window
             if (window->key_map[GLFW_KEY_S]) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
             if (window->key_map[GLFW_KEY_D]) {acc_v(glm::cross(d, up), res); component->movement_flags |= (1 << input_component_t::movement_flags_t::RIGHT);}
     
-            /*            if (window->key_map[GLFW_KEY_SPACE])
+            if (window->key_map[GLFW_KEY_SPACE])
             {
-                if (e_physics->enabled)
-                {
-                    if (detected_collision)
-                    {
+                //                if (e_physics->enabled)
+                //                {
+                //if (detected_collision)
+                //                    {
                         // give some velotity towards the up vector
-                        e->ws_v += up * 100.0f;
-                        e->ws_p += e->ws_v * dt;
-                    }
-                }
-                else
-                {
-                    acc_v(up, res);
-                }
-                }*/
+                //                        e->ws_v += up * 100.0f;
+                //                        e->ws_p += e->ws_v * dt;
+                //                    }
+                    //                }
+                    //                else
+                    //                {
+                     acc_v(up, res);
+                     //                }
+            }
     
             if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
             if (window->key_map[GLFW_KEY_LEFT_SHIFT]) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
@@ -2222,6 +2221,9 @@ lua_set_veclocity_in_view_direction(lua_State *state);
 internal int32_t
 lua_get_player_ts_view_direction(lua_State *state);
 
+internal int32_t
+lua_print_player_terrain_position_info(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
@@ -2235,6 +2237,7 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_entity_model_display", &lua_toggle_entity_model_display);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_velocity", &lua_toggle_entity_model_display);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_ts_view_dir", &lua_get_player_ts_view_direction);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "print_player_terrain_position_info", &lua_print_player_terrain_position_info);
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -2428,4 +2431,137 @@ lua_get_player_ts_view_direction(lua_State *state)
     lua_pushnumber(state, dir.y);
     lua_pushnumber(state, dir.z);
     return(3);
+}
+
+internal int32_t
+lua_print_player_terrain_position_info(lua_State *state)
+{
+    struct entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+
+    vector3_t ts_p = vector3_t(main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_p, 1.0f));
+    struct morphable_terrain_t *t = main_entity->on_t;
+    
+    vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+
+    // is outside the terrain
+    if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
+        ||  ts_p_xz.y < 0.0f || ts_p_xz.y > t->xz_dim.y)
+    {
+	return {false};
+    }
+
+    // position of the player on one tile (square - two triangles)
+    vector2_t ts_position_on_tile = vector2_t(ts_p_xz.x - glm::floor(ts_p_xz.x)
+                                              , ts_p_xz.y - glm::floor(ts_p_xz.y));
+
+    // starting from (0, 0)
+    ivector2_t ts_tile_corner_position = ivector2_t(glm::floor(ts_p_xz));
+
+
+    // wrong math probably
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a,
+										     const vector2_t &offset_b,
+										     const vector2_t &offset_c,
+                                                                                     // For morphing function
+                                                                                     const vector2_t &offset_d) -> terrain_triangle_t
+	{
+	    float32_t tl_x = ts_tile_corner_position.x;
+	    float32_t tl_z = ts_tile_corner_position.y;
+	
+	    uint32_t triangle_indices[3] =
+	    {
+		get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.x)
+		, get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.x)
+	    };
+
+	    float32_t *terrain_heights = (float32_t *)t->heights;
+	    vector3_t a = vector3_t(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
+	    vector3_t b = vector3_t(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
+	    vector3_t c = vector3_t(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
+
+            terrain_triangle_t triangle = {};
+            triangle.ts_height = barry_centric(a, b, c, ts_position_on_tile);
+            triangle.idx[0] = triangle_indices[0];
+            triangle.idx[1] = triangle_indices[1];
+            triangle.idx[2] = triangle_indices[2];
+            // For morphing function
+            triangle.idx[3] = get_terrain_index(offset_d.x + tl_x, offset_d.y + tl_z, t->xz_dim.x);
+            
+            // For now still in terrain space, get converted later
+            triangle.ws_triangle_position[0] = vector3_t(offset_a.x + tl_x, a.y, offset_a.y + tl_z);
+            triangle.ws_triangle_position[1] = vector3_t(offset_b.x + tl_x, b.y, offset_b.y + tl_z);
+            triangle.ws_triangle_position[2] = vector3_t(offset_c.x + tl_x, c.y, offset_c.y + tl_z);
+            // For morphing function
+            triangle.offsets[0] = ivector2_t(offset_a.x, offset_a.y);
+            triangle.offsets[1] = ivector2_t(offset_b.x, offset_b.y);
+            triangle.offsets[2] = ivector2_t(offset_c.x, offset_c.y);
+            triangle.offsets[3] = ivector2_t(offset_d.x, offset_d.y);
+	    return(triangle);
+	};
+    
+    terrain_triangle_t ret = {};
+
+    vector3_t normal;
+    
+    if (ts_tile_corner_position.x % 2 == 0)
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+                // 1
+                console_out("1\n");
+	    }
+	    else
+	    {
+                // 2
+                console_out("2\n");
+	    }
+	}
+	else
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+                // 3
+                console_out("3\n");
+	    }
+	    else
+	    {
+                // 4
+                console_out("4\n");
+	    }
+	}
+    }
+    else
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+                // 5
+                console_out("5\n");
+	    }
+	    else
+	    {
+                // 6
+                console_out("6\n");
+	    }
+	}
+	else
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+                // 7
+                console_out("7\n");
+	    }
+	    else
+	    {
+                // 8
+                console_out("8\n");
+	    }
+	}
+    }
+
+    return(0);
 }

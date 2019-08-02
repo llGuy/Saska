@@ -641,7 +641,7 @@ get_sliding_down_direction(const vector3_t &ws_view_direction,
 }
 
 internal void
-morpha_terrain_at_triangle(terrain_triangle_t *triangle,
+morph_terrain_at_triangle(terrain_triangle_t *triangle,
                            morphable_terrain_t *t,
                            float32_t morph_zone_radius,
                            float32_t dt,
@@ -649,7 +649,6 @@ morpha_terrain_at_triangle(terrain_triangle_t *triangle,
 {
     uint32_t morph_quotients_radius_count = (morph_zone_radius) * (morph_zone_radius);
 
-    // TODO: Terraform the new way.
     struct morph_point_t
     {
         // In terrain space
@@ -668,11 +667,44 @@ morpha_terrain_at_triangle(terrain_triangle_t *triangle,
         ivector2_t direction;
         // Terrain space
         ivector2_t coord;
-    }  quarter_starts[4] = { mound_quarter_start_t{ triangle->offsets[0], get_ts_xz_coord_from_idx(triangle->idx[0], t) },
-                             mound_quarter_start_t{ triangle->offsets[1], get_ts_xz_coord_from_idx(triangle->idx[1], t) },
-                             mound_quarter_start_t{ triangle->offsets[2], get_ts_xz_coord_from_idx(triangle->idx[2], t) },
-                             mound_quarter_start_t{ triangle->offsets[3], get_ts_xz_coord_from_idx(triangle->idx[3], t) }};
+    }  quarter_starts[4] = { mound_quarter_start_t{ triangle->offsets[0] * 2 - ivector2_t(1), get_ts_xz_coord_from_idx(triangle->idx[0], t) },
+                             mound_quarter_start_t{ triangle->offsets[1] * 2 - ivector2_t(1), get_ts_xz_coord_from_idx(triangle->idx[1], t) },
+                             mound_quarter_start_t{ triangle->offsets[2] * 2 - ivector2_t(1), get_ts_xz_coord_from_idx(triangle->idx[2], t) },
+                             mound_quarter_start_t{ triangle->offsets[3] * 2 - ivector2_t(1), get_ts_xz_coord_from_idx(triangle->idx[3], t) }};
           
+    float32_t *height_ptr = t->heights;
+
+    for (uint32_t quarter = 0; quarter < 4; ++quarter)
+    {
+        for (uint32_t z = 0; z < morph_zone_radius; ++z)
+        {
+            for (uint32_t x = 0; x < morph_zone_radius; ++x)
+            {
+                vector2_t f32_coord = vector2_t((float32_t)x * quarter_starts[quarter].direction.x, (float32_t)z * quarter_starts[quarter].direction.y);
+                float32_t squared_distance = distance_squared(f32_coord);
+                if (squared_distance >= morph_zone_radius * morph_zone_radius
+                    && abs(squared_distance - morph_zone_radius * morph_zone_radius) < 0.000001f)
+                {
+                    break;
+                }
+
+                // Morph the terrain
+                int32_t ts_x_position = f32_coord.x + quarter_starts[quarter].coord.x;
+                int32_t ts_z_position = f32_coord.y + quarter_starts[quarter].coord.y; // Y ==> Z
+                int32_t index = get_terrain_index(ts_x_position, ts_z_position, t->xz_dim.x, t->xz_dim.y);
+
+                // To create the mound shape (round)
+                float32_t cos_theta = (cos((squared_distance / (morph_zone_radius * morph_zone_radius)) * 2.0f) + 1.0f) / 2.0f;
+                cos_theta = cos_theta * cos_theta * cos_theta;
+
+                if (index >= 0)
+                {
+                    height_ptr[index] += cos_theta * dt;
+                }
+            }
+        }
+    }
+    
     t->is_modified = true;
 }
 
@@ -707,7 +739,7 @@ morph_terrain_at(const ivector2_t &ts_position
 	    {
 		break;
 	    }
-	    // ---- morph the terrain ----
+	    // ---- Morph the terrain ----
 	    int32_t ts_p_x = x + ts_position.x;
 	    int32_t ts_p_z = z + ts_position.y;
 	    
@@ -1740,7 +1772,12 @@ update_input_components(window_data_t *window
             {
                 if (ts_coord.x >= 0)
                 {
-                    morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
+                    morph_terrain_at_triangle(&g_terrains.terrain_pointer.triangle,
+                                               e->on_t,
+                                               3.0f,
+                                               dt,
+                                               gpu);
+//                    morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
                 }
             }
 

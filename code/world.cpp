@@ -23,6 +23,11 @@ enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 // ---- terrain code ----
 struct morphable_terrain_t
 {
+    // TODO: Possible fix to hard setting position at collision whilst morphing
+    persist constexpr uint32_t MAX_MORPHED_POINTS = 20;
+    ivector2_t morphed_points[MAX_MORPHED_POINTS] = {};
+    uint32_t current_morphed_points_count = 0;
+    
     // Gravity constant
     float32_t k_g;
     
@@ -477,7 +482,10 @@ struct detected_collision_return_t
 {
     bool detected;
     vector3_t ws_at;
+    vector3_t ts_at;
     vector3_t ws_normal;
+
+    float32_t ts_y_diff;
 };
 
 internal detected_collision_return_t
@@ -622,9 +630,9 @@ detect_terrain_collision(hitbox_t *hitbox,
     vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
     normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
     
-    if (ts_p.y < 0.1f + ts_height)
+    if (ts_p.y < 0.0001f + ts_height)
     {
-	return {true, ws_at, normal};
+	return {true, ws_at, ts_at, normal, ts_height - ts_p.y};
     }
 
     return {false};
@@ -704,7 +712,7 @@ morph_terrain_at_triangle(terrain_triangle_t *triangle,
             }
         }
     }
-    
+
     t->is_modified = true;
 }
 
@@ -1289,9 +1297,11 @@ struct physics_component_t
     // Depending on the shape of the body (see formula for rectangle if using hitbox, and for sphere if using bounding sphere)
     vector3_t moment_of_inertia;
 
-    vector3_t acceleration;
-    vector3_t velocity;
-    vector3_t displacement;
+    float32_t coefficient_of_restitution = 0.8f;
+    
+    vector3_t acceleration {0.0f};
+    vector3_t velocity {0.0f};
+    vector3_t displacement {0.0f};
     
     // F = ma
     vector3_t total_force_on_body;
@@ -1622,7 +1632,7 @@ update_physics_components(float32_t dt)
                 vector3_t ws_input_v = vector3_t(0.0f);
                 if (e->components.input_component >= 0)
                 {
-                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
+                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal); 
 
                     float32_t speed = 40.0f;
                     
@@ -1684,6 +1694,75 @@ update_physics_components(float32_t dt)
 
             e->ws_p += e->ws_v * dt;
             e->ws_v = vector3_t(0.0f);*/
+            
+            // Convert to terrain coordinates (so that {0, 1, 0} is up)
+            vector3_t ts_previous_position = vector3_t(e->on_t->inverse_transform * vector4_t(e->ws_p, 1.0f));
+            vector3_t ts_previous_velocity = vector3_t(e->on_t->inverse_transform * vector4_t(component->velocity, 0.0f));
+
+            detected_collision_return_t collision = detect_terrain_collision(&component->hitbox,
+                                                                             e->size,
+                                                                             e->ws_p,
+                                                                             e->on_t);
+            component->surface_normal = collision.ws_normal;
+            component->surface_position = collision.ws_at;
+            
+            vector3_t ts_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
+            vector3_t ts_normal_force = -ts_gravity_force;
+
+            vector3_t ts_new_velocity = vector3_t(0.0f);
+
+            vector3_t input_velocity = vector3_t(0.0f);
+            
+            if (collision.detected)
+            {
+                // TODO: Find a way to avoid hard setting the position. Make it so that the terrain morphing's velocity gets added to the object's velocity
+                if (e->on_t->is_modified)
+                {
+                    ts_previous_position = collision.ts_at + (vector3_t(1.0f) / e->on_t->size) * vector3_t(0.0f, e->size.y * -component->hitbox.y_min, 0.0f);
+                }
+                if (distance_squared(ts_previous_velocity) < 0.1f)
+                {
+                    ts_new_velocity = vector3_t(0.0f);
+                }
+                else
+                {
+                    ts_new_velocity = component->coefficient_of_restitution * glm::reflect(ts_previous_velocity, vector3_t(0.0f, 1.0f, 0.0f));
+                }
+                ts_new_velocity += ts_normal_force * dt;
+
+                // Take into account input
+                if (e->components.input_component >= 0)
+                {
+                    input_component_t *input = &g_entities.input_components[e->components.input_component];
+                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
+
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
+                        input_velocity += forward;
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
+                        input_velocity += -glm::cross(forward, component->surface_normal);
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
+                        input_velocity += -forward;
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
+                        input_velocity += glm::cross(forward, component->surface_normal);
+
+                    if (input->movement_flags)
+                    {
+                        input_velocity = vector3_t(e->on_t->inverse_transform * vector4_t(30.0f * glm::normalize(input_velocity), 0.0f));
+                    }
+                }
+            }
+            else
+            {
+                ts_new_velocity = ts_previous_velocity;
+            }
+
+            ts_new_velocity += ts_gravity_force * dt;
+            
+            //            ts_new_velocity += ts_previous_velocity + ts_gravity_force * dt;
+            vector3_t ts_new_position = ts_previous_position + ts_new_velocity * dt + input_velocity * dt;
+
+            e->ws_p = vector3_t(e->on_t->push_k.transform * vector4_t(ts_new_position, 1.0f));
+            component->velocity = vector3_t(e->on_t->push_k.transform * vector4_t(ts_new_velocity, 0.0f));
         }
         else
         {
@@ -1808,6 +1887,7 @@ update_input_components(window_data_t *window
  //            if (detected_collision) e->ws_v = vector3_t(0.0f);
     
             //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
+            component->movement_flags = 0;
             if (window->key_map[GLFW_KEY_R]) {accelerate = 10.0f;}
             if (window->key_map[GLFW_KEY_W]) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
             if (window->key_map[GLFW_KEY_A]) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
@@ -1991,9 +2071,9 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
         
     // add rotating entity
     entity_t r = construct_entity("entity.blue"_hash
-				, vector3_t(200.0f, -40.0f, 300.0f)
+                                  , vector3_t(200.0f, 40.0f, 300.0f)
                                   , vector3_t(1.0f, 0.0f, -1.0f)
-				, quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
+                                  , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r.size = vector3_t(10.0f);
 
@@ -2005,6 +2085,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
 
     rendering_component_t *r_ptr_rendering = add_rendering_component(r_ptr);
     physics = add_physics_component(r_ptr, true);
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2031,6 +2112,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     add_physics_component(r2_ptr, false);
 
     physics = add_physics_component(r2_ptr, false);
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2261,6 +2343,12 @@ lua_get_player_ts_view_direction(lua_State *state);
 internal int32_t
 lua_print_player_terrain_position_info(lua_State *state);
 
+internal int32_t
+lua_stop_simulation(lua_State *state);
+
+internal int32_t
+lua_start_simulation(lua_State *state);
+
 void
 initialize_world(window_data_t *window
                  , vulkan_state_t *vk
@@ -2275,6 +2363,8 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_velocity", &lua_toggle_entity_model_display);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_ts_view_dir", &lua_get_player_ts_view_direction);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_player_terrain_position_info", &lua_print_player_terrain_position_info);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "start_simulation", &lua_start_simulation);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -2468,6 +2558,38 @@ lua_get_player_ts_view_direction(lua_State *state)
     lua_pushnumber(state, dir.y);
     lua_pushnumber(state, dir.z);
     return(3);
+}
+
+internal int32_t
+lua_start_simulation(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    entity_t *entity = get_entity(kname);
+
+    vector3_t initial_velocity = vector3_t(entity->on_t->push_k.transform * vector4_t(0.0f, 1.0f, 0.0f, 0.0f)) * 10.0f;
+
+    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    component->enabled = true;
+    component->velocity = initial_velocity;
+    
+    return(0);
+}
+
+internal int32_t
+lua_stop_simulation(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    entity_t *entity = get_entity(kname);
+
+    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    component->enabled = false;
+    component->velocity = vector3_t(0.0f);
+    
+    return(0);
 }
 
 internal int32_t

@@ -484,25 +484,42 @@ struct detected_collision_return_t
     vector3_t ws_at;
     vector3_t ts_at;
     vector3_t ws_normal;
+    vector3_t ts_normal;
 
     float32_t ts_y_diff;
 };
+
+enum terrain_space_t { TERRAIN_SPACE, WORLD_SPACE };
 
 internal detected_collision_return_t
 detect_terrain_collision(hitbox_t *hitbox,
                          const vector3_t &size,
                          const vector3_t &ws_p,
-                         morphable_terrain_t *t)
+                         morphable_terrain_t *t,
+                         enum terrain_space_t terrain_space = terrain_space_t::WORLD_SPACE)
 {
+    vector3_t ts_p;
+    vector3_t ts_entity_height_offset;
+    vector2_t ts_p_xz;
+    
     matrix4_t ws_to_ts = t->inverse_transform;
 
     // TODO: Make this more accurate (this is just for testing purposes at the moment)
     //    vector3_t contact_point = ws_p + vector3_t(0.0f, hitbox->y_min, 0.0f) * size;
+    if (terrain_space == terrain_space_t::WORLD_SPACE)
+    {
+        ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
+        ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f)) + ts_entity_height_offset;
 
-    vector3_t ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
-    vector3_t ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f)) + ts_entity_height_offset;
-
-    vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+        ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+    }
+    else
+    {
+        ts_p = ws_p;
+        ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
+        
+        ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+    }
 
     // is outside the terrain
     if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
@@ -628,14 +645,14 @@ detect_terrain_collision(hitbox_t *hitbox,
     vector3_t ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
 
     vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
-    normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
+    vector3_t ws_normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
     
     if (ts_p.y < 0.0001f + ts_height)
     {
-	return {true, ws_at, ts_at, normal, ts_height - ts_p.y};
+	return {true, ws_at, ts_at, ws_normal, normal, ts_height - ts_p.y};
     }
 
-    return {false};
+    return {false, ws_at, ts_at, ws_normal, normal, ts_height- ts_p.y};
 }
 
 internal vector3_t
@@ -1297,11 +1314,14 @@ struct physics_component_t
     // Depending on the shape of the body (see formula for rectangle if using hitbox, and for sphere if using bounding sphere)
     vector3_t moment_of_inertia;
 
-    float32_t coefficient_of_restitution = 0.8f;
+    float32_t coefficient_of_restitution = 0.0f;
     
     vector3_t acceleration {0.0f};
     vector3_t velocity {0.0f};
     vector3_t displacement {0.0f};
+
+    enum is_resting_t { NOT_RESTING = 0, JUST_COLLIDED = 1, RESTING = 2, SLIDING = 3 } is_resting;
+    float32_t sliding_momentum = 0.0f;
     
     // F = ma
     vector3_t total_force_on_body;
@@ -1617,83 +1637,7 @@ update_physics_components(float32_t dt)
         morphable_terrain_t *t = e->on_t;
         if (component->enabled)
         {
-            /*
-            // See if there was collision
-            detected_collision_return_t collision = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
-            component->surface_normal = collision.ws_normal;
-            component->surface_position = collision.ws_at;
-
-            // If collision with terrain was detected
-            if (collision.detected)
-            {
-                component->gravity_accumulation = vector3_t(0.0f);
-                
-                // If input is enabled on the entity
-                vector3_t ws_input_v = vector3_t(0.0f);
-                if (e->components.input_component >= 0)
-                {
-                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal); 
-
-                    float32_t speed = 40.0f;
-                    
-                    input_component_t *input = &g_entities.input_components[e->components.input_component];
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
-                    {
-                        ws_input_v += forward;
-                    }
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
-                    {
-                        ws_input_v += -glm::cross(forward, component->surface_normal);
-                    }
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
-                    {
-                        ws_input_v += -forward;
-                    }
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
-                    {
-                        ws_input_v += glm::cross(forward, component->surface_normal);
-                    }
-
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
-                    {
-                        persist constexpr float32_t TEST_ROUGHNESS = 0.5f;
-                        //                        component->friction_accumulation += -forward * TEST_ROUGHNESS * glm::dot(-component->surface_normal, -e->on_t->ws_n);
-                        float32_t dot = glm::dot(-component->surface_normal, -e->on_t->ws_n);
-                        float32_t cross = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
-                        
-                        vector3_t friction_d = -forward * TEST_ROUGHNESS * cross;
-                        vector3_t slide_d = forward * TEST_ROUGHNESS * dot;
-                        component->slide_accumulation += friction_d + slide_d;
-                        input->movement_flags = 0;
-                    }
-                    else
-                    {
-                        //                        component->friction_accumulation = vector3_t(0.0f);
-                    }
-                    
-                    if (input->movement_flags)
-                    {
-                        ws_input_v = glm::normalize(ws_input_v) * speed;
-                        input->movement_flags = 0;
-                    }
-                }
-
-                //                e->ws_v += ws_input_v;
-
-                vector3_t height_offset = vector3_t(glm::mat4_cast(e->on_t->gs_r) * vector4_t(-vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size, 0.0f));
-
-                e->ws_p = collision.ws_at + height_offset; //- vector3_t(0.0f, component->hitbox.y_min, 0.0f) * e->size + ws_input_v * dt
-                e->ws_v += ws_input_v;
-            }
-            else
-            {
-                component->gravity_accumulation += t->k_g * e->on_t->ws_n;
-            }
-
-            e->ws_v += component->gravity_accumulation + component->slide_accumulation;
-
-            e->ws_p += e->ws_v * dt;
-            e->ws_v = vector3_t(0.0f);*/
+            // TODO: Add a resting flag in the physics component for when the entity is just resting on the terrain (not collision)
             
             // Convert to terrain coordinates (so that {0, 1, 0} is up)
             vector3_t ts_previous_position = vector3_t(e->on_t->inverse_transform * vector4_t(e->ws_p, 1.0f));
@@ -1708,13 +1652,89 @@ update_physics_components(float32_t dt)
             
             vector3_t ts_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
             vector3_t ts_normal_force = -ts_gravity_force;
+            vector3_t ts_friction_force = vector3_t(0.0f);
+            vector3_t ts_sliding_force = vector3_t(0.0f);
 
             vector3_t ts_new_velocity = vector3_t(0.0f);
 
             vector3_t input_velocity = vector3_t(0.0f);
+
+            vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
             
-            if (collision.detected)
+            if (component->is_resting == physics_component_t::is_resting_t::RESTING &&
+                collision.detected)
             {
+                if (e->on_t->is_modified)
+                {
+                    ts_previous_position = collision.ts_at + (vector3_t(1.0f) / e->on_t->size) * vector3_t(0.0f, e->size.y * -component->hitbox.y_min, 0.0f);
+                }
+                
+                ts_new_velocity = ts_previous_velocity;
+                
+                // Take into account input
+                if (e->components.input_component >= 0)
+                {
+                    input_component_t *input = &g_entities.input_components[e->components.input_component];
+
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
+                        input_velocity += forward;
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
+                        input_velocity += -glm::cross(forward, component->surface_normal);
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
+                        input_velocity += -forward;
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
+                        input_velocity += glm::cross(forward, component->surface_normal);
+
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
+                    {
+                        component->is_resting = physics_component_t::is_resting_t::SLIDING;
+                        float32_t sin_theta = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
+                        ts_sliding_force = vector3_t(e->on_t->inverse_transform * vector4_t(glm::normalize(forward), 0.0f)) * component->mass * 9.81f * sin_theta;
+                    }
+                    else if (input->movement_flags)
+                    {
+                        component->is_resting = physics_component_t::is_resting_t::RESTING;
+                        ts_new_velocity = vector3_t(0.0f);
+                        input_velocity = vector3_t(e->on_t->inverse_transform * vector4_t(30.0f * glm::normalize(input_velocity), 0.0f));
+                        ts_new_velocity += input_velocity;
+                    }
+                }
+
+                persist constexpr float32_t ROUGHNESS = 0.5f;
+                float32_t cos_theta = glm::dot(-collision.ts_normal, glm::vec3(0.0f, -1.0f, 0.0f));
+                ts_friction_force = ts_previous_velocity * -1.0f * component->mass * ROUGHNESS * 9.81f * cos_theta;
+                ts_new_velocity += ts_friction_force * dt;
+                ts_new_velocity += ts_sliding_force *dt;
+
+                ts_new_velocity += ts_normal_force * dt;
+            }
+            else if (component->is_resting == physics_component_t::is_resting_t::SLIDING)
+            {
+                input_component_t *input = &g_entities.input_components[e->components.input_component];
+
+                persist constexpr float32_t ROUGHNESS = 0.5f;
+                float32_t cos_theta = glm::dot(-collision.ts_normal, glm::vec3(0.0f, -1.0f, 0.0f));
+                ts_friction_force = ts_previous_velocity * -1.0f * component->mass * ROUGHNESS * 9.81f * cos_theta;
+                
+                float32_t sin_theta = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
+                ts_sliding_force = vector3_t(e->on_t->inverse_transform * vector4_t(glm::normalize(forward), 0.0f)) * component->mass * 9.81f * sin_theta;
+                
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
+                {
+                    component->sliding_momentum += glm::length(ts_previous_velocity) * component->mass;
+                    ts_new_velocity += component->sliding_momentum * ts_sliding_force * dt;
+                    ts_new_velocity += ts_friction_force * dt;
+                }
+                else
+                {
+                    component->is_resting = physics_component_t::is_resting_t::RESTING;
+                    component->sliding_momentum = 0.0f;
+                }
+            }
+            else if (component->is_resting != physics_component_t::is_resting_t::RESTING && collision.detected)
+            {
+                component->is_resting = (physics_component_t::is_resting_t)(component->is_resting + 1);
+                
                 // TODO: Find a way to avoid hard setting the position. Make it so that the terrain morphing's velocity gets added to the object's velocity
                 if (e->on_t->is_modified)
                 {
@@ -1729,39 +1749,36 @@ update_physics_components(float32_t dt)
                     ts_new_velocity = component->coefficient_of_restitution * glm::reflect(ts_previous_velocity, vector3_t(0.0f, 1.0f, 0.0f));
                 }
                 ts_new_velocity += ts_normal_force * dt;
-
-                // Take into account input
-                if (e->components.input_component >= 0)
-                {
-                    input_component_t *input = &g_entities.input_components[e->components.input_component];
-                    vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
-
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
-                        input_velocity += forward;
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
-                        input_velocity += -glm::cross(forward, component->surface_normal);
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
-                        input_velocity += -forward;
-                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
-                        input_velocity += glm::cross(forward, component->surface_normal);
-
-                    if (input->movement_flags)
-                    {
-                        input_velocity = vector3_t(e->on_t->inverse_transform * vector4_t(30.0f * glm::normalize(input_velocity), 0.0f));
-                    }
-                }
             }
             else
             {
+                component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
                 ts_new_velocity = ts_previous_velocity;
             }
 
             ts_new_velocity += ts_gravity_force * dt;
             
-            //            ts_new_velocity += ts_previous_velocity + ts_gravity_force * dt;
-            vector3_t ts_new_position = ts_previous_position + ts_new_velocity * dt + input_velocity * dt;
+            vector3_t ts_new_position = ts_previous_position + ts_new_velocity * dt;
 
+            // Make sure to adjust the position of the player if he is sliding and slightly above the terrain
+            if (component->is_resting == physics_component_t::is_resting_t::SLIDING)
+            {
+                detected_collision_return_t next_collision = detect_terrain_collision(&component->hitbox,
+                                                                                      e->size,
+                                                                                      ts_new_position,
+                                                                                      e->on_t,
+                                                                                      terrain_space_t::TERRAIN_SPACE);
+                
+                
+                if (!next_collision.detected && glm::length(ts_new_velocity) < 5.0f)
+                {
+                    ts_new_position = next_collision.ts_at;
+                }
+            }
+            
             e->ws_p = vector3_t(e->on_t->push_k.transform * vector4_t(ts_new_position, 1.0f));
+            // Subtract input velocity
+            ts_new_velocity -= input_velocity;
             component->velocity = vector3_t(e->on_t->push_k.transform * vector4_t(ts_new_velocity, 0.0f));
         }
         else
@@ -1911,7 +1928,7 @@ update_input_components(window_data_t *window
                      //                }
             }
     
-            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
+            //            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
             if (window->key_map[GLFW_KEY_LEFT_SHIFT]) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
 
             if (movements > 0)
@@ -2347,6 +2364,9 @@ internal int32_t
 lua_stop_simulation(lua_State *state);
 
 internal int32_t
+lua_move_entity(lua_State *state);
+
+internal int32_t
 lua_start_simulation(lua_State *state);
 
 void
@@ -2365,6 +2385,7 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_player_terrain_position_info", &lua_print_player_terrain_position_info);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "start_simulation", &lua_start_simulation);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "move_entity", &lua_move_entity);
     
     initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
     initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
@@ -2573,6 +2594,23 @@ lua_start_simulation(lua_State *state)
     physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
     component->enabled = true;
     component->velocity = initial_velocity;
+    
+    return(0);
+}
+
+internal int32_t
+lua_move_entity(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    entity_t *entity = get_entity(kname);
+
+    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    vector3_t x_direction = vector3_t(entity->on_t->push_k.transform * vector4_t(1.0f, 0.0f, 0.0f, 0.0f)) * 10.0f;
+    component->velocity = x_direction;
+
+    console_out("moving entity");
     
     return(0);
 }

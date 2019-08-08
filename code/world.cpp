@@ -515,8 +515,8 @@ detect_terrain_collision(hitbox_t *hitbox,
     }
     else
     {
-        ts_p = ws_p;
         ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
+        ts_p = ws_p + ts_entity_height_offset;
         
         ts_p_xz = vector2_t(ts_p.x, ts_p.z);
     }
@@ -652,7 +652,7 @@ detect_terrain_collision(hitbox_t *hitbox,
 	return {true, ws_at, ts_at, ws_normal, normal, ts_height - ts_p.y};
     }
 
-    return {false, ws_at, ts_at, ws_normal, normal, ts_height- ts_p.y};
+    return {false, ws_at, ts_at, ws_normal, normal, ts_height - ts_p.y};
 }
 
 internal vector3_t
@@ -1659,7 +1659,8 @@ update_physics_components(float32_t dt)
 
             vector3_t input_velocity = vector3_t(0.0f);
 
-            vector3_t forward = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
+            vector3_t forward = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
+            vector3_t ts_forward = vector3_t(e->on_t->inverse_transform * vector4_t(forward, 0.0f));
             
             if (component->is_resting == physics_component_t::is_resting_t::RESTING &&
                 collision.detected)
@@ -1689,7 +1690,9 @@ update_physics_components(float32_t dt)
                     {
                         component->is_resting = physics_component_t::is_resting_t::SLIDING;
                         float32_t sin_theta = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
-                        ts_sliding_force = vector3_t(e->on_t->inverse_transform * vector4_t(glm::normalize(forward), 0.0f)) * component->mass * 9.81f * sin_theta;
+                        ts_sliding_force = ts_forward * component->mass * 9.81f * sin_theta;
+                        ts_new_velocity += ts_forward * 2.0f;
+                        component->sliding_momentum += component->mass * 2.0f;
                     }
                     else if (input->movement_flags)
                     {
@@ -1717,12 +1720,12 @@ update_physics_components(float32_t dt)
                 ts_friction_force = ts_previous_velocity * -1.0f * component->mass * ROUGHNESS * 9.81f * cos_theta;
                 
                 float32_t sin_theta = glm::length(glm::cross(-component->surface_normal, -e->on_t->ws_n));
-                ts_sliding_force = vector3_t(e->on_t->inverse_transform * vector4_t(glm::normalize(forward), 0.0f)) * component->mass * 9.81f * sin_theta;
+                ts_sliding_force = ts_forward * component->mass * 9.81f * sin_theta;
                 
                 if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
                 {
                     component->sliding_momentum += glm::length(ts_previous_velocity) * component->mass;
-                    ts_new_velocity += component->sliding_momentum * ts_sliding_force * dt;
+                    ts_new_velocity += component->sliding_momentum * ts_sliding_force * 100.0f * dt;
                     ts_new_velocity += ts_friction_force * dt;
                 }
                 else
@@ -1730,6 +1733,8 @@ update_physics_components(float32_t dt)
                     component->is_resting = physics_component_t::is_resting_t::RESTING;
                     component->sliding_momentum = 0.0f;
                 }
+
+                ts_new_velocity += ts_normal_force * dt;
             }
             else if (component->is_resting != physics_component_t::is_resting_t::RESTING && collision.detected)
             {

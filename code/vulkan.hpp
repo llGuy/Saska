@@ -50,10 +50,10 @@ struct gpu_t
 
 // allocates memory for stuff like buffers and images
 void
-allocate_gpu_memory(VkMemoryPropertyFlags properties
-                    , VkMemoryRequirements memory_requirements
-                    , gpu_t *gpu
-                    , VkDeviceMemory *dest_memory);
+allocate_gpu_memory(VkMemoryPropertyFlags properties,
+                    VkMemoryRequirements memory_requirements,
+                    gpu_t *gpu,
+                    VkDeviceMemory *dest_memory);
 
 struct mapped_gpu_memory_t
 {
@@ -124,7 +124,13 @@ struct gpu_buffer_t
 };
 
 void
-update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue);
+update_gpu_buffer(gpu_buffer_t *dst,
+                  void *data,
+                  uint32_t size,
+                  uint32_t offset,
+                  VkPipelineStageFlags stage,
+                  VkAccessFlags access,
+                  VkCommandBuffer *queue);
 
 struct draw_indexed_data_t
 {
@@ -136,7 +142,8 @@ struct draw_indexed_data_t
 };
 
 internal inline draw_indexed_data_t
-init_draw_indexed_data_default(uint32_t instance_count, uint32_t index_count)
+init_draw_indexed_data_default(uint32_t instance_count,
+                               uint32_t index_count)
 {
     draw_indexed_data_t index_data = {};
     index_data.index_count = index_count;
@@ -156,8 +163,8 @@ struct model_index_data_t
     VkIndexType index_type;
 
     draw_indexed_data_t
-    init_draw_indexed_data(uint32_t first_index
-                           , uint32_t offset)
+    init_draw_indexed_data(uint32_t first_index,
+                           uint32_t offset)
     {
         draw_indexed_data_t data;
         data.index_count = index_count;
@@ -172,8 +179,8 @@ struct model_index_data_t
 };
     
 internal inline void
-command_buffer_bind_ibo(const model_index_data_t &index_data
-                        , VkCommandBuffer *command_buffer)
+command_buffer_bind_ibo(const model_index_data_t &index_data,
+                        VkCommandBuffer *command_buffer)
 {
     vkCmdBindIndexBuffer(*command_buffer
                          , index_data.index_buffer

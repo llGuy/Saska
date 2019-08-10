@@ -789,19 +789,19 @@ initialize_console(void)
 }
 
 internal void
-handle_console_input(window_data_t *window)
+handle_console_input(input_state_t *input_state)
 {
     if (g_console.receive_input)
     {
-        for (uint32_t i = 0; i < window->char_count; ++i)
+        for (uint32_t i = 0; i < input_state->char_count; ++i)
         {
-            char character[2] = {window->char_stack[i], 0};
+            char character[2] = {input_state->char_stack[i], 0};
             output_to_input_section(character, g_console.input_color);
-            g_console.input_characters[g_console.input_character_count++] = window->char_stack[i];
-            window->char_stack[i] = 0;
+            g_console.input_characters[g_console.input_character_count++] = input_state->char_stack[i];
+            input_state->char_stack[i] = 0;
         }
 
-        if (window->key_map[GLFW_KEY_BACKSPACE])
+        if (input_state->keyboard[keyboard_button_type_t::BACKSPACE].is_down)
         {
             if (g_console.input_character_count)
             {
@@ -811,7 +811,7 @@ handle_console_input(window_data_t *window)
             }
         }
 
-        if (window->key_map[GLFW_KEY_ENTER])
+        if (input_state->keyboard[keyboard_button_type_t::ENTER].is_down)
         {
             g_console.input_characters[g_console.input_character_count] = '\0';
             output_to_output_section(g_console.input_characters, g_console.input_color);
@@ -824,25 +824,25 @@ handle_console_input(window_data_t *window)
         }
     }
 
-    if (window->key_map[GLFW_KEY_ESCAPE])
+    if (input_state->keyboard[keyboard_button_type_t::ESCAPE].is_down)
     {
         g_console.receive_input = false;
     }
-    if (window->char_stack[0] == 't' && !g_console.receive_input)
+    if (input_state->char_stack[0] == 't' && !g_console.receive_input)
     {
         g_console.receive_input = true;
-        window->char_stack[0] = 0;
+        input_state->char_stack[0] = 0;
     }
     // Open console
-    if (window->char_stack[0] == 'c' && !g_console.receive_input)
+    if (input_state->char_stack[0] == 'c' && !g_console.receive_input)
     {
         g_console.render_console ^= 0x1;
-        window->char_stack[0] = 0;
+        input_state->char_stack[0] = 0;
     }
 }
 
 internal void
-push_console_to_render(window_data_t *window)
+push_console_to_render(input_state_t *input_state)
 {
     if (g_console.cursor_fade > 0xff || g_console.cursor_fade <= 0x00)
     {
@@ -852,7 +852,7 @@ push_console_to_render(window_data_t *window)
     }
     if (g_console.fade_in_or_out == console_t::fade_t::OUT)
     {
-        g_console.cursor_fade -= (int32_t)(console_t::BLINK_SPEED * window->dt * (float32_t)0xff);
+        g_console.cursor_fade -= (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
         if (g_console.cursor_fade < 0x00)
         {
             g_console.cursor_fade = 0x00;
@@ -863,7 +863,7 @@ push_console_to_render(window_data_t *window)
     }
     else
     {
-        g_console.cursor_fade += (int32_t)(console_t::BLINK_SPEED * window->dt * (float32_t)0xff);
+        g_console.cursor_fade += (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
         g_console.cursor_color >>= 8;
         g_console.cursor_color <<= 8;
         g_console.cursor_color |= g_console.cursor_fade;
@@ -925,14 +925,13 @@ push_console_to_render(window_data_t *window)
 }    
 
 internal void
-initialize_ui_elements(gpu_t *gpu, const resolution_t &backbuffer_resolution)
+initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
     initialize_console();
 }
 
 void
-initialize_ui_rendering_state(gpu_t *gpu,
-                              VkFormat swapchain_format,
+initialize_ui_rendering_state(VkFormat swapchain_format,
                               uniform_pool_t *uniform_pool,
                               const resolution_t &resolution,
                               gpu_command_queue_pool_t *queue_pool)
@@ -982,7 +981,6 @@ initialize_ui_rendering_state(gpu_t *gpu,
                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VK_SHARING_MODE_EXCLUSIVE,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    gpu,
                     vbo);
 
         main_binding->buffer = vbo->buffer;
@@ -997,7 +995,6 @@ initialize_ui_rendering_state(gpu_t *gpu,
                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VK_SHARING_MODE_EXCLUSIVE,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                    gpu,
                     tx_vbo);
 
         main_binding->buffer = tx_vbo->buffer;
@@ -1015,7 +1012,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, gpu, false /*don_t't clear*/);
+        make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, false /*don_t't clear*/);
     }
 
     g_ui.ui_pipeline = g_pipeline_manager.add("pipeline.uibox"_hash);
@@ -1043,8 +1040,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
                                0.0f,
                                dynamic,
                                ui_render_pass,
-                               0,
-                               gpu);
+                               0);
     }
     
     uniform_layout_handle_t tx_layout_hdl = g_uniform_layout_manager.add("uniform_layout.tx_ui_quad"_hash);
@@ -1052,7 +1048,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
     {
         uniform_layout_info_t layout_info;
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *tx_layout_ptr = make_uniform_layout(&layout_info, gpu);
+        *tx_layout_ptr = make_uniform_layout(&layout_info);
     }
     image_handle_t tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager.get(tx_hdl);
@@ -1065,32 +1061,28 @@ initialize_ui_rendering_state(gpu_t *gpu,
                      1,
                      2,
                      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                     VK_FILTER_NEAREST,
-                     gpu);
+                     VK_FILTER_NEAREST);
         transition_image_layout(&tx_ptr->image,
                                 VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                queue_pool,
-                                gpu);
+                                queue_pool);
         invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
                                                      queue_pool,
                                                      tx_ptr,
                                                      (uint32_t)image_data.width,
-                                                     (uint32_t)image_data.height,
-                                                     gpu);
+                                                     (uint32_t)image_data.height);
         transition_image_layout(&tx_ptr->image,
                                 VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                queue_pool,
-                                gpu);
+                                queue_pool);
     }
     g_ui.tx_group = g_uniform_group_manager.add("uniform_group.tx_ui_quad"_hash);
     auto *tx_group_ptr = g_uniform_group_manager.get(g_ui.tx_group);
     {
-        *tx_group_ptr = make_uniform_group(tx_layout_ptr, uniform_pool, gpu);
-        update_uniform_group(gpu, tx_group_ptr,
+        *tx_group_ptr = make_uniform_group(tx_layout_ptr, uniform_pool);
+        update_uniform_group(tx_group_ptr,
                              update_binding_t{ TEXTURE, tx_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
     }
     
@@ -1119,8 +1111,7 @@ initialize_ui_rendering_state(gpu_t *gpu,
                                0.0f,
                                dynamic,
                                ui_render_pass,
-                               0,
-                               gpu);
+                               0);
     }
 
     g_ui.secondary_ui_q.submit_level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
@@ -1128,26 +1119,26 @@ initialize_ui_rendering_state(gpu_t *gpu,
 
 // will be rendered to backbuffer first
 void
-initialize_game_ui(gpu_t *gpu, gpu_command_queue_pool_t *qpool, swapchain_t *swapchain, uniform_pool_t *uniform_pool, const resolution_t &resolution)
+initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &resolution)
 {
-    g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY, gpu);
+    g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
-    initialize_ui_rendering_state(gpu, swapchain->format, uniform_pool, resolution, qpool);
-    initialize_ui_elements(gpu, resolution);
+    initialize_ui_rendering_state(get_swapchain_format(), uniform_pool, resolution, qpool);
+    initialize_ui_elements(resolution);
 }
 
 void
-update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, window_data_t *window)
+update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state)
 {
-    handle_console_input(window);
+    handle_console_input(input_state);
     if (g_console.render_console)
     {
-        push_console_to_render(window);
+        push_console_to_render(input_state);
     }
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
                                                                              g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
-    begin_command_queue(&g_ui.secondary_ui_q, gpu, &inheritance);
+    begin_command_queue(&g_ui.secondary_ui_q, &inheritance);
     {
         // may_t execute other stuff
         auto *dst_framebuffer = g_framebuffer_manager.get(dst_framebuffer_hdl);
@@ -1199,11 +1190,11 @@ update_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, window_data
                                 0);
         }
     }
-    end_command_queue(&g_ui.secondary_ui_q, gpu);
+    end_command_queue(&g_ui.secondary_ui_q);
 }
 
 void
-render_game_ui(gpu_t *gpu, framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue)
+render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue)
 {
     // for_t the moment, this just executes one command buffer
     auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
@@ -1274,20 +1265,20 @@ lua_console_clear(lua_State *state)
 internal int32_t
 lua_get_fps(lua_State *state)
 {
-    window_data_t *win = get_window_data();
-    lua_pushnumber(state, 1.0f / win->dt);
-    return(1);
+    //    inpus_state_t *win = get_window_data();
+    //    lua_pushnumber(state, 1.0f / win->dt);
+    return(0);
 }
 
 internal int32_t
 lua_print_fps(lua_State *state)
 {
-    window_data_t *win = get_window_data();
+    /*window_data_t *win = get_window_data();
     float32_t fps = 1.0f / win->dt;
     uint32_t fps_ui = (uint32_t)fps;
     char buffer[20] = {};
     sprintf(buffer, "%d", fps_ui);
-    output_to_output_section(buffer, g_console.output_color);
+    output_to_output_section(buffer, g_console.output_color);*/
     return(0);
 }
 

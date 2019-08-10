@@ -22,44 +22,40 @@ global_var struct window_rendering_data_t
 } window_rendering;
 
 void
-make_game(vulkan_state_t *vk, gpu_t *gpu, swapchain_t *swapchain, window_data_t *window)
+make_game(input_state_t *input_state)
 {
-    allocate_command_pool(gpu->queue_families.graphics_family
-				  , gpu
-				  , &window_rendering.command_pool);
+    allocate_command_pool(get_queue_families()->graphics_family, &window_rendering.command_pool);
 
-    allocate_command_buffers(&window_rendering.command_pool
-				     , VK_COMMAND_BUFFER_LEVEL_PRIMARY
-				     , gpu
-				     , memory_buffer_view_t<VkCommandBuffer>{3, window_rendering.command_buffer});
+    allocate_command_buffers(&window_rendering.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			     memory_buffer_view_t<VkCommandBuffer>{3, window_rendering.command_buffer});
 
     for (uint32_t i = 0; i < 2; ++i)
     {
-        init_semaphore(gpu, &window_rendering.img_ready[i]);
-        init_semaphore(gpu, &window_rendering.render_finish[i]);   
-        init_fence(gpu, VK_FENCE_CREATE_SIGNALED_BIT, &window_rendering.cpu_wait[i]);
+        init_semaphore(&window_rendering.img_ready[i]);
+        init_semaphore(&window_rendering.render_finish[i]);   
+        init_fence(VK_FENCE_CREATE_SIGNALED_BIT, &window_rendering.cpu_wait[i]);
     }
     
 
     // ---- Initialize game data ----
     // Initialize atmosphere, shadow, skeletal animation...
     initialize_scripting();
-    initialize_game_3d_graphics(gpu, swapchain, &window_rendering.command_pool);
-    initialize_game_2d_graphics(gpu, swapchain, &window_rendering.command_pool);
-    initialize_game_ui(gpu, &window_rendering.command_pool, &vk->swapchain, &g_uniform_pool, get_backbuffer_resolution());
-    initialize_world(window, vk, &window_rendering.command_pool);
+    initialize_game_3d_graphics(&window_rendering.command_pool);
+    initialize_game_2d_graphics(&window_rendering.command_pool);
+    initialize_game_ui(&window_rendering.command_pool, &g_uniform_pool, get_backbuffer_resolution());
+    initialize_world(input_state, &window_rendering.command_pool);
 }
 
 void
-destroy_game(gpu_t *gpu)
+destroy_game(void)
 {
     // ---- destroy world data ----
-    destroy_world(gpu);
+    destroy_world();
     
     free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{3, window_rendering.command_buffer}
-				, &window_rendering.command_pool, gpu);
+				, &window_rendering.command_pool);
 
-    vkDestroyCommandPool(gpu->logical_device, window_rendering.command_pool, nullptr);
+    /*    vkDestroyCommandPool(gpu->logical_device, window_rendering.command_pool, nullptr);
     vkDestroyFence(gpu->logical_device, window_rendering.cpu_wait[0], nullptr);
     vkDestroyFence(gpu->logical_device, window_rendering.cpu_wait[1], nullptr);
     
@@ -67,15 +63,11 @@ destroy_game(gpu_t *gpu)
     vkDestroySemaphore(gpu->logical_device, window_rendering.img_ready[0], nullptr);
 
     vkDestroySemaphore(gpu->logical_device, window_rendering.render_finish[1], nullptr);
-    vkDestroySemaphore(gpu->logical_device, window_rendering.img_ready[1], nullptr);
+    vkDestroySemaphore(gpu->logical_device, window_rendering.img_ready[1], nullptr);*/
 }
 
 void
-update_game(gpu_t *gpu
-	    , swapchain_t *swapchain
-	    , window_data_t *window
-	    , vulkan_state_t *vk
-	    , float32_t dt)
+update_game(input_state_t *input_state, float32_t dt)
 {
     // ---- update different parts of the game (world, gui...)
     persist uint32_t current_frame = 0;
@@ -85,9 +77,7 @@ update_game(gpu_t *gpu
 
     VkFence null_fence = VK_NULL_HANDLE;
     
-    auto next_image_data = acquire_next_image(swapchain
-                                              , gpu
-                                              , &window_rendering.img_ready[current_frame]
+    auto next_image_data = acquire_next_image(&window_rendering.img_ready[current_frame]
                                               , &null_fence);
     
     if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
@@ -100,20 +90,20 @@ update_game(gpu_t *gpu
 	OUTPUT_DEBUG_LOG("%s\n", "failed to acquire swapchain image");
     }
     
-    wait_fences(gpu, memory_buffer_view_t<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
-    reset_fences(gpu, {1, &window_rendering.cpu_wait[current_frame]});
+    wait_fences(memory_buffer_view_t<VkFence>{1, &window_rendering.cpu_wait[current_frame]});
+    reset_fences({1, &window_rendering.cpu_wait[current_frame]});
     
     // ---- begin recording instructions into the command buffers ----
     gpu_command_queue_t queue{window_rendering.command_buffer[current_frame]};
     begin_command_buffer(&queue.q, 0, nullptr);
     {
-        update_world(window, vk, dt, next_image_data.image_index, current_frame, &queue);
+        update_world(input_state, dt, next_image_data.image_index, current_frame, &queue);
 
-        dbg_handle_input(window, &vk->gpu);
-        update_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), window);
-        render_game_ui(&vk->gpu, get_pfx_framebuffer_hdl(), &queue);
+        dbg_handle_input(input_state);
+        update_game_ui(get_pfx_framebuffer_hdl(), input_state);
+        render_game_ui(get_pfx_framebuffer_hdl(), &queue);
         
-        render_final_output(next_image_data.image_index, &queue, swapchain);
+        render_final_output(next_image_data.image_index, &queue);
     }
     end_command_buffer(&queue.q);
     // ---- end recording instructions
@@ -125,14 +115,13 @@ update_game(gpu_t *gpu
                                , memory_buffer_view_t<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}
                                , memory_buffer_view_t<VkPipelineStageFlags>{1, &wait_stages}
                                , &window_rendering.cpu_wait[current_frame]
-                               , &gpu->graphics_queue);
+                               , get_graphics_queue());
     
     VkSemaphore signal_semaphores[] = {window_rendering.render_finish[current_frame]};
 
     present(memory_buffer_view_t<VkSemaphore>{1, &window_rendering.render_finish[current_frame]}
-                                , memory_buffer_view_t<VkSwapchainKHR>{1, &swapchain->swapchain}
                                 , &next_image_data.image_index
-                                , &gpu->present_queue);
+                                , get_present_queue());
     
     if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR || next_image_data.result == VK_SUBOPTIMAL_KHR)
     {

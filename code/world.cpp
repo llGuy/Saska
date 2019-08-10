@@ -4,7 +4,6 @@
 #include <iostream>
 #include "world.hpp"
 #include <glm/glm.hpp>
-#include <GLFW/glfw3.h>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -128,7 +127,7 @@ add_terrain(void)
 }    
 
 internal void
-clean_up_terrain(gpu_t *gpu)
+clean_up_terrain(void)
 {
     for (uint32_t i = 0; i < g_terrains.terrain_count; ++i)
     {
@@ -389,8 +388,7 @@ internal terrain_triangle_t
 get_triangle_pointing_at(vector3_t ws_ray_p,
                          const vector3_t &ws_ray_d,
                          morphable_terrain_t *t,
-                         float32_t dt,
-                         gpu_t *gpu)
+                         float32_t dt)
 {
     persist constexpr float32_t MAX_DISTANCE = 6.0f;
     persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -428,8 +426,7 @@ internal ivector2_t
 get_coord_pointing_at(vector3_t ws_ray_p,
                       const vector3_t &ws_ray_d,
                       morphable_terrain_t *t,
-                      float32_t dt,
-                      gpu_t *gpu)
+                      float32_t dt)
 {
     persist constexpr float32_t MAX_DISTANCE = 6.0f;
     persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -669,8 +666,7 @@ internal void
 morph_terrain_at_triangle(terrain_triangle_t *triangle,
                            morphable_terrain_t *t,
                            float32_t morph_zone_radius,
-                           float32_t dt,
-                           gpu_t *gpu)
+                           float32_t dt)
 {
     uint32_t morph_quotients_radius_count = (morph_zone_radius) * (morph_zone_radius);
 
@@ -737,8 +733,7 @@ internal void
 morph_terrain_at(const ivector2_t &ts_position
 		 , morphable_terrain_t *t
 		 , float32_t morph_zone_radius
-		 , float32_t dt
-                 , gpu_t *gpu)
+		 , float32_t dt)
 {
     uint32_t morph_quotients_outer_count = (morph_zone_radius - 1) * (morph_zone_radius - 1);
     uint32_t morph_quotients_inner_count = morph_zone_radius * 2 - 1;
@@ -913,8 +908,7 @@ make_3D_terrain_base(uint32_t width_x
 		     , gpu_buffer_t *mesh_xz_values
 		     , gpu_buffer_t *idx_buffer
 		     , model_t *model_info
-		     , VkCommandPool *cmdpool
-		     , gpu_t *gpu)
+		     , VkCommandPool *cmdpool)
 {
     assert(width_x & 0X1 && depth_z & 0X1);
     
@@ -962,14 +956,12 @@ make_3D_terrain_base(uint32_t width_x
     invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t{sizeof(float32_t) * 2 * width_x * depth_z, vtx}
 							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							  , cmdpool
-							  , mesh_xz_values
-							  , gpu);
+							  , mesh_xz_values);
 
     invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t{sizeof(uint32_t) * 11 * (((width_x - 1) * (depth_z - 1)) / 4), idx} // <--- this is idx, not vtx .... (stupid error)
 							  , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							  , cmdpool
-							  , idx_buffer
-							  , gpu);
+							  , idx_buffer);
 
     model_info->attribute_count = 2;
     model_info->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model_info->attribute_count);
@@ -1000,25 +992,23 @@ internal void
 make_3D_terrain_mesh_instance(uint32_t width_x
 			      , uint32_t depth_z
 			      , float32_t *&cpu_side_heights
-			      , gpu_buffer_t *gpu_side_heights
-			      , gpu_t *gpu)
+			      , gpu_buffer_t *gpu_side_heights)
 {
     // don_t't need in the future
     cpu_side_heights = (float32_t *)allocate_free_list(sizeof(float32_t) * width_x * depth_z);
     memset(cpu_side_heights, 0, sizeof(float32_t) * width_x * depth_z);
 
-    init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(float32_t) * width_x * depth_z, gpu)
+    init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(float32_t) * width_x * depth_z)
 			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 			, VK_SHARING_MODE_EXCLUSIVE
 			, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			, gpu
 			, gpu_side_heights);
 }
 
 internal void
-make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, gpu_t *gpu)
+make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain)
 {
-    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, gpu);
+    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer);
     terrain->xz_dim = ivector2_t(w, d);
 }
 
@@ -1053,18 +1043,17 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
 
 
 internal void
-make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
+make_terrain_instances(VkCommandPool *cmdpool)
 {
     // Make the terrain render command recorder
     g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10
                                                                     , VK_SHADER_STAGE_VERTEX_BIT
                                                                     // Parameter is obsolete, must remove
                                                                     , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-                                                                    , cmdpool
-                                                                    , gpu);
+                                                                    , cmdpool);
 
     auto *red_terrain = add_terrain();
-    make_terrain_mesh_data(21, 21, red_terrain, gpu);
+    make_terrain_mesh_data(21, 21, red_terrain);
     make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(0.0f, 0.0f, 200.0f)
                                 , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
@@ -1073,7 +1062,7 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
     red_terrain->k_g = -8.5f;
 
     auto *green_terrain = add_terrain();
-    make_terrain_mesh_data(21, 21, green_terrain, gpu);
+    make_terrain_mesh_data(21, 21, green_terrain);
     make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(200.0f, 0.0f, 0.0f)
                                 , quaternion_t(glm::radians(vector3_t(0.0f, 45.0f, 20.0f)))
@@ -1084,13 +1073,13 @@ make_terrain_instances(gpu_t *gpu, VkCommandPool *cmdpool)
 }
 
 internal void
-add_staged_creation_terrains(gpu_t *gpu)
+add_staged_creation_terrains(void)
 {
     for (uint32_t i = 0; i < g_terrains.create_count; ++i)
     {
         auto *create_staging_info = &g_terrains.create_stagings[i];
         auto *new_terrain = add_terrain();
-        make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain, gpu);
+        make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain);
         make_terrain_rendering_data(new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                     , create_staging_info->ws_p
                                     , quaternion_t(create_staging_info->rotation)
@@ -1101,7 +1090,7 @@ add_staged_creation_terrains(gpu_t *gpu)
 }
 
 internal void
-make_terrain_pointer(gpu_t *gpu, swapchain_t *swapchain)
+make_terrain_pointer(void)
 {
     //    g_terrains.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
 
@@ -1117,14 +1106,12 @@ make_terrain_pointer(gpu_t *gpu, swapchain_t *swapchain)
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 }
 
 internal void
-initialize_terrains(VkCommandPool *cmdpool
-                    , swapchain_t *swapchain
-                    , gpu_t *gpu)
+initialize_terrains(VkCommandPool *cmdpool)
 {
     // ---- register the info of the model for json loader to access ---
     g_terrains.model_info = g_model_manager.add("model.terrain_base_info"_hash);
@@ -1135,10 +1122,9 @@ initialize_terrains(VkCommandPool *cmdpool
 			 , &g_terrains.mesh_xz_values
 			 , &g_terrains.idx_buffer
 			 , model_info
-			 , cmdpool
-			 , gpu);
+			 , cmdpool);
 
-    make_terrain_instances(gpu, cmdpool);
+    make_terrain_instances(cmdpool);
 
     g_terrains.terrain_ppln = g_pipeline_manager.add("pipeline.terrain_pipeline"_hash);
     auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);
@@ -1154,7 +1140,7 @@ initialize_terrains(VkCommandPool *cmdpool
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 
     g_terrains.terrain_shadow_ppln = g_pipeline_manager.add("pipeline.terrain_shadow"_hash);
@@ -1171,10 +1157,10 @@ initialize_terrains(VkCommandPool *cmdpool
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
     }
     
-    make_terrain_pointer(gpu, swapchain);
+    make_terrain_pointer();
 }
 
 internal void
@@ -1821,9 +1807,8 @@ add_input_component(entity_t *e)
 
 // Don't even know yet if this is needed ? Only one entity will have this component - maybe just keep for consistency with the system
 internal void
-update_input_components(window_data_t *window
-                        , float32_t dt
-                        , gpu_t *gpu)
+update_input_components(input_state_t *input_state
+                        , float32_t dt)
 {
     // TODO: organise input handling better to take into account console being opened
     if (!console_is_receiving_input())
@@ -1837,13 +1822,13 @@ update_input_components(window_data_t *window
             vector3_t up = e->on_t->ws_n;
         
             // Mouse movement
-            if (window->m_moved)
+            if (input_state->cursor_moved)
             {
                 // TODO: Make sensitivity configurable with a file or something, and later menu
                 persist constexpr uint32_t SENSITIVITY = 15.0f;
     
-                vector2_t prev_mp = vector2_t(window->prev_m_x, window->prev_m_y);
-                vector2_t curr_mp = vector2_t(window->m_x, window->m_y);
+                vector2_t prev_mp = vector2_t(input_state->previous_cursor_pos_x, input_state->previous_cursor_pos_y);
+                vector2_t curr_mp = vector2_t(input_state->cursor_pos_x, input_state->cursor_pos_y);
 
                 vector3_t res = e->ws_d;
 	    
@@ -1862,22 +1847,20 @@ update_input_components(window_data_t *window
             ivector2_t ts_coord = get_coord_pointing_at(e->ws_p
                                                         , e->ws_d
                                                         , e->on_t
-                                                        , dt
-                                                        , gpu);
-            g_terrains.terrain_pointer.triangle = get_triangle_pointing_at(e->ws_p, e->ws_d, e->on_t, dt, gpu);
+                                                        , dt);
+            g_terrains.terrain_pointer.triangle = get_triangle_pointing_at(e->ws_p, e->ws_d, e->on_t, dt);
             //            g_terrains.terrain_pointer.ts_position = ts_coord;
             g_terrains.terrain_pointer.t = e->on_t;
     
             // ---- modify the terrain ----
-            if (window->mb_map[GLFW_MOUSE_BUTTON_RIGHT])
+            if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_RIGHT].is_down)
             {
                 if (ts_coord.x >= 0)
                 {
                     morph_terrain_at_triangle(&g_terrains.terrain_pointer.triangle,
                                                e->on_t,
                                                3.0f,
-                                               dt,
-                                               gpu);
+                                               dt);
 //                    morph_terrain_at(ts_coord, e->on_t, 3, dt, gpu);
                 }
             }
@@ -1908,33 +1891,19 @@ update_input_components(window_data_t *window
     
  //            if (detected_collision) e->ws_v = vector3_t(0.0f);
     
-            //    if (window->key_map[GLFW_KEY_P]) std::cout << glm::to_string(world.user_camera.d) << std::endl;
             component->movement_flags = 0;
-            if (window->key_map[GLFW_KEY_R]) {accelerate = 10.0f;}
-            if (window->key_map[GLFW_KEY_W]) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
-            if (window->key_map[GLFW_KEY_A]) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
-            if (window->key_map[GLFW_KEY_S]) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
-            if (window->key_map[GLFW_KEY_D]) {acc_v(glm::cross(d, up), res); component->movement_flags |= (1 << input_component_t::movement_flags_t::RIGHT);}
+            if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 10.0f;}
+            if (input_state->keyboard[keyboard_button_type_t::W].is_down) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
+            if (input_state->keyboard[keyboard_button_type_t::A].is_down) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
+            if (input_state->keyboard[keyboard_button_type_t::S].is_down) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
+            if (input_state->keyboard[keyboard_button_type_t::D].is_down) {acc_v(glm::cross(d, up), res); component->movement_flags |= (1 << input_component_t::movement_flags_t::RIGHT);}
     
-            if (window->key_map[GLFW_KEY_SPACE])
+            if (input_state->keyboard[keyboard_button_type_t::SPACE].is_down)
             {
-                //                if (e_physics->enabled)
-                //                {
-                //if (detected_collision)
-                //                    {
-                        // give some velotity towards the up vector
-                //                        e->ws_v += up * 100.0f;
-                //                        e->ws_p += e->ws_v * dt;
-                //                    }
-                    //                }
-                    //                else
-                    //                {
-                     acc_v(up, res);
-                     //                }
+                acc_v(up, res);
             }
     
-            //            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) acc_v(-up, res);
-            if (window->key_map[GLFW_KEY_LEFT_SHIFT]) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
+            if (input_state->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
 
             if (movements > 0)
             {
@@ -1993,18 +1962,17 @@ make_entity_instanced_renderable(model_handle_t model_handle
 }
 
 internal void
-update_entities(window_data_t *window
-                , float32_t dt
-                , gpu_t *gpu)
+update_entities(input_state_t *input_state
+                , float32_t dt)
 {
-    update_input_components(window, dt, gpu);
+    update_input_components(input_state, dt);
     update_physics_components(dt);
     update_camera_components(dt);
     update_rendering_component(dt);
 }
 
 internal void
-initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, window_data_t *window)
+initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities.entity_model = g_model_manager.get_handle("model.cube_model"_hash);
     
@@ -2023,7 +1991,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, g_model_manager.get(cube_hdl),
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 
     g_entities.dbg_hitbox_ppln = g_pipeline_manager.add("pipeline.hitboxes"_hash);
@@ -2038,7 +2006,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(hitbox_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 
     g_entities.entity_shadow_ppln = g_pipeline_manager.add("pipeline.model_shadow"_hash);
@@ -2056,14 +2024,13 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, g_model_manager.get(cube_hdl),
-                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
     }
 
     g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20
                                                                                  , VK_SHADER_STAGE_VERTEX_BIT
                                                                                  , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-                                                                                 , cmdpool
-                                                                                 , gpu);
+                                                                                 , cmdpool);
 
     entity_t e = construct_entity("entity.main"_hash
 				, vector3_t(50.0f, 10.0f, 280.0f)
@@ -2086,7 +2053,7 @@ initialize_entities(gpu_t *gpu, swapchain_t *swapchain, VkCommandPool *cmdpool, 
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
-    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(window, get_backbuffer_resolution()));
+    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(input_state, get_backbuffer_resolution()));
     add_input_component(e_ptr);
 
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);
@@ -2280,8 +2247,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
 }
 
 internal void
-render_world(vulkan_state_t *vk
-	     , uint32_t image_index
+render_world(uint32_t image_index
 	     , uint32_t current_frame
 	     , gpu_command_queue_t *queue)
 {
@@ -2335,7 +2301,7 @@ render_world(vulkan_state_t *vk
     }
     end_deferred_rendering(camera->v_m, queue);
 
-    apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m, &vk->gpu);
+    apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
 }
 
 internal int32_t
@@ -2375,8 +2341,7 @@ internal int32_t
 lua_start_simulation(lua_State *state);
 
 void
-initialize_world(window_data_t *window
-                 , vulkan_state_t *vk
+initialize_world(input_state_t *input_state
                  , VkCommandPool *cmdpool)
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
@@ -2392,28 +2357,27 @@ initialize_world(window_data_t *window
     add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "move_entity", &lua_move_entity);
     
-    initialize_terrains(cmdpool, &vk->swapchain, &vk->gpu);
-    initialize_entities(&vk->gpu, &vk->swapchain, cmdpool, window);
+    initialize_terrains(cmdpool);
+    initialize_entities(cmdpool, input_state);
 }
 
 void
-update_world(window_data_t *window
-	     , vulkan_state_t *vk
+update_world(input_state_t *input_state
 	     , float32_t dt
 	     , uint32_t image_index
 	     , uint32_t current_frame
 	     , gpu_command_queue_t *cmdbuf)
 {
-    handle_input_debug(window, dt, &vk->gpu);
+    handle_input_debug(input_state, dt);
     
-    update_entities(window, dt, &vk->gpu);
+    update_entities(input_state, dt);
 
-    add_staged_creation_terrains(&vk->gpu);
+    add_staged_creation_terrains();
 
     // ---- Actually rendering the frame ----
-    update_3d_output_camera_transforms(image_index, &vk->gpu);
+    update_3d_output_camera_transforms(image_index);
     
-    render_world(vk, image_index, current_frame, cmdbuf);    
+    render_world(image_index, current_frame, cmdbuf);    
 }
 
 
@@ -2422,9 +2386,8 @@ update_world(window_data_t *window
 
 // Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
 void
-handle_input_debug(window_data_t *window
-                   , float32_t dt
-                   , gpu_t *gpu)
+handle_input_debug(input_state_t *input_state
+                   , float32_t dt)
 {
     if (!console_is_receiving_input())
     {
@@ -2441,7 +2404,7 @@ handle_input_debug(window_data_t *window
     
         //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
 
-        if (window->key_map[GLFW_KEY_P])
+        if (input_state->keyboard[keyboard_button_type_t::P].is_down)
         {
             for (uint32_t i = 0; i < 8; ++i)
             {
@@ -2464,22 +2427,22 @@ handle_input_debug(window_data_t *window
 
 
 void
-destroy_world(gpu_t *gpu)
+destroy_world(void)
 {
-    g_render_pass_manager.clean_up(gpu);
-    g_image_manager.clean_up(gpu);
-    g_framebuffer_manager.clean_up(gpu);
-    g_pipeline_manager.clean_up(gpu);
-    g_gpu_buffer_manager.clean_up(gpu);
+    g_render_pass_manager.clean_up();
+    g_image_manager.clean_up();
+    g_framebuffer_manager.clean_up();
+    g_pipeline_manager.clean_up();
+    g_gpu_buffer_manager.clean_up();
 
-    clean_up_terrain(gpu);
+    clean_up_terrain();
 
-    for (uint32_t i = 0; i < g_uniform_layout_manager.count; ++i)
+    /*for (uint32_t i = 0; i < g_uniform_layout_manager.count; ++i)
     {
 	vkDestroyDescriptorSetLayout(gpu->logical_device, g_uniform_layout_manager.objects[i], nullptr);
-    }
+    }*/
 
-    destroy_graphics(gpu);
+    destroy_graphics();
 }
 
 internal int32_t

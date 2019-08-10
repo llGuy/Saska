@@ -52,7 +52,6 @@ struct gpu_t
 void
 allocate_gpu_memory(VkMemoryPropertyFlags properties,
                     VkMemoryRequirements memory_requirements,
-                    gpu_t *gpu,
                     VkDeviceMemory *dest_memory);
 
 struct mapped_gpu_memory_t
@@ -62,34 +61,13 @@ struct mapped_gpu_memory_t
     VkDeviceMemory *memory;
     void *data;
 
-    inline void
-    begin(gpu_t *gpu)
-    {
-        vkMapMemory(gpu->logical_device, *memory, offset, size, 0, &data);
-    }
+    void begin(void);
 
-    inline void
-    fill(memory_byte_buffer_t byte_buffer)
-    {
-        memcpy(data, byte_buffer.ptr, size);
-    }
+    void fill(memory_byte_buffer_t byte_buffer);
 
-    inline void
-    flush(uint32_t offset, uint32_t size, gpu_t *gpu)
-    {
-        VkMappedMemoryRange range = {};
-        range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        range.memory = *memory;
-        range.offset = offset;
-        range.size = size;
-        vkFlushMappedMemoryRanges(gpu->logical_device, 1, &range);
-    }
+    void flush(uint32_t offset, uint32_t size);
 	
-    inline void
-    end(gpu_t *gpu)
-    {
-        vkUnmapMemory(gpu->logical_device, *memory);
-    }
+    void end(void);
 };
 
 struct gpu_buffer_t
@@ -115,12 +93,7 @@ struct gpu_buffer_t
         return(info);
     }
 
-    void
-    destroy(gpu_t *gpu)
-    {
-        vkDestroyBuffer(gpu->logical_device, buffer, nullptr);
-        vkFreeMemory(gpu->logical_device, memory, nullptr);
-    }
+    void destroy(void);
 };
 
 void
@@ -210,7 +183,8 @@ command_buffer_execute_commands(VkCommandBuffer *cmdbuf
                          , cmds.buffer);
 }
 
-    
+void destroy_shader_module(VkShaderModule *module);
+
 struct graphics_pipeline_t
 {
     enum shader_stages_bits_t : int32_t { VERTEX_SHADER_BIT = 1 << 0
@@ -226,12 +200,7 @@ struct graphics_pipeline_t
 
     VkPipeline pipeline;
 
-    inline void
-    destroy(gpu_t *gpu)
-    {
-        vkDestroyPipelineLayout(gpu->logical_device, layout, nullptr);
-        vkDestroyPipeline(gpu->logical_device, pipeline, nullptr);
-    }
+    void destroy(void);
 };
     
 internal inline void
@@ -255,7 +224,6 @@ init_buffer(VkDeviceSize buffer_size
             , VkBufferUsageFlags usage
             , VkSharingMode sharing_mode
             , VkMemoryPropertyFlags memory_properties
-            , gpu_t *gpu
             , gpu_buffer_t *dest_buffer);
 
     
@@ -268,14 +236,7 @@ struct image2d_t
 
     VkFormat format;
 	
-    inline VkMemoryRequirements
-    get_memory_requirements(gpu_t *gpu)
-    {
-        VkMemoryRequirements requirements = {};
-        vkGetImageMemoryRequirements(gpu->logical_device, image, &requirements);
-
-        return(requirements);
-    }
+    VkMemoryRequirements get_memory_requirements(void);
 
     inline VkDescriptorImageInfo
     make_descriptor_info(VkImageLayout expected_layout)
@@ -287,22 +248,9 @@ struct image2d_t
         return(info);
     }
 
-    inline void
-    destroy(gpu_t *gpu)
-    {
-        if (image != VK_NULL_HANDLE) vkDestroyImage(gpu->logical_device, image, nullptr);
-        if (image_view != VK_NULL_HANDLE) vkDestroyImageView(gpu->logical_device, image_view, nullptr);
-        if (image_sampler != VK_NULL_HANDLE) vkDestroySampler(gpu->logical_device, image_sampler, nullptr);
-        if (device_memory != VK_NULL_HANDLE) vkFreeMemory(gpu->logical_device, device_memory, nullptr);
-    }
+    void destroy(void);
 
-    inline mapped_gpu_memory_t
-    construct_map(gpu_t *gpu)
-    {
-        VkMemoryRequirements requirements = {};
-        vkGetImageMemoryRequirements(gpu->logical_device, image, &requirements);
-        return(mapped_gpu_memory_t{0, requirements.size, &device_memory});
-    }
+    mapped_gpu_memory_t construct_map(void);
 }; 
     
 void
@@ -313,7 +261,6 @@ init_image(uint32_t width
            , VkImageUsageFlags usage
            , VkMemoryPropertyFlags properties
            , uint32_t layers
-           , gpu_t *gpu
            , image2d_t *dest_image
            , VkImageCreateFlags flags = 0);
 
@@ -321,7 +268,6 @@ void
 init_image_view(VkImage *image
                 , VkFormat format
                 , VkImageAspectFlags aspect_flags
-                , gpu_t *gpu
                 , VkImageView *dest_image_view
                 , VkImageViewType type
                 , uint32_t layers);
@@ -341,8 +287,12 @@ init_image_sampler(VkFilter mag_filter
                    , float32_t mip_lod_bias
                    , float32_t min_lod
                    , float32_t max_lod
-                   , gpu_t *gpu
                    , VkSampler *dest_sampler);
+
+VkSubresourceLayout get_image_subresource_layout(VkImage *image,
+                                                 VkImageSubresource *subresource);
+
+VkFormat get_device_supported_depth_format(void);
 
 struct swapchain_t
 {
@@ -360,11 +310,7 @@ struct render_pass_t
     VkRenderPass render_pass;
     uint32_t subpass_count;
 
-    inline void
-    destroy(gpu_t *gpu)
-    {
-        vkDestroyRenderPass(gpu->logical_device, render_pass, nullptr);
-    }
+    void destroy(void);
 };
 
 internal inline VkAttachmentDescription
@@ -482,13 +428,11 @@ void
 init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions
                  , const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions
                  , const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies
-                 , gpu_t *gpu
                  , render_pass_t *dest_render_pass);
 void
 init_shader(VkShaderStageFlagBits stage_bits
             , uint32_t content_size
             , byte_t *file_contents
-            , gpu_t *gpu
             , VkShaderModule *dest_shader_module);
 
 // describes the binding of a buffer to a model VAO
@@ -917,13 +861,11 @@ init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicState> *dynamic_
 void
 init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts
                      , memory_buffer_view_t<VkPushConstantRange> *ranges
-                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout);
 
 void
 init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
                      , const memory_buffer_view_t<VkPushConstantRange> &ranges
-                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout);
 
 internal inline void
@@ -970,30 +912,19 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
                        , VkPipelineLayout *layout
                        , render_pass_t *render_pass
                        , uint32_t subpass
-                       , gpu_t *gpu
                        , VkPipeline *pipeline);
 
 void
 allocate_command_pool(uint32_t queue_family_index
-                      , gpu_t *gpu
                       , VkCommandPool *command_pool);
 
 void
 allocate_command_buffers(VkCommandPool *command_pool_source
                          , VkCommandBufferLevel level
-                         , gpu_t *gpu
                          , const memory_buffer_view_t<VkCommandBuffer> &command_buffers);
 
-internal inline void
-free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
-                    , VkCommandPool *pool
-                    , gpu_t *gpu)
-{
-    vkFreeCommandBuffers(gpu->logical_device
-                         , *pool
-                         , command_buffers.count
-                         , command_buffers.buffer);
-}
+void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
+                         , VkCommandPool *pool);
     
 void
 begin_command_buffer(VkCommandBuffer *command_buffer
@@ -1016,35 +947,30 @@ submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
 
 void
 init_single_use_command_buffer(VkCommandPool *command_pool
-                               , gpu_t *gpu
                                , VkCommandBuffer *dst);
 
 void
 destroy_single_use_command_buffer(VkCommandBuffer *command_buffer
-                                  , VkCommandPool *command_pool
-                                  , gpu_t *gpu);
+                                  , VkCommandPool *command_pool);
     
 void
 transition_image_layout(VkImage *image
                         , VkFormat format
                         , VkImageLayout old_layout
                         , VkImageLayout new_layout
-                        , VkCommandPool *graphics_command_pool
-                        , gpu_t *gpu);
+                        , VkCommandPool *graphics_command_pool);
 
 void
 copy_buffer_into_image(gpu_buffer_t *src_buffer
                        , image2d_t *dst_image
                        , uint32_t width
                        , uint32_t height
-                       , VkCommandPool *command_pool
-                       , gpu_t *gpu);
+                       , VkCommandPool *command_pool);
 
 void
 copy_buffer(gpu_buffer_t *src_buffer
             , gpu_buffer_t *dst_buffer
-            , VkCommandPool *command_pool
-            , gpu_t *gpu);
+            , VkCommandPool *command_pool);
 
 void
 copy_image(image2d_t *src_image,
@@ -1053,8 +979,7 @@ copy_image(image2d_t *src_image,
            VkPipelineStageFlags flags_before,
            VkPipelineStageFlags flags_after,
            VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf,
-           gpu_t *gpu);
+           VkCommandBuffer *cmdbuf);
 
 void
 blit_image(image2d_t *src_image,
@@ -1063,22 +988,19 @@ blit_image(image2d_t *src_image,
            VkPipelineStageFlags flags_before,
            VkPipelineStageFlags flags_after,
            VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf,
-           gpu_t *gpu);
+           VkCommandBuffer *cmdbuf);
 
 void
 invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , VkBufferUsageFlags usage
                                               , VkCommandPool *transfer_command_pool
-                                              , gpu_buffer_t *dst_buffer
-                                              , gpu_t *gpu);
+                                              , gpu_buffer_t *dst_buffer);
 
 void
 invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
                                              VkCommandPool *transfer_command_pool,
                                              image2d_t *dst_image,
-                                             int32_t width, int32_t height,
-                                             gpu_t *gpu);
+                                             int32_t width, int32_t height);
     
 struct framebuffer_t
 {
@@ -1090,11 +1012,7 @@ struct framebuffer_t
     memory_buffer_view_t<VkImageView> color_attachments;
     VkImageView depth_attachment;
 
-    void
-    destroy(gpu_t *gpu)
-    {
-        vkDestroyFramebuffer(gpu->logical_device, framebuffer, nullptr);
-    }
+    void destroy(void);
 };
 
 void
@@ -1102,7 +1020,6 @@ init_framebuffer_attachment(uint32_t width
                             , uint32_t height
                             , VkFormat format
                             , VkImageUsageFlags usage
-                            , gpu_t *gpu
                             , image2d_t *attachment
                             // for_t cubemap targets
                             , uint32_t layers = 1
@@ -1114,7 +1031,6 @@ init_framebuffer(render_pass_t *compatible_render_pass
                  , uint32_t width
                  , uint32_t height
                  , uint32_t layers
-                 , gpu_t *gpu
                  , framebuffer_t *framebuffer); // need to initialize the attachment handles
 
 internal inline VkDescriptorSetLayoutBinding
@@ -1134,7 +1050,6 @@ init_descriptor_set_layout_binding(VkDescriptorType type
 
 void
 init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings
-                           , gpu_t *gpu
                            , VkDescriptorSetLayout *dst);
 
 internal inline void
@@ -1155,12 +1070,10 @@ command_buffer_bind_descriptor_sets(graphics_pipeline_t *pipeline
 void
 allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets
                          , const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
-                         , gpu_t *gpu
                          , VkDescriptorPool *descriptor_pool);
 
 VkDescriptorSet
 allocate_descriptor_set(VkDescriptorSetLayout *layout
-                        , gpu_t *gpu
                         , VkDescriptorPool *descriptor_pool);
     
 internal void
@@ -1252,117 +1165,65 @@ struct descriptor_pool_t
 void
 init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
                      , uint32_t max_sets
-                     , gpu_t *gpu
                      , VkDescriptorPool *pool);
     
 void
 init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
                      , uint32_t max_sets
-                     , gpu_t *gpu
                      , descriptor_pool_t *pool);
     
     
 void
-update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes
-                       , gpu_t *gpu);
+update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes);
 
-internal inline void
-init_semaphore(gpu_t *gpu
-               , VkSemaphore *semaphore)
-{
-    VkSemaphoreCreateInfo semaphore_info = {};
-    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	
-    VK_CHECK(vkCreateSemaphore(gpu->logical_device
-                               , &semaphore_info
-                               , nullptr
-                               , semaphore));
-}
+void init_semaphore(VkSemaphore *semaphore);
 
-internal inline void
-init_fence(gpu_t *gpu
-           , VkFenceCreateFlags flags
-           , VkFence *fence)
-{
-    VkFenceCreateInfo fence_info = {};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_info.flags = flags;
+void init_fence(VkFenceCreateFlags flags, VkFence *fence);
 
-    VK_CHECK(vkCreateFence(gpu->logical_device
-                           , &fence_info
-                           , nullptr
-                           , fence));
-}
-
-internal inline void
-wait_fences(gpu_t *gpu
-            , const memory_buffer_view_t<VkFence> &fences)
-{
-    vkWaitForFences(gpu->logical_device
-                    , fences.count
-                    , fences.buffer
-                    , VK_TRUE
-                    , std::numeric_limits<uint64_t>::max());
-}
+void wait_fences(const memory_buffer_view_t<VkFence> &fences);
 
 struct next_image_return_t {VkResult result; uint32_t image_index;};
-internal inline next_image_return_t
-acquire_next_image(swapchain_t *swapchain
-                   , gpu_t *gpu
-                   , VkSemaphore *semaphore
-                   , VkFence *fence)
-{
-    uint32_t image_index = 0;
-    VkResult result = vkAcquireNextImageKHR(gpu->logical_device
-                                            , swapchain->swapchain
-                                            , std::numeric_limits<uint64_t>::max()
-                                            , *semaphore
-                                            , *fence
-                                            , &image_index);
-    return(next_image_return_t{result, image_index});
-}
+
+next_image_return_t
+acquire_next_image(VkSemaphore *semaphore
+                   , VkFence *fence);
 
 VkResult
 present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
-        , const memory_buffer_view_t<VkSwapchainKHR> &swapchains
         , uint32_t *image_index
         , VkQueue *present_queue);
 
-internal inline void
-reset_fences(gpu_t *gpu
-             , const memory_buffer_view_t<VkFence> &fences)
-{
-    vkResetFences(gpu->logical_device, fences.count, fences.buffer);
-}
+void reset_fences(const memory_buffer_view_t<VkFence> &fences);
 
-internal inline uint32_t
-adjust_memory_size_for_gpu_alignment(uint32_t size
-                                     , gpu_t *gpu)
-{
-    uint32_t alignment = gpu->properties.limits.nonCoherentAtomSize;
+uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size);
 
-    uint32_t mod = size % alignment;
-	
-    if (mod == 0) return size;
-    else return size + alignment - mod;
-}
-    
-struct vulkan_state_t
+queue_families_t *get_queue_families(void);
+VkQueue *get_present_queue(void);
+VkQueue *get_graphics_queue(void);
+// TODO: Replace this with get swapchain
+VkFormat get_swapchain_format(void);
+VkExtent2D get_swapchain_extent(void);
+uint32_t get_swapchain_image_count(void);
+VkImageView *get_swapchain_image_views(void);
+
+struct vulkan_context_t
 {
     VkInstance instance;
+    
     VkDebugUtilsMessengerEXT debug_messenger;
+    
     gpu_t gpu;
+    
     VkSurfaceKHR surface;
+    
     swapchain_t swapchain;
 };
 
 /* entry point for vulkan stuff */
-void
-init_vulkan_state(vulkan_state_t *state
-                  , GLFWwindow *window);
+void init_vulkan_state(create_vulkan_surface *create_proc, input_state_t *input_state);
 
-void
-destroy_swapchain(vulkan_state_t *state);
-    
-void
-destroy_vulkan_state(vulkan_state_t *state);
+void destroy_swapchain(void);
+
+void idle_gpu(void);
+
+void destroy_vulkan_state(void);

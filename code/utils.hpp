@@ -31,6 +31,7 @@ typedef float float32_t;
 typedef double float64_t;
 
 typedef uint8_t byte_t;
+typedef uint32_t bool32_t;
 
 extern struct debug_output_t
 {

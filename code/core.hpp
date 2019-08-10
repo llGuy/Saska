@@ -7,6 +7,7 @@
 
 #include "utils.hpp"
 #include "memory.hpp"
+#include <vulkan/vulkan.h>
 
 #define DEBUG true
 
@@ -23,6 +24,17 @@
      assert(false);	  \
      } 
 
+enum platform_t { AGNOSTIC, WINDOWS, LINUX, INVALID };
+extern const platform_t PLATFORM = INVALID;
+
+struct create_vulkan_surface
+{
+    VkInstance *instance;
+    VkSurfaceKHR *surface;
+
+    virtual bool32_t create_proc(void) = 0;
+};
+
 inline constexpr uint32_t
 left_shift(uint32_t n)
 {
@@ -30,39 +42,7 @@ left_shift(uint32_t n)
 }
 
 void
-output_debug(const char *format
-	     , ...);
-
-struct window_data_t
-{
-    int32_t w, h;
-    struct GLFWwindow *window;
-    float32_t dt = 0.0f;
-
-    memory_buffer_view_t<bool> key_map;
-    memory_buffer_view_t<bool> mb_map;
-
-    persist constexpr uint32_t MAX_CHARS = 10;
-    char char_stack[MAX_CHARS];
-    uint32_t char_count = 0;
-
-    // Mouse position
-    int32_t m_x = 0;
-    int32_t m_y = 0;
-
-    // Previous mouse position
-    int32_t prev_m_x = 0;
-    int32_t prev_m_y;
-
-    bool m_moved = false;
-    bool window_resized = false;
-
-    vector2_t normalized_cursor_position;
-};
-
-window_data_t *
-get_window_data(void);
-
+output_debug(const char *format, ...);
 
 struct file_contents_t
 {
@@ -179,3 +159,46 @@ const matrix4_t IDENTITY_MAT4X4 = matrix4_t(1.0f);
 
 extern float32_t
 barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos);
+
+enum keyboard_button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
+                              ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, UP, LEFT, DOWN, RIGHT,
+                              SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE, INVALID_KEY };
+
+struct keyboard_button_input_t
+{
+    bool is_down = 0;
+    float32_t down_amount = 0.0f;
+};
+
+enum mouse_button_type_t { MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE, INVALID_MOUSE_BUTTON };
+
+struct mouse_button_input_t
+{
+    bool is_down = 0;
+    float32_t down_amount = 0.0f;
+};
+
+#define MAX_CHARS 10
+
+struct input_state_t
+{
+    keyboard_button_input_t keyboard[keyboard_button_type_t::INVALID_KEY];
+    mouse_button_input_t mouse_buttons[mouse_button_type_t::INVALID_MOUSE_BUTTON];
+
+    uint32_t char_count;
+    char char_stack[10] = {};
+
+    bool cursor_moved = 0;
+    float32_t cursor_pos_x = 0.0f, cursor_pos_y = 0.0f;
+    float32_t previous_cursor_pos_x = 0.0f, previous_cursor_pos_y = 0.0f;
+
+    bool resized = 0;
+    int32_t window_width, window_height;
+
+    glm::vec2 normalized_cursor_position;
+
+    float32_t dt;
+};
+
+void enable_cursor_display(void);
+void disable_cursor_display(void);

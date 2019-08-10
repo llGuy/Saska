@@ -70,20 +70,14 @@
 #define DEBUG_FILE ".debug"
 
 debug_output_t output_file;
-window_data_t window;
 
-window_data_t *
-get_window_data(void)
-{
-    return(&window);
-}
-
-internal bool running;
+global_var bool g_running;
+global_var double g_game_time = 0.0f;
+global_var double g_dt = 0.0f;
+global_var GLFWwindow *g_window = nullptr;
 
 file_contents_t
-read_file(const char *filename
-	  , const char *flags
-	  , linear_allocator_t *allocator)
+read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
 {
     FILE *file = fopen(filename, flags);
     if (file == nullptr)
@@ -164,57 +158,131 @@ barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, con
 #define MAX_KEYS 350
 #define MAX_MB 5
 
-internal void
-glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
+internal void glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
 {
-    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
-    w_data->w = w;
-    w_data->h = h;
-    w_data->window_resized = true;
+    input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
+    input_state->window_width = w;
+    input_state->window_height = h;
+    input_state->resized = true;
 }
 
-internal void
-glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t scancode, int32_t action, int32_t mods)
+internal void set_key_state(input_state_t *input_state, keyboard_button_type_t button, int32_t action)
 {
-    if (key < MAX_KEYS)
+    if (action == GLFW_PRESS)
     {
-	window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
-	if (action == GLFW_PRESS) w_data->key_map[key] = true;
-	else if (action == GLFW_RELEASE) w_data->key_map[key] = false;
+        keyboard_button_input_t *key = &input_state->keyboard[button];
+        key->is_down = 1;
+        key->down_amount += g_dt;
+    }
+    else if (action == GLFW_RELEASE)
+    {
+        keyboard_button_input_t *key = &input_state->keyboard[button];
+        key->is_down = 0;
+        key->down_amount = 0.0f;
+    }
+}
+
+internal void glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t scancode, int32_t action, int32_t mods)
+{
+    input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
+    switch(key)
+    {
+    case GLFW_KEY_A: { set_key_state(input_state, keyboard_button_type_t::A, action); } break;
+    case GLFW_KEY_B: { set_key_state(input_state, keyboard_button_type_t::B, action); } break;
+    case GLFW_KEY_C: { set_key_state(input_state, keyboard_button_type_t::C, action); } break;
+    case GLFW_KEY_D: { set_key_state(input_state, keyboard_button_type_t::D, action); } break;
+    case GLFW_KEY_E: { set_key_state(input_state, keyboard_button_type_t::E, action); } break;
+    case GLFW_KEY_F: { set_key_state(input_state, keyboard_button_type_t::F, action); } break;
+    case GLFW_KEY_G: { set_key_state(input_state, keyboard_button_type_t::G, action); } break;
+    case GLFW_KEY_H: { set_key_state(input_state, keyboard_button_type_t::H, action); } break;
+    case GLFW_KEY_I: { set_key_state(input_state, keyboard_button_type_t::I, action); } break;
+    case GLFW_KEY_J: { set_key_state(input_state, keyboard_button_type_t::J, action); } break;
+    case GLFW_KEY_K: { set_key_state(input_state, keyboard_button_type_t::K, action); } break;
+    case GLFW_KEY_L: { set_key_state(input_state, keyboard_button_type_t::L, action); } break;
+    case GLFW_KEY_M: { set_key_state(input_state, keyboard_button_type_t::M, action); } break;
+    case GLFW_KEY_N: { set_key_state(input_state, keyboard_button_type_t::N, action); } break;
+    case GLFW_KEY_O: { set_key_state(input_state, keyboard_button_type_t::O, action); } break;
+    case GLFW_KEY_P: { set_key_state(input_state, keyboard_button_type_t::P, action); } break;
+    case GLFW_KEY_Q: { set_key_state(input_state, keyboard_button_type_t::Q, action); } break;
+    case GLFW_KEY_R: { set_key_state(input_state, keyboard_button_type_t::R, action); } break;
+    case GLFW_KEY_S: { set_key_state(input_state, keyboard_button_type_t::S, action); } break;
+    case GLFW_KEY_T: { set_key_state(input_state, keyboard_button_type_t::T, action); } break;
+    case GLFW_KEY_U: { set_key_state(input_state, keyboard_button_type_t::U, action); } break;
+    case GLFW_KEY_V: { set_key_state(input_state, keyboard_button_type_t::V, action); } break;
+    case GLFW_KEY_W: { set_key_state(input_state, keyboard_button_type_t::W, action); } break;
+    case GLFW_KEY_X: { set_key_state(input_state, keyboard_button_type_t::X, action); } break;
+    case GLFW_KEY_Y: { set_key_state(input_state, keyboard_button_type_t::Y, action); } break;
+    case GLFW_KEY_Z: { set_key_state(input_state, keyboard_button_type_t::Z, action); } break;
+    case GLFW_KEY_0: { set_key_state(input_state, keyboard_button_type_t::ZERO, action); } break;
+    case GLFW_KEY_1: { set_key_state(input_state, keyboard_button_type_t::ONE, action); } break;
+    case GLFW_KEY_2: { set_key_state(input_state, keyboard_button_type_t::TWO, action); } break;
+    case GLFW_KEY_3: { set_key_state(input_state, keyboard_button_type_t::THREE, action); } break;
+    case GLFW_KEY_4: { set_key_state(input_state, keyboard_button_type_t::FOUR, action); } break;
+    case GLFW_KEY_5: { set_key_state(input_state, keyboard_button_type_t::FIVE, action); } break;
+    case GLFW_KEY_6: { set_key_state(input_state, keyboard_button_type_t::SIX, action); } break;
+    case GLFW_KEY_7: { set_key_state(input_state, keyboard_button_type_t::SEVEN, action); } break;
+    case GLFW_KEY_8: { set_key_state(input_state, keyboard_button_type_t::EIGHT, action); } break;
+    case GLFW_KEY_9: { set_key_state(input_state, keyboard_button_type_t::NINE, action); } break;
+    case GLFW_KEY_UP: { set_key_state(input_state, keyboard_button_type_t::UP, action); } break;
+    case GLFW_KEY_LEFT: { set_key_state(input_state, keyboard_button_type_t::LEFT, action); } break;
+    case GLFW_KEY_DOWN: { set_key_state(input_state, keyboard_button_type_t::DOWN, action); } break;
+    case GLFW_KEY_RIGHT: { set_key_state(input_state, keyboard_button_type_t::RIGHT, action); } break;
+    case GLFW_KEY_SPACE: { set_key_state(input_state, keyboard_button_type_t::SPACE, action); } break;
+    case GLFW_KEY_LEFT_SHIFT: { set_key_state(input_state, keyboard_button_type_t::LEFT_SHIFT, action); } break;
+    case GLFW_KEY_LEFT_CONTROL: { set_key_state(input_state, keyboard_button_type_t::LEFT_CONTROL, action); } break;
+    case GLFW_KEY_ENTER: { set_key_state(input_state, keyboard_button_type_t::ENTER, action); } break;
+    case GLFW_KEY_BACKSPACE: { set_key_state(input_state, keyboard_button_type_t::BACKSPACE, action); } break;
+    case GLFW_KEY_ESCAPE: { set_key_state(input_state, keyboard_button_type_t::ESCAPE, action); } break;
     }
 }
 
 internal void
 glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
 {
-    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
+    input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
 
-    w_data->prev_m_x = w_data->m_x;
-    w_data->prev_m_y = w_data->m_y;
-    
-    w_data->m_x = x;
-    w_data->m_y = y;
-    w_data->m_moved = true;
+    input_state->previous_cursor_pos_x = input_state->cursor_pos_x;
+    input_state->previous_cursor_pos_y = input_state->cursor_pos_y;
+    input_state->cursor_pos_x = x;
+    input_state->cursor_pos_y = y;
+    input_state->cursor_moved = true;
+}
+
+internal void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
+{
+    if (action == GLFW_PRESS)
+    {
+        mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
+        mouse_button->is_down = 1;
+        mouse_button->down_amount += g_dt;
+    }
+    else if (action == GLFW_RELEASE)
+    {
+        mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
+        mouse_button->is_down = 0;
+        mouse_button->down_amount = 0.0f;
+    }
 }
 
 internal void
 glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t mods)
 {
-    if (button < MAX_MB)
+    input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
+    switch(button)
     {
-	window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
-	if (action == GLFW_PRESS) w_data->mb_map[button] = true;
-	else if (action == GLFW_RELEASE) w_data->mb_map[button] = false;
+    case GLFW_MOUSE_BUTTON_LEFT: { set_mouse_button_state(input_state, mouse_button_type_t::MOUSE_LEFT, action); } break;
+    case GLFW_MOUSE_BUTTON_RIGHT: { set_mouse_button_state(input_state, mouse_button_type_t::MOUSE_RIGHT, action); } break;
+    case GLFW_MOUSE_BUTTON_MIDDLE: { set_mouse_button_state(input_state, mouse_button_type_t::MOUSE_MIDDLE, action); } break;
     }
 }
 
 internal void
 glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
 {
-    window_data_t *w_data = (window_data_t *)glfwGetWindowUserPointer(win);
-    if (w_data->char_count != window_data_t::MAX_CHARS)
+    input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
+    if (input_state->char_count != MAX_CHARS)
     {
-        w_data->char_stack[w_data->char_count++] = (char)code_point;
+        input_state->char_stack[input_state->char_count++] = (char)code_point;
     }
 }
 
@@ -227,12 +295,33 @@ init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allo
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
-int32_t
-main(int32_t argc
-     , char * argv[])
+internal bool32_t create_vulkan_surface_proc(VkInstance *instance, VkSurfaceKHR *dst_surface, void *window_data)
 {
+    GLFWwindow **window = (GLFWwindow **)(window_data);
+    return glfwCreateWindowSurface(*instance, *window, nullptr, dst_surface);
+}
 
-    
+struct create_vulkan_surface_agnostic : create_vulkan_surface
+{
+    GLFWwindow *window_data;
+    bool32_t create_proc(void) override
+    {
+        return glfwCreateWindowSurface(*instance, window_data, nullptr, surface);   
+    }
+};
+
+void enable_cursor_display(void)
+{
+    glfwSetInputMode(g_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+}
+
+void disable_cursor_display(void)
+{
+    glfwSetInputMode(g_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+}
+
+int32_t main(int32_t argc, char * argv[])
+{    
     open_debug_file();
 	
     OUTPUT_DEBUG_LOG("%s\n", "starting session");
@@ -256,75 +345,67 @@ main(int32_t argc
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    allocate_memory_buffer(window.key_map, MAX_KEYS);
-    allocate_memory_buffer(window.mb_map, MAX_MB);
-	
-    window.w = 1700;
-    window.h = 800;
-	
-    window.window = glfwCreateWindow(window.w
-                                     , window.h
-                                     , "Game"
-                                     , NULL
-                                     , NULL);
+    input_state_t input_state = {};
+    input_state.window_width = 1700;
+    input_state.window_height = 800;
 
-    if (!window.window)
+    g_window = glfwCreateWindow(input_state.window_width, input_state.window_height, "Game", NULL, NULL);
+
+    if (!g_window)
     {
         glfwTerminate();
         return(-1);
     }
 
-    glfwSetInputMode(window.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    glfwSetWindowUserPointer(window.window, &window);
-    glfwSetKeyCallback(window.window, glfw_keyboard_input_proc);
-    glfwSetMouseButtonCallback(window.window, glfw_mouse_button_proc);
-    glfwSetCursorPosCallback(window.window, glfw_mouse_position_proc);
-    glfwSetWindowSizeCallback(window.window, glfw_window_resize_proc);
-    glfwSetCharCallback(window.window, glfw_char_input_proc);
+    glfwSetInputMode(g_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetWindowUserPointer(g_window, &input_state);
+    glfwSetKeyCallback(g_window, glfw_keyboard_input_proc);
+    glfwSetMouseButtonCallback(g_window, glfw_mouse_button_proc);
+    glfwSetCursorPosCallback(g_window, glfw_mouse_position_proc);
+    glfwSetWindowSizeCallback(g_window, glfw_window_resize_proc);
+    glfwSetCharCallback(g_window, glfw_char_input_proc);
 
-    vulkan_state_t vk = {};
-
-    init_vulkan_state(&vk, window.window);
-
-
-    make_game(&vk
-              , &vk.gpu
-              , &vk.swapchain
-              , &window);
-	
-	
+    create_vulkan_surface_agnostic create_surface_agnostic_platform = {};
+    
+    create_surface_agnostic_platform.window_data = g_window;
+    
+    init_vulkan_state(&create_surface_agnostic_platform, &input_state);
+    
+    make_game(&input_state);
 
     float32_t fps = 0.0f;
 
     {
         float64_t m_x, m_y;
-        glfwGetCursorPos(window.window, &m_x, &m_y);
-        window.m_x = (float32_t)m_x;
-        window.m_y = (float32_t)m_y;
+        glfwGetCursorPos(g_window, &m_x, &m_y);
+        input_state.cursor_pos_x = (float32_t)m_x;
+        input_state.cursor_pos_y = (float32_t)m_y;
     }
-        
+    
     auto now = std::chrono::high_resolution_clock::now();
-    while(!glfwWindowShouldClose(window.window))
+    while(!glfwWindowShouldClose(g_window))
     {
         glfwPollEvents();
-        update_game(&vk.gpu, &vk.swapchain, &window, &vk, window.dt);	   
+        update_game(&input_state, g_dt);	   
 
         clear_linear();
 
-        window.m_moved = false;
+        input_state.cursor_moved = false;
 
-        window.char_count = 0;
-        window.key_map[GLFW_KEY_BACKSPACE] = false;
-        window.key_map[GLFW_KEY_ENTER] = false;
-        window.key_map[GLFW_KEY_ESCAPE] = false;
-        window.key_map[GLFW_KEY_LEFT_CONTROL] = false;
+        input_state.char_count = 0;
+        input_state.keyboard[keyboard_button_type_t::BACKSPACE].is_down = false;
+        input_state.keyboard[keyboard_button_type_t::ENTER].is_down = false;
+        input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = false;
+        input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = false;
 
         double xpos, ypos;
-        glfwGetCursorPos(window.window, &xpos, &ypos);
-        window.normalized_cursor_position = vector2_t((float32_t)xpos, (float32_t)ypos);
+        glfwGetCursorPos(g_window, &xpos, &ypos);
+        input_state.normalized_cursor_position = vector2_t((float32_t)xpos, (float32_t)ypos);
         
         auto new_now = std::chrono::high_resolution_clock::now();
-        window.dt = std::chrono::duration<float32_t, std::chrono::seconds::period>(new_now - now).count();
+        g_dt = std::chrono::duration<double, std::chrono::seconds::period>(new_now - now).count();
+        g_game_time += g_dt;
+        input_state.dt = g_dt;
 
         now = new_now;
     }
@@ -340,14 +421,12 @@ main(int32_t argc
 	
     close_debug_file();
 
-    // destroy rnd and vk
-    vkDeviceWaitIdle(vk.gpu.logical_device);
-    destroy_swapchain(&vk);
-    destroy_game(&vk.gpu);
+    destroy_swapchain();
+    destroy_game();
 	
-    destroy_vulkan_state(&vk);
+    destroy_vulkan_state();
 	
-    glfwDestroyWindow(window.window);
+    glfwDestroyWindow(g_window);
     glfwTerminate();
 
     std::cout << "Finished session" << std::endl;

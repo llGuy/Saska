@@ -7,14 +7,163 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
+global_var vulkan_context_t g_context;
+
+void mapped_gpu_memory_t::begin(void)
+{
+    vkMapMemory(g_context.gpu.logical_device, *memory, offset, size, 0, &data);
+}
+
+void mapped_gpu_memory_t::fill(memory_byte_buffer_t byte_buffer)
+{
+    memcpy(data, byte_buffer.ptr, size);
+}
+
+void mapped_gpu_memory_t::flush(uint32_t offset, uint32_t size)
+{
+    VkMappedMemoryRange range = {};
+    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    range.memory = *memory;
+    range.offset = offset;
+    range.size = size;
+    vkFlushMappedMemoryRanges(g_context.gpu.logical_device, 1, &range);
+}
+
+void mapped_gpu_memory_t::end(void)
+{
+    vkUnmapMemory(g_context.gpu.logical_device, *memory);
+}
+
+void gpu_buffer_t::destroy(void)
+{
+    vkDestroyBuffer(g_context.gpu.logical_device, buffer, nullptr);
+    vkFreeMemory(g_context.gpu.logical_device, memory, nullptr);
+}
+
+void destroy_shader_module(VkShaderModule *module)
+{
+    vkDestroyShaderModule(g_context.gpu.logical_device, *module, nullptr);
+}
+
+void graphics_pipeline_t::destroy(void)
+{
+    vkDestroyPipelineLayout(g_context.gpu.logical_device, layout, nullptr);
+    vkDestroyPipeline(g_context.gpu.logical_device, pipeline, nullptr);
+}
+
+VkMemoryRequirements image2d_t::get_memory_requirements(void)
+{
+    VkMemoryRequirements requirements = {};
+    vkGetImageMemoryRequirements(g_context.gpu.logical_device, image, &requirements);
+
+    return(requirements);
+}
+
+void image2d_t::destroy(void)
+{
+    if (image != VK_NULL_HANDLE) vkDestroyImage(g_context.gpu.logical_device, image, nullptr);
+    if (image_view != VK_NULL_HANDLE) vkDestroyImageView(g_context.gpu.logical_device, image_view, nullptr);
+    if (image_sampler != VK_NULL_HANDLE) vkDestroySampler(g_context.gpu.logical_device, image_sampler, nullptr);
+    if (device_memory != VK_NULL_HANDLE) vkFreeMemory(g_context.gpu.logical_device, device_memory, nullptr);
+}
+
+mapped_gpu_memory_t image2d_t::construct_map(void)
+{
+    VkMemoryRequirements requirements = {};
+    vkGetImageMemoryRequirements(g_context.gpu.logical_device, image, &requirements);
+    return(mapped_gpu_memory_t{0, requirements.size, &device_memory});
+}
+
+void render_pass_t::destroy(void)
+{
+    vkDestroyRenderPass(g_context.gpu.logical_device, render_pass, nullptr);
+}
+
+void framebuffer_t::destroy(void)
+{
+    vkDestroyFramebuffer(g_context.gpu.logical_device, framebuffer, nullptr);
+}
+
+void init_semaphore(VkSemaphore *semaphore)
+{
+    VkSemaphoreCreateInfo semaphore_info = {};
+    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	
+    VK_CHECK(vkCreateSemaphore(g_context.gpu.logical_device
+                               , &semaphore_info
+                               , nullptr
+                               , semaphore));
+}
+
+void init_fence(VkFenceCreateFlags flags, VkFence *fence)
+{
+    VkFenceCreateInfo fence_info = {};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_info.flags = flags;
+
+    VK_CHECK(vkCreateFence(g_context.gpu.logical_device
+                           , &fence_info
+                           , nullptr
+                           , fence));
+}
+
+void wait_fences(const memory_buffer_view_t<VkFence> &fences)
+{
+    vkWaitForFences(g_context.gpu.logical_device
+                    , fences.count
+                    , fences.buffer
+                    , VK_TRUE
+                    , std::numeric_limits<uint64_t>::max());
+}
+
+VkFormat get_device_supported_depth_format(void)
+{
+    return g_context.gpu.supported_depth_format;
+}
+
+next_image_return_t
+acquire_next_image(VkSemaphore *semaphore
+                   , VkFence *fence)
+{
+    uint32_t image_index = 0;
+    VkResult result = vkAcquireNextImageKHR(g_context.gpu.logical_device
+                                            , g_context.swapchain.swapchain
+                                            , std::numeric_limits<uint64_t>::max()
+                                            , *semaphore
+                                            , *fence
+                                            , &image_index);
+    return(next_image_return_t{result, image_index});
+}
+
+void reset_fences(const memory_buffer_view_t<VkFence> &fences)
+{
+    vkResetFences(g_context.gpu.logical_device, fences.count, fences.buffer);
+}
+
+uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size)
+{
+    uint32_t alignment = g_context.gpu.properties.limits.nonCoherentAtomSize;
+
+    uint32_t mod = size % alignment;
+	
+    if (mod == 0) return size;
+    else return size + alignment - mod;
+}
+
+void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
+                         , VkCommandPool *pool)
+{
+    vkFreeCommandBuffers(g_context.gpu.logical_device
+                         , *pool
+                         , command_buffers.count
+                         , command_buffers.buffer);
+}
+
 internal uint32_t
-find_memory_type_according_to_requirements(gpu_t *gpu
-                                           , VkMemoryPropertyFlags properties
-                                           , VkMemoryRequirements memory_requirements)
+find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements)
 {
     VkPhysicalDeviceMemoryProperties mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(gpu->hardware
-                                        , &mem_properties);
+    vkGetPhysicalDeviceMemoryProperties(g_context.gpu.hardware, &mem_properties);
 
     for (uint32_t i = 0
              ; i < mem_properties.memoryTypeCount
@@ -35,20 +184,53 @@ find_memory_type_according_to_requirements(gpu_t *gpu
 void
 allocate_gpu_memory(VkMemoryPropertyFlags properties
                     , VkMemoryRequirements memory_requirements
-                    , gpu_t *gpu
                     , VkDeviceMemory *dest_memory)
 {
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = memory_requirements.size;
-    alloc_info.memoryTypeIndex = find_memory_type_according_to_requirements(gpu
-                                                                            , properties
+    alloc_info.memoryTypeIndex = find_memory_type_according_to_requirements(properties
                                                                             , memory_requirements);
 
-    VK_CHECK(vkAllocateMemory(gpu->logical_device
+    VK_CHECK(vkAllocateMemory(g_context.gpu.logical_device
                               , &alloc_info
                               , nullptr
                               , dest_memory));
+}
+
+queue_families_t *get_queue_families(void)
+{
+    return &g_context.gpu.queue_families;
+}
+
+VkFormat get_swapchain_format(void)
+{
+    return g_context.swapchain.format;
+}
+
+VkExtent2D get_swapchain_extent(void)
+{
+    return g_context.swapchain.extent;
+}
+
+VkImageView *get_swapchain_image_views(void)
+{
+    return g_context.swapchain.views.buffer;
+}
+
+uint32_t get_swapchain_image_count(void)
+{
+    return g_context.swapchain.imgs.count;
+}
+
+VkQueue *get_present_queue(void)
+{
+    return &g_context.gpu.present_queue;
+}
+
+VkQueue *get_graphics_queue(void)
+{
+    return &g_context.gpu.graphics_queue;
 }
 
 void
@@ -110,8 +292,7 @@ struct instance_create_extension_params_t
 
 // TODO(luc) : make validation layers truly optional, enable / disable when requested
 internal void
-init_instance(VkInstance *instance
-              , VkApplicationInfo *app_info
+init_instance(VkApplicationInfo *app_info
               , instance_create_validation_layer_params_t *validation_params
               , instance_create_extension_params_t *extension_params)
 {
@@ -151,7 +332,7 @@ init_instance(VkInstance *instance
 
     VK_CHECK(vkCreateInstance(&instance_info
                               , nullptr
-                              , instance)
+                              , &g_context.instance)
              , "failed to create instance\n");
 
     pop_stack();
@@ -171,9 +352,7 @@ vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity
     return(VK_FALSE);
 }
 
-internal void
-init_debug_messenger(VkInstance *instance
-                     , VkDebugUtilsMessengerEXT *messenger)
+internal void init_debug_messenger(void)
 {
     // setup debugger
     VkDebugUtilsMessengerCreateInfoEXT debug_info = {};
@@ -187,39 +366,38 @@ init_debug_messenger(VkInstance *instance
     debug_info.pfnUserCallback = vulkan_debug_proc;
     debug_info.pUserData = nullptr;
 
-    PFN_vkCreateDebugUtilsMessengerEXT vk_create_debug_utils_messenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(*instance, "vkCreateDebugUtilsMessengerEXT");
+    PFN_vkCreateDebugUtilsMessengerEXT vk_create_debug_utils_messenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(g_context.instance, "vkCreateDebugUtilsMessengerEXT");
     assert(vk_create_debug_utils_messenger != nullptr);
-    VK_CHECK(vk_create_debug_utils_messenger(*instance, &debug_info, nullptr, messenger));
+    VK_CHECK(vk_create_debug_utils_messenger(g_context.instance, &debug_info, nullptr, &g_context.debug_messenger));
 }
 
 internal void
-get_swapchain_support(VkSurfaceKHR *surface
-                      , gpu_t *gpu)
+get_swapchain_support(VkSurfaceKHR *surface)
 {
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu->hardware, *surface, &gpu->swapchain_support.capabilities);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(gpu->hardware, *surface, &gpu->swapchain_support.available_formats_count, nullptr);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_context.gpu.hardware, *surface, &g_context.gpu.swapchain_support.capabilities);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(g_context.gpu.hardware, *surface, &g_context.gpu.swapchain_support.available_formats_count, nullptr);
 
-    if (gpu->swapchain_support.available_formats_count != 0)
+    if (g_context.gpu.swapchain_support.available_formats_count != 0)
     {
-        gpu->swapchain_support.available_formats = (VkSurfaceFormatKHR *)allocate_stack(sizeof(VkSurfaceFormatKHR) * gpu->swapchain_support.available_formats_count
+        g_context.gpu.swapchain_support.available_formats = (VkSurfaceFormatKHR *)allocate_stack(sizeof(VkSurfaceFormatKHR) * g_context.gpu.swapchain_support.available_formats_count
                                                                                         , alignment_t(1)
                                                                                         , "surface_format_list_allocation");
-        vkGetPhysicalDeviceSurfaceFormatsKHR(gpu->hardware
+        vkGetPhysicalDeviceSurfaceFormatsKHR(g_context.gpu.hardware
                                              , *surface
-                                             , &gpu->swapchain_support.available_formats_count
-                                             , gpu->swapchain_support.available_formats);
+                                             , &g_context.gpu.swapchain_support.available_formats_count
+                                             , g_context.gpu.swapchain_support.available_formats);
     }
 
-    vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->hardware, *surface, &gpu->swapchain_support.available_present_modes_count, nullptr);
-    if (gpu->swapchain_support.available_present_modes_count != 0)
+    vkGetPhysicalDeviceSurfacePresentModesKHR(g_context.gpu.hardware, *surface, &g_context.gpu.swapchain_support.available_present_modes_count, nullptr);
+    if (g_context.gpu.swapchain_support.available_present_modes_count != 0)
     {
-        gpu->swapchain_support.available_present_modes = (VkPresentModeKHR *)allocate_stack(sizeof(VkPresentModeKHR) * gpu->swapchain_support.available_present_modes_count
+        g_context.gpu.swapchain_support.available_present_modes = (VkPresentModeKHR *)allocate_stack(sizeof(VkPresentModeKHR) * g_context.gpu.swapchain_support.available_present_modes_count
                                                                                             , alignment_t(1)
                                                                                             , "surface_present_mode_list_allocation");
-        vkGetPhysicalDeviceSurfacePresentModesKHR(gpu->hardware
+        vkGetPhysicalDeviceSurfacePresentModesKHR(g_context.gpu.hardware
                                                   , *surface
-                                                  , &gpu->swapchain_support.available_present_modes_count
-                                                  , gpu->swapchain_support.available_present_modes);
+                                                  , &g_context.gpu.swapchain_support.available_present_modes_count
+                                                  , g_context.gpu.swapchain_support.available_present_modes);
     }
 }
     
@@ -269,32 +447,31 @@ check_if_physical_device_supports_extensions(physical_device_extensions_params_t
     
 internal bool
 check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params
-                                     , VkSurfaceKHR *surface
-                                     , gpu_t *gpu)
+                                     , VkSurfaceKHR *surface)
 {
-    gpu->find_queue_families(surface);
+    g_context.gpu.find_queue_families(surface);
 
     VkPhysicalDeviceProperties device_properties;
-    vkGetPhysicalDeviceProperties(gpu->hardware
+    vkGetPhysicalDeviceProperties(g_context.gpu.hardware
                                   , &device_properties);
     
     VkPhysicalDeviceFeatures device_features;
-    vkGetPhysicalDeviceFeatures(gpu->hardware
+    vkGetPhysicalDeviceFeatures(g_context.gpu.hardware
                                 , &device_features);
 
     bool swapchain_supported = check_if_physical_device_supports_extensions(extension_params
-                                                                            , gpu->hardware);
+                                                                            , g_context.gpu.hardware);
 
     bool swapchain_usable = false;
     if (swapchain_supported)
     {
-        get_swapchain_support(surface, gpu);
-        swapchain_usable = gpu->swapchain_support.available_formats_count && gpu->swapchain_support.available_present_modes_count;
+        get_swapchain_support(surface);
+        swapchain_usable = g_context.gpu.swapchain_support.available_formats_count && g_context.gpu.swapchain_support.available_present_modes_count;
     }
 
     return(swapchain_supported && swapchain_usable
            && (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-           && gpu->queue_families.complete()
+           && g_context.gpu.queue_families.complete()
            && device_features.geometryShader
            && device_features.wideLines
            && device_features.textureCompressionBC
@@ -303,20 +480,17 @@ check_if_physical_device_is_suitable(physical_device_extensions_params_t *extens
 }
 
 internal void
-choose_gpu(physical_device_extensions_params_t *extension_params
-           , VkSurfaceKHR *surface
-           , VkInstance *instance
-           , gpu_t *gpu_result)
+choose_gpu(physical_device_extensions_params_t *extension_params)
 {
     uint32_t device_count = 0;
-    vkEnumeratePhysicalDevices(*instance
+    vkEnumeratePhysicalDevices(g_context.instance
                                , &device_count
                                , nullptr);
     
     VkPhysicalDevice *devices = (VkPhysicalDevice *)allocate_stack(sizeof(VkPhysicalDevice) * device_count
                                                                    , alignment_t(1)
                                                                    , "physical_device_list_allocation");
-    vkEnumeratePhysicalDevices(*instance
+    vkEnumeratePhysicalDevices(g_context.instance
                                , &device_count
                                , devices);
 
@@ -326,33 +500,27 @@ choose_gpu(physical_device_extensions_params_t *extension_params
              ; i < device_count
              ; ++i)
     {
-        gpu_t gpu;
-        gpu.hardware = devices[i];
+        g_context.gpu.hardware = devices[i];
 	
         // check if device is suitable
-        if (check_if_physical_device_is_suitable(extension_params
-                                                 , surface
-                                                 , &gpu))
+        if (check_if_physical_device_is_suitable(extension_params, &g_context.surface))
         {
-            *gpu_result = gpu;
-
-            vkGetPhysicalDeviceProperties(gpu.hardware, &gpu_result->properties);
+            vkGetPhysicalDeviceProperties(g_context.gpu.hardware, &g_context.gpu.properties);
 		
             break;
         }
     }
 
-    assert(gpu_result->hardware != VK_NULL_HANDLE);
+    assert(g_context.gpu.hardware != VK_NULL_HANDLE);
     OUTPUT_DEBUG_LOG("%s\n", "found gpu compatible with application");
 }
 
 internal void
 init_device(physical_device_extensions_params_t *gpu_extensions
-            , instance_create_validation_layer_params_t *validation_layers
-            , gpu_t *gpu)
+            , instance_create_validation_layer_params_t *validation_layers)
 {
     // create the logical device
-    queue_families_t *indices = &gpu->queue_families;
+    queue_families_t *indices = &g_context.gpu.queue_families;
 
     bitset32_t bitset;
     bitset.set1(indices->graphics_family);
@@ -407,15 +575,15 @@ init_device(physical_device_extensions_params_t *gpu_extensions
     device_info.ppEnabledLayerNames = validation_layers->o_layer_names;
     device_info.enabledLayerCount = validation_layers->o_layer_count;
     
-    VK_CHECK(vkCreateDevice(gpu->hardware
+    VK_CHECK(vkCreateDevice(g_context.gpu.hardware
                             , &device_info
                             , nullptr
-                            , &gpu->logical_device));
+                            , &g_context.gpu.logical_device));
     pop_stack();
     pop_stack();
 
-    vkGetDeviceQueue(gpu->logical_device, gpu->queue_families.graphics_family, 0, &gpu->graphics_queue);
-    vkGetDeviceQueue(gpu->logical_device, gpu->queue_families.present_family, 0, &gpu->present_queue);
+    vkGetDeviceQueue(g_context.gpu.logical_device, g_context.gpu.queue_families.graphics_family, 0, &g_context.gpu.graphics_queue);
+    vkGetDeviceQueue(g_context.gpu.logical_device, g_context.gpu.queue_families.present_family, 0, &g_context.gpu.present_queue);
 }
 
 internal VkSurfaceFormatKHR
@@ -464,8 +632,7 @@ choose_surface_present_mode(const VkPresentModeKHR *available_present_modes
 }
 
 internal VkExtent2D
-choose_swapchain_extent(GLFWwindow *window
-                        , const VkSurfaceCapabilitiesKHR *capabilities)
+choose_swapchain_extent(input_state_t *input_state, const VkSurfaceCapabilitiesKHR *capabilities)
 {
     if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
     {
@@ -473,8 +640,7 @@ choose_swapchain_extent(GLFWwindow *window
     }
     else
     {
-        int32_t width, height;
-        glfwGetFramebufferSize(window, &width, &height);
+        int32_t width = input_state->window_width, height = input_state->window_height;
 
         VkExtent2D actual_extent	= { (uint32_t)width, (uint32_t)height };
         actual_extent.width		= MAX(capabilities->minImageExtent.width, MIN(capabilities->maxImageExtent.width, actual_extent.width));
@@ -482,6 +648,17 @@ choose_swapchain_extent(GLFWwindow *window
 
         return(actual_extent);
     }
+}
+
+VkSubresourceLayout get_image_subresource_layout(VkImage *image,
+                                                 VkImageSubresource *subresource)
+{
+    VkSubresourceLayout layout;
+    vkGetImageSubresourceLayout(g_context.gpu.logical_device,
+                                *image,
+                                subresource,
+                                &layout);
+    return(layout);
 }
 
 void
@@ -492,7 +669,6 @@ init_image(uint32_t width
            , VkImageUsageFlags usage
            , VkMemoryPropertyFlags properties
            , uint32_t layers
-           , gpu_t *gpu
            , image2d_t *dest_image
            , VkImageCreateFlags flags)
 {
@@ -512,16 +688,16 @@ init_image(uint32_t width
     image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     image_info.flags = flags;
 
-    VK_CHECK(vkCreateImage(gpu->logical_device, &image_info, nullptr, &dest_image->image));
+    VK_CHECK(vkCreateImage(g_context.gpu.logical_device, &image_info, nullptr, &dest_image->image));
 
     VkMemoryRequirements mem_requirements = {};
-    vkGetImageMemoryRequirements(gpu->logical_device
+    vkGetImageMemoryRequirements(g_context.gpu.logical_device
                                  , dest_image->image
                                  , &mem_requirements);
 
-    allocate_gpu_memory(properties, mem_requirements, gpu, &dest_image->device_memory);
+    allocate_gpu_memory(properties, mem_requirements, &dest_image->device_memory);
 
-    vkBindImageMemory(gpu->logical_device, dest_image->image, dest_image->device_memory, 0);
+    vkBindImageMemory(g_context.gpu.logical_device, dest_image->image, dest_image->device_memory, 0);
 
     dest_image->format;
 }
@@ -530,7 +706,6 @@ void
 init_image_view(VkImage *image
                 , VkFormat format
                 , VkImageAspectFlags aspect_flags
-                , gpu_t *gpu
                 , VkImageView *dest_image_view
                 , VkImageViewType type
                 , uint32_t layers)
@@ -546,7 +721,7 @@ init_image_view(VkImage *image
     view_info.subresourceRange.baseArrayLayer	= 0;
     view_info.subresourceRange.layerCount		= layers;
 
-    VK_CHECK(vkCreateImageView(gpu->logical_device, &view_info, nullptr, dest_image_view));
+    VK_CHECK(vkCreateImageView(g_context.gpu.logical_device, &view_info, nullptr, dest_image_view));
 }
 
 void
@@ -564,7 +739,6 @@ init_image_sampler(VkFilter mag_filter
                    , float32_t mip_lod_bias
                    , float32_t min_lod
                    , float32_t max_lod
-                   , gpu_t *gpu
                    , VkSampler *dest_sampler)
 {
     VkSamplerCreateInfo sampler_info = {};
@@ -584,7 +758,7 @@ init_image_sampler(VkFilter mag_filter
     sampler_info.minLod = min_lod;
     sampler_info.maxLod = max_lod;
 
-    VK_CHECK(vkCreateSampler(gpu->logical_device, &sampler_info, nullptr, dest_sampler));
+    VK_CHECK(vkCreateSampler(g_context.gpu.logical_device, &sampler_info, nullptr, dest_sampler));
 }
 
 void
@@ -604,7 +778,6 @@ begin_command_buffer(VkCommandBuffer *command_buffer
 void
 allocate_command_buffers(VkCommandPool *command_pool_source
                          , VkCommandBufferLevel level
-                         , gpu_t *gpu
                          , const memory_buffer_view_t<VkCommandBuffer> &command_buffers)
 {
     VkCommandBufferAllocateInfo allocate_info = {};
@@ -613,7 +786,7 @@ allocate_command_buffers(VkCommandPool *command_pool_source
     allocate_info.commandPool = *command_pool_source;
     allocate_info.commandBufferCount = command_buffers.count;
 
-    vkAllocateCommandBuffers(gpu->logical_device
+    vkAllocateCommandBuffers(g_context.gpu.logical_device
                              , &allocate_info
                              , command_buffers.buffer);
 }
@@ -649,12 +822,10 @@ has_stencil_component(VkFormat format)
 
 void
 init_single_use_command_buffer(VkCommandPool *command_pool
-                               , gpu_t *gpu
                                , VkCommandBuffer *dst)
 {
     allocate_command_buffers(command_pool
                              , VK_COMMAND_BUFFER_LEVEL_PRIMARY
-                             , gpu
                              , memory_buffer_view_t<VkCommandBuffer>{1, dst});
 
     begin_command_buffer(dst
@@ -664,8 +835,7 @@ init_single_use_command_buffer(VkCommandPool *command_pool
 
 void
 destroy_single_use_command_buffer(VkCommandBuffer *command_buffer
-                                  , VkCommandPool *command_pool
-                                  , gpu_t *gpu)
+                                  , VkCommandPool *command_pool)
 {
     end_command_buffer(command_buffer);
 
@@ -675,11 +845,11 @@ destroy_single_use_command_buffer(VkCommandBuffer *command_buffer
                , null_buffer<VkSemaphore>()
                , null_buffer<VkPipelineStageFlags>()
                , &null_fence
-               , &gpu->graphics_queue);
+               , &g_context.gpu.graphics_queue);
 
-    vkQueueWaitIdle(gpu->graphics_queue);
+    vkQueueWaitIdle(g_context.gpu.graphics_queue);
 
-    free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{1, command_buffer}, command_pool, gpu);
+    free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{1, command_buffer}, command_pool);
 }
     
 void
@@ -687,11 +857,10 @@ transition_image_layout(VkImage *image
                         , VkFormat format
                         , VkImageLayout old_layout
                         , VkImageLayout new_layout
-                        , VkCommandPool *graphics_command_pool
-                        , gpu_t *gpu)
+                        , VkCommandPool *graphics_command_pool)
 {
     VkCommandBuffer single_use;
-    init_single_use_command_buffer(graphics_command_pool, gpu, &single_use);
+    init_single_use_command_buffer(graphics_command_pool, &single_use);
 	
     VkImageMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -775,8 +944,7 @@ transition_image_layout(VkImage *image
                          , &barrier);
 
     destroy_single_use_command_buffer(&single_use
-                                      , graphics_command_pool
-                                      , gpu);
+                                      , graphics_command_pool);
 }
 
 void
@@ -784,12 +952,10 @@ copy_buffer_into_image(gpu_buffer_t *src_buffer
                        , image2d_t *dst_image
                        , uint32_t width
                        , uint32_t height
-                       , VkCommandPool *command_pool
-                       , gpu_t *gpu)
+                       , VkCommandPool *command_pool)
 {
     VkCommandBuffer command_buffer;
     init_single_use_command_buffer(command_pool
-                                   , gpu
                                    , &command_buffer);
 
     VkBufferImageCopy region	= {};
@@ -813,19 +979,16 @@ copy_buffer_into_image(gpu_buffer_t *src_buffer
                            , &region);
 
     destroy_single_use_command_buffer(&command_buffer
-                                      , command_pool
-                                      , gpu);
+                                      , command_pool);
 }
 
 void
 copy_buffer(gpu_buffer_t *src_buffer
             , gpu_buffer_t *dst_buffer
-            , VkCommandPool *command_pool
-            , gpu_t *gpu)
+            , VkCommandPool *command_pool)
 {
     VkCommandBuffer command_buffer;
     init_single_use_command_buffer(command_pool
-                                   , gpu
                                    , &command_buffer);
 
     VkBufferCopy region = {};
@@ -837,8 +1000,7 @@ copy_buffer(gpu_buffer_t *src_buffer
                     , &region);
 
     destroy_single_use_command_buffer(&command_buffer
-                                      , command_pool
-                                      , gpu);
+                                      , command_pool);
 }
 
 void
@@ -848,8 +1010,7 @@ copy_image(image2d_t *src_image,
            VkPipelineStageFlags flags_before,
            VkPipelineStageFlags flags_after,
            VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf,
-           gpu_t *gpu)
+           VkCommandBuffer *cmdbuf)
 {
     VkImageMemoryBarrier image_barrier = {};
     image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -953,8 +1114,7 @@ blit_image(image2d_t *src_image,
            VkPipelineStageFlags flags_before,
            VkPipelineStageFlags flags_after,
            VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf,
-           gpu_t *gpu)
+           VkCommandBuffer *cmdbuf)
 {
     VkImageMemoryBarrier image_barrier = {};
     image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1058,8 +1218,7 @@ void
 invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
                                              VkCommandPool *transfer_command_pool,
                                              image2d_t *dst_image,
-                                             int32_t width, int32_t height,
-                                             gpu_t *gpu)
+                                             int32_t width, int32_t height)
 {
     VkDeviceSize staging_buffer_size = items.size;
 	
@@ -1070,30 +1229,27 @@ invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
                 , VK_BUFFER_USAGE_TRANSFER_SRC_BIT
                 , VK_SHARING_MODE_EXCLUSIVE
                 , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                , gpu
                 , &staging_buffer);
 
     mapped_gpu_memory_t mapped_memory = staging_buffer.construct_map();
-    mapped_memory.begin(gpu);
+    mapped_memory.begin();
     mapped_memory.fill(items);
-    mapped_memory.end(gpu);
+    mapped_memory.end();
 
     copy_buffer_into_image(&staging_buffer,
                            dst_image,
                            width, height,
-                           transfer_command_pool,
-                           gpu);
+                           transfer_command_pool);
 
-    vkDestroyBuffer(gpu->logical_device, staging_buffer.buffer, nullptr);
-    vkFreeMemory(gpu->logical_device, staging_buffer.memory, nullptr);    
+    vkDestroyBuffer(g_context.gpu.logical_device, staging_buffer.buffer, nullptr);
+    vkFreeMemory(g_context.gpu.logical_device, staging_buffer.memory, nullptr);    
 }
 
 void
 invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                                               , VkBufferUsageFlags usage
                                               , VkCommandPool *transfer_command_pool
-                                              , gpu_buffer_t *dst_buffer
-                                              , gpu_t *gpu)
+                                              , gpu_buffer_t *dst_buffer)
 {
     VkDeviceSize buffer_size = items.size;
 	
@@ -1104,39 +1260,33 @@ invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
                 , VK_BUFFER_USAGE_TRANSFER_SRC_BIT
                 , VK_SHARING_MODE_EXCLUSIVE
                 , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                , gpu
                 , &staging_buffer);
 
     mapped_gpu_memory_t mapped_memory = staging_buffer.construct_map();
-    mapped_memory.begin(gpu);
+    mapped_memory.begin();
     mapped_memory.fill(items);
-    mapped_memory.end(gpu);
+    mapped_memory.end();
 
     init_buffer(buffer_size
                 , VK_BUFFER_USAGE_TRANSFER_SRC_BIT | usage
                 , VK_SHARING_MODE_EXCLUSIVE
                 , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-                , gpu
                 , dst_buffer);
 
     copy_buffer(&staging_buffer
                 , dst_buffer
-                , transfer_command_pool
-                , gpu);
+                , transfer_command_pool);
 
-    vkDestroyBuffer(gpu->logical_device, staging_buffer.buffer, nullptr);
-    vkFreeMemory(gpu->logical_device, staging_buffer.memory, nullptr);
+    vkDestroyBuffer(g_context.gpu.logical_device, staging_buffer.buffer, nullptr);
+    vkFreeMemory(g_context.gpu.logical_device, staging_buffer.memory, nullptr);
 }
     
 internal void
-init_swapchain(GLFWwindow *window
-               , VkSurfaceKHR *surface
-               , gpu_t *gpu
-               , swapchain_t *swapchain)
+init_swapchain(input_state_t *input_state)
 {
-    swapchain_details_t *swapchain_details = &gpu->swapchain_support;
+    swapchain_details_t *swapchain_details = &g_context.gpu.swapchain_support;
     VkSurfaceFormatKHR surface_format = choose_surface_format(swapchain_details->available_formats, swapchain_details->available_formats_count);
-    VkExtent2D surface_extent = choose_swapchain_extent(window, &swapchain_details->capabilities);
+    VkExtent2D surface_extent = choose_swapchain_extent(input_state, &swapchain_details->capabilities);
     VkPresentModeKHR present_mode = choose_surface_present_mode(swapchain_details->available_present_modes, swapchain_details->available_present_modes_count);
 
     // add 1 to the minimum images supported in the swapchain
@@ -1148,7 +1298,7 @@ init_swapchain(GLFWwindow *window
 
     VkSwapchainCreateInfoKHR swapchain_info;
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_info.surface = *surface;
+    swapchain_info.surface = g_context.surface;
     swapchain_info.minImageCount = image_count;
     swapchain_info.imageFormat = surface_format.format;
     swapchain_info.imageColorSpace = surface_format.colorSpace;
@@ -1156,9 +1306,9 @@ init_swapchain(GLFWwindow *window
     swapchain_info.imageArrayLayers = 1;
     swapchain_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    uint32_t queue_family_indices[] = { (uint32_t)gpu->queue_families.graphics_family, (uint32_t)gpu->queue_families.present_family };
+    uint32_t queue_family_indices[] = { (uint32_t)g_context.gpu.queue_families.graphics_family, (uint32_t)g_context.gpu.queue_families.present_family };
 
-    if (gpu->queue_families.graphics_family != gpu->queue_families.present_family)
+    if (g_context.gpu.queue_families.graphics_family != g_context.gpu.queue_families.present_family)
     {
         swapchain_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         swapchain_info.queueFamilyIndexCount = 2;
@@ -1177,31 +1327,30 @@ init_swapchain(GLFWwindow *window
     swapchain_info.clipped = VK_TRUE;
     swapchain_info.oldSwapchain = VK_NULL_HANDLE;
 
-    VK_CHECK(vkCreateSwapchainKHR(gpu->logical_device, &swapchain_info, nullptr, &swapchain->swapchain));
+    VK_CHECK(vkCreateSwapchainKHR(g_context.gpu.logical_device, &swapchain_info, nullptr, &g_context.swapchain.swapchain));
 
-    vkGetSwapchainImagesKHR(gpu->logical_device, swapchain->swapchain, &image_count, nullptr);
+    vkGetSwapchainImagesKHR(g_context.gpu.logical_device, g_context.swapchain.swapchain, &image_count, nullptr);
 
-    allocate_memory_buffer(swapchain->imgs, image_count);
+    allocate_memory_buffer(g_context.swapchain.imgs, image_count);
 	
-    vkGetSwapchainImagesKHR(gpu->logical_device, swapchain->swapchain, &image_count, swapchain->imgs.buffer);
+    vkGetSwapchainImagesKHR(g_context.gpu.logical_device, g_context.swapchain.swapchain, &image_count, g_context.swapchain.imgs.buffer);
 	
-    swapchain->extent = surface_extent;
-    swapchain->format = surface_format.format;
-    swapchain->present_mode = present_mode;
+    g_context.swapchain.extent = surface_extent;
+    g_context.swapchain.format = surface_format.format;
+    g_context.swapchain.present_mode = present_mode;
 
-    allocate_memory_buffer(swapchain->views, image_count);
+    allocate_memory_buffer(g_context.swapchain.views, image_count);
 	
     for (uint32_t i = 0
              ; i < image_count
              ; ++i)
     {
-        VkImage *image = &swapchain->imgs[i];
+        VkImage *image = &g_context.swapchain.imgs[i];
 
         init_image_view(image
-                        , swapchain->format
+                        , g_context.swapchain.format
                         , VK_IMAGE_ASPECT_COLOR_BIT
-                        , gpu
-                        , &swapchain->views[i]
+                        , &g_context.swapchain.views[i]
                         , VK_IMAGE_VIEW_TYPE_2D
                         , 1);
     }
@@ -1211,7 +1360,6 @@ void
 init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions
                  , const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions
                  , const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies
-                 , gpu_t *gpu
                  , render_pass_t *dest_render_pass)
 {
     VkRenderPassCreateInfo render_pass_info	= {};
@@ -1223,7 +1371,7 @@ init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment
     render_pass_info.dependencyCount	= subpass_dependencies.count;
     render_pass_info.pDependencies		= subpass_dependencies.buffer;
 
-    VK_CHECK(vkCreateRenderPass(gpu->logical_device, &render_pass_info, nullptr, &dest_render_pass->render_pass));
+    VK_CHECK(vkCreateRenderPass(g_context.gpu.logical_device, &render_pass_info, nullptr, &dest_render_pass->render_pass));
     dest_render_pass->subpass_count = subpass_descriptions.count;
 }
 
@@ -1232,15 +1380,14 @@ internal VkFormat
 find_supported_format(const VkFormat *candidates
                       , uint32_t candidate_size
                       , VkImageTiling tiling
-                      , VkFormatFeatureFlags features
-                      , gpu_t *gpu)
+                      , VkFormatFeatureFlags features)
 {
     for (uint32_t i = 0
              ; i < candidate_size
              ; ++i)
     {
         VkFormatProperties properties;
-        vkGetPhysicalDeviceFormatProperties(gpu->hardware, candidates[i], &properties);
+        vkGetPhysicalDeviceFormatProperties(g_context.gpu.hardware, candidates[i], &properties);
         if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
         {
             return(candidates[i]);
@@ -1257,7 +1404,7 @@ find_supported_format(const VkFormat *candidates
 }
 
 internal void
-find_depth_format(gpu_t *gpu)
+find_depth_format(void)
 {
     VkFormat formats[] = 
         {
@@ -1266,18 +1413,16 @@ find_depth_format(gpu_t *gpu)
             , VK_FORMAT_D24_UNORM_S8_UINT
         };
     
-    gpu->supported_depth_format	= find_supported_format(formats
+    g_context.gpu.supported_depth_format	= find_supported_format(formats
                                                         , 3
                                                         , VK_IMAGE_TILING_OPTIMAL
-                                                        , VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-                                                        , gpu);
+                                                        , VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
     
 void
 init_shader(VkShaderStageFlagBits stage_bits
             , uint32_t content_size
             , byte_t *file_contents
-            , gpu_t *gpu
             , VkShaderModule *dest_shader_module)
 {
     VkShaderModuleCreateInfo shader_info = {};
@@ -1285,7 +1430,7 @@ init_shader(VkShaderStageFlagBits stage_bits
     shader_info.codeSize = content_size;
     shader_info.pCode = reinterpret_cast<const uint32_t *>(file_contents);
 
-    VK_CHECK(vkCreateShaderModule(gpu->logical_device
+    VK_CHECK(vkCreateShaderModule(g_context.gpu.logical_device
                                   , &shader_info
                                   , nullptr
                                   , dest_shader_module));
@@ -1294,7 +1439,6 @@ init_shader(VkShaderStageFlagBits stage_bits
 void
 init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
                      , const memory_buffer_view_t<VkPushConstantRange> &ranges
-                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout)
 {
     VkPipelineLayoutCreateInfo layout_info = {};
@@ -1304,7 +1448,7 @@ init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
     layout_info.pushConstantRangeCount = ranges.count;
     layout_info.pPushConstantRanges = ranges.buffer;
 
-    VK_CHECK(vkCreatePipelineLayout(gpu->logical_device
+    VK_CHECK(vkCreatePipelineLayout(g_context.gpu.logical_device
                                     , &layout_info
                                     , nullptr
                                     , pipeline_layout));        
@@ -1313,7 +1457,6 @@ init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
 void
 init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts
                      , memory_buffer_view_t<VkPushConstantRange> *ranges
-                     , gpu_t *gpu
                      , VkPipelineLayout *pipeline_layout)
 {
     VkPipelineLayoutCreateInfo layout_info = {};
@@ -1323,7 +1466,7 @@ init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts
     layout_info.pushConstantRangeCount = ranges->count;
     layout_info.pPushConstantRanges = ranges->buffer;
 
-    VK_CHECK(vkCreatePipelineLayout(gpu->logical_device
+    VK_CHECK(vkCreatePipelineLayout(g_context.gpu.logical_device
                                     , &layout_info
                                     , nullptr
                                     , pipeline_layout));
@@ -1342,7 +1485,6 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
                        , VkPipelineLayout *pipeline_layout
                        , render_pass_t *render_pass
                        , uint32_t subpass
-                       , gpu_t *gpu
                        , VkPipeline *pipeline)
 {
     VkGraphicsPipelineCreateInfo pipeline_info = {};
@@ -1365,7 +1507,7 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
 
-    VK_CHECK (vkCreateGraphicsPipelines(gpu->logical_device
+    VK_CHECK (vkCreateGraphicsPipelines(g_context.gpu.logical_device
                                         , VK_NULL_HANDLE
                                         , 1
                                         , &pipeline_info
@@ -1375,7 +1517,6 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
 
 void
 allocate_command_pool(uint32_t queue_family_index
-                      , gpu_t *gpu
                       , VkCommandPool *command_pool)
 {
     VkCommandPoolCreateInfo pool_info = {};
@@ -1383,7 +1524,7 @@ allocate_command_pool(uint32_t queue_family_index
     pool_info.queueFamilyIndex	= queue_family_index;
     pool_info.flags			= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    VK_CHECK(vkCreateCommandPool(gpu->logical_device, &pool_info, nullptr, command_pool));
+    VK_CHECK(vkCreateCommandPool(g_context.gpu.logical_device, &pool_info, nullptr, command_pool));
 }
 
 void
@@ -1391,7 +1532,6 @@ init_framebuffer_attachment(uint32_t width
                             , uint32_t height
                             , VkFormat format
                             , VkImageUsageFlags usage
-                            , gpu_t *gpu
                             , image2d_t *attachment
                             // for_t cubemap targets
                             , uint32_t layers
@@ -1405,7 +1545,6 @@ init_framebuffer_attachment(uint32_t width
                , usage
                , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
                , layers
-               , gpu
                , attachment
                , create_flags);
 
@@ -1416,7 +1555,6 @@ init_framebuffer_attachment(uint32_t width
     init_image_view(&attachment->image
                     , format
                     , aspect_flags
-                    , gpu
                     , &attachment->image_view
                     , image_view_type
                     , layers);
@@ -1427,7 +1565,6 @@ init_framebuffer(render_pass_t *compatible_render_pass
                  , uint32_t width
                  , uint32_t height
                  , uint32_t layer_count
-                 , gpu_t *gpu
                  , framebuffer_t *framebuffer)
 {
     memory_buffer_view_t<VkImageView> image_view_attachments;
@@ -1459,12 +1596,11 @@ init_framebuffer(render_pass_t *compatible_render_pass
     fbo_info.height				= height;
     fbo_info.layers				= layer_count;
 
-    VK_CHECK(vkCreateFramebuffer(gpu->logical_device, &fbo_info, nullptr, &framebuffer->framebuffer));
+    VK_CHECK(vkCreateFramebuffer(g_context.gpu.logical_device, &fbo_info, nullptr, &framebuffer->framebuffer));
 }
 
 VkDescriptorSet
 allocate_descriptor_set(VkDescriptorSetLayout *layout
-                        , gpu_t *gpu
                         , VkDescriptorPool *descriptor_pool)
 {
     VkDescriptorSet result;
@@ -1475,7 +1611,7 @@ allocate_descriptor_set(VkDescriptorSetLayout *layout
     alloc_info.descriptorSetCount	= 1;
     alloc_info.pSetLayouts		= layout;
 
-    VK_CHECK(vkAllocateDescriptorSets(gpu->logical_device, &alloc_info, &result));
+    VK_CHECK(vkAllocateDescriptorSets(g_context.gpu.logical_device, &alloc_info, &result));
 
     return(result);
 }
@@ -1483,7 +1619,6 @@ allocate_descriptor_set(VkDescriptorSetLayout *layout
 void
 allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets
                          , const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
-                         , gpu_t *gpu
                          , VkDescriptorPool *descriptor_pool)
 {
     VkDescriptorSetAllocateInfo alloc_info	= {};
@@ -1492,13 +1627,12 @@ allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets
     alloc_info.descriptorSetCount	= layouts.count;
     alloc_info.pSetLayouts		= layouts.buffer;
 
-    VK_CHECK(vkAllocateDescriptorSets(gpu->logical_device, &alloc_info, descriptor_sets.buffer));
+    VK_CHECK(vkAllocateDescriptorSets(g_context.gpu.logical_device, &alloc_info, descriptor_sets.buffer));
 }
 
 void
 init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
                      , uint32_t max_sets
-                     , gpu_t *gpu
                      , VkDescriptorPool *pool)
 {
     VkDescriptorPoolCreateInfo pool_info = {};
@@ -1508,13 +1642,12 @@ init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
 
     pool_info.maxSets = max_sets;
 
-    VK_CHECK(vkCreateDescriptorPool(gpu->logical_device, &pool_info, nullptr, pool));
+    VK_CHECK(vkCreateDescriptorPool(g_context.gpu.logical_device, &pool_info, nullptr, pool));
 }
     
 void
 init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
                      , uint32_t max_sets
-                     , gpu_t *gpu
                      , descriptor_pool_t *pool)
 {
     VkDescriptorPoolCreateInfo pool_info = {};
@@ -1524,12 +1657,11 @@ init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
 
     pool_info.maxSets = max_sets;
 
-    VK_CHECK(vkCreateDescriptorPool(gpu->logical_device, &pool_info, nullptr, &pool->pool));
+    VK_CHECK(vkCreateDescriptorPool(g_context.gpu.logical_device, &pool_info, nullptr, &pool->pool));
 }
 
 void
 init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings
-                           , gpu_t *gpu
                            , VkDescriptorSetLayout *dst)
 {
     VkDescriptorSetLayoutCreateInfo layout_info	= {};
@@ -1537,14 +1669,13 @@ init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBindi
     layout_info.bindingCount			= bindings.count;
     layout_info.pBindings				= bindings.buffer;
 	
-    VK_CHECK(vkCreateDescriptorSetLayout(gpu->logical_device, &layout_info, nullptr, dst));
+    VK_CHECK(vkCreateDescriptorSetLayout(g_context.gpu.logical_device, &layout_info, nullptr, dst));
 }
     
 void
-update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes
-                       , gpu_t *gpu)
+update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes)
 {
-    vkUpdateDescriptorSets(gpu->logical_device
+    vkUpdateDescriptorSets(g_context.gpu.logical_device
                            , writes.count
                            , writes.buffer
                            , 0
@@ -1556,7 +1687,6 @@ init_buffer(VkDeviceSize buffer_size
             , VkBufferUsageFlags usage
             , VkSharingMode sharing_mode
             , VkMemoryPropertyFlags memory_properties
-            , gpu_t *gpu
             , gpu_buffer_t *dest_buffer)
 {
     dest_buffer->size = buffer_size;
@@ -1568,14 +1698,14 @@ init_buffer(VkDeviceSize buffer_size
     buffer_info.sharingMode	= sharing_mode;
     buffer_info.flags	= 0;
 
-    VK_CHECK(vkCreateBuffer(gpu->logical_device, &buffer_info, nullptr, &dest_buffer->buffer));
+    VK_CHECK(vkCreateBuffer(g_context.gpu.logical_device, &buffer_info, nullptr, &dest_buffer->buffer));
 
     VkMemoryRequirements mem_requirements;
-    vkGetBufferMemoryRequirements(gpu->logical_device, dest_buffer->buffer, &mem_requirements);
+    vkGetBufferMemoryRequirements(g_context.gpu.logical_device, dest_buffer->buffer, &mem_requirements);
 
-    allocate_gpu_memory(memory_properties, mem_requirements, gpu, &dest_buffer->memory);
+    allocate_gpu_memory(memory_properties, mem_requirements, &dest_buffer->memory);
 	
-    vkBindBufferMemory(gpu->logical_device, dest_buffer->buffer, dest_buffer->memory, 0);
+    vkBindBufferMemory(g_context.gpu.logical_device, dest_buffer->buffer, dest_buffer->memory, 0);
 }
 
 void
@@ -1649,10 +1779,11 @@ command_buffer_next_subpass(VkCommandBuffer *cmdbuf
 
 VkResult
 present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
-        , const memory_buffer_view_t<VkSwapchainKHR> &swapchains
         , uint32_t *image_index
         , VkQueue *present_queue)
 {
+    memory_buffer_view_t<VkSwapchainKHR> swapchains{1, &g_context.swapchain.swapchain};
+    
     VkPresentInfoKHR present_info = {};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = signal_semaphores.count;
@@ -1667,8 +1798,7 @@ present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
 }
     
 void
-init_vulkan_state(vulkan_state_t *state
-                  , GLFWwindow *window)
+init_vulkan_state(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
 {
     init_manager();
 	
@@ -1702,21 +1832,16 @@ init_vulkan_state(vulkan_state_t *state
     app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     app_info.apiVersion = VK_API_VERSION_1_0;
 	
-    init_instance(&state->instance
-                  , &app_info
-                  , &validation_params
-                  , &extension_params);
+    init_instance(&app_info, &validation_params, &extension_params);
 	
     pop_stack();
 
-    init_debug_messenger(&state->instance
-                         , &state->debug_messenger);
+    init_debug_messenger();
 
     // create the surface
-    VK_CHECK(glfwCreateWindowSurface(state->instance
-                                     , window
-                                     , nullptr
-                                     , &state->surface));
+    create_surface_proc->instance = &g_context.instance;
+    create_surface_proc->surface = &g_context.surface;
+    VK_CHECK(create_surface_proc->create_proc());
 
     // choose hardware and create device
     persist constexpr uint32_t gpu_extension_count = 1;
@@ -1724,21 +1849,13 @@ init_vulkan_state(vulkan_state_t *state
     physical_device_extensions_params_t gpu_extensions = {};
     gpu_extensions.r_extension_count = gpu_extension_count;
     gpu_extensions.r_extension_names = gpu_extension_names;
-    choose_gpu(&gpu_extensions	// function initializes the queue families in the GPU struct
-               , &state->surface
-               , &state->instance
-               , &state->gpu);
-    vkGetPhysicalDeviceMemoryProperties(state->gpu.hardware, &state->gpu.memory_properties);
-    find_depth_format(&state->gpu);
-    init_device(&gpu_extensions
-                , &validation_params
-                , &state->gpu);
+    choose_gpu(&gpu_extensions);
+    vkGetPhysicalDeviceMemoryProperties(g_context.gpu.hardware, &g_context.gpu.memory_properties);
+    find_depth_format();
+    init_device(&gpu_extensions, &validation_params);
 
     // create swapchain
-    init_swapchain(window
-                   , &state->surface
-                   , &state->gpu
-                   , &state->swapchain);
+    init_swapchain(input_state);
 }
 
 void
@@ -1754,23 +1871,27 @@ destroy_debug_utils_messenger_ext(VkInstance instance
 }
     
 void
-destroy_vulkan_state(vulkan_state_t *state)
+destroy_vulkan_state(void)
 {	
-    vkDestroyDevice(state->gpu.logical_device, nullptr);
+    vkDestroyDevice(g_context.gpu.logical_device, nullptr);
 	
-    vkDestroySurfaceKHR(state->instance, state->surface, nullptr);
+    vkDestroySurfaceKHR(g_context.instance, g_context.surface, nullptr);
 	
-    destroy_debug_utils_messenger_ext(state->instance, state->debug_messenger, nullptr);
-    vkDestroyInstance(state->instance, nullptr);
+    destroy_debug_utils_messenger_ext(g_context.instance, g_context.debug_messenger, nullptr);
+    vkDestroyInstance(g_context.instance, nullptr);
 }
 
-void
-destroy_swapchain(vulkan_state_t *state)
+void idle_gpu(void)
 {
-    for (uint32_t i = 0; i < state->swapchain.views.count; ++i)
+    vkDeviceWaitIdle(g_context.gpu.logical_device);
+}
+
+void destroy_swapchain(void)
+{
+    for (uint32_t i = 0; i < g_context.swapchain.views.count; ++i)
     {
-        vkDestroyImageView(state->gpu.logical_device, state->swapchain.views[i], nullptr);
+        vkDestroyImageView(g_context.gpu.logical_device, g_context.swapchain.views[i], nullptr);
     }
 	
-    vkDestroySwapchainKHR(state->gpu.logical_device, state->swapchain.swapchain, nullptr);
+    vkDestroySwapchainKHR(g_context.gpu.logical_device, g_context.swapchain.swapchain, nullptr);
 }

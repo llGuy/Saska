@@ -18,15 +18,15 @@ uniform_group_manager_t g_uniform_group_manager;
 model_manager_t g_model_manager;
 
 gpu_command_queue_t
-make_command_queue(VkCommandPool *pool, submit_level_t level, gpu_t *gpu)
+make_command_queue(VkCommandPool *pool, submit_level_t level)
 {
     gpu_command_queue_t result;
-    allocate_command_buffers(pool, level, gpu, {1, &result.q});
+    allocate_command_buffers(pool, level, {1, &result.q});
     return(result);
 }
 
 void
-begin_command_queue(gpu_command_queue_t *queue, gpu_t *gpu, VkCommandBufferInheritanceInfo *inheritance)
+begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance)
 {
     begin_command_buffer(&queue->q,
                          (queue->submit_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0) | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
@@ -34,7 +34,7 @@ begin_command_queue(gpu_command_queue_t *queue, gpu_t *gpu, VkCommandBufferInher
 }
     
 void
-end_command_queue(gpu_command_queue_t *queue, gpu_t *gpu)
+end_command_queue(gpu_command_queue_t *queue)
 {
     end_command_buffer(&queue->q);
 }
@@ -45,7 +45,7 @@ end_command_queue(gpu_command_queue_t *queue, gpu_t *gpu)
 uniform_pool_t g_uniform_pool;
 
 internal void
-make_uniform_pool(gpu_t *gpu)
+make_uniform_pool(void)
 {
     VkDescriptorPoolSize pool_sizes[3] = {};
 
@@ -53,7 +53,7 @@ make_uniform_pool(gpu_t *gpu)
     init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 20, &pool_sizes[1]);
     init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 20, &pool_sizes[2]);
     
-    init_descriptor_pool(memory_buffer_view_t<VkDescriptorPoolSize>{3, pool_sizes}, 30, gpu, &g_uniform_pool);
+    init_descriptor_pool(memory_buffer_view_t<VkDescriptorPoolSize>{3, pool_sizes}, 30, &g_uniform_pool);
 }
 
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
@@ -88,10 +88,10 @@ uniform_layout_info_t::push(uint32_t count
 using uniform_layout_t = VkDescriptorSetLayout;
 
 uniform_layout_t
-make_uniform_layout(uniform_layout_info_t *blueprint, gpu_t *gpu)
+make_uniform_layout(uniform_layout_info_t *blueprint)
 {
     VkDescriptorSetLayout layout;
-    init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, gpu, &layout);
+    init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, &layout);
     return(layout);
 }
 
@@ -101,9 +101,9 @@ make_uniform_layout(uniform_layout_info_t *blueprint, gpu_t *gpu)
 using uniform_group_t = VkDescriptorSet;
 
 uniform_group_t
-make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool, gpu_t *gpu)
+make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
 {
-    uniform_group_t uniform_group = allocate_descriptor_set(layout, gpu, pool);
+    uniform_group_t uniform_group = allocate_descriptor_set(layout, pool);
 
     return(uniform_group);
 }
@@ -227,7 +227,7 @@ gpu_material_submission_queue_t::submit_to_cmdbuf(gpu_command_queue_t *queue)
 
 gpu_material_submission_queue_t
 make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
-				   , submit_level_t level, gpu_command_queue_pool_t *pool, gpu_t *gpu)
+				   , submit_level_t level, gpu_command_queue_pool_t *pool)
 {
     gpu_material_submission_queue_t material_queue;
 
@@ -243,7 +243,7 @@ make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags pu
     // used for multi threading - gets submitted to secondary buffer then all the secondary buffers join into the main queue
     else if (level = VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
-	gpu_command_queue_t command_queue = make_command_queue(pool, level, gpu);
+	gpu_command_queue_t command_queue = make_command_queue(pool, level);
 
 	material_queue.mtrl_count = 0;
 	allocate_memory_buffer(material_queue.mtrls, max_materials);
@@ -262,11 +262,11 @@ submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue)
 }
 
 void
-make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions, gpu_t *gpu)
+make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
-    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, flags);
 
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     
@@ -274,7 +274,7 @@ make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat for
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
     
-    init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
+    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count);
 
     if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
     {
@@ -288,19 +288,18 @@ make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat for
                                    , VK_FALSE
                                    , (VkCompareOp)0
                                    , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                                   , 0.0f, 0.0f, 0.0f
-                                   , gpu, &img->image_sampler);
+                                   , 0.0f, 0.0f, 0.0f, &img->image_sampler);
     }
 }
 
 void
-make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter, gpu_t *gpu)
+make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
-    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, gpu, img, flags);
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, flags);
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
-    init_image_view(&img->image, format, aspect_flags, gpu, &img->image_view, view_type, layer_count);
+    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count);
     init_image_sampler(filter, filter
                        , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
                        , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
@@ -311,8 +310,7 @@ make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t l
                        , VK_FALSE
                        , (VkCompareOp)0
                        , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                       , 0.0f, 0.0f, 0.0f
-                       , gpu, &img->image_sampler);
+                       , 0.0f, 0.0f, 0.0f, &img->image_sampler);
 }
 
 void
@@ -321,8 +319,7 @@ make_framebuffer(framebuffer_t *fbo
                  , uint32_t layer_count
                  , render_pass_t *compatible
                  , const memory_buffer_view_t<image2d_t> &colors
-                 , image2d_t *depth
-                 , gpu_t *gpu)
+                 , image2d_t *depth)
 {
     if (colors.count)
     {
@@ -342,7 +339,7 @@ make_framebuffer(framebuffer_t *fbo
         fbo->depth_attachment = depth->image_view;
     }
     
-    init_framebuffer(compatible, w, h, layer_count, gpu, fbo);
+    init_framebuffer(compatible, w, h, layer_count, fbo);
 
     fbo->extent = VkExtent2D{ w, h };
 }
@@ -363,7 +360,6 @@ make_render_pass(render_pass_t *render_pass
                  , const memory_buffer_view_t<render_pass_attachment_t> &attachments
                  , const memory_buffer_view_t<render_pass_subpass_t> &subpasses
                  , const memory_buffer_view_t<render_pass_dependency_t> &dependencies
-                 , gpu_t *gpu
                  , bool clear_every_instance)
 {
     VkAttachmentDescription descriptions_vk[10] = {};
@@ -424,7 +420,7 @@ make_render_pass(render_pass_t *render_pass
                                                                  , VK_DEPENDENCY_BY_REGION_BIT);
     }
     
-    init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, gpu, render_pass);
+    init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, render_pass);
 }
 
 void
@@ -441,15 +437,14 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
                        , float32_t depth_bias
                        , const dynamic_states_t &dynamic_states
                        , render_pass_t *compatible
-                       , uint32_t subpass
-                       , gpu_t *gpu)
+                       , uint32_t subpass)
 {
     VkShaderModule module_objects[shader_modules_t::MAX_SHADERS] = {};
     VkPipelineShaderStageCreateInfo infos[shader_modules_t::MAX_SHADERS] = {};
     for (uint32_t i = 0; i < modules.count; ++i)
     {
         file_contents_t bytecode = read_file(modules.modules[i].filename);
-        init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, gpu, &module_objects[i]);
+        init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, &module_objects[i]);
         init_shader_pipeline_info(&module_objects[i], modules.modules[i].stage, &infos[i]);
     }
     VkPipelineVertexInputStateCreateInfo v_input = {};
@@ -510,7 +505,7 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
     {
         real_layouts[i] = *g_uniform_layout_manager.get(layouts.layouts[i]);
     }
-    init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, gpu, &ppln->layout);
+    init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, &ppln->layout);
     memory_buffer_view_t<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
     init_graphics_pipeline(&shaders_mb
                                    , &v_input
@@ -520,11 +515,11 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
                                    , &multi
                                    , &blending_info
                                    , &dynamic_info
-                                   , &depth, &ppln->layout, compatible, subpass, gpu, &ppln->pipeline);
+                                   , &depth, &ppln->layout, compatible, subpass, &ppln->pipeline);
 
     for (uint32_t i = 0; i < modules.count; ++i)
     {
-        vkDestroyShaderModule(gpu->logical_device, module_objects[i], nullptr);
+        destroy_shader_module(&module_objects[i]);
     }
 }
 
@@ -545,20 +540,21 @@ struct cameras_t
 } g_cameras;
 
 internal void
-make_camera_data(gpu_t *gpu, VkDescriptorPool *pool, swapchain_t *swapchain)
+make_camera_data(VkDescriptorPool *pool)
 {
-    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager.add("uniform_layout.camera_transforms_ubo"_hash, swapchain->imgs.count);
+    uint32_t swapchain_image_count = get_swapchain_image_count();
+    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager.add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
     auto *ubo_layout_ptr = g_uniform_layout_manager.get(ubo_layout_hdl);
     {
         uniform_layout_info_t blueprint = {};
         blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        *ubo_layout_ptr = make_uniform_layout(&blueprint, gpu);
+        *ubo_layout_ptr = make_uniform_layout(&blueprint);
     }
 
-    g_cameras.camera_transforms_ubos = g_gpu_buffer_manager.add("gpu_buffer.camera_transforms_ubos"_hash, swapchain->imgs.count);
+    g_cameras.camera_transforms_ubos = g_gpu_buffer_manager.add("gpu_buffer.camera_transforms_ubos"_hash, swapchain_image_count);
     auto *camera_ubos = g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos);
     {
-        uint32_t uniform_buffer_count = swapchain->imgs.count;
+        uint32_t uniform_buffer_count = swapchain_image_count;
 
         g_cameras.ubo_count = uniform_buffer_count;
 	
@@ -572,20 +568,19 @@ make_camera_data(gpu_t *gpu, VkDescriptorPool *pool, swapchain_t *swapchain)
                                 , VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
                                 , VK_SHARING_MODE_EXCLUSIVE
                                 , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                                , gpu
                                 , &camera_ubos[i]);
         }
     }
 
-    g_cameras.camera_transforms_uniform_groups = g_uniform_group_manager.add("uniform_group.camera_transforms_ubo"_hash, swapchain->imgs.count);
+    g_cameras.camera_transforms_uniform_groups = g_uniform_group_manager.add("uniform_group.camera_transforms_ubo"_hash, swapchain_image_count);
     auto *transforms = g_uniform_group_manager.get(g_cameras.camera_transforms_uniform_groups);
     {
         uniform_layout_handle_t layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash);
         auto *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
-        for (uint32_t i = 0; i < swapchain->imgs.count; ++i)
+        for (uint32_t i = 0; i < swapchain_image_count; ++i)
         {
-            transforms[i] = make_uniform_group(layout_ptr, pool, gpu);
-            update_uniform_group(gpu, &transforms[i],
+            transforms[i] = make_uniform_group(layout_ptr, pool);
+            update_uniform_group(&transforms[i],
                                  update_binding_t{BUFFER, &camera_ubos[i], 0});
         }
     }
@@ -603,7 +598,7 @@ make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
 }
 
 void
-update_3d_output_camera_transforms(uint32_t image_index, gpu_t *gpu)
+update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
     
@@ -630,17 +625,17 @@ update_3d_output_camera_transforms(uint32_t image_index, gpu_t *gpu)
     gpu_buffer_t &current_ubo = *g_gpu_buffer_manager.get(g_cameras.camera_transforms_ubos + image_index);
 
     auto map = current_ubo.construct_map();
-    map.begin(gpu);
+    map.begin();
     map.fill(memory_byte_buffer_t{sizeof(camera_transform_uniform_data_t), &transform_data});
-    map.end(gpu);
+    map.end();
 }
 
 
 camera_handle_t
-add_camera(window_data_t *window, resolution_t resolution)
+add_camera(input_state_t *input_state, resolution_t resolution)
 {
     uint32_t index = g_cameras.camera_count;
-    g_cameras.cameras[index].set_default(resolution.width, resolution.height, window->m_x, window->m_y);
+    g_cameras.cameras[index].set_default(resolution.width, resolution.height, input_state->cursor_pos_x, input_state->cursor_pos_y);
     ++g_cameras.camera_count;
     return(index);
 }
@@ -830,9 +825,7 @@ render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
 }
 
 internal void
-make_atmosphere_data(gpu_t *gpu
-                     , VkDescriptorPool *pool
-                     , swapchain_t *swapchain
+make_atmosphere_data(VkDescriptorPool *pool
                      , VkCommandPool *cmdpool)
 {
     g_atmosphere.make_render_pass = g_render_pass_manager.add("render_pass.atmosphere_render_pass"_hash);
@@ -851,7 +844,7 @@ make_atmosphere_data(gpu_t *gpu
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies});
     }
 
     g_atmosphere.make_fbo = g_framebuffer_manager.add("framebuffer.atmosphere_fbo"_hash);
@@ -859,9 +852,9 @@ make_atmosphere_data(gpu_t *gpu
     {
         image_handle_t atmosphere_cubemap_handle = g_image_manager.add("image2D.atmosphere_cubemap"_hash);
         auto *cubemap = g_image_manager.get(atmosphere_cubemap_handle);
-        make_framebuffer_attachment(cubemap, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3, gpu);
+        make_framebuffer_attachment(cubemap, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3);
 
-        make_framebuffer(atmosphere_fbo, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr, gpu);
+        make_framebuffer(atmosphere_fbo, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr);
     }
 
     // ---- Make render atmosphere uniform layout
@@ -870,7 +863,7 @@ make_atmosphere_data(gpu_t *gpu
     {
         uniform_layout_info_t layout_info = {};
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *render_atmosphere_layout_ptr = make_uniform_layout(&layout_info, gpu);
+        *render_atmosphere_layout_ptr = make_uniform_layout(&layout_info);
     }
 
     g_atmosphere.cubemap_uniform_group = g_uniform_group_manager.add("descriptor_set.cubemap"_hash);
@@ -879,8 +872,8 @@ make_atmosphere_data(gpu_t *gpu
         image_handle_t cubemap_hdl = g_image_manager.get_handle("image2D.atmosphere_cubemap"_hash);
         auto *cubemap_ptr = g_image_manager.get(cubemap_hdl);
 
-        *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, &g_uniform_pool, gpu);
-        update_uniform_group(gpu, cubemap_group_ptr,
+        *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, &g_uniform_pool);
+        update_uniform_group(cubemap_group_ptr,
                              update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
@@ -897,7 +890,7 @@ make_atmosphere_data(gpu_t *gpu
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(make_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
-                               false, 0.0f, dynamic, atmosphere_render_pass, 0, gpu);
+                               false, 0.0f, dynamic, atmosphere_render_pass, 0);
     }
 
     g_atmosphere.render_pipeline = g_pipeline_manager.add("pipeline.render_atmosphere"_hash);
@@ -915,21 +908,21 @@ make_atmosphere_data(gpu_t *gpu
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(render_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0);
     }
 
     // ---- Update the atmosphere (initialize it) ----
     VkCommandBuffer cmdbuf;
-    init_single_use_command_buffer(cmdpool, gpu, &cmdbuf);
+    init_single_use_command_buffer(cmdpool, &cmdbuf);
 
     gpu_command_queue_t queue{cmdbuf};
     update_atmosphere(&queue);
     
-    destroy_single_use_command_buffer(&cmdbuf, cmdpool, gpu);
+    destroy_single_use_command_buffer(&cmdbuf, cmdpool);
 }
 
 internal void
-make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
+make_shadow_data(void)
 {
     vector3_t light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
     g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, vector3_t(0.0f), vector3_t(0.0f, 1.0f, 0.0f));
@@ -939,7 +932,7 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
     g_lighting.shadows.pass = g_render_pass_manager.add("render_pass.shadow_render_pass"_hash);
     auto *shadow_pass = g_render_pass_manager.get(g_lighting.shadows.pass);
     {
-        render_pass_attachment_t shadow_attachment { gpu->supported_depth_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        render_pass_attachment_t shadow_attachment { get_device_supported_depth_format(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
         render_pass_subpass_t subpass = {};
         subpass.set_depth(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL });
         render_pass_dependency_t dependencies[2] = {};
@@ -948,7 +941,7 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                                                       VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
         
-        make_render_pass(shadow_pass, {1, &shadow_attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(shadow_pass, {1, &shadow_attachment}, {1, &subpass}, {2, dependencies});
     }
 
     // ---- Make shadow framebuffer ----
@@ -957,9 +950,9 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
     {
         image_handle_t shadowmap_handle = g_image_manager.add("image2D.shadow_map"_hash);
         auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
-        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, get_device_supported_depth_format(), 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
         
-        make_framebuffer(shadow_fbo, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, 1, shadow_pass, null_buffer<image2d_t>(), shadowmap_texture, gpu);
+        make_framebuffer(shadow_fbo, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, 1, shadow_pass, null_buffer<image2d_t>(), shadowmap_texture);
     }
     
     uniform_layout_handle_t sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
@@ -967,7 +960,7 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
     {
         uniform_layout_info_t layout_info = {};
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *sampler2D_layout_ptr = make_uniform_layout(&layout_info, gpu);
+        *sampler2D_layout_ptr = make_uniform_layout(&layout_info);
     }
 
     g_lighting.shadows.set = g_uniform_group_manager.add("descriptor_set.shadow_map_set"_hash);
@@ -976,8 +969,8 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
         image_handle_t shadowmap_handle = g_image_manager.get_handle("image2D.shadow_map"_hash);
         auto *shadowmap_texture = g_image_manager.get(shadowmap_handle);
         
-        *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, &g_uniform_pool, gpu);
-        update_uniform_group(gpu, shadow_map_ptr,
+        *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, &g_uniform_pool);
+        update_uniform_group(shadow_map_ptr,
                              update_binding_t{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
@@ -992,7 +985,7 @@ make_shadow_data(gpu_t *gpu, swapchain_t *swapchain)
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(frustum_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering.backbuffer_res, blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0, gpu);
+                               true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0);
     }
 }
 
@@ -1182,17 +1175,17 @@ update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
 }
 
 void
-make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
+make_dfr_rendering_data(void)
 {
     // ---- Make deferred rendering render pass ----
     g_dfr_rendering.dfr_render_pass = g_render_pass_manager.add("render_pass.deferred_render_pass"_hash);
     auto *dfr_render_pass = g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass);
     {
-        render_pass_attachment_t attachments[] = { render_pass_attachment_t{swapchain->format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-                                                 render_pass_attachment_t{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-                                                 render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-                                                 render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
-                                                 render_pass_attachment_t{gpu->supported_depth_format, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} };
+        render_pass_attachment_t attachments[] = { render_pass_attachment_t{get_swapchain_format(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                   render_pass_attachment_t{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                   render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                   render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                   render_pass_attachment_t{get_device_supported_depth_format(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} };
         render_pass_subpass_t subpasses[2] = {};
         subpasses[0].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
@@ -1214,7 +1207,7 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         dependencies[2] = make_render_pass_dependency(1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                                       VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(dfr_render_pass, {5, attachments}, {2, subpasses}, {3, dependencies}, gpu);
+        make_render_pass(dfr_render_pass, {5, attachments}, {2, subpasses}, {3, dependencies});
     }
 
     // ---- Make deferred rendering framebuffer ----
@@ -1234,11 +1227,11 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         image_handle_t depth_tx_hdl = g_image_manager.add("image2D.fbo_depth"_hash);
         auto *depth_tx = g_image_manager.get(depth_tx_hdl);
 
-        make_framebuffer_attachment(final_tx, w, h, swapchain->format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2, gpu);
-        make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2, gpu);
-        make_framebuffer_attachment(depth_tx, w, h, gpu->supported_depth_format, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2, gpu);
+        make_framebuffer_attachment(final_tx, w, h, get_swapchain_format(), 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(depth_tx, w, h, get_device_supported_depth_format(), 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
 
         image2d_t color_attachments[4] = {};
         color_attachments[0] = *final_tx;
@@ -1247,7 +1240,7 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         color_attachments[3] = *normal_tx;
         
         // Can put final_tx as the pointer to the array because, the other 3 textures will be stored contiguously just after it in memory
-        make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {4, color_attachments}, depth_tx, gpu);
+        make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {4, color_attachments}, depth_tx);
     }
 
     uniform_layout_handle_t gbuffer_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.g_buffer_layout"_hash);
@@ -1257,7 +1250,7 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *gbuffer_layout_ptr = make_uniform_layout(&layout_info, gpu);
+        *gbuffer_layout_ptr = make_uniform_layout(&layout_info);
     }
 
     uniform_layout_handle_t gbuffer_input_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.deferred_layout"_hash);
@@ -1267,13 +1260,13 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info, gpu);
+        *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info);
     }
 
     g_dfr_rendering.dfr_g_buffer_group = g_uniform_group_manager.add("uniform_group.g_buffer"_hash);
     auto *gbuffer_group_ptr = g_uniform_group_manager.get(g_dfr_rendering.dfr_g_buffer_group);
     {
-        *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, &g_uniform_pool, gpu);
+        *gbuffer_group_ptr = make_uniform_group(gbuffer_layout_ptr, &g_uniform_pool);
 
         image_handle_t final_tx_hdl = g_image_manager.get_handle("image2D.fbo_final"_hash);
         image2d_t *final_tx = g_image_manager.get(final_tx_hdl);
@@ -1284,7 +1277,7 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         image_handle_t normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
         image2d_t *normal_tx = g_image_manager.get(normal_tx_hdl);
         
-        update_uniform_group(gpu, gbuffer_group_ptr,
+        update_uniform_group(gbuffer_group_ptr,
                              update_binding_t{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
@@ -1302,8 +1295,8 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         image_handle_t normal_tx_hdl = g_image_manager.get_handle("image2D.fbo_normal"_hash);
         auto *normal_tx = g_image_manager.get(normal_tx_hdl);
 
-        *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, &g_uniform_pool, gpu);
-        update_uniform_group(gpu, gbuffer_input_group_ptr,
+        *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, &g_uniform_pool);
+        update_uniform_group(gbuffer_input_group_ptr,
                              update_binding_t{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
@@ -1320,7 +1313,7 @@ make_dfr_rendering_data(gpu_t *gpu, swapchain_t *swapchain)
         dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(deferred_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering.backbuffer_res, blend_states, nullptr,
-                               false, 0.0f, dynamic_states, dfr_render_pass, 1, gpu);
+                               false, 0.0f, dynamic_states, dfr_render_pass, 1);
     }
 }
 
@@ -1468,21 +1461,21 @@ struct dbg_pfx_frame_capture_t
     vector2_t backbuffer_cursor_position;
 
     inline void
-    prepare_memory_maps(gpu_t *gpu)
+    prepare_memory_maps(void)
     {
         for (uint32_t i = 0; i < sampler_count; ++i)
         {
-            samplers[i].mapped = samplers[i].blitted_linear_image.construct_map(gpu);
-            samplers[i].mapped.begin(gpu);
+            samplers[i].mapped = samplers[i].blitted_linear_image.construct_map();
+            samplers[i].mapped.begin();
         }
     }
 
     inline void
-    end_memory_maps(gpu_t *gpu)
+    end_memory_maps(void)
     {
         for (uint32_t i = 0; i < sampler_count; ++i)
         {
-            samplers[i].mapped.end(gpu);
+            samplers[i].mapped.end();
         }
     }
 };
@@ -1517,7 +1510,7 @@ float16_to_float32(uint16_t f)
 }
 
 internal vector4_t
-glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs, gpu_t *gpu)
+glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs)
 {
     uint32_t ui_x = (uint32_t)(uvs.x * (float32_t)sampler->resolution.width);
     uint32_t ui_y = (uint32_t)(uvs.y * (float32_t)sampler->resolution.height);
@@ -1533,11 +1526,8 @@ glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const v
     uint8_t *pixels = (uint8_t *)sampler->mapped.data;
 
     VkImageSubresource subresources {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-    VkSubresourceLayout layout;
-    vkGetImageSubresourceLayout(gpu->logical_device,
-                                sampler->blitted_linear_image.image,
-                                &subresources,
-                                &layout);
+    VkSubresourceLayout layout = get_image_subresource_layout(&sampler->blitted_linear_image.image,
+                                                              &subresources);
 
     pixels += layout.offset;
     pixels += ui_y * (layout.rowPitch);
@@ -1580,7 +1570,7 @@ glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const v
 }
 
 internal uint32_t
-get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution, gpu_t *gpu)
+get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution)
 {
     uint32_t ui_x = (uint32_t)(x * (float32_t)resolution.width);
     uint32_t ui_y = (uint32_t)(y * (float32_t)resolution.height);
@@ -1596,11 +1586,8 @@ get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, floa
     uint8_t *pixels = (uint8_t *)memory->data;
 
     VkImageSubresource subresources { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
-    VkSubresourceLayout layout;
-    vkGetImageSubresourceLayout(gpu->logical_device,
-                                image->image,
-                                &subresources,
-                                &layout);
+    VkSubresourceLayout layout = get_image_subresource_layout(&image->image,
+                                                              &subresources);
 
     pixels += layout.offset;
 
@@ -1620,18 +1607,18 @@ get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, floa
 }
 
 vector4_t
-invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera, gpu_t *gpu);
+invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera);
 
 void
-dbg_handle_input(window_data_t *window, gpu_t *gpu)
+dbg_handle_input(input_state_t *input_state)
 {
     if (g_postfx.dbg_in_frame_capture_mode)
     {
-        if (window->mb_map[GLFW_MOUSE_BUTTON_LEFT])
+        if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
         {
             // Isn't normalized
-            g_postfx.dbg_capture.window_cursor_position = window->normalized_cursor_position;
-            g_postfx.dbg_capture.window_cursor_position.y = window->h - g_postfx.dbg_capture.window_cursor_position.y;
+            g_postfx.dbg_capture.window_cursor_position = input_state->normalized_cursor_position;
+            g_postfx.dbg_capture.window_cursor_position.y = input_state->window_height - g_postfx.dbg_capture.window_cursor_position.y;
 
             g_postfx.dbg_capture.backbuffer_cursor_position = g_postfx.dbg_capture.window_cursor_position -
                 vector2_t(g_postfx.render_rect2D.offset.x, g_postfx.render_rect2D.offset.y);
@@ -1642,35 +1629,33 @@ dbg_handle_input(window_data_t *window, gpu_t *gpu)
             vector4_t final_color = invoke_glsl_code(&g_postfx.dbg_capture,
                                                      vector2_t((g_postfx.dbg_capture.backbuffer_cursor_position.x + 1.0f) / 2.0f,
                                                                (g_postfx.dbg_capture.backbuffer_cursor_position.y + 1.0f) / 2.0f),
-                                                     get_camera_bound_to_3d_output(),
-                                                     gpu);
+                                                     get_camera_bound_to_3d_output());
             uint32_t final_color_ui = vec4_color_to_ui32b(final_color);
             
             
-            g_postfx.dbg_capture.mapped_image = g_postfx.dbg_capture.blitted_image_linear.construct_map(gpu);
-            g_postfx.dbg_capture.mapped_image.begin(gpu);
+            g_postfx.dbg_capture.mapped_image = g_postfx.dbg_capture.blitted_image_linear.construct_map();
+            g_postfx.dbg_capture.mapped_image.begin();
             
             uint32_t pixel_color = get_pixel_color(&g_postfx.dbg_capture.blitted_image_linear,
                                                    &g_postfx.dbg_capture.mapped_image,
                                                    (g_postfx.dbg_capture.backbuffer_cursor_position.x + 1.0f) / 2.0f,
                                                    (g_postfx.dbg_capture.backbuffer_cursor_position.y + 1.0f) / 2.0f,
                                                    VK_FORMAT_B8G8R8A8_UNORM,
-                                                   get_backbuffer_resolution(),
-                                                   gpu);
-            g_postfx.dbg_capture.mapped_image.end(gpu);
+                                                   get_backbuffer_resolution());
+            g_postfx.dbg_capture.mapped_image.end();
 
                         // Print cursor position and the color of the pixel
             persist char buffer[100];
             sprintf(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
             console_out(buffer);
 
-            window->mb_map[GLFW_MOUSE_BUTTON_LEFT] = false;
+            input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down = false;
         }
     }
 }
 
 internal void
-dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect, gpu_t *gpu)
+dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
     init_image(w,
                h,
@@ -1679,40 +1664,37 @@ dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, Vk
                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                1,
-               gpu,
                dst_img,
                0);
     VkImageAspectFlags aspect_flags = aspect;
     init_image_view(&dst_img->image,
                     format,
                     aspect_flags,
-                    gpu,
                     &dst_img->image_view,
                     VK_IMAGE_VIEW_TYPE_2D,
                     1);
 }
 
 internal void
-dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect, gpu_t *gpu)
+dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
-    make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2, gpu);
-    dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, gpu);
+    make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
+    dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 internal void
-dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture, gpu_t *gpu)
+dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
 {
     uniform_layout_handle_t layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.pfx_single_tx_output"_hash);
     uniform_layout_t *layout_ptr = g_uniform_layout_manager.get(layout_hdl);
     
-    capture->blitted_image_uniform = make_uniform_group(layout_ptr, &g_uniform_pool, gpu);
-    update_uniform_group(gpu,
-                         &capture->blitted_image_uniform,
+    capture->blitted_image_uniform = make_uniform_group(layout_ptr, &g_uniform_pool);
+    update_uniform_group(&capture->blitted_image_uniform,
                          update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 }
 
 internal void
-dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture, gpu_t *gpu)
+dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture)
 {
     capture->sampler_count = stage->input_count;
     framebuffer_t *stage_fbo = g_framebuffer_manager.get(stage->fbo);
@@ -1725,13 +1707,12 @@ dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *cap
                                           stage_fbo->extent.width,
                                           stage_fbo->extent.height,
                                           sampler->format,
-                                          VK_IMAGE_ASPECT_COLOR_BIT,
-                                          gpu);
+                                          VK_IMAGE_ASPECT_COLOR_BIT);
     }
 }
 
 internal void
-dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool, gpu_t *gpu)
+dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
 {
     // Trying to debug the SSR stage
     pfx_stage_t *stage = &g_postfx.ssr_stage;
@@ -1761,19 +1742,16 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool, gpu_t *gpu)
                                              stage_fbo->extent.width,
                                              stage_fbo->extent.height,
                                              VK_FORMAT_B8G8R8A8_UNORM,
-                                             VK_IMAGE_ASPECT_COLOR_BIT,
-                                             gpu);
+                                             VK_IMAGE_ASPECT_COLOR_BIT);
     
     transition_image_layout(&frame_capture->blitted_image.image,
                             VK_FORMAT_B8G8R8A8_UNORM,
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            pool,
-                            gpu);
+                            pool);
     
     // Initialize the uniform group for the blitted image
-    dbg_make_frame_capture_uniform_data(frame_capture,
-                                        gpu);
+    dbg_make_frame_capture_uniform_data(frame_capture);
     // Initialize the samplers
     g_postfx.dbg_capture.sampler_count = 3;
     g_postfx.dbg_capture.samplers[0].format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -1782,7 +1760,7 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool, gpu_t *gpu)
     g_postfx.dbg_capture.samplers[0].resolution = (resolution_t)stage_fbo->extent;
     g_postfx.dbg_capture.samplers[1].resolution = (resolution_t)stage_fbo->extent;
     g_postfx.dbg_capture.samplers[2].resolution = (resolution_t)stage_fbo->extent;
-    dbg_make_frame_capture_samplers(stage, frame_capture, gpu);
+    dbg_make_frame_capture_samplers(stage, frame_capture);
 }
 
 internal void
@@ -1791,8 +1769,6 @@ make_pfx_stage(pfx_stage_t *dst_stage,
                const shader_uniform_layouts_t &uniform_layouts,
                const resolution_t &resolution,
                image2d_t *stage_output,
-               gpu_t *gpu,
-               swapchain_t *swapchain,
                uniform_layout_t *single_tx_layout_ptr,
                render_pass_t *pfx_render_pass)
 {
@@ -1806,45 +1782,45 @@ make_pfx_stage(pfx_stage_t *dst_stage,
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(stage_pipeline, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
                                , VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr
-                               , false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
+                               , false, 0.0f, dynamic, pfx_render_pass, 0);
     }
 
     auto *stage_framebuffer = g_framebuffer_manager.get(dst_stage->fbo);
     {
         auto *tx_ptr = stage_output;
         make_framebuffer_attachment(tx_ptr, resolution.width, resolution.height,
-                                    swapchain->format, 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 2, gpu);
-        make_framebuffer(stage_framebuffer, resolution.width, resolution.height, 1, pfx_render_pass, {1, tx_ptr}, nullptr, gpu);
+                                    get_swapchain_format(), 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 2);
+        make_framebuffer(stage_framebuffer, resolution.width, resolution.height, 1, pfx_render_pass, {1, tx_ptr}, nullptr);
     }
 
     auto *output_group = g_uniform_group_manager.get(dst_stage->output_group);
     {
-        *output_group = make_uniform_group(single_tx_layout_ptr, &g_uniform_pool, gpu);
-        update_uniform_group(gpu, output_group,
+        *output_group = make_uniform_group(single_tx_layout_ptr, &g_uniform_pool);
+        update_uniform_group(output_group,
                              update_binding_t{TEXTURE, stage_output, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }
 
 void
-make_postfx_data(gpu_t *gpu,
-                 swapchain_t *swapchain,
-                 gpu_command_queue_pool_t *pool)
+make_postfx_data(gpu_command_queue_pool_t *pool)
 {
     g_postfx.pfx_single_tx_layout = g_uniform_layout_manager.add("uniform_layout.pfx_single_tx_output"_hash);
     auto *single_tx_layout_ptr = g_uniform_layout_manager.get(g_postfx.pfx_single_tx_layout);
     {
         uniform_layout_info_t info = {};
         info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        *single_tx_layout_ptr = make_uniform_layout(&info, gpu);
+        *single_tx_layout_ptr = make_uniform_layout(&info);
     }
     
-    g_postfx.final_stage.fbo = g_framebuffer_manager.add("framebuffer.display_fbo"_hash, swapchain->views.count);
+    g_postfx.final_stage.fbo = g_framebuffer_manager.add("framebuffer.display_fbo"_hash, get_swapchain_image_count());
 
+    VkFormat swapchain_format = get_swapchain_format();
+    
     g_postfx.final_render_pass = g_render_pass_manager.add("render_pass.final_render_pass"_hash);
     auto *final_render_pass = g_render_pass_manager.get(g_postfx.final_render_pass);
     {
         // only_t one attachment
-        render_pass_attachment_t attachment = { swapchain->format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+        render_pass_attachment_t attachment = { swapchain_format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
         render_pass_subpass_t subpass;
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         render_pass_dependency_t dependencies[2];
@@ -1852,14 +1828,14 @@ make_postfx_data(gpu_t *gpu,
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
     }
     
     g_postfx.pfx_render_pass = g_render_pass_manager.add("render_pass.pfx_render_pass"_hash);
     auto *pfx_render_pass = g_render_pass_manager.get(g_postfx.pfx_render_pass);
     {
         // only_t one attachment
-        render_pass_attachment_t attachment = { swapchain->format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+        render_pass_attachment_t attachment = { swapchain_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
         render_pass_subpass_t subpass;
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         render_pass_dependency_t dependencies[2];
@@ -1867,21 +1843,23 @@ make_postfx_data(gpu_t *gpu,
                                                       , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
                                                       , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
-        make_render_pass(pfx_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies}, gpu);
+        make_render_pass(pfx_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
     }
     // ---- make_t the framebuffer for the swapchain / screen ----
     // ---- only_t has one color attachment, no depth attachment ----
     // ---- uses_t swapchain extent ----
     auto *final_fbo = g_framebuffer_manager.get(g_postfx.final_stage.fbo);
-    {    
-        for (uint32_t i = 0; i < swapchain->views.count; ++i)
+    {
+        VkImageView *swapchain_image_views = get_swapchain_image_views();
+        
+        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
         {
-            final_fbo[i].extent = swapchain->extent;
+            final_fbo[i].extent = get_swapchain_extent();
             
             allocate_memory_buffer(final_fbo[i].color_attachments, 1);
-            final_fbo[i].color_attachments[0] = swapchain->views[i];
+            final_fbo[i].color_attachments[0] = swapchain_image_views[i];
             final_fbo[i].depth_attachment = VK_NULL_HANDLE;
-            init_framebuffer(pfx_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, gpu, &final_fbo[i]);
+            init_framebuffer(pfx_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, &final_fbo[i]);
         }
     }
 
@@ -1894,8 +1872,8 @@ make_postfx_data(gpu_t *gpu,
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
         make_graphics_pipeline(final_ppln, modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, swapchain->extent, blending, nullptr,
-                               false, 0.0f, dynamic, pfx_render_pass, 0, gpu);
+                               VK_CULL_MODE_NONE, layouts, push_k, get_swapchain_extent(), blending, nullptr,
+                               false, 0.0f, dynamic, pfx_render_pass, 0);
     }
     
     shader_modules_t modules(shader_module_info_t{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT},
@@ -1913,8 +1891,6 @@ make_postfx_data(gpu_t *gpu,
                    layouts,
                    get_backbuffer_resolution(),
                    ssr_tx_ptr,
-                   gpu,
-                   swapchain,
                    single_tx_layout_ptr,
                    pfx_render_pass);
 
@@ -1931,12 +1907,10 @@ make_postfx_data(gpu_t *gpu,
                    pre_final_layouts,
                    get_backbuffer_resolution(),
                    pre_final_tx_ptr,
-                   gpu,
-                   swapchain,
                    single_tx_layout_ptr,
                    pfx_render_pass);
 
-    dbg_make_frame_capture_data(pool, gpu);
+    dbg_make_frame_capture_data(pool);
 }
 
 framebuffer_handle_t
@@ -1949,8 +1923,7 @@ inline void
 apply_ssr(gpu_command_queue_t *queue
           , uniform_group_t *transforms_group
           , const matrix4_t &view_matrix
-          , const matrix4_t &projection_matrix
-          , gpu_t *gpu)
+          , const matrix4_t &projection_matrix)
 {
     queue->begin_render_pass(g_postfx.pfx_render_pass
                              , g_postfx.ssr_stage.fbo
@@ -1988,8 +1961,7 @@ apply_ssr(gpu_command_queue_t *queue
 }
 
 inline void
-render_to_pre_final(gpu_command_queue_t *queue,
-                    gpu_t *gpu)
+render_to_pre_final(gpu_command_queue_t *queue)
 {
     if (g_postfx.dbg_requested_capture)
     {
@@ -2004,8 +1976,7 @@ render_to_pre_final(gpu_command_queue_t *queue,
                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                   &queue->q,
-                   gpu);
+                   &queue->q);
         copy_image(g_image_manager.get(g_postfx.ssr_stage.output),
                    &g_postfx.dbg_capture.blitted_image_linear,
                    g_dfr_rendering.backbuffer_res.width,
@@ -2013,8 +1984,7 @@ render_to_pre_final(gpu_command_queue_t *queue,
                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                   &queue->q,
-                   gpu);
+                   &queue->q);
 
         for (uint32_t i = 0; i < g_postfx.ssr_stage.input_count; ++i)
         {
@@ -2025,8 +1995,7 @@ render_to_pre_final(gpu_command_queue_t *queue,
                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                       &queue->q,
-                       gpu);
+                       &queue->q);
         }
     }
     
@@ -2083,43 +2052,43 @@ void
 apply_pfx_on_scene(gpu_command_queue_t *queue
                    , uniform_group_t *transforms_group
                    , const matrix4_t &view_matrix
-                   , const matrix4_t &projection_matrix
-                   , gpu_t *gpu)
+                   , const matrix4_t &projection_matrix)
 {
     apply_ssr(queue, transforms_group,
               view_matrix,
-              projection_matrix,
-              gpu);
+              projection_matrix);
 
-    render_to_pre_final(queue, gpu);
+    render_to_pre_final(queue);
 }
 
 void
-render_final_output(uint32_t image_index, gpu_command_queue_t *queue, swapchain_t *swapchain)
+render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
 {
     queue->begin_render_pass(g_postfx.final_render_pass
                              , g_postfx.final_stage.fbo + image_index
                              , VK_SUBPASS_CONTENTS_INLINE
                              , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
 
+    VkExtent2D swapchain_extent = get_swapchain_extent();
+    
     float32_t backbuffer_asp = (float32_t)g_dfr_rendering.backbuffer_res.width / (float32_t)g_dfr_rendering.backbuffer_res.height;
-    float32_t swapchain_asp = (float32_t)swapchain->extent.width / (float32_t)swapchain->extent.height;
+    float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
 
     uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
     
     if (backbuffer_asp >= swapchain_asp)
     {
-        rect2D_width = swapchain->extent.width;
-        rect2D_height = (uint32_t)((float32_t)swapchain->extent.width / backbuffer_asp);
+        rect2D_width = swapchain_extent.width;
+        rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
         rect2Dx = 0;
-        rect2Dy = (swapchain->extent.height - rect2D_height) / 2;
+        rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
     }
 
     if (backbuffer_asp < swapchain_asp)
     {
-        rect2D_width = (uint32_t)(swapchain->extent.height * backbuffer_asp);
-        rect2D_height = swapchain->extent.height;
-        rect2Dx = (swapchain->extent.width - rect2D_width) / 2;
+        rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
+        rect2D_height = swapchain_extent.height;
+        rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
         rect2Dy = 0;
     }
     
@@ -2151,9 +2120,7 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue, swapchain_
 }
 
 internal void
-make_cube_model(gpu_t *gpu,
-                swapchain_t *swapchain,
-                gpu_command_queue_pool_t *pool)
+make_cube_model(gpu_command_queue_pool_t *pool)
 {
     model_handle_t cube_model_hdl = g_model_manager.add("model.cube_model"_hash);
     auto *cube_model_ptr = g_model_manager.get(cube_model_hdl);
@@ -2205,8 +2172,7 @@ make_cube_model(gpu_t *gpu,
         invoke_staging_buffer_for_device_local_buffer(byte_buffer
                                                               , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
                                                               , pool
-                                                              , vbo
-                                                              , gpu);
+                                                              , vbo);
 
         main_binding->buffer = vbo->buffer;
         cube_model_ptr->create_vbo_list();
@@ -2245,8 +2211,7 @@ make_cube_model(gpu_t *gpu,
 	invoke_staging_buffer_for_device_local_buffer(byte_buffer
 							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							      , pool
-							      , ibo
-							      , gpu);
+							      , ibo);
 
 	cube_model_ptr->index_data.index_buffer = ibo->buffer;
     }
@@ -2259,18 +2224,16 @@ internal int32_t
 lua_end_frame_capture(lua_State *state);
 
 void
-initialize_game_3d_graphics(gpu_t *gpu,
-                            swapchain_t *swapchain,
-                            gpu_command_queue_pool_t *pool)
+initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
 {
     g_dfr_rendering.backbuffer_res = {1500, 1000};
     
-    make_uniform_pool(gpu);
-    make_dfr_rendering_data(gpu, swapchain);
-    make_camera_data(gpu, &g_uniform_pool, swapchain);
-    make_shadow_data(gpu, swapchain);
-    make_cube_model(gpu, swapchain, pool);
-    make_atmosphere_data(gpu, &g_uniform_pool, swapchain, pool);
+    make_uniform_pool();
+    make_dfr_rendering_data();
+    make_camera_data(&g_uniform_pool);
+    make_shadow_data();
+    make_cube_model(pool);
+    make_atmosphere_data(&g_uniform_pool, pool);
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);    
@@ -2280,20 +2243,16 @@ initialize_game_3d_graphics(gpu_t *gpu,
 
 
 void
-initialize_game_2d_graphics(gpu_t *gpu,
-                            swapchain_t *swapchain,
-                            gpu_command_queue_pool_t *pool)
+initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
 {
-    make_postfx_data(gpu, swapchain, pool);
+    make_postfx_data(pool);
 }
 
 void
-destroy_graphics(gpu_t *gpu)
+destroy_graphics(void)
 {
-    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
+    //    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }
-
-#include <GLFW/glfw3.h>
 
 internal int32_t
 lua_begin_frame_capture(lua_State *state)
@@ -2303,8 +2262,7 @@ lua_begin_frame_capture(lua_State *state)
 
     console_out("=== Begin frame capture ===\n");
     
-    window_data_t *window = get_window_data();
-    glfwSetInputMode(window->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    enable_cursor_display();
     
     return(0);
 }
@@ -2316,8 +2274,7 @@ lua_end_frame_capture(lua_State *state)
 
     console_out("=== End frame capture ===\n");
     
-    window_data_t *window = get_window_data();
-    glfwSetInputMode(window->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    disable_cursor_display();
     
     return(0);
 }
@@ -2378,8 +2335,6 @@ using sampler2D = sampler2d_ptr_t;
 
 namespace glsl
 {
-    gpu_t *g_dbg_gpu_ptr;
-    
 // =============== INCLUDE GLSL CODE HERE =================
 #include "shaders/pfx_ssr_c.hpp"
 // ===============
@@ -2388,7 +2343,7 @@ namespace glsl
 internal vec4
 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 {
-    vector4_t sampled = glsl_texture_function(sampler.sampler_data, vector2_t(uvs.x, uvs.y), glsl::g_dbg_gpu_ptr);
+    vector4_t sampled = glsl_texture_function(sampler.sampler_data, vector2_t(uvs.x, uvs.y));
     return vec4(sampled.x, sampled.y, sampled.z, sampled.w);
 }
 
@@ -2397,10 +2352,8 @@ glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 #define SET_VS_DATA(name, data) glsl::##name = data
 
 vector4_t
-invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera, gpu_t *gpu)
+invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera)
 {
-    glsl::g_dbg_gpu_ptr = gpu;
-
     glsl::pk_t pk;
 
     vector4_t n_light_dir = camera->v_m * vector4_t(glm::normalize(-g_lighting.ws_light_position), 0.0f);
@@ -2431,13 +2384,13 @@ invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_
     vs_data.uvs.y = uvs.y;
     SET_VS_DATA(fs_in, vs_data);
 
-    capture->prepare_memory_maps(gpu);
+    capture->prepare_memory_maps();
     {
         // If in debug mode of course
         __debugbreak();
         glsl::main();
     }
-    capture->end_memory_maps(gpu);
+    capture->end_memory_maps();
 
     vector4_t final_color = vector4_t(glsl::final_color.x, glsl::final_color.y, glsl::final_color.z, 1.0f);
     return(final_color);

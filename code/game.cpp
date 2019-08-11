@@ -21,8 +21,7 @@ global_var struct window_rendering_data_t
     uint32_t in_flight_fram;
 } window_rendering;
 
-void
-make_game(input_state_t *input_state)
+void initialize_game(input_state_t *input_state)
 {
     allocate_command_pool(get_queue_families()->graphics_family, &window_rendering.command_pool);
 
@@ -70,8 +69,8 @@ void
 update_game(input_state_t *input_state, float32_t dt)
 {
     // ---- update different parts of the game (world, gui...)
-    persist uint32_t current_frame = 0;
-    persist constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+    persist_var uint32_t current_frame = 0;
+    persist_var constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
     current_frame = 0;
 

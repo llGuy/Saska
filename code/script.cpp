@@ -58,7 +58,7 @@ get_from_stack(script_primitive_type_t type, int32_t stack_index, void *dst)
     {
     case script_primitive_type_t::NUMBER:  {*cast_ptr<int>(dst) = lua_tonumber(g_lua_state, stack_index); break;}
     case script_primitive_type_t::STRING:  {*cast_ptr<const char *>(dst) = lua_tostring(g_lua_state, stack_index); break;}
-    case script_primitive_type_t::BOOLEAN: {*cast_ptr<bool>(dst) = lua_toboolean(g_lua_state, stack_index); break;}
+        //    case script_primitive_type_t::BOOLEAN: {*cast_ptr<bool>(dst) = lua_toboolean(g_lua_state, stack_index); break;}
     }
 }
 

@@ -14,7 +14,7 @@ mount_virtual_file_path(const char *real_path, const char *virtual_path)
     // TODO(luc) : function to mount virtual file paths into the hash table
 }
 
-internal File_Data
+internal_function File_Data
 read_binary(const File &file_description)
 {
     FILE *file = fopen(file_description.file_path, "rb");
@@ -35,7 +35,7 @@ read_binary(const File &file_description)
     return(File_Data{buffer, size, file_description});
 }    
 
-internal File_Data
+internal_function File_Data
 read_image(const File &file_description)
 {
     s32 w, h, channels;

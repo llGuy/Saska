@@ -1,4 +1,3 @@
-#include <iostream>
 #define GLFW_INCLUDE_VULKAN
 #include <cstring>
 
@@ -159,7 +158,7 @@ void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_bu
                          , command_buffers.buffer);
 }
 
-internal uint32_t
+internal_function uint32_t
 find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements)
 {
     VkPhysicalDeviceMemoryProperties mem_properties;
@@ -291,7 +290,7 @@ struct instance_create_extension_params_t
 };
 
 // TODO(luc) : make validation layers truly optional, enable / disable when requested
-internal void
+internal_function void
 init_instance(VkApplicationInfo *app_info
               , instance_create_validation_layer_params_t *validation_params
               , instance_create_extension_params_t *extension_params)
@@ -338,7 +337,7 @@ init_instance(VkApplicationInfo *app_info
     pop_stack();
 }
 
-internal VKAPI_ATTR VkBool32 VKAPI_CALL
+internal_function VKAPI_ATTR VkBool32 VKAPI_CALL
 vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity
                   , VkDebugUtilsMessageTypeFlagsEXT message_type
                   , const VkDebugUtilsMessengerCallbackDataEXT *message_data
@@ -352,7 +351,7 @@ vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity
     return(VK_FALSE);
 }
 
-internal void init_debug_messenger(void)
+internal_function void init_debug_messenger(void)
 {
     // setup debugger
     VkDebugUtilsMessengerCreateInfoEXT debug_info = {};
@@ -371,7 +370,7 @@ internal void init_debug_messenger(void)
     VK_CHECK(vk_create_debug_utils_messenger(g_context.instance, &debug_info, nullptr, &g_context.debug_messenger));
 }
 
-internal void
+internal_function void
 get_swapchain_support(VkSurfaceKHR *surface)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_context.gpu.hardware, *surface, &g_context.gpu.swapchain_support.capabilities);
@@ -407,7 +406,7 @@ struct physical_device_extensions_params_t
     const char **r_extension_names;
 };
 
-internal bool
+internal_function bool
 check_if_physical_device_supports_extensions(physical_device_extensions_params_t *extension_params
                                              , VkPhysicalDevice gpu)
 {
@@ -445,7 +444,7 @@ check_if_physical_device_supports_extensions(physical_device_extensions_params_t
     return(!required_extensions_left);
 }
     
-internal bool
+internal_function bool
 check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params
                                      , VkSurfaceKHR *surface)
 {
@@ -479,7 +478,7 @@ check_if_physical_device_is_suitable(physical_device_extensions_params_t *extens
            && device_features.fillModeNonSolid);
 }
 
-internal void
+internal_function void
 choose_gpu(physical_device_extensions_params_t *extension_params)
 {
     uint32_t device_count = 0;
@@ -515,7 +514,7 @@ choose_gpu(physical_device_extensions_params_t *extension_params)
     OUTPUT_DEBUG_LOG("%s\n", "found gpu compatible with application");
 }
 
-internal void
+internal_function void
 init_device(physical_device_extensions_params_t *gpu_extensions
             , instance_create_validation_layer_params_t *validation_layers)
 {
@@ -586,7 +585,7 @@ init_device(physical_device_extensions_params_t *gpu_extensions
     vkGetDeviceQueue(g_context.gpu.logical_device, g_context.gpu.queue_families.present_family, 0, &g_context.gpu.present_queue);
 }
 
-internal VkSurfaceFormatKHR
+internal_function VkSurfaceFormatKHR
 choose_surface_format(VkSurfaceFormatKHR *available_formats
                       , uint32_t format_count)
 {
@@ -609,7 +608,7 @@ choose_surface_format(VkSurfaceFormatKHR *available_formats
     return(available_formats[0]);
 }
 
-internal VkPresentModeKHR
+internal_function VkPresentModeKHR
 choose_surface_present_mode(const VkPresentModeKHR *available_present_modes
                             , uint32_t present_modes_count)
 {
@@ -631,7 +630,7 @@ choose_surface_present_mode(const VkPresentModeKHR *available_present_modes
     return(best_mode);
 }
 
-internal VkExtent2D
+internal_function VkExtent2D
 choose_swapchain_extent(input_state_t *input_state, const VkSurfaceCapabilitiesKHR *capabilities)
 {
     if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
@@ -814,7 +813,7 @@ submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
     vkQueueSubmit(*queue, 1, &submit_info, *fence);
 }
 
-internal bool
+internal_function bool
 has_stencil_component(VkFormat format)
 {
     return(format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT);
@@ -1281,7 +1280,7 @@ invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
     vkFreeMemory(g_context.gpu.logical_device, staging_buffer.memory, nullptr);
 }
     
-internal void
+internal_function void
 init_swapchain(input_state_t *input_state)
 {
     swapchain_details_t *swapchain_details = &g_context.gpu.swapchain_support;
@@ -1296,7 +1295,7 @@ init_swapchain(input_state_t *input_state)
         image_count = swapchain_details->capabilities.maxImageCount;
     }
 
-    VkSwapchainCreateInfoKHR swapchain_info;
+    VkSwapchainCreateInfoKHR swapchain_info = {};
     swapchain_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     swapchain_info.surface = g_context.surface;
     swapchain_info.minImageCount = image_count;
@@ -1376,7 +1375,7 @@ init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment
 }
 
 // find gpu supported depth format
-internal VkFormat
+internal_function VkFormat
 find_supported_format(const VkFormat *candidates
                       , uint32_t candidate_size
                       , VkImageTiling tiling
@@ -1403,7 +1402,7 @@ find_supported_format(const VkFormat *candidates
     return VkFormat{};
 }
 
-internal void
+internal_function void
 find_depth_format(void)
 {
     VkFormat formats[] = 
@@ -1797,13 +1796,12 @@ present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
                              , &present_info));
 }
     
-void
-init_vulkan_state(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
+void initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
 {
     init_manager();
 	
     // initialize instance
-    persist constexpr uint32_t layer_count = 1;
+    persist_var constexpr uint32_t layer_count = 1;
     const char *layer_names[layer_count] = { "VK_LAYER_LUNARG_standard_validation" };
 
     instance_create_validation_layer_params_t validation_params = {};
@@ -1812,13 +1810,24 @@ init_vulkan_state(create_vulkan_surface *create_surface_proc, input_state_t *inp
     validation_params.o_layer_names = layer_names;
 
     uint32_t extension_count;
+    const char **total_extension_buffer;
+#if defined (_WIN32)
+    // TODO: TODO: TODO: MAKE A BETTER WAY TO SELECT FRICKING EXTENSIONS
+    total_extension_buffer = (const char **)allocate_stack(sizeof(const char *) * 4);
+    total_extension_buffer[0] = "VK_KHR_win32_surface";
+    total_extension_buffer[1] = "VK_KHR_surface";
+    total_extension_buffer[2] = "VK_EXT_debug_utils";
+    total_extension_buffer[3] = "VK_EXT_debug_report";
+    extension_count = 4;
+#else
     const char **extension_names = glfwGetRequiredInstanceExtensions(&extension_count);
-    const char **total_extension_buffer = (const char **)allocate_stack(sizeof(const char *) * (extension_count + 4)
-                                                                        , alignment_t(1)
-                                                                        , "vulkan_instanc_extension_names_list_allocation");
+    total_extension_buffer = (const char **)allocate_stack(sizeof(const char *) * (extension_count + 4)
+                                                           , alignment_t(1)
+                                                           , "vulkan_instanc_extension_names_list_allocation");
     memcpy(total_extension_buffer, extension_names, sizeof(const char *) * extension_count);
     total_extension_buffer[extension_count++] = "VK_EXT_debug_utils";
     total_extension_buffer[extension_count++] = "VK_EXT_debug_report";
+#endif
 	
     instance_create_extension_params_t extension_params = {};
     extension_params.r_extension_count = extension_count;
@@ -1844,7 +1853,7 @@ init_vulkan_state(create_vulkan_surface *create_surface_proc, input_state_t *inp
     VK_CHECK(create_surface_proc->create_proc());
 
     // choose hardware and create device
-    persist constexpr uint32_t gpu_extension_count = 1;
+    persist_var constexpr uint32_t gpu_extension_count = 1;
     const char *gpu_extension_names[gpu_extension_count] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     physical_device_extensions_params_t gpu_extensions = {};
     gpu_extensions.r_extension_count = gpu_extension_count;

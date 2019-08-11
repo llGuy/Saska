@@ -44,7 +44,7 @@ end_command_queue(gpu_command_queue_t *queue)
 // --------------------- Uniform stuff ---------------------
 uniform_pool_t g_uniform_pool;
 
-internal void
+internal_function void
 make_uniform_pool(void)
 {
     VkDescriptorPoolSize pool_sizes[3] = {};
@@ -116,7 +116,7 @@ make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
 // will be used for multi-threading the rendering process for extra extra performance !
 global_var struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager
 {
-    persist constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
+    persist_var constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
 
     uint32_t active_queue_ptr {0};
     gpu_command_queue_t active_queues[MAX_ACTIVE_QUEUES];
@@ -529,7 +529,7 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
 // Rendering pipeline
 struct cameras_t
 {
-    persist constexpr uint32_t MAX_CAMERAS = 10;
+    persist_var constexpr uint32_t MAX_CAMERAS = 10;
     uint32_t camera_count = 0;
     camera_t cameras[MAX_CAMERAS] = {};
     camera_handle_t camera_bound_to_3d_output;
@@ -539,7 +539,7 @@ struct cameras_t
     uint32_t ubo_count;
 } g_cameras;
 
-internal void
+internal_function void
 make_camera_data(VkDescriptorPool *pool)
 {
     uint32_t swapchain_image_count = get_swapchain_image_count();
@@ -640,6 +640,10 @@ add_camera(input_state_t *input_state, resolution_t resolution)
     return(index);
 }
 
+// windows.h fucking conflicts jesus christ
+#undef near
+#undef far
+
 void
 make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far)
 {
@@ -705,7 +709,7 @@ struct lighting_t
     // Later, need to add PSSM
     struct shadows_t
     {
-        persist constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+        persist_var constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
         
         framebuffer_handle_t fbo;
         render_pass_handle_t pass;
@@ -730,7 +734,7 @@ struct lighting_t
 
 struct atmosphere_t
 {
-    persist constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
+    persist_var constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
     
     // gpu_t objects needed to create the atmosphere skybox cubemap
     render_pass_handle_t make_render_pass;
@@ -824,7 +828,7 @@ render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
                                 , cube->index_data.init_draw_indexed_data(0, 0));
 }
 
-internal void
+internal_function void
 make_atmosphere_data(VkDescriptorPool *pool
                      , VkCommandPool *cmdpool)
 {
@@ -921,7 +925,7 @@ make_atmosphere_data(VkDescriptorPool *pool
     destroy_single_use_command_buffer(&cmdbuf, cmdpool);
 }
 
-internal void
+internal_function void
 make_shadow_data(void)
 {
     vector3_t light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
@@ -989,7 +993,7 @@ make_shadow_data(void)
     }
 }
 
-internal void
+internal_function void
 calculate_ws_frustum_corners(vector4_t *corners
 			     , vector4_t *shadow_corners)
 {
@@ -1018,7 +1022,7 @@ calculate_ws_frustum_corners(vector4_t *corners
     shadow_corners[7] = shadow_data.inverse_light_view * camera->captured_shadow_corners[7];
 }
 
-internal void
+internal_function void
 render_debug_frustum(gpu_command_queue_t *queue
                      , VkDescriptorSet ubo)
 {
@@ -1498,7 +1502,7 @@ struct post_processing_t
     rect2D_t render_rect2D;
 } g_postfx;
 
-internal float32_t
+internal_function float32_t
 float16_to_float32(uint16_t f)
 {
     int f32i32 =  ((f & 0x8000) << 16);
@@ -1509,7 +1513,7 @@ float16_to_float32(uint16_t f)
     return ret;
 }
 
-internal vector4_t
+internal_function vector4_t
 glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs)
 {
     uint32_t ui_x = (uint32_t)(uvs.x * (float32_t)sampler->resolution.width);
@@ -1569,7 +1573,7 @@ glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const v
     return(final_color);
 }
 
-internal uint32_t
+internal_function uint32_t
 get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution)
 {
     uint32_t ui_x = (uint32_t)(x * (float32_t)resolution.width);
@@ -1645,7 +1649,7 @@ dbg_handle_input(input_state_t *input_state)
             g_postfx.dbg_capture.mapped_image.end();
 
                         // Print cursor position and the color of the pixel
-            persist char buffer[100];
+            persist_var char buffer[100];
             sprintf(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
             console_out(buffer);
 
@@ -1654,7 +1658,7 @@ dbg_handle_input(input_state_t *input_state)
     }
 }
 
-internal void
+internal_function void
 dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
     init_image(w,
@@ -1675,14 +1679,14 @@ dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, Vk
                     1);
 }
 
-internal void
+internal_function void
 dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
     make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
     dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-internal void
+internal_function void
 dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
 {
     uniform_layout_handle_t layout_hdl = g_uniform_layout_manager.get_handle("uniform_layout.pfx_single_tx_output"_hash);
@@ -1693,7 +1697,7 @@ dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
                          update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 }
 
-internal void
+internal_function void
 dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture)
 {
     capture->sampler_count = stage->input_count;
@@ -1711,7 +1715,7 @@ dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *cap
     }
 }
 
-internal void
+internal_function void
 dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
 {
     // Trying to debug the SSR stage
@@ -1763,7 +1767,7 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
     dbg_make_frame_capture_samplers(stage, frame_capture);
 }
 
-internal void
+internal_function void
 make_pfx_stage(pfx_stage_t *dst_stage,
                const shader_modules_t &shader_modules,
                const shader_uniform_layouts_t &uniform_layouts,
@@ -2119,7 +2123,7 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
     queue->end_render_pass();
 }
 
-internal void
+internal_function void
 make_cube_model(gpu_command_queue_pool_t *pool)
 {
     model_handle_t cube_model_hdl = g_model_manager.add("model.cube_model"_hash);
@@ -2152,7 +2156,7 @@ make_cube_model(gpu_command_queue_pool_t *pool)
 	
         float32_t radius = 1.0f;
 	
-        persist vertex_t vertices[]
+        persist_var vertex_t vertices[]
         {
             {{-radius, -radius, radius	}, gray},
             {{radius, -radius, radius	}, gray},
@@ -2181,7 +2185,7 @@ make_cube_model(gpu_command_queue_pool_t *pool)
     gpu_buffer_handle_t model_ibo_hdl = g_gpu_buffer_manager.add("ibo.cube_model_ibo"_hash);
     auto *ibo = g_gpu_buffer_manager.get(model_ibo_hdl);
     {
-	persist uint32_t mesh_indices[] = 
+	persist_var uint32_t mesh_indices[] = 
             {
                 0, 1, 2,
                 2, 3, 0,
@@ -2217,10 +2221,10 @@ make_cube_model(gpu_command_queue_pool_t *pool)
     }
 }
 
-internal int32_t
+internal_function int32_t
 lua_begin_frame_capture(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_end_frame_capture(lua_State *state);
 
 void
@@ -2254,7 +2258,7 @@ destroy_graphics(void)
     //    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }
 
-internal int32_t
+internal_function int32_t
 lua_begin_frame_capture(lua_State *state)
 {
     // Copy images into samplers blitted images
@@ -2267,7 +2271,7 @@ lua_begin_frame_capture(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_end_frame_capture(lua_State *state)
 {
     g_postfx.dbg_in_frame_capture_mode = false;
@@ -2319,14 +2323,14 @@ struct sampler2d_ptr_t
     dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler_data;
 };
 
-internal vec4
+internal_function vec4
 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs);
 
 #define Push_K struct pk_t
 #define in
 #define out funccall_inout::
 #define inout funccall_inout::
-#define uniform internal
+#define uniform internal_function
 #define texture glsl_texture_func
 
 #define VS_DATA struct vs_data_t
@@ -2340,7 +2344,7 @@ namespace glsl
 // ===============
 }
 
-internal vec4
+internal_function vec4
 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 {
     vector4_t sampled = glsl_texture_function(sampler.sampler_data, vector2_t(uvs.x, uvs.y));

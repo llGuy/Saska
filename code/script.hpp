@@ -24,7 +24,7 @@ begin_file(const char *filename);
 void
 end_file(void);
 
-enum script_primitive_type_t { NUMBER, STRING, BOOLEAN, FUNCTION, TABLE_INDEX, TABLE_HANDLE, TABLE_FIELD };
+enum script_primitive_type_t { NUMBER, STRING, FUNCTION, TABLE_INDEX, TABLE_HANDLE, TABLE_FIELD };
 enum stack_item_type_t { GLOBAL, FIELD, ARRAY_INDEX };
 
 struct push_to_stack_info_t
@@ -54,7 +54,7 @@ add_global_to_lua(script_primitive_type_t type, const char *name, const T &data)
     switch(type)
     {
     case script_primitive_type_t::NUMBER: {int32_t *int_ptr = (int32_t *)data_ptr; lua_pushnumber(g_lua_state, *int_ptr); break;}
-    case script_primitive_type_t::BOOLEAN: {bool *bool_ptr = (bool *)data_ptr; lua_pushboolean(g_lua_state, *bool_ptr); break;}
+        //    case script_primitive_type_t::BOOLEAN: {bool *bool_ptr = (bool *)data_ptr; lua_pushboolean(g_lua_state, *bool_ptr); break;}
     case script_primitive_type_t::STRING: {const char **str_ptr = (const char **)data_ptr; lua_pushstring(g_lua_state, *str_ptr); break;}
     case script_primitive_type_t::FUNCTION: {lua_function_t *f_ptr = (lua_function_t *)data_ptr; lua_pushcfunction(g_lua_state, *f_ptr); break;}
     }

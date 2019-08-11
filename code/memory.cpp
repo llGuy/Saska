@@ -61,8 +61,8 @@ allocate_stack(uint32_t allocation_size
     stack_allocation_header_t *header = (stack_allocation_header_t *)start_address;
     
 #if DEBUG
-    header->allocation_name = name;
-    OUTPUT_DEBUG_LOG("stack allocation for \"%s\"\n", name);
+    //header->allocation_name = name;
+    //    OUTPUT_DEBUG_LOG("stack allocation for \"%s\"\n", name);
 #endif
 
     header->size = allocation_size;
@@ -152,7 +152,7 @@ allocate_free_list(uint32_t allocation_size
     free_list_allocation_header_t *header = (free_list_allocation_header_t *)smallest_free_block;
     header->size = allocation_size;
 #if DEBUG
-    header->name = name;
+    //    header->name = name;
 #endif
     return((byte_t *)header + sizeof(free_list_allocation_header_t));
 }

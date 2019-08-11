@@ -11,8 +11,8 @@
 #define FORCEINLINE __forceinline
 #endif
 
-#define persist static
-#define internal static
+#define persist_var static
+#define internal_function static
 #define global_var static
 
 #include <glm/glm.hpp>

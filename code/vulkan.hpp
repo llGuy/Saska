@@ -114,7 +114,7 @@ struct draw_indexed_data_t
     uint32_t first_instance;
 };
 
-internal inline draw_indexed_data_t
+internal_function inline draw_indexed_data_t
 init_draw_indexed_data_default(uint32_t instance_count,
                                uint32_t index_count)
 {
@@ -151,7 +151,7 @@ struct model_index_data_t
     }
 };
     
-internal inline void
+internal_function inline void
 command_buffer_bind_ibo(const model_index_data_t &index_data,
                         VkCommandBuffer *command_buffer)
 {
@@ -161,7 +161,7 @@ command_buffer_bind_ibo(const model_index_data_t &index_data,
                          , index_data.index_type);
 }
     
-internal inline void
+internal_function inline void
 command_buffer_bind_vbos(const memory_buffer_view_t<VkBuffer> &buffers
                          , const memory_buffer_view_t<VkDeviceSize> &offsets
                          , uint32_t first_binding, uint32_t binding_count
@@ -174,7 +174,7 @@ command_buffer_bind_vbos(const memory_buffer_view_t<VkBuffer> &buffers
                            , offsets.buffer);
 }
 
-internal inline void
+internal_function inline void
 command_buffer_execute_commands(VkCommandBuffer *cmdbuf
                                 , const memory_buffer_view_t<VkCommandBuffer> &cmds)
 {
@@ -203,7 +203,7 @@ struct graphics_pipeline_t
     void destroy(void);
 };
     
-internal inline void
+internal_function inline void
 command_buffer_push_constant(void *data
                              , uint32_t size
                              , uint32_t offset
@@ -313,7 +313,7 @@ struct render_pass_t
     void destroy(void);
 };
 
-internal inline VkAttachmentDescription
+internal_function inline VkAttachmentDescription
 init_attachment_description(VkFormat format
                             , VkSampleCountFlagBits samples
                             , VkAttachmentLoadOp load, VkAttachmentStoreOp store
@@ -332,7 +332,7 @@ init_attachment_description(VkFormat format
     return(desc);
 }
 
-internal inline VkAttachmentReference
+internal_function inline VkAttachmentReference
 init_attachment_reference(uint32_t attachment
                           , VkImageLayout layout)
 {
@@ -342,7 +342,7 @@ init_attachment_reference(uint32_t attachment
     return(ref);
 }
 
-internal inline VkSubpassDescription
+internal_function inline VkSubpassDescription
 init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &color_refs
                          , VkAttachmentReference *depth
                          , const memory_buffer_view_t<VkAttachmentReference> &input_refs)
@@ -357,7 +357,7 @@ init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &colo
     return(subpass);
 }
 
-internal inline VkSubpassDependency
+internal_function inline VkSubpassDependency
 init_subpass_dependency(uint32_t src_subpass
                         , uint32_t dst_subpass
                         , VkPipelineStageFlags src_stage
@@ -381,7 +381,7 @@ init_subpass_dependency(uint32_t src_subpass
     return(dependency);
 }
 
-internal inline VkClearValue
+internal_function inline VkClearValue
 init_clear_color_color(float32_t r, float32_t g, float32_t b, float32_t a)
 {
     VkClearValue value {};
@@ -389,7 +389,7 @@ init_clear_color_color(float32_t r, float32_t g, float32_t b, float32_t a)
     return(value);
 }
 
-internal inline VkClearValue
+internal_function inline VkClearValue
 init_clear_color_depth(float32_t d, uint32_t s)
 {
     VkClearValue value {};
@@ -397,7 +397,7 @@ init_clear_color_depth(float32_t d, uint32_t s)
     return(value);
 }
 
-internal inline VkRect2D
+internal_function inline VkRect2D
 init_render_area(const VkOffset2D &offset, const VkExtent2D &extent)
 {
     VkRect2D render_area {};
@@ -418,7 +418,7 @@ void
 command_buffer_next_subpass(VkCommandBuffer *cmdbuf
                             , VkSubpassContents contents);
 
-internal inline void
+internal_function inline void
 command_buffer_end_render_pass(VkCommandBuffer *command_buffer)
 {
     vkCmdEndRenderPass(*command_buffer);
@@ -548,7 +548,7 @@ struct model_t
     }
 };
     
-internal inline void
+internal_function inline void
 command_buffer_draw_indexed(VkCommandBuffer *command_buffer
                             , const draw_indexed_data_t &data)
 {
@@ -560,7 +560,7 @@ command_buffer_draw_indexed(VkCommandBuffer *command_buffer
                      , data.first_instance);
 }
 
-internal inline void
+internal_function inline void
 command_buffer_draw(VkCommandBuffer *cmdbuf
                     , uint32_t v_count
                     , uint32_t i_count
@@ -574,7 +574,7 @@ command_buffer_draw(VkCommandBuffer *cmdbuf
               , first_i);
 }
 
-internal inline void
+internal_function inline void
 command_buffer_bind_pipeline(graphics_pipeline_t *pipeline
                              , VkCommandBuffer *command_buffer)
 {
@@ -584,7 +584,7 @@ command_buffer_bind_pipeline(graphics_pipeline_t *pipeline
 }
 
 // creating pipelines takes a LOT of params
-internal inline void
+internal_function inline void
 init_shader_pipeline_info(VkShaderModule *module
                           , VkShaderStageFlagBits stage_bits
                           , VkPipelineShaderStageCreateInfo *dest_info)
@@ -595,7 +595,7 @@ init_shader_pipeline_info(VkShaderModule *module
     dest_info->pName = "main";	
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_vertex_input_info(model_t *model /* model contains input information required */
                                 , VkPipelineVertexInputStateCreateInfo *info)
 {
@@ -609,7 +609,7 @@ init_pipeline_vertex_input_info(model_t *model /* model contains input informati
     }
 }
 
-internal inline VkVertexInputAttributeDescription
+internal_function inline VkVertexInputAttributeDescription
 init_attribute_description(uint32_t binding
                            , uint32_t location
                            , VkFormat format
@@ -625,7 +625,7 @@ init_attribute_description(uint32_t binding
     return(info);
 }
     
-internal inline VkVertexInputBindingDescription
+internal_function inline VkVertexInputBindingDescription
 init_binding_description(uint32_t binding
                          , uint32_t stride
                          , VkVertexInputRate input_rate)
@@ -639,7 +639,7 @@ init_binding_description(uint32_t binding
     return(info);
 }
     
-internal inline VkPipelineVertexInputStateCreateInfo
+internal_function inline VkPipelineVertexInputStateCreateInfo
 init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingDescription> &bindings
                                 , const memory_buffer_view_t<VkVertexInputAttributeDescription> & attributes)
 {
@@ -655,7 +655,7 @@ init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingD
     return(info);
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_input_assembly_info(VkPipelineInputAssemblyStateCreateFlags flags
                                   , VkPrimitiveTopology topology
                                   , VkBool32 primitive_restart
@@ -666,7 +666,7 @@ init_pipeline_input_assembly_info(VkPipelineInputAssemblyStateCreateFlags flags
     info->primitiveRestartEnable = primitive_restart;
 }
 
-internal inline VkRect2D
+internal_function inline VkRect2D
 make_rect2D(int32_t startx,
             int32_t starty,
             uint32_t width,
@@ -678,7 +678,7 @@ make_rect2D(int32_t startx,
     return(dst);
 }
     
-internal inline void
+internal_function inline void
 init_viewport(uint32_t x, uint32_t y
               , uint32_t width
               , uint32_t height
@@ -754,7 +754,7 @@ init_pipeline_viewport_info(memory_buffer_view_t<VkViewport> *viewports
     info->pScissors = scissors->buffer;;
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_rasterization_info(VkPolygonMode polygon_mode
                                  , VkCullModeFlags cull_flags
                                  , float32_t line_width
@@ -778,7 +778,7 @@ init_pipeline_rasterization_info(VkPolygonMode polygon_mode
     info->flags = flags;
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_multisampling_info(VkSampleCountFlagBits rasterization_samples
                                  , VkPipelineMultisampleStateCreateFlags flags
                                  , VkPipelineMultisampleStateCreateInfo *info)
@@ -793,7 +793,7 @@ init_pipeline_multisampling_info(VkSampleCountFlagBits rasterization_samples
     info->flags = flags;
 }
 
-internal inline void
+internal_function inline void
 init_blend_state_attachment(VkColorComponentFlags color_write_flags
                             , VkBool32 enable_blend
                             , VkBlendFactor src_color
@@ -815,7 +815,7 @@ init_blend_state_attachment(VkColorComponentFlags color_write_flags
     attachment->alphaBlendOp = alpha_op;
 }
 
-internal inline void
+internal_function inline void
 init_pipeline_blending_info(VkBool32 enable_logic_op
                             , VkLogicOp logic_op
                             , const memory_buffer_view_t<VkPipelineColorBlendAttachmentState> &states
@@ -832,7 +832,7 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
     info->blendConstants[3] = 0.0f;
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_blending_info(VkBool32 enable_logic_op
                             , VkLogicOp logic_op
                             , memory_buffer_view_t<VkPipelineColorBlendAttachmentState> *states
@@ -849,7 +849,7 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
     info->blendConstants[3] = 0.0f;
 }
 
-internal inline void
+internal_function inline void
 init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicState> *dynamic_states
                                   , VkPipelineDynamicStateCreateInfo *info)
 {
@@ -868,7 +868,7 @@ init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
                      , const memory_buffer_view_t<VkPushConstantRange> &ranges
                      , VkPipelineLayout *pipeline_layout);
 
-internal inline void
+internal_function inline void
 init_push_constant_range(VkShaderStageFlags stage_flags
                          , uint32_t size
                          , uint32_t offset
@@ -879,7 +879,7 @@ init_push_constant_range(VkShaderStageFlags stage_flags
     rng->size = size;
 }
     
-internal inline void
+internal_function inline void
 init_pipeline_depth_stencil_info(VkBool32 depth_test_enable
                                  , VkBool32 depth_write_enable
                                  , float32_t min_depth_bounds
@@ -931,7 +931,7 @@ begin_command_buffer(VkCommandBuffer *command_buffer
                      , VkCommandBufferUsageFlags usage_flags
                      , VkCommandBufferInheritanceInfo *inheritance);
 
-internal inline void
+internal_function inline void
 end_command_buffer(VkCommandBuffer *command_buffer)
 {
     vkEndCommandBuffer(*command_buffer);
@@ -1033,7 +1033,7 @@ init_framebuffer(render_pass_t *compatible_render_pass
                  , uint32_t layers
                  , framebuffer_t *framebuffer); // need to initialize the attachment handles
 
-internal inline VkDescriptorSetLayoutBinding
+internal_function inline VkDescriptorSetLayoutBinding
 init_descriptor_set_layout_binding(VkDescriptorType type
                                    , uint32_t binding
                                    , uint32_t count
@@ -1052,7 +1052,7 @@ void
 init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings
                            , VkDescriptorSetLayout *dst);
 
-internal inline void
+internal_function inline void
 command_buffer_bind_descriptor_sets(graphics_pipeline_t *pipeline
                                     , const memory_buffer_view_t<VkDescriptorSet> &sets
                                     , VkCommandBuffer *command_buffer)
@@ -1076,7 +1076,7 @@ VkDescriptorSet
 allocate_descriptor_set(VkDescriptorSetLayout *layout
                         , VkDescriptorPool *descriptor_pool);
     
-internal void
+internal_function void
 init_descriptor_set_buffer_info(gpu_buffer_t *buffer
                                 , uint32_t offset_in_ubo
                                 , VkDescriptorBufferInfo *buffer_info)
@@ -1086,7 +1086,7 @@ init_descriptor_set_buffer_info(gpu_buffer_t *buffer
     buffer_info->range = buffer->size;
 }
 
-internal void
+internal_function void
 init_buffer_descriptor_set_write(VkDescriptorSet *set
                                  , uint32_t binding
                                  , uint32_t dst_array_element
@@ -1103,7 +1103,7 @@ init_buffer_descriptor_set_write(VkDescriptorSet *set
     write->pBufferInfo = infos;
 }
 
-internal void
+internal_function void
 init_input_attachment_descriptor_set_write(VkDescriptorSet *set
                                            , uint32_t binding
                                            , uint32_t dst_array_element
@@ -1120,7 +1120,7 @@ init_input_attachment_descriptor_set_write(VkDescriptorSet *set
     write->pImageInfo = infos;
 }
     
-internal void
+internal_function void
 init_image_descriptor_set_write(VkDescriptorSet *set
                                 , uint32_t binding
                                 , uint32_t dst_array_element
@@ -1137,7 +1137,7 @@ init_image_descriptor_set_write(VkDescriptorSet *set
     write->pImageInfo = infos;
 }
     
-internal void
+internal_function void
 init_descriptor_set_image_info(VkSampler sampler
                                , VkImageView image_view
                                , VkImageLayout expected_layout
@@ -1148,7 +1148,7 @@ init_descriptor_set_image_info(VkSampler sampler
     image_info->sampler = sampler;
 }
 
-internal void
+internal_function void
 init_descriptor_pool_size(VkDescriptorType type
                           , uint32_t count
                           , VkDescriptorPoolSize *size)
@@ -1220,7 +1220,7 @@ struct vulkan_context_t
 };
 
 /* entry point for vulkan stuff */
-void init_vulkan_state(create_vulkan_surface *create_proc, input_state_t *input_state);
+void initialize_graphics_api(create_vulkan_surface *create_proc, input_state_t *input_state);
 
 void destroy_swapchain(void);
 

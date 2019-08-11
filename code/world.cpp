@@ -1,7 +1,5 @@
 #include "ui.hpp"
-#include <chrono>
 #include "script.hpp"
-#include <iostream>
 #include "world.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
@@ -23,7 +21,7 @@ enum { ENTITY_QUEUE, TERRAIN_QUEUE };
 struct morphable_terrain_t
 {
     // TODO: Possible fix to hard setting position at collision whilst morphing
-    persist constexpr uint32_t MAX_MORPHED_POINTS = 20;
+    persist_var constexpr uint32_t MAX_MORPHED_POINTS = 20;
     ivector2_t morphed_points[MAX_MORPHED_POINTS] = {};
     uint32_t current_morphed_points_count = 0;
     
@@ -113,20 +111,20 @@ global_var struct morphable_terrains_t
     } terrain_pointer;
 } g_terrains;
 
-internal vector3_t
+internal_function vector3_t
 get_ws_terrain_vertex_position(uint32_t idx,
                                morphable_terrain_t *terrain)
 {
     return(vector3_t());
 }
 
-internal morphable_terrain_t *
+internal_function morphable_terrain_t *
 add_terrain(void)
 {
     return(&g_terrains.terrains[g_terrains.terrain_count++]);
 }    
 
-internal void
+internal_function void
 clean_up_terrain(void)
 {
     for (uint32_t i = 0; i < g_terrains.terrain_count; ++i)
@@ -191,7 +189,7 @@ transform_from_ws_to_ts(const vector3_t &ws_v,
     return(ts_position);
 }
 
-internal bool
+internal_function bool
 is_on_terrain(const vector3_t &ws_position,
               morphable_terrain_t *t,
               float32_t *distance)
@@ -214,13 +212,13 @@ is_on_terrain(const vector3_t &ws_position,
     return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
 }
 
-template <typename T> internal float32_t
+template <typename T> internal_function float32_t
 distance_squared(const T &v)
 {
     return(glm::dot(v, v));
 }
 
-internal terrain_triangle_t
+internal_function terrain_triangle_t
 get_triangle_from_pos(const vector3_t ts_p,
                       morphable_terrain_t *t)
 {
@@ -384,15 +382,15 @@ get_triangle_from_pos(const vector3_t ts_p,
     return {false};
 }
 
-internal terrain_triangle_t
+internal_function terrain_triangle_t
 get_triangle_pointing_at(vector3_t ws_ray_p,
                          const vector3_t &ws_ray_d,
                          morphable_terrain_t *t,
                          float32_t dt)
 {
-    persist constexpr float32_t MAX_DISTANCE = 6.0f;
-    persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
-    persist constexpr float32_t STEP_SIZE = 0.3f;
+    persist_var constexpr float32_t MAX_DISTANCE = 6.0f;
+    persist_var constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
+    persist_var constexpr float32_t STEP_SIZE = 0.3f;
 
     matrix4_t ws_to_ts = t->inverse_transform;
     vector3_t ts_ray_p_start = vector3_t(ws_to_ts * vector4_t(ws_ray_p, 1.0f));
@@ -422,15 +420,15 @@ get_triangle_pointing_at(vector3_t ws_ray_p,
     return(terrain_triangle_t{false});
 }
 
-internal ivector2_t
+internal_function ivector2_t
 get_coord_pointing_at(vector3_t ws_ray_p,
                       const vector3_t &ws_ray_d,
                       morphable_terrain_t *t,
                       float32_t dt)
 {
-    persist constexpr float32_t MAX_DISTANCE = 6.0f;
-    persist constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
-    persist constexpr float32_t STEP_SIZE = 0.3f;
+    persist_var constexpr float32_t MAX_DISTANCE = 6.0f;
+    persist_var constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
+    persist_var constexpr float32_t STEP_SIZE = 0.3f;
 
     matrix4_t ws_to_ts = t->inverse_transform;
     vector3_t ts_ray_p_start = vector3_t(ws_to_ts * vector4_t(ws_ray_p, 1.0f));
@@ -488,7 +486,7 @@ struct detected_collision_return_t
 
 enum terrain_space_t { TERRAIN_SPACE, WORLD_SPACE };
 
-internal detected_collision_return_t
+internal_function detected_collision_return_t
 detect_terrain_collision(hitbox_t *hitbox,
                          const vector3_t &size,
                          const vector3_t &ws_p,
@@ -652,7 +650,7 @@ detect_terrain_collision(hitbox_t *hitbox,
     return {false, ws_at, ts_at, ws_normal, normal, ts_height - ts_p.y};
 }
 
-internal vector3_t
+internal_function vector3_t
 get_sliding_down_direction(const vector3_t &ws_view_direction,
                            const vector3_t &ws_up_vector,
                            const vector3_t &ws_normal)
@@ -662,7 +660,7 @@ get_sliding_down_direction(const vector3_t &ws_view_direction,
     return(ws_down);
 }
 
-internal void
+internal_function void
 morph_terrain_at_triangle(terrain_triangle_t *triangle,
                            morphable_terrain_t *t,
                            float32_t morph_zone_radius,
@@ -729,7 +727,7 @@ morph_terrain_at_triangle(terrain_triangle_t *triangle,
     t->is_modified = true;
 }
 
-internal void
+internal_function void
 morph_terrain_at(const ivector2_t &ts_position
 		 , morphable_terrain_t *t
 		 , float32_t morph_zone_radius
@@ -832,7 +830,7 @@ morph_terrain_at(const ivector2_t &ts_position
     t->is_modified = true;
 }
 
-internal morphable_terrain_t *
+internal_function morphable_terrain_t *
 on_which_terrain(const vector3_t &ws_position)
 {
     struct distance_terrain_data_t { float32_t distance; morphable_terrain_t *terrain; };
@@ -871,7 +869,7 @@ on_which_terrain(const vector3_t &ws_position)
 }
 
 // ---- this command happens when rendering (terrain is updated on the cpu side at a different time) ----
-internal void
+internal_function void
 update_terrain_on_gpu(gpu_command_queue_t *queue)
 {
     for (uint32_t terrain = 0;
@@ -893,7 +891,7 @@ update_terrain_on_gpu(gpu_command_queue_t *queue)
     }
 }
 
-internal float32_t
+internal_function float32_t
 terrain_noise()
 {
     float32_t r = (float32_t)(rand() % 100);
@@ -901,7 +899,7 @@ terrain_noise()
     return(r);
 }
 
-internal void
+internal_function void
 make_3D_terrain_base(uint32_t width_x
 		     , uint32_t depth_z
 		     , float32_t random_displacement_factor
@@ -988,7 +986,7 @@ make_3D_terrain_base(uint32_t width_x
     pop_stack();
 }
 
-internal void
+internal_function void
 make_3D_terrain_mesh_instance(uint32_t width_x
 			      , uint32_t depth_z
 			      , float32_t *&cpu_side_heights
@@ -1005,7 +1003,7 @@ make_3D_terrain_mesh_instance(uint32_t width_x
 			, gpu_side_heights);
 }
 
-internal void
+internal_function void
 make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain)
 {
     make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer);
@@ -1014,7 +1012,7 @@ make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain)
 
 
 // TODO: make this take roughness and metalness to push to pushconstant or whatever 
-internal void
+internal_function void
 make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue
                             , const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color)
 {
@@ -1042,7 +1040,7 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
 
 
 
-internal void
+internal_function void
 make_terrain_instances(VkCommandPool *cmdpool)
 {
     // Make the terrain render command recorder
@@ -1072,7 +1070,7 @@ make_terrain_instances(VkCommandPool *cmdpool)
     green_terrain->k_g = -8.5f;
 }
 
-internal void
+internal_function void
 add_staged_creation_terrains(void)
 {
     for (uint32_t i = 0; i < g_terrains.create_count; ++i)
@@ -1089,7 +1087,7 @@ add_staged_creation_terrains(void)
     g_terrains.create_count = 0;
 }
 
-internal void
+internal_function void
 make_terrain_pointer(void)
 {
     //    g_terrains.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
@@ -1110,7 +1108,7 @@ make_terrain_pointer(void)
     }
 }
 
-internal void
+internal_function void
 initialize_terrains(VkCommandPool *cmdpool)
 {
     // ---- register the info of the model for json loader to access ---
@@ -1163,7 +1161,7 @@ initialize_terrains(VkCommandPool *cmdpool)
     make_terrain_pointer();
 }
 
-internal void
+internal_function void
 prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 				   , VkDescriptorSet *ubo_set)
 {
@@ -1239,7 +1237,7 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 }
 
 // Is just a triangle
-internal void
+internal_function void
 render_terrain_pointer(gpu_command_queue_t *queue,
                        uniform_group_t *ubo_transforms_group)
 {
@@ -1472,14 +1470,14 @@ construct_entity(const constant_string_t &name
     return(e);
 }
 
-internal entity_t *
+internal_function entity_t *
 get_entity(const constant_string_t &name)
 {
     entity_handle_t v = *g_entities.name_map.get(name.hash);
     return(&g_entities.entity_list[v]);
 }
 
-internal entity_t *
+internal_function entity_t *
 get_entity(entity_handle_t v)
 {
     return(&g_entities.entity_list[v]);
@@ -1492,7 +1490,7 @@ attach_camera_to_entity(entity_t *e
     
 }
 
-internal struct camera_component_t *
+internal_function struct camera_component_t *
 add_camera_component(entity_t *e
                      , uint32_t camera_index)
 {
@@ -1504,7 +1502,7 @@ add_camera_component(entity_t *e
     return(component);
 }
 
-internal void
+internal_function void
 update_camera_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.camera_component_count; ++i)
@@ -1536,7 +1534,7 @@ update_camera_components(float32_t dt)
     }
 }
 
-internal struct rendering_component_t *
+internal_function struct rendering_component_t *
 add_rendering_component(entity_t *e)
 {
     e->components.rendering_component = g_entities.rendering_component_count++;
@@ -1547,7 +1545,7 @@ add_rendering_component(entity_t *e)
     return(component);
 }
 
-internal void
+internal_function void
 update_rendering_component(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.rendering_component_count; ++i)
@@ -1573,7 +1571,7 @@ update_rendering_component(float32_t dt)
     }
 }
 
-internal struct physics_component_t *
+internal_function struct physics_component_t *
 add_physics_component(entity_t *e
                       , bool enabled)
 {
@@ -1585,7 +1583,7 @@ add_physics_component(entity_t *e
     return(component);
 }
 
-internal void
+internal_function void
 update_physics_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
@@ -1689,7 +1687,7 @@ update_physics_components(float32_t dt)
                     }
                 }
 
-                persist constexpr float32_t ROUGHNESS = 0.5f;
+                persist_var constexpr float32_t ROUGHNESS = 0.5f;
                 float32_t cos_theta = glm::dot(-collision.ts_normal, glm::vec3(0.0f, -1.0f, 0.0f));
                 ts_friction_force = ts_previous_velocity * -1.0f * component->mass * ROUGHNESS * 9.81f * cos_theta;
                 ts_new_velocity += ts_friction_force * dt;
@@ -1701,7 +1699,7 @@ update_physics_components(float32_t dt)
             {
                 input_component_t *input = &g_entities.input_components[e->components.input_component];
 
-                persist constexpr float32_t ROUGHNESS = 0.5f;
+                persist_var constexpr float32_t ROUGHNESS = 0.5f;
                 float32_t cos_theta = glm::dot(-collision.ts_normal, glm::vec3(0.0f, -1.0f, 0.0f));
                 ts_friction_force = ts_previous_velocity * -1.0f * component->mass * ROUGHNESS * 9.81f * cos_theta;
                 
@@ -1795,7 +1793,7 @@ update_physics_components(float32_t dt)
     }
 }
 
-internal input_component_t *
+internal_function input_component_t *
 add_input_component(entity_t *e)
 {
     e->components.input_component = g_entities.input_component_count++;
@@ -1806,7 +1804,7 @@ add_input_component(entity_t *e)
 }
 
 // Don't even know yet if this is needed ? Only one entity will have this component - maybe just keep for consistency with the system
-internal void
+internal_function void
 update_input_components(input_state_t *input_state
                         , float32_t dt)
 {
@@ -1825,7 +1823,7 @@ update_input_components(input_state_t *input_state
             if (input_state->cursor_moved)
             {
                 // TODO: Make sensitivity configurable with a file or something, and later menu
-                persist constexpr uint32_t SENSITIVITY = 15.0f;
+                persist_var constexpr uint32_t SENSITIVITY = 15.0f;
     
                 vector2_t prev_mp = vector2_t(input_state->previous_cursor_pos_x, input_state->previous_cursor_pos_y);
                 vector2_t curr_mp = vector2_t(input_state->cursor_pos_x, input_state->cursor_pos_y);
@@ -1919,7 +1917,7 @@ update_input_components(input_state_t *input_state
     }
 }
 
-internal entity_handle_t
+internal_function entity_handle_t
 add_entity(const entity_t &e)
 
 {
@@ -1937,7 +1935,7 @@ add_entity(const entity_t &e)
     return(view);
 }
 
-internal void
+internal_function void
 push_entity_to_queue(entity_t *e_ptr // Needs a rendering component attached
                      , model_handle_t model_handle
                      , gpu_material_submission_queue_t *queue)
@@ -1954,14 +1952,14 @@ push_entity_to_queue(entity_t *e_ptr // Needs a rendering component attached
 			 , init_draw_indexed_data_default(1, model->index_data.index_count));
 }
 
-internal void
+internal_function void
 make_entity_instanced_renderable(model_handle_t model_handle
 				 , const constant_string_t &e_mtrl_name)
 {
     // TODO(luc) : first need to add support for instance rendering in material renderers.
 }
 
-internal void
+internal_function void
 update_entities(input_state_t *input_state
                 , float32_t dt)
 {
@@ -1971,7 +1969,7 @@ update_entities(input_state_t *input_state
     update_rendering_component(dt);
 }
 
-internal void
+internal_function void
 initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities.entity_model = g_model_manager.get_handle("model.cube_model"_hash);
@@ -2118,10 +2116,10 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 }
 
 // ---- rendering of the entire world happens here ----
-internal void
+internal_function void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, framebuffer_t *fbo);
 
-internal void
+internal_function void
 dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
     if (g_entities.dbg.hit_box_display)
@@ -2179,7 +2177,7 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
     }
 }
 
-internal void
+internal_function void
 dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
     if (g_entities.dbg.render_sliding_vector_entity)
@@ -2246,7 +2244,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
     }
 }
 
-internal void
+internal_function void
 render_world(uint32_t image_index
 	     , uint32_t current_frame
 	     , gpu_command_queue_t *queue)
@@ -2304,40 +2302,40 @@ render_world(uint32_t image_index
     apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
 }
 
-internal int32_t
+internal_function int32_t
 lua_get_player_position(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_set_player_position(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_spawn_terrain(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_toggle_collision_box_render(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_render_entity_direction_information(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_toggle_entity_model_display(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_set_veclocity_in_view_direction(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_get_player_ts_view_direction(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_print_player_terrain_position_info(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_stop_simulation(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_move_entity(lua_State *state);
 
-internal int32_t
+internal_function int32_t
 lua_start_simulation(lua_State *state);
 
 void
@@ -2445,7 +2443,7 @@ destroy_world(void)
     destroy_graphics();
 }
 
-internal int32_t
+internal_function int32_t
 lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
@@ -2456,7 +2454,7 @@ lua_get_player_position(lua_State *state)
     return(3);
 }
 
-internal int32_t
+internal_function int32_t
 lua_set_player_position(lua_State *state)
 {
     float32_t x = lua_tonumber(state, -3);
@@ -2469,7 +2467,7 @@ lua_set_player_position(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_spawn_terrain(lua_State *state)
 {
     uint32_t dimensions = lua_tonumber(state, -2);
@@ -2491,14 +2489,14 @@ lua_spawn_terrain(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_toggle_collision_box_render(lua_State *state)
 {
     g_entities.dbg.hit_box_display ^= true;
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_render_entity_direction_information(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
@@ -2506,14 +2504,14 @@ lua_render_entity_direction_information(lua_State *state)
 
     g_entities.dbg.render_sliding_vector_entity = get_entity(kname);
 
-    persist char buffer[50];
+    persist_var char buffer[50];
     sprintf(buffer, "rendering for entity: %s", name);
     console_out(buffer);
     
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_toggle_entity_model_display(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
@@ -2526,7 +2524,7 @@ lua_toggle_entity_model_display(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_set_veclocity_in_view_direction(lua_State *state)
 {
     const char *name = lua_tostring(state, -2);
@@ -2537,7 +2535,7 @@ lua_set_veclocity_in_view_direction(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
@@ -2549,7 +2547,7 @@ lua_get_player_ts_view_direction(lua_State *state)
     return(3);
 }
 
-internal int32_t
+internal_function int32_t
 lua_start_simulation(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
@@ -2566,7 +2564,7 @@ lua_start_simulation(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_move_entity(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
@@ -2583,7 +2581,7 @@ lua_move_entity(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_stop_simulation(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
@@ -2598,7 +2596,7 @@ lua_stop_simulation(lua_State *state)
     return(0);
 }
 
-internal int32_t
+internal_function int32_t
 lua_print_player_terrain_position_info(lua_State *state)
 {
     struct entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];

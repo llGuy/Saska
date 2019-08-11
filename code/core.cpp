@@ -114,14 +114,14 @@ read_image(const char *filename)
     return(external_image_data);
 }
 
-internal void
+internal_function void
 open_debug_file(void)
 {
     output_file.fp = fopen(DEBUG_FILE, "w+");
     assert(output_file.fp >= NULL);
 }
 
-internal void
+internal_function void
 close_debug_file(void)
 {
     fclose(output_file.fp);
@@ -158,7 +158,7 @@ barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, con
 #define MAX_KEYS 350
 #define MAX_MB 5
 
-internal void glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
+internal_function void glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
     input_state->window_width = w;
@@ -166,7 +166,7 @@ internal void glfw_window_resize_proc(GLFWwindow *win, int32_t w, int32_t h)
     input_state->resized = true;
 }
 
-internal void set_key_state(input_state_t *input_state, keyboard_button_type_t button, int32_t action)
+internal_function void set_key_state(input_state_t *input_state, keyboard_button_type_t button, int32_t action)
 {
     if (action == GLFW_PRESS)
     {
@@ -182,7 +182,7 @@ internal void set_key_state(input_state_t *input_state, keyboard_button_type_t b
     }
 }
 
-internal void glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t scancode, int32_t action, int32_t mods)
+internal_function void glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t scancode, int32_t action, int32_t mods)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
     switch(key)
@@ -236,7 +236,7 @@ internal void glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, int32_t sca
     }
 }
 
-internal void
+internal_function void
 glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
@@ -248,7 +248,7 @@ glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
     input_state->cursor_moved = true;
 }
 
-internal void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
+internal_function void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
 {
     if (action == GLFW_PRESS)
     {
@@ -264,7 +264,7 @@ internal void set_mouse_button_state(input_state_t *input_state, mouse_button_ty
     }
 }
 
-internal void
+internal_function void
 glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t mods)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
@@ -276,7 +276,7 @@ glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t 
     }
 }
 
-internal void
+internal_function void
 glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
@@ -288,14 +288,14 @@ glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
 
 #include <chrono>
 
-internal void
+internal_function void
 init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
 {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
-internal bool32_t create_vulkan_surface_proc(VkInstance *instance, VkSurfaceKHR *dst_surface, void *window_data)
+internal_function bool32_t create_vulkan_surface_proc(VkInstance *instance, VkSurfaceKHR *dst_surface, void *window_data)
 {
     GLFWwindow **window = (GLFWwindow **)(window_data);
     return glfwCreateWindowSurface(*instance, *window, nullptr, dst_surface);
@@ -369,9 +369,8 @@ int32_t main(int32_t argc, char * argv[])
     
     create_surface_agnostic_platform.window_data = g_window;
     
-    init_vulkan_state(&create_surface_agnostic_platform, &input_state);
-    
-    make_game(&input_state);
+    initialize_graphics_api(&create_surface_agnostic_platform, &input_state);
+    initialize_game(&input_state);
 
     float32_t fps = 0.0f;
 

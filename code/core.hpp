@@ -116,10 +116,10 @@ struct bitset32_t
     }
 };
 
-template <typename T> internal constexpr memory_buffer_view_t<T>
+template <typename T> internal_function constexpr memory_buffer_view_t<T>
 null_buffer(void) {return(memory_buffer_view_t<T>{0, nullptr});}
 
-template <typename T> internal constexpr memory_buffer_view_t<T>
+template <typename T> internal_function constexpr memory_buffer_view_t<T>
 single_buffer(T *address) {return(memory_buffer_view_t<T>{1, address});}
 
 template <typename T> void

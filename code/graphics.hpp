@@ -5,9 +5,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-enum {INVALID_HANDLE = -1};
+enum invalid_t {INVALID_HANDLE = -1};
 
-typedef int32_t handle_t;
 template <typename T, uint32_t Max = 40> struct object_manager_t
 {
     using Type = T;
@@ -15,7 +14,7 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
     T objects[ Max ];
     hash_table_inline_t<uint32_t, Max, 4, 4> object_name_map {""}; // To be used during initialization only
 
-    handle_t
+    int32_t
     add(const constant_string_t &name, uint32_t allocation_count = 1)
     {
 	object_name_map.insert(name.hash, count);
@@ -26,14 +25,14 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
 	return(prev);
     }
 
-    inline handle_t
+    inline int32_t
     get_handle(const constant_string_t &name)
     {
 	return(*object_name_map.get(name.hash));
     }
     
     inline T *
-    get(handle_t handle)
+    get(int32_t handle)
     {
 	return(&objects[handle]);
     }
@@ -57,12 +56,12 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
 
 typedef VkCommandPool gpu_command_queue_pool_t;
 typedef VkCommandBufferLevel submit_level_t;
-typedef handle_t gpu_buffer_handle_t;
-typedef handle_t image_handle_t;
-typedef handle_t framebuffer_handle_t;
-typedef handle_t render_pass_handle_t;
-typedef handle_t pipeline_handle_t;
-typedef handle_t model_handle_t;
+typedef int32_t gpu_buffer_handle_t;
+typedef int32_t image_handle_t;
+typedef int32_t framebuffer_handle_t;
+typedef int32_t render_pass_handle_t;
+typedef int32_t pipeline_handle_t;
+typedef int32_t model_handle_t;
 typedef object_manager_t<gpu_buffer_t> gpu_buffer_manager_t;
 typedef object_manager_t<image2d_t> image_manager_t;
 typedef object_manager_t<framebuffer_t> framebuffer_manager_t;
@@ -174,7 +173,7 @@ make_uniform_binding_s(uint32_t count
 // Separate Uniform_Layout_Info (list of binding structs) from Uniform_Layout (API struct) for optimisation reasons
 struct uniform_layout_info_t // --> VkDescriptorSetLayout
 {
-    persist constexpr uint32_t MAX_BINDINGS = 15;
+    persist_var constexpr uint32_t MAX_BINDINGS = 15;
     uniform_binding_t bindings_buffer[MAX_BINDINGS] = {};
     uint32_t binding_count = 0;
     
@@ -257,8 +256,8 @@ update_uniform_group(uniform_group_t *group, const Update_Ts &...updates)
     update_descriptor_sets({sizeof...(updates), writes});
 }
 
-using uniform_layout_handle_t = handle_t;
-using uniform_group_handle_t = handle_t;
+using uniform_layout_handle_t = int32_t;
+using uniform_group_handle_t = int32_t;
 
 // --------------------- Rendering stuff ---------------------
 // Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render
@@ -538,7 +537,7 @@ struct camera_t
     } 
 };
 
-using camera_handle_t = handle_t;
+using camera_handle_t = int32_t;
 
 camera_handle_t
 add_camera(input_state_t *input_state, resolution_t resolution);

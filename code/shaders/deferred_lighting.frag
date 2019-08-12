@@ -98,7 +98,7 @@ pbr(void)
     float G = geometry_smith(vs_normal, to_camera, light_vector, roughness);
 
     vec3 num = F * D * G;
-    float den = 4 * max(dot(vs_normal, to_camera), 0.0) * max(dot(vs_normal, light_vector), 0.0);
+    float den = 4 * max(dot(vs_normal, to_camera), 0.0) * max(dot(vs_normal, light_vector), 0.1);
     vec3 spec = num / max(den, 0.001);
 
     vec3 ks = F * 0.5;

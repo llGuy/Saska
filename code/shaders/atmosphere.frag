@@ -73,7 +73,7 @@ calculate_atmosphere_depth_at_dir(vec3 ws_camera_position
 }
 
 const float SURFACE_HEIGHT = 0.8;
-const uint SAMPLE_COUNT = 5;
+const uint SAMPLE_COUNT = 10;
 const vec3 AIR_COLOR = vec3(0.18867780, 0.49784429, 0.4616065);
 
 vec3
@@ -119,7 +119,7 @@ main(void)
     
     for (uint i = 0; i < SAMPLE_COUNT; ++i)
     {
-	float distance = (float(i) * step_distance);
+	float distance = (float(i) * step_distance) * 0.5f;
 	vec3 ws_ray_position = distance * ws_view_dir;
 	float ray_atmosphere_depth = calculate_atmosphere_depth_at_dir(ws_ray_position
 								       , push_k.ws_light_direction.xyz);
@@ -138,7 +138,7 @@ main(void)
     total_rayleigh = (total_rayleigh * pow(atmosphere_depth_at_dir, 0.5)) / float(SAMPLE_COUNT);
     total_mie = (total_mie * pow(atmosphere_depth_at_dir, 2.4)) / float(SAMPLE_COUNT);
 
-    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.4;
+    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.2;
 
     float gray_out_bottom = 0.0;
     float p_dot_d = dot(ws_view_dir, -ws_camera_position);
@@ -153,12 +153,12 @@ main(void)
 	gray_out_bottom = smoothstep(0.0, 1.0, pow(d * 2, 3));
     }
 
-    float test = clamp(1.7 * dot(normalize(-ws_camera_position), normalize(ws_view_dir)), 0, 1);
+    float test = 1 - clamp(dot(normalize(-ws_camera_position), normalize(ws_view_dir)), 0, 1);
     
-    out_color = (vec4(total_mie.xyzz) * spotlight * 0.6 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
+    //    out_color = (vec4(total_mie.xyzz) * spotlight * 0.6 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor);
+    out_color = (vec4(total_mie.xyzz) * spotlight * 0.6 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor) * test;
 
-    out_color = mix(out_color, vec4(0.0), vec4(test));
-
+    //    out_color = vec4(test);
     out_color = pow(out_color, vec4(1.0 / 2.2));
     //    out_color = clamp(out_color, vec3(0.0), out_color(1.0));
     //    out_color = vec4(gray_out_bottom);

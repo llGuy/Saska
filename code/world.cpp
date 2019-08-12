@@ -53,6 +53,13 @@ struct morphable_terrain_t
     } push_k;
 };
 
+internal_function vector3_t get_world_space_from_terrain_space_no_scale(const vector3_t &p, morphable_terrain_t *terrain)
+{
+    vector3_t ws = vector3_t( glm::translate(terrain->ws_p) * glm::mat4_cast(terrain->gs_r) * vector4_t(p, 1.0f) );
+
+    return(ws);
+}
+
 struct planet_t
 {
     // planet has 6 faces
@@ -62,7 +69,7 @@ struct planet_t
     quaternion_t r;
 };
 
-struct terrain_create_staging
+struct terrain_create_staging_t
 {
     uint32_t dimensions;
     float32_t size;
@@ -91,12 +98,14 @@ global_var struct morphable_terrains_t
     gpu_buffer_t idx_buffer;
     model_handle_t model_info;
 
-
     static constexpr uint32_t MAX_TERRAINS = 10;
     morphable_terrain_t terrains[MAX_TERRAINS];
     uint32_t terrain_count {0};
 
-    terrain_create_staging create_stagings[10];
+    planet_t test_planet;
+
+    // For lua stuff when spawning terrains
+    terrain_create_staging_t create_stagings[10];
     uint32_t create_count = 0;
     
     pipeline_handle_t terrain_ppln;
@@ -1038,6 +1047,22 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
     terrain->ws_n = vector3_t(glm::mat4_cast(terrain->gs_r) * vector4_t(0.0f, 1.0f, 0.0f, 0.0f));
 }
 
+
+internal_function void
+make_planet(const vector3_t &position, const vector3_t &color, VkCommandPool *cmdpool)
+{
+    planet_t *planet = &g_terrains.test_planet;
+    
+    for (uint32_t i = 0; i < 1; ++i)
+    {
+        morphable_terrain_t *face = &planet->meshes[i];
+        make_terrain_mesh_data(21, 21, face);
+        quaternion_t rotation = quaternion_t(glm::radians(vector3_t(90.0f, 0.0f, 0.0f)));
+        make_terrain_rendering_data(face, &g_world_submission_queues[TERRAIN_QUEUE], position, rotation, vector3_t(10.0f), color);
+        face->k_g = -8.5f;
+    }
+}
+
 internal_function void
 make_terrain_instances(VkCommandPool *cmdpool)
 {
@@ -1054,7 +1079,7 @@ make_terrain_instances(VkCommandPool *cmdpool)
     make_terrain_mesh_data(21, 21, red_terrain);
     make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(0.0f, 0.0f, 200.0f)
-                                , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
+                                , quaternion_t(glm::radians(vector3_t(60.0f, 20.0f, 0.0f)))
                                 , vector3_t(15.0f)
                                 , grass_color);
     red_terrain->k_g = -8.5f;
@@ -1063,11 +1088,13 @@ make_terrain_instances(VkCommandPool *cmdpool)
     make_terrain_mesh_data(21, 21, green_terrain);
     make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(200.0f, 0.0f, 0.0f)
-                                , quaternion_t(glm::radians(vector3_t(0.0f, 45.0f, 20.0f)))
+                                , quaternion_t(glm::radians(vector3_t(70.0f, 45.0f, 20.0f)))
                                 , vector3_t(10.0f)
                                 , grass_color);
 
     green_terrain->k_g = -8.5f;
+
+    //make_planet(vector3_t(300.0f, 300.0f, 300.0f), grass_color, cmdpool);
 }
 
 internal_function void
@@ -1912,7 +1939,11 @@ update_input_components(input_state_t *input_state
                 acc_v(up, res);
             }
     
-            if (input_state->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down) component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
+            if (input_state->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down)
+            {
+                acc_v(-up, res);
+                component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
+            }
 
             if (movements > 0)
             {
@@ -2065,8 +2096,9 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);
         
     // add rotating entity
+    vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
     entity_t r = construct_entity("entity.blue"_hash
-                                  , vector3_t(200.0f, 40.0f, 300.0f)
+                                  , get_world_space_from_terrain_space_no_scale(vector3_t(100.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
                                   , vector3_t(1.0f, 0.0f, -1.0f)
                                   , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
@@ -2080,7 +2112,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 
     rendering_component_t *r_ptr_rendering = add_rendering_component(r_ptr);
     physics = add_physics_component(r_ptr, true);
-    physics->enabled = true;
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2088,18 +2120,18 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
     
-    r_ptr_rendering->push_k.color = vector4_t(0.2f, 0.2f, 0.8f, 1.0f);
-    r_ptr_rendering->push_k.roughness = 0.2f;
-    r_ptr_rendering->push_k.metalness = 0.8f;
+    r_ptr_rendering->push_k.color = vector4_t(grass_color, 1.0f);
+    r_ptr_rendering->push_k.roughness = 0.8f;
+    r_ptr_rendering->push_k.metalness = 0.2f;
     
     push_entity_to_queue(r_ptr
                          , &g_entities.entity_model
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 
     entity_t r2 = construct_entity("entity.purple"_hash
-				 , vector3_t(250.0f, -40.0f, 350.0f)
-				 , vector3_t(0.0f)
-				 , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
+                                   , get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
+                                   , vector3_t(0.0f)
+                                   , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r2.size = vector3_t(10.0f);
     entity_handle_t rv2 = add_entity(r2);
@@ -2109,7 +2141,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     add_physics_component(r2_ptr, false);
 
     physics = add_physics_component(r2_ptr, false);
-    physics->enabled = true;
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2117,7 +2149,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
     
-    r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.2f, 0.2f, 1.0f);
+    r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
     r2_ptr_rendering->push_k.roughness = 0.6f;
     r2_ptr_rendering->push_k.metalness = 0.2f;
     r2_ptr->on_t = &g_terrains.terrains[0];

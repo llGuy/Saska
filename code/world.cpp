@@ -1038,8 +1038,6 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
     terrain->ws_n = vector3_t(glm::mat4_cast(terrain->gs_r) * vector4_t(0.0f, 1.0f, 0.0f, 0.0f));
 }
 
-
-
 internal_function void
 make_terrain_instances(VkCommandPool *cmdpool)
 {
@@ -1050,13 +1048,15 @@ make_terrain_instances(VkCommandPool *cmdpool)
                                                                     , VK_COMMAND_BUFFER_LEVEL_SECONDARY
                                                                     , cmdpool);
 
+    vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
+    
     auto *red_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, red_terrain);
     make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(0.0f, 0.0f, 200.0f)
                                 , quaternion_t(glm::radians(vector3_t(30.0f, 20.0f, 0.0f)))
                                 , vector3_t(15.0f)
-                                , vector3_t(255.0f, 69.0f, 0.0f) / 256.0f);
+                                , grass_color);
     red_terrain->k_g = -8.5f;
 
     auto *green_terrain = add_terrain();
@@ -1065,7 +1065,7 @@ make_terrain_instances(VkCommandPool *cmdpool)
                                 , vector3_t(200.0f, 0.0f, 0.0f)
                                 , quaternion_t(glm::radians(vector3_t(0.0f, 45.0f, 20.0f)))
                                 , vector3_t(10.0f)
-                                , vector3_t(0.1, 0.6, 0.2) * 0.7f);
+                                , grass_color);
 
     green_terrain->k_g = -8.5f;
 }
@@ -2035,7 +2035,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 				, glm::normalize(vector3_t(1.0f, 0.0f, 1.0f))
 				, quaternion_t(0, 0, 0, 0));
 
-    e.size = vector3_t(10.0f);
+    e.size = vector3_t(3.0f);
     
     entity_handle_t ev = add_entity(e);
     auto *e_ptr = get_entity(ev);
@@ -2062,7 +2062,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                   , vector3_t(1.0f, 0.0f, -1.0f)
                                   , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r.size = vector3_t(10.0f);
+    r.size = vector3_t(3.0f);
 
     entity_handle_t rv = add_entity(r);
     auto *r_ptr = get_entity(rv); 
@@ -2091,7 +2091,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 				 , vector3_t(0.0f)
 				 , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r2.size = vector3_t(10.0f);
+    r2.size = vector3_t(3.0f);
     entity_handle_t rv2 = add_entity(r2);
     auto *r2_ptr = get_entity(rv2);
 
@@ -2357,6 +2357,8 @@ initialize_world(input_state_t *input_state
     
     initialize_terrains(cmdpool);
     initialize_entities(cmdpool, input_state);
+
+    clear_linear();
 }
 
 void

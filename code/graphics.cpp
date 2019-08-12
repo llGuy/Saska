@@ -423,6 +423,15 @@ make_render_pass(render_pass_t *render_pass
     init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, render_pass);
 }
 
+void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool)
+{
+    memory_byte_buffer_t byte_buffer{ size, data };
+    invoke_staging_buffer_for_device_local_buffer(byte_buffer,
+                                                  usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                  pool,
+                                                  dst_buffer);
+}
+
 void
 make_graphics_pipeline(graphics_pipeline_t *ppln
                        , const shader_modules_t &modules
@@ -2240,7 +2249,9 @@ initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
     make_atmosphere_data(&g_uniform_pool, pool);
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);    
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);
+
+    clear_linear();
 }
 
 // 2D Graphics
@@ -2250,6 +2261,8 @@ void
 initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
 {
     make_postfx_data(pool);
+
+    clear_linear();
 }
 
 void
@@ -2398,4 +2411,179 @@ invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_
 
     vector4_t final_color = vector4_t(glsl::final_color.x, glsl::final_color.y, glsl::final_color.z, 1.0f);
     return(final_color);
+}
+
+
+
+
+// Different formats
+mesh_t load_obj_format_model(const char *path, gpu_command_queue_pool_t *cmd_pool)
+{
+    return {};
+}
+
+/*struct mesh_t
+{
+    enum buffer_type_t { VERTEX, NORMAL, UVS, COLOR, JOINT_INDICES, JOINT_WEIGHT, EXTRA, INVALID_BUFFER_TYPE };
+    
+    persist_var constexpr uint32_t MAX_BUFFERS = 10;
+    gpu_buffer_t buffers[MAX_BUFFERS];
+
+    model_t attribute_and_binding_information;
+};*/
+
+void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh)
+{
+    mesh->buffer_types_stack[mesh->buffer_count++] = buffer_type;
+    // Validate the buffer type in the buffer object
+    mesh->buffers[buffer_type].type = buffer_type;
+}
+
+bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh)
+{
+    return(mesh->buffers[buffer_type].type == buffer_type);
+}
+
+mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh)
+{
+    if (mesh_has_buffer_type(buffer_type, mesh))
+    {
+        return(&mesh->buffers[buffer_type]);
+    }
+    return(nullptr);
+}
+
+struct custom_mesh_header_t
+{
+    uint32_t vertices_offset;
+    uint32_t vertices_size;
+    uint32_t normals_offset;
+    uint32_t normals_size;
+    uint32_t uvs_offset;
+    uint32_t uvs_size;
+    uint32_t indices_offset;
+    uint32_t indices_size;
+};
+
+// First work on this
+mesh_t load_custom_mesh_format_model(const char *path, gpu_command_queue_pool_t *cmd_pool)
+{
+    file_contents_t mesh_data = read_file(path);
+
+    mesh_t mesh = {};
+
+    custom_mesh_header_t *header = (custom_mesh_header_t *)mesh_data.content;
+
+    if (header->indices_size)
+    {
+        push_buffer_to_mesh(buffer_type_t::INDICES, &mesh);
+        mesh_buffer_t *indices_gpu_buffer = get_mesh_buffer_object(buffer_type_t::INDICES, &mesh);
+        make_unmappable_gpu_buffer(&indices_gpu_buffer->gpu_buffer,
+                                   header->indices_size,
+                                   mesh_data.content + header->indices_offset,
+                                   gpu_buffer_usage_t::INDEX_BUFFER,
+                                   cmd_pool);
+
+        mesh.index_data.index_type = VK_INDEX_TYPE_UINT32;
+        mesh.index_data.index_offset = 0;
+        mesh.index_count = header->indices_size / sizeof(uint32_t);
+    }
+    
+    push_buffer_to_mesh(buffer_type_t::VERTEX, &mesh);
+    {
+        // Create vertices buffer
+        mesh_buffer_t *vertices_gpu_buffer = get_mesh_buffer_object(buffer_type_t::VERTEX, &mesh);
+        make_unmappable_gpu_buffer(&vertices_gpu_buffer->gpu_buffer,
+                                   header->vertices_size,
+                                   mesh_data.content + header->vertices_offset,
+                                   gpu_buffer_usage_t::VERTEX_BUFFER,
+                                   cmd_pool);
+    }
+    
+    if (header->normals_size)
+    {
+        push_buffer_to_mesh(buffer_type_t::NORMAL, &mesh);
+        mesh_buffer_t *normals_gpu_buffer = get_mesh_buffer_object(buffer_type_t::NORMAL, &mesh);
+        make_unmappable_gpu_buffer(&normals_gpu_buffer->gpu_buffer,
+                                   header->normals_size,
+                                   mesh_data.content + header->normals_offset,
+                                   gpu_buffer_usage_t::VERTEX_BUFFER,
+                                   cmd_pool);
+        
+    }
+    if (header->uvs_size)
+    {
+        push_buffer_to_mesh(buffer_type_t::UVS, &mesh);
+        mesh_buffer_t *uvs_gpu_buffer = get_mesh_buffer_object(buffer_type_t::UVS, &mesh);
+        make_unmappable_gpu_buffer(&uvs_gpu_buffer->gpu_buffer,
+                                   header->uvs_size,
+                                   mesh_data.content + header->uvs_offset,
+                                   gpu_buffer_usage_t::VERTEX_BUFFER,
+                                   cmd_pool);        
+    }
+    
+    return(mesh);
+}
+
+model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
+{
+    model_t model = {};
+    uint32_t binding_count = 0;
+    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh))
+    {
+        binding_count = mesh->buffer_count - 1;
+    }
+    else
+    {
+        binding_count = mesh->buffer_count;
+    }
+    model.attribute_count = binding_count;
+    model.atributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model.attribute_count);
+    model.binding_count = binding_count;
+    model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t) * model.binding_count);
+
+    uint32_t current_binding = 0;
+    for (uint32_t buffer = 0; buffer < mesh->buffer_count; ++buffer)
+    {
+        if (mesh->buffer_types_stack[buffer] != buffer_type_t::INDICES)
+        {
+            // For vertex-type buffers only (vertices buffer, normal buffer, uvs buffer, extra buffers, whatever)
+            model_binding_t *binding = &model.bindings[current_binding];
+            binding->begin_attributes_creation(modle.attributes_buffer);
+
+            VkFormat format = 0;
+            uint32_t attribute_size = 0;
+            switch(mesh->buffer_types_stack[buffer])
+            {
+            case buffer_type_t::VERTEX: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
+            case buffer_type_t::NORMAL: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
+            case buffer_type_t::UVS: { format = VK_FORMAT_R32G32_SFLOAT; attribute_size = sizeof(vector2_t); } break;
+            case buffer_type_t::COLOR: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
+            case buffer_type_t::JOINT_INDICES: { format = VK_FORMAT_R32G32B32_UINT; attribute_size = sizeof(ivector3_t); } break;
+            case buffer_type_t::JOINT_WEIGHT: { format = VK_FORMAT_R32G32B32A32_SFLOAT; attribute_size = sizeof(vector4_t); } break;
+            case buffer_type_t::EXTRA_V3: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
+            case buffer_type_t::EXTRA_V2: { format = VK_FORMAT_R32G32_SFLOAT; attribute_size = sizeof(vector2_t); } break;
+            case buffer_type_t::EXTRA_V1: { format = VK_FORMAT_R32_SFLOAT; attribute_size = sizeof(float32_t); } break;
+            }
+            
+            binding->push_attribute(current_binding, format, attribute_size);
+
+            binding->end_attribute_creation();
+            
+            ++current_binding;
+        }
+    }
+}
+
+// Model loading
+mesh_t load_model(model_file_format_t format, const char *path, gpu_command_queue_pool_t *cmd_pool)
+{
+    switch(format)
+    {
+    case model_file_format_t::CUSTOM_MESH:
+        {
+            return(load_custom_mesh_format_model(path, cmd_pool));
+        } break;
+    }
+    return {};
 }

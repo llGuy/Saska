@@ -3,10 +3,13 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 #include <glm/glm.hpp>
+#include "utils.hpp"
 #include <glm/gtx/transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 enum invalid_t {INVALID_HANDLE = -1};
 
+// TODO: Possibly get rid of this system
 template <typename T, uint32_t Max = 40> struct object_manager_t
 {
     using Type = T;
@@ -477,6 +480,17 @@ struct dynamic_states_t
     }
 };
 
+enum gpu_buffer_usage_t { VERTEX_BUFFER = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                          INDEX_BUFFER = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                          UNIFORM_BUFFER = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                          INVALID_USAGE };
+
+void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer,
+                                uint32_t size,
+                                void *data,
+                                gpu_buffer_usage_t usage,
+                                gpu_command_queue_pool_t *pool);
+
 void
 make_graphics_pipeline(graphics_pipeline_t *ppln
                        , const shader_modules_t &modules
@@ -681,3 +695,76 @@ initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
 
 void
 destroy_graphics(void);
+
+
+
+// TODO: Model loading stuff
+// TODO: Possibly support more formats
+// TODO: Support colors and textures (for now, just positions and normals)
+enum model_file_format_t { OBJ, CUSTOM_MESH, INVALID_MODEL_FILE_FORMAT };
+
+// Each attribute will be in different buffers
+// But if the buffers aren't too big, squeeze into one buffer
+enum buffer_type_t : char { INDICES, VERTEX, NORMAL, UVS, COLOR, JOINT_INDICES, JOINT_WEIGHT, EXTRA_V3, EXTRA_V2, EXTRA_V1, INVALID_BUFFER_TYPE };
+
+struct mesh_buffer_t
+{
+    gpu_buffer_t gpu_buffer;
+    buffer_type_t type = buffer_type_t::INVALID_BUFFER_TYPE;
+};
+
+// TODO: Refactor the model system to use mesh_t for instances of model_t
+struct mesh_t
+{
+    persist_var constexpr uint32_t MAX_BUFFERS = 6;
+    mesh_buffer_t buffers[buffer_type_t::INVALID_BUFFER_TYPE];
+    uint32_t buffer_count = 0;
+    buffer_type_t buffer_types_stack[MAX_BUFFERS];
+
+    model_index_data_t index_data;
+};
+
+void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh);
+bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh);
+mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh);
+
+mesh_t load_model(model_file_format_t format, const char *path);
+model_t make_mesh_attribute_and_binding_information(mesh_t *mesh);
+
+struct joint_t
+{
+    joint_t *parent;
+    memory_buffer_view_t<joint_t> children;
+
+    uint32_t id;
+    const char *name;
+    matrix4_t local_bind_transform;
+    matrix4_t inverse_bind_transform;
+    matrix4_t animated_transform;
+};
+
+struct joint_transform_t
+{
+    vector3_t position;
+    quaternion_t rotation;
+};
+
+struct key_frame_t
+{
+    float32_t time_stamp;
+    hash_table_inline_t<joint_transform_t, 10, 2, 3> joint_transforms;
+};
+
+struct animation_t
+{
+    float32_t animation_length;
+    key_frame_t key_frames;
+};
+
+struct animated_material_rendering_data_t
+{
+    memory_buffer_view_t<matrix4_t> interpolated_joint_transforms;
+};
+
+// TODO: Animation loading stuff (currently under work)
+void load_animation(const char *path);

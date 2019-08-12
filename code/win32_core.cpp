@@ -40,7 +40,9 @@ debug_output_t output_file;
 global_var bool g_running;
 global_var double g_game_time = 0.0f;
 global_var double g_dt = 0.0f;
-HWND g_window;
+global_var HWND g_window;
+global_var HCURSOR g_cursor;
+global_var input_state_t input_state = {};
 
 file_contents_t
 read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
@@ -94,8 +96,7 @@ close_debug_file(void)
 }
 
 extern void
-output_debug(const char *format
-	     , ...)
+output_debug(const char *format, ...)
 {
     va_list arg_list;
     
@@ -122,10 +123,12 @@ barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, con
 
 void enable_cursor_display(void)
 {
+    SetCursor(g_cursor);
 }
 
 void disable_cursor_display(void)
-{
+{    
+    SetCursor(0);
 }
 
 LRESULT CALLBACK windows_callback(HWND window_handle,
@@ -137,11 +140,20 @@ LRESULT CALLBACK windows_callback(HWND window_handle,
     {
         // Input ...
 
-        
+
+    case WM_SETCURSOR:
+        {
+            SetCursor(0);
+        } break;
     case WM_DESTROY:
         {
             g_running = 0;
             PostQuitMessage(0);
+        } break;
+    case WM_PAINT:
+        {
+            // Render
+            update_game(&input_state, g_dt);
         } break;
     default:
         {
@@ -192,15 +204,17 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
     
     const char *window_class_name = "saska_window_class";
     const char *window_name = "Saska";
+
+    g_cursor = LoadCursor(0, IDC_ARROW);
     
     WNDCLASS window_class = {};
     ZeroMemory(&window_class, sizeof(window_class));
-    window_class.style = 0;
+    window_class.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
     window_class.lpfnWndProc = windows_callback;
     window_class.cbClsExtra = 0;
     window_class.hInstance = hinstance;
     window_class.hIcon = 0;
-    window_class.hCursor = 0;
+    window_class.hCursor = g_cursor;
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = 0;
     window_class.lpszClassName = window_class_name;
@@ -221,8 +235,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
                               NULL);
 
     ShowWindow(g_window, showcmd);
-
-    input_state_t input_state = {};
+    //    disable_cursor_display();
 
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
@@ -241,10 +254,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
             TranslateMessage(&message);
             DispatchMessage(&message);
         }
-
-        // Render
-        update_game(&input_state, g_dt);
-
+        
+        RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
+        
         clear_linear();
 
         input_state.cursor_moved = false;

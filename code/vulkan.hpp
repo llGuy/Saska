@@ -491,7 +491,7 @@ struct model_t
     void
     prepare_bindings(uint32_t binding_count)
     {
-	    
+        
     }
 	
     VkVertexInputBindingDescription *

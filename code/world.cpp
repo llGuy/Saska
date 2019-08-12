@@ -1298,7 +1298,7 @@ struct physics_component_t
     // Depending on the shape of the body (see formula for rectangle if using hitbox, and for sphere if using bounding sphere)
     vector3_t moment_of_inertia;
 
-    float32_t coefficient_of_restitution = 0.0f;
+    float32_t coefficient_of_restitution = 0.6f;
     
     vector3_t acceleration {0.0f};
     vector3_t velocity {0.0f};
@@ -1360,6 +1360,9 @@ struct rendering_component_t
 	// in world space
 	matrix4_t ws_t{1.0f};
 	vector4_t color;
+
+        float32_t roughness;
+        float32_t metalness;
     } push_k;
 
     bool enabled = true;
@@ -1446,7 +1449,8 @@ global_var struct entities_t
     pipeline_handle_t entity_shadow_ppln;
     pipeline_handle_t dbg_hitbox_ppln;
 
-    model_handle_t entity_model;
+    mesh_t entity_mesh;
+    model_t entity_model;
 
     // For now:
     uint32_t main_entity;
@@ -1834,11 +1838,18 @@ update_input_components(input_state_t *input_state
 
                 float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
                 float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
+                
                 res = matrix3_t(glm::rotate(x_angle, up)) * res;
                 vector3_t rotate_y = glm::cross(res, up);
                 res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
 
-                e->ws_d = res;
+                float32_t up_dot_view = glm::dot(up, res);
+                float32_t minus_up_dot_view = glm::dot(-up, res);
+
+                if (up_dot_view > -0.999f && minus_up_dot_view > -0.999f)
+                {
+                    e->ws_d = res;    
+                }
             }
 
             // Mouse input
@@ -1937,12 +1948,9 @@ add_entity(const entity_t &e)
 
 internal_function void
 push_entity_to_queue(entity_t *e_ptr // Needs a rendering component attached
-                     , model_handle_t model_handle
+                     , model_t *model
                      , gpu_material_submission_queue_t *queue)
 {
-    // ---- adds an entity to the stack of renderables
-    auto *model = g_model_manager.get(model_handle);
-
     rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
     
     queue->push_material(&component->push_k
@@ -1972,23 +1980,24 @@ update_entities(input_state_t *input_state
 internal_function void
 initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 {
-    g_entities.entity_model = g_model_manager.get_handle("model.cube_model"_hash);
+    g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
+    g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
+    g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
     
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     {
-        model_handle_t cube_hdl = g_model_manager.get_handle("model.cube_model"_hash);
         render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
-                               shader_module_info_t{"shaders/SPV/model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                               shader_module_info_t{"shaders/SPV/lp_notex_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                        g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, g_model_manager.get(cube_hdl),
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities.entity_model,
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 
@@ -2012,16 +2021,15 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     {
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
-        model_handle_t cube_hdl = g_model_manager.get_handle("model.cube_model"_hash);
         render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, g_model_manager.get(cube_hdl),
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities.entity_model,
                                true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
     }
 
@@ -2035,7 +2043,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 				, glm::normalize(vector3_t(1.0f, 0.0f, 1.0f))
 				, quaternion_t(0, 0, 0, 0));
 
-    e.size = vector3_t(3.0f);
+    e.size = vector3_t(10.0f);
     
     entity_handle_t ev = add_entity(e);
     auto *e_ptr = get_entity(ev);
@@ -2062,7 +2070,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                   , vector3_t(1.0f, 0.0f, -1.0f)
                                   , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r.size = vector3_t(3.0f);
+    r.size = vector3_t(10.0f);
 
     entity_handle_t rv = add_entity(r);
     auto *r_ptr = get_entity(rv); 
@@ -2072,7 +2080,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 
     rendering_component_t *r_ptr_rendering = add_rendering_component(r_ptr);
     physics = add_physics_component(r_ptr, true);
-    physics->enabled = false;
+    physics->enabled = true;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2081,9 +2089,11 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_max = 1.001f;
     
     r_ptr_rendering->push_k.color = vector4_t(0.2f, 0.2f, 0.8f, 1.0f);
+    r_ptr_rendering->push_k.roughness = 0.2f;
+    r_ptr_rendering->push_k.metalness = 0.8f;
     
     push_entity_to_queue(r_ptr
-                         , g_model_manager.get_handle("model.cube_model"_hash)
+                         , &g_entities.entity_model
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 
     entity_t r2 = construct_entity("entity.purple"_hash
@@ -2091,7 +2101,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 				 , vector3_t(0.0f)
 				 , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r2.size = vector3_t(3.0f);
+    r2.size = vector3_t(10.0f);
     entity_handle_t rv2 = add_entity(r2);
     auto *r2_ptr = get_entity(rv2);
 
@@ -2099,7 +2109,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     add_physics_component(r2_ptr, false);
 
     physics = add_physics_component(r2_ptr, false);
-    physics->enabled = false;
+    physics->enabled = true;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2107,11 +2117,13 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
     
-    r2_ptr_rendering->push_k.color = vector4_t(0.6f, 0.0f, 0.6f, 1.0f);
+    r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.2f, 0.2f, 1.0f);
+    r2_ptr_rendering->push_k.roughness = 0.6f;
+    r2_ptr_rendering->push_k.metalness = 0.2f;
     r2_ptr->on_t = &g_terrains.terrains[0];
 
     push_entity_to_queue(r2_ptr
-                         , g_model_manager.get_handle("model.cube_model"_hash)
+                         , &g_entities.entity_model
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 }
 
@@ -2294,8 +2306,7 @@ render_world(uint32_t image_index
         dbg_render_sliding_vectors(&uniform_groups[0], queue);
         
         // ---- render skybox ----
-        auto *cube_model = g_model_manager.get(g_entities.entity_model);
-        render_atmosphere({1, uniform_groups}, camera->p, cube_model, queue);
+        render_atmosphere({1, uniform_groups}, camera->p, queue);
     }
     end_deferred_rendering(camera->v_m, queue);
 

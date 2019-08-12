@@ -755,6 +755,8 @@ struct atmosphere_t
 
     // Descriptor set that will be used to sample (should not be used in world.cpp)
     uniform_group_handle_t cubemap_uniform_group;
+
+    model_handle_t cube_handle;
 } g_atmosphere;
 
 void
@@ -802,7 +804,6 @@ update_atmosphere(gpu_command_queue_t *queue)
 void
 render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
                   , const vector3_t &camera_position // To change to camera structure
-                  , model_t *cube
                   , gpu_command_queue_t *queue)
 {
     auto *render_pipeline = g_pipeline_manager.get(g_atmosphere.render_pipeline);
@@ -814,6 +815,8 @@ render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
     
     command_buffer_bind_descriptor_sets(render_pipeline, {sets.count + 1, groups}, &queue->q);
 
+    model_t *cube = g_model_manager.get(g_atmosphere.cube_handle);
+    
     VkDeviceSize zero = 0;
     command_buffer_bind_vbos(cube->raw_cache_for_rendering, {1, &zero}, 0, 1, &queue->q);
 
@@ -923,6 +926,8 @@ make_atmosphere_data(VkDescriptorPool *pool
                                VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
                                true, 0.0f, dynamic, g_render_pass_manager.get(g_dfr_rendering.dfr_render_pass), 0);
     }
+
+    g_atmosphere.cube_handle = g_model_manager.get_handle("model.cube_model"_hash);
 
     // ---- Update the atmosphere (initialize it) ----
     VkCommandBuffer cmdbuf;
@@ -2417,7 +2422,7 @@ invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_
 
 
 // Different formats
-mesh_t load_obj_format_model(const char *path, gpu_command_queue_pool_t *cmd_pool)
+mesh_t load_obj_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
 {
     return {};
 }
@@ -2466,7 +2471,7 @@ struct custom_mesh_header_t
 };
 
 // First work on this
-mesh_t load_custom_mesh_format_model(const char *path, gpu_command_queue_pool_t *cmd_pool)
+mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
 {
     file_contents_t mesh_data = read_file(path);
 
@@ -2478,6 +2483,7 @@ mesh_t load_custom_mesh_format_model(const char *path, gpu_command_queue_pool_t 
     {
         push_buffer_to_mesh(buffer_type_t::INDICES, &mesh);
         mesh_buffer_t *indices_gpu_buffer = get_mesh_buffer_object(buffer_type_t::INDICES, &mesh);
+        uint32_t *indices = (uint32_t *)(mesh_data.content + header->indices_offset);
         make_unmappable_gpu_buffer(&indices_gpu_buffer->gpu_buffer,
                                    header->indices_size,
                                    mesh_data.content + header->indices_offset,
@@ -2486,13 +2492,15 @@ mesh_t load_custom_mesh_format_model(const char *path, gpu_command_queue_pool_t 
 
         mesh.index_data.index_type = VK_INDEX_TYPE_UINT32;
         mesh.index_data.index_offset = 0;
-        mesh.index_count = header->indices_size / sizeof(uint32_t);
+        mesh.index_data.index_count = header->indices_size / sizeof(uint32_t);
+        mesh.index_data.index_buffer = indices_gpu_buffer->gpu_buffer.buffer;
     }
     
     push_buffer_to_mesh(buffer_type_t::VERTEX, &mesh);
     {
         // Create vertices buffer
         mesh_buffer_t *vertices_gpu_buffer = get_mesh_buffer_object(buffer_type_t::VERTEX, &mesh);
+        vector3_t *vertices = (vector3_t *)(mesh_data.content + header->vertices_offset);
         make_unmappable_gpu_buffer(&vertices_gpu_buffer->gpu_buffer,
                                    header->vertices_size,
                                    mesh_data.content + header->vertices_offset,
@@ -2538,7 +2546,7 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
         binding_count = mesh->buffer_count;
     }
     model.attribute_count = binding_count;
-    model.atributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model.attribute_count);
+    model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * model.attribute_count);
     model.binding_count = binding_count;
     model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t) * model.binding_count);
 
@@ -2549,9 +2557,10 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
         {
             // For vertex-type buffers only (vertices buffer, normal buffer, uvs buffer, extra buffers, whatever)
             model_binding_t *binding = &model.bindings[current_binding];
-            binding->begin_attributes_creation(modle.attributes_buffer);
+            binding->buffer = mesh->buffers[mesh->buffer_types_stack[buffer]].gpu_buffer.buffer;
+            binding->begin_attributes_creation(model.attributes_buffer);
 
-            VkFormat format = 0;
+            VkFormat format;
             uint32_t attribute_size = 0;
             switch(mesh->buffer_types_stack[buffer])
             {
@@ -2568,21 +2577,26 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
             
             binding->push_attribute(current_binding, format, attribute_size);
 
-            binding->end_attribute_creation();
+            binding->end_attributes_creation();
             
             ++current_binding;
         }
     }
+
+    // TODO: Get rid of this and replace the whole rendering system to account for new mesh structure
+    model.create_vbo_list();
+
+    return(model);
 }
 
 // Model loading
-mesh_t load_model(model_file_format_t format, const char *path, gpu_command_queue_pool_t *cmd_pool)
+mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_pool_t *cmd_pool)
 {
     switch(format)
     {
-    case model_file_format_t::CUSTOM_MESH:
+    case mesh_file_format_t::CUSTOM_MESH:
         {
-            return(load_custom_mesh_format_model(path, cmd_pool));
+            return(load_custom_mesh_format_mesh(path, cmd_pool));
         } break;
     }
     return {};

@@ -144,6 +144,11 @@ output_debug(const char *format
     fflush(output_file.fp);
 }
 
+float32_t get_dt(void)
+{
+    return(g_dt);
+}
+
 float32_t
 barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
 {

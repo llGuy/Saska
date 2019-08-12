@@ -27,6 +27,8 @@
 enum platform_t { AGNOSTIC, WINDOWS, LINUX, INVALID };
 extern const platform_t PLATFORM = INVALID;
 
+float32_t get_dt(void);
+
 struct create_vulkan_surface
 {
     VkInstance *instance;

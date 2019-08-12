@@ -450,7 +450,7 @@ struct shader_pk_data_t
 {
     uint32_t size;
     uint32_t offset;
-    VkShaderStageFlagBits stages;
+    VkShaderStageFlags stages;
 };
 
 struct shader_blend_states_t
@@ -662,7 +662,6 @@ end_deferred_rendering(const matrix4_t &view_matrix
 void
 render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
                   , const vector3_t &camera_position // to change to camera structure
-                  , model_t *cube
                   , gpu_command_queue_t *queue);
 
 void
@@ -701,7 +700,7 @@ destroy_graphics(void);
 // TODO: Model loading stuff
 // TODO: Possibly support more formats
 // TODO: Support colors and textures (for now, just positions and normals)
-enum model_file_format_t { OBJ, CUSTOM_MESH, INVALID_MODEL_FILE_FORMAT };
+enum mesh_file_format_t { OBJ, CUSTOM_MESH, INVALID_MESH_FILE_FORMAT };
 
 // Each attribute will be in different buffers
 // But if the buffers aren't too big, squeeze into one buffer
@@ -728,7 +727,7 @@ void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh);
 bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh);
 mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh);
 
-mesh_t load_model(model_file_format_t format, const char *path);
+mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_pool_t *cmdpool);
 model_t make_mesh_attribute_and_binding_information(mesh_t *mesh);
 
 struct joint_t

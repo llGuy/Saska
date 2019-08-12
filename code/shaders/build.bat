@@ -2,8 +2,15 @@ C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model.vert.spv model
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model.geom.spv model.geom	
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model.frag.spv model.frag
 
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/lp_notex_model.vert.spv lp_notex_model.vert
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/lp_notex_model.geom.spv lp_notex_model.geom	
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/lp_notex_model.frag.spv lp_notex_model.frag
+
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model_shadow.vert.spv model_shadow.vert
-C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model_shadow.frag.spv model_shadow.frag 
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/model_shadow.frag.spv model_shadow.frag
+
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/lp_notex_model_shadow.vert.spv lp_notex_model_shadow.vert
+C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/lp_notex_model_shadow.frag.spv lp_notex_model_shadow.frag 
 
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/deferred_lighting.vert.spv deferred_lighting.vert
 C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/deferred_lighting.frag.spv deferred_lighting.frag

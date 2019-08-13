@@ -704,7 +704,7 @@ enum mesh_file_format_t { OBJ, CUSTOM_MESH, INVALID_MESH_FILE_FORMAT };
 
 // Each attribute will be in different buffers
 // But if the buffers aren't too big, squeeze into one buffer
-enum buffer_type_t : char { INDICES, VERTEX, NORMAL, UVS, COLOR, JOINT_INDICES, JOINT_WEIGHT, EXTRA_V3, EXTRA_V2, EXTRA_V1, INVALID_BUFFER_TYPE };
+enum buffer_type_t : char { INDICES, VERTEX, NORMAL, UVS, COLOR, JOINT_WEIGHT, JOINT_INDICES, EXTRA_V3, EXTRA_V2, EXTRA_V1, INVALID_BUFFER_TYPE };
 
 struct mesh_buffer_t
 {

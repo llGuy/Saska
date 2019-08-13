@@ -1,3 +1,5 @@
+// TODO: Big refactor after animations are loaded
+
 #include "core.hpp"
 #include "vulkan.hpp"
 
@@ -2462,10 +2464,19 @@ struct custom_mesh_header_t
 {
     uint32_t vertices_offset;
     uint32_t vertices_size;
+    
     uint32_t normals_offset;
     uint32_t normals_size;
+    
     uint32_t uvs_offset;
     uint32_t uvs_size;
+    
+    uint32_t affected_joint_weights_offset;
+    uint32_t affected_joint_weights_size;
+    
+    uint32_t affected_joint_ids_offset;
+    uint32_t affected_joint_ids_size;
+    
     uint32_t indices_offset;
     uint32_t indices_size;
 };
@@ -2529,6 +2540,28 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
                                    gpu_buffer_usage_t::VERTEX_BUFFER,
                                    cmd_pool);        
     }
+    if (header->affected_joint_weights_size)
+    {
+        push_buffer_to_mesh(buffer_type_t::JOINT_WEIGHT, &mesh);
+        mesh_buffer_t *weights_gpu_buffer = get_mesh_buffer_object(buffer_type_t::JOINT_WEIGHT, &mesh);
+        vector3_t *weights = (vector3_t *)(mesh_data.content + header->affected_joint_weights_offset);
+        make_unmappable_gpu_buffer(&weights_gpu_buffer->gpu_buffer,
+                                   header->affected_joint_weights_size,
+                                   mesh_data.content + header->affected_joint_weights_offset,
+                                   gpu_buffer_usage_t::VERTEX_BUFFER,
+                                   cmd_pool);
+    }
+    if (header->affected_joint_ids_size)
+    {
+        push_buffer_to_mesh(buffer_type_t::JOINT_INDICES, &mesh);
+        mesh_buffer_t *joint_ids_gpu_buffer = get_mesh_buffer_object(buffer_type_t::JOINT_INDICES, &mesh);
+        ivector3_t *joint_ids = (ivector3_t *)(mesh_data.content + header->affected_joint_ids_offset);
+        make_unmappable_gpu_buffer(&joint_ids_gpu_buffer->gpu_buffer,
+                                   header->affected_joint_ids_size,
+                                   mesh_data.content + header->affected_joint_ids_offset,
+                                   gpu_buffer_usage_t::VERTEX_BUFFER,
+                                   cmd_pool);
+    }
     
     return(mesh);
 }
@@ -2557,6 +2590,7 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
         {
             // For vertex-type buffers only (vertices buffer, normal buffer, uvs buffer, extra buffers, whatever)
             model_binding_t *binding = &model.bindings[current_binding];
+            binding->binding = current_binding;
             binding->buffer = mesh->buffers[mesh->buffer_types_stack[buffer]].gpu_buffer.buffer;
             binding->begin_attributes_creation(model.attributes_buffer);
 
@@ -2568,8 +2602,8 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
             case buffer_type_t::NORMAL: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
             case buffer_type_t::UVS: { format = VK_FORMAT_R32G32_SFLOAT; attribute_size = sizeof(vector2_t); } break;
             case buffer_type_t::COLOR: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
-            case buffer_type_t::JOINT_INDICES: { format = VK_FORMAT_R32G32B32_UINT; attribute_size = sizeof(ivector3_t); } break;
-            case buffer_type_t::JOINT_WEIGHT: { format = VK_FORMAT_R32G32B32A32_SFLOAT; attribute_size = sizeof(vector4_t); } break;
+            case buffer_type_t::JOINT_INDICES: { format = VK_FORMAT_R32G32B32_SINT; attribute_size = sizeof(ivector3_t); } break;
+            case buffer_type_t::JOINT_WEIGHT: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
             case buffer_type_t::EXTRA_V3: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
             case buffer_type_t::EXTRA_V2: { format = VK_FORMAT_R32G32_SFLOAT; attribute_size = sizeof(vector2_t); } break;
             case buffer_type_t::EXTRA_V1: { format = VK_FORMAT_R32_SFLOAT; attribute_size = sizeof(float32_t); } break;

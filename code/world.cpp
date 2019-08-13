@@ -1,3 +1,5 @@
+// TODO: Have a startup script so that you can reload the game
+
 #include "ui.hpp"
 #include "script.hpp"
 #include "world.hpp"
@@ -2019,12 +2021,12 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     {
         render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
-                               shader_module_info_t{"shaders/SPV/lp_notex_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_animated.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                               shader_module_info_t{"shaders/SPV/lp_notex_animated.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                        g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT };
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
@@ -2585,10 +2587,10 @@ lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
     entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
-    vector4_t dir = glm::scale(main_entity->on_t->size) * main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_d, 0.0f);
-    lua_pushnumber(state, dir.x);
-    lua_pushnumber(state, dir.y);
-    lua_pushnumber(state, dir.z);
+    //    vector4_t dir = glm::scale(main_entity->on_t->size) * main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_d, 0.0f);
+    lua_pushnumber(state, main_entity->ws_d.x);
+    lua_pushnumber(state, main_entity->ws_d.y);
+    lua_pushnumber(state, main_entity->ws_d.z);
     return(3);
 }
 

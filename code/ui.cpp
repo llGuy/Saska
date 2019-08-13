@@ -663,7 +663,7 @@ push_font_character_to_render(ui_box_t *box)
 
 struct console_t
 {
-    bool render_console;
+    bool render_console = true;
     bool receive_input;
 
     ui_box_t back_box;

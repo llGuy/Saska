@@ -2023,8 +2023,8 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
     g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
     g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
-    g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman.skeleton_custom");
-    g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
+    g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
+    g_entities.entity_mesh_cycles = load_animations("models/spaceman_walk.animations_custom");
 
     uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager.add("uniform_layout.joint_ubo"_hash);
     uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager.get(animation_layout_hdl);

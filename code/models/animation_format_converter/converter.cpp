@@ -10,7 +10,7 @@
 #include <rapidxml.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#define DEBUG
+//#define DEBUG
 #define CORRECTION glm::rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))
 
 using namespace rapidxml;

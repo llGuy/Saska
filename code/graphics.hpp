@@ -276,6 +276,9 @@ struct material_t
     // ---- ibo information
     model_index_data_t index_data;
     draw_indexed_data_t draw_index_data;
+
+    // Some materials may have a ubo per instance
+    uniform_group_t *ubo = nullptr;
 };
 
 // Queue of materials to be submitted
@@ -290,10 +293,11 @@ struct gpu_material_submission_queue_t
     int32_t cmdbuf_index{-1};
 
     uint32_t
-    push_material(void *push_k_ptr, uint32_t push_k_size
-		  , const memory_buffer_view_t<VkBuffer> &vbo_bindings
-		  , const model_index_data_t &index_data
-		  , const draw_indexed_data_t &draw_index_data);
+    push_material(void *push_k_ptr, uint32_t push_k_size,
+		  const memory_buffer_view_t<VkBuffer> &vbo_bindings,
+		  const model_index_data_t &index_data,
+		  const draw_indexed_data_t &draw_index_data,
+                  uniform_group_t *ubo = nullptr);
 
     gpu_command_queue_t *
     get_command_buffer(gpu_command_queue_t *queue = nullptr);

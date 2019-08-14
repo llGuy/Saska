@@ -17,7 +17,7 @@ constexpr float32_t PI = 3.14159265359f;
 global_var constexpr uint32_t MAX_MTRLS = 10;
 global_var gpu_material_submission_queue_t g_world_submission_queues[MAX_MTRLS];
 
-enum { ENTITY_QUEUE, TERRAIN_QUEUE };
+enum { TERRAIN_QUEUE, ENTITY_QUEUE };
 
 // ---- terrain code ----
 struct morphable_terrain_t
@@ -1485,6 +1485,8 @@ global_var struct entities_t
     uniform_layout_t animation_ubo_layout;
     model_t entity_model;
 
+    
+
     // For now:
     uint32_t main_entity;
     
@@ -1994,7 +1996,8 @@ push_entity_to_queue(entity_t *e_ptr // Needs a rendering component attached
 			 , sizeof(component->push_k)
 			 , model->raw_cache_for_rendering
 			 , model->index_data
-			 , init_draw_indexed_data_default(1, model->index_data.index_count));
+			 , init_draw_indexed_data_default(1, model->index_data.index_count)
+                         , &g_entities.entity_animation_instance.group);
 }
 
 internal_function void
@@ -2023,11 +2026,13 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman.skeleton_custom");
     g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
 
+    uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager.add("uniform_layout.joint_ubo"_hash);
+    uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager.get(animation_layout_hdl);
     uniform_layout_info_t animation_ubo_info = {};
     animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-    g_entities.animation_ubo_layout = make_uniform_layout(&animation_ubo_info);
+    *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
     
-    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, &g_entities.animation_ubo_layout, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
+    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, animation_layout_ptr, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
     
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
@@ -2037,7 +2042,8 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                shader_module_info_t{"shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_animated.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                       g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+                                         g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                         animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
@@ -2069,7 +2075,8 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
         render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);

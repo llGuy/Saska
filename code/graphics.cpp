@@ -126,9 +126,10 @@ global_var struct gpu_material_submission_queue_manager_t // maybe in the future
 
 uint32_t
 gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size
-					     , const memory_buffer_view_t<VkBuffer> &vbo_bindings
-					     , const model_index_data_t &index_data
-					     , const draw_indexed_data_t &draw_index_data)
+                                               , const memory_buffer_view_t<VkBuffer> &vbo_bindings
+                                               , const model_index_data_t &index_data
+                                               , const draw_indexed_data_t &draw_index_data
+                                               , uniform_group_t *ubo)
 {
     material_t new_mtrl = {};
     new_mtrl.push_k_ptr = push_k_ptr;
@@ -136,6 +137,7 @@ gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k
     new_mtrl.vbo_bindings = vbo_bindings;
     new_mtrl.index_data = index_data;
     new_mtrl.draw_index_data = draw_index_data;
+    new_mtrl.ubo = ubo;
 
     mtrls[mtrl_count] = new_mtrl;
 
@@ -178,17 +180,27 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
 	    
     command_buffer_bind_pipeline(graphics_pipeline, &dst_command_queue->q);
 
-    command_buffer_bind_descriptor_sets(graphics_pipeline
-						, uniform_groups
-						, &dst_command_queue->q);
-
+    uniform_group_t *groups = ALLOCA_T(uniform_group_t, uniform_groups.count + 1);
+    memcpy(groups, uniform_groups.buffer, sizeof(uniform_group_t) * uniform_groups.count);
+    
     for (uint32_t i = 0; i < mtrl_count; ++i)
     {
         material_t *mtrl = &mtrls[i];
 
         VkDeviceSize *zero = ALLOCA_T(VkDeviceSize, mtrl->vbo_bindings.count);
         for (uint32_t z = 0; z < mtrl->vbo_bindings.count; ++z) zero[z] = 0;
-			
+        
+        // TODO: Make sure this doesn't happen to materials which don't need an extra UBO
+        uint32_t uniform_count = uniform_groups.count;
+        if (mtrl->ubo)
+        {
+            groups[uniform_count] = *mtrl->ubo;
+            ++uniform_count;
+        }
+        command_buffer_bind_descriptor_sets(graphics_pipeline
+                                            , { uniform_count, groups }
+                                            , &dst_command_queue->q);
+        
         command_buffer_bind_vbos(mtrl->vbo_bindings
                                          , {mtrl->vbo_bindings.count, zero}
                                          , 0
@@ -2729,10 +2741,14 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
     instance.bound_cycle = bound_cycle;
     instance.skeleton = skeleton;
     instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
+    for (uint32_t i = 0; i < skeleton->joint_count; ++i)
+    {
+        instance.interpolated_transforms[i] = matrix4_t(1.0f);
+    }
 
     make_unmappable_gpu_buffer(&instance.interpolated_transforms_ubo,
                                sizeof(matrix4_t) * skeleton->joint_count,
-                               nullptr,
+                               instance.interpolated_transforms,
                                gpu_buffer_usage_t::UNIFORM_BUFFER,
                                pool);
 

@@ -1,6 +1,6 @@
 #version 450
 
-layout(binding = 0) uniform Uniform_Buffer_Object
+layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
 {
     mat4 view;
     mat4 proj;
@@ -10,6 +10,12 @@ layout(binding = 0) uniform Uniform_Buffer_Object
 
     vec4 debug_vector;
 } ubo;
+
+layout(set = 2, binding = 0) uniform Joint_Transforms
+{
+    // TODO: Don't hardcode number of transforms
+    mat4 transforms[13];
+} joints;
 
 // Animation UBO with the joint transforms
 
@@ -36,21 +42,44 @@ layout(location = 0) out VS_DATA
     
 } vs_out;
 
+#define MAX_WEIGHTS 3
+
 void
 main(void)
 {
-    vec4 ws_position = push_k.model * vec4(vertex_position, 1.0);
-    vec4 vs_position = ubo.view * ws_position;
-    vec3 real_normal = vertex_normal;
-    // I don't know why blender flips the y?
-    real_normal.y *= -1.0;
-    vec4 vs_normal = ubo.view * vec4(normalize(real_normal), 0.0);
+    mat4 identity = mat4(
+                         1, 0, 0, 0,
+                         0, 1, 0, 0,
+                         0, 0, 1, 0,
+                         0, 0, 0, 1);
 
+    vec4 accumulated_local = vec4(0);
+    vec4 accumulated_normal = vec4(0);
+
+    for (int i = 0; i < MAX_WEIGHTS; ++i)
+    {
+        vec4 original_pos = vec4(vertex_position, 1.0f);
+
+        mat4 joint = joints.transforms[affected_joint_ids[i]];
+		
+        vec4 pose_position = joint * original_pos;
+
+        accumulated_local += pose_position * joint_weights[i];
+
+        vec4 world_normal = joint * vec4(vertex_normal, 0.0f);
+        accumulated_normal += world_normal * joint_weights[i];
+    }
+	
+    vec3 ws_position = vec3(push_k.model * ( accumulated_local));
+    vec4 vs_position = ubo.view * vec4(ws_position, 1.0);
+
+    vec4 vs_normal = ubo.view * accumulated_normal;
+    
     gl_Position = ubo.proj * vs_position;
-    vs_out.final = joint_weights;
+    vs_out.final = vec3(push_k.color);
 
     vs_out.position = vs_position.xyz;
     vs_out.normal = vs_normal.xyz;
 
-    vs_out.shadow_coord = ubo.shadow_proj * ubo.shadow_view * ws_position;
+    vs_out.shadow_coord = ubo.shadow_proj * ubo.shadow_view * vec4(ws_position, 1.0);
 }

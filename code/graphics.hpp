@@ -732,38 +732,29 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh);
 
 struct joint_t
 {
-    joint_t *parent;
-    memory_buffer_view_t<joint_t> children;
-
-    uint32_t id;
-    const char *name;
-    matrix4_t local_bind_transform;
-    matrix4_t inverse_bind_transform;
-    matrix4_t animated_transform;
+    persist_var constexpr uint32_t MAX_CHILD_JOINTS = 4;
+    
+    uint32_t joint_id = 0;
+    uint32_t parent_joint_id = 0;
+    uint32_t children_joint_count = 0;
+    uint32_t children_joint_ids[MAX_CHILD_JOINTS] = {};
+    // TODO: To remove if not needed by the game!
+    matrix4_t bind_transform;
+    matrix4_t inverse_bind_transform;    
 };
 
-struct joint_transform_t
+struct skeleton_t
 {
-    vector3_t position;
-    quaternion_t rotation;
+    uint32_t joint_count;
+    joint_t *joints;
+    // Mostly for debugging purposes
+    const char **joint_names;
 };
 
-struct key_frame_t
-{
-    float32_t time_stamp;
-    hash_table_inline_t<joint_transform_t, 10, 2, 3> joint_transforms;
-};
+joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton);
 
-struct animation_t
-{
-    float32_t animation_length;
-    key_frame_t key_frames;
-};
-
-struct animated_material_rendering_data_t
-{
-    memory_buffer_view_t<matrix4_t> interpolated_joint_transforms;
-};
+// TODO: Skeleton loading stuff (currently under work)
+skeleton_t load_skeleton(const char *path);
 
 // TODO: Animation loading stuff (currently under work)
 void load_animation(const char *path);

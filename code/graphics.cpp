@@ -2635,3 +2635,45 @@ mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_
     }
     return {};
 }
+
+joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton)
+{
+    return &skeleton->joints[joint_id];
+}
+
+// TODO: Skeleton loading stuff (currently under work)
+skeleton_t load_skeleton(const char *path)
+{
+    file_contents_t skeleton_data = read_file(path);
+
+    skeleton_t skeleton = {};
+    skeleton.joint_count = *((uint32_t *)skeleton_data.content);
+
+    skeleton.joint_names = (const char **)allocate_free_list(skeleton.joint_count);
+    
+    // Allocate names
+    char *names_bytes = (char *)(skeleton_data.content + sizeof(uint32_t));
+    uint32_t char_count = 0;
+    for (uint32_t joint = 0; joint < skeleton.joint_count; ++joint)
+    {
+        uint32_t length = strlen(names_bytes + char_count);
+        char *name = (char *)allocate_free_list(length + 1);
+
+        memcpy(name, names_bytes + char_count, length + 1);
+
+        char_count += length + 1;
+
+        skeleton.joint_names[joint] = name;
+    }
+
+    skeleton.joints = (joint_t *)allocate_free_list(skeleton.joint_count);
+
+    byte_t *joint_data_pointer = (byte_t *)(names_bytes + char_count);
+    for (uint32_t i = 0; i < skeleton.joint_count; ++i)
+    {
+        joint_t *current_joint = &skeleton.joints[i];
+        memcpy(current_joint, joint_data_pointer + i * sizeof(joint_t), sizeof(joint_t));
+    }
+    
+    return skeleton;
+}

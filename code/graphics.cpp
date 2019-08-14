@@ -2721,7 +2721,7 @@ animation_cycles_t load_animations(const char *path)
     return animation_cycle;
 }
 
-animated_instance_t initialize_animated_instance(skeleton_t *skeleton, animation_cycle_t *bound_cycle)
+animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycle_t *bound_cycle)
 {
     animated_instance_t instance = {};
     
@@ -2730,6 +2730,15 @@ animated_instance_t initialize_animated_instance(skeleton_t *skeleton, animation
     instance.skeleton = skeleton;
     instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
 
+    make_unmappable_gpu_buffer(&instance.interpolated_transforms_ubo,
+                               sizeof(matrix4_t) * skeleton->joint_count,
+                               nullptr,
+                               gpu_buffer_usage_t::UNIFORM_BUFFER,
+                               pool);
+
+    instance.group = make_uniform_group(gpu_ubo_layout, &g_uniform_pool);
+    update_uniform_group(&instance.group, update_binding_t{BUFFER, &instance.interpolated_transforms_ubo, 0});
+    
     return(instance);
 }
 
@@ -2798,4 +2807,15 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
 
     // Convert all the transforms to model space
     update_joint(0, instance->skeleton, instance->interpolated_transforms);
+}
+
+void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance)
+{
+    update_gpu_buffer(&instance->interpolated_transforms_ubo,
+                      instance->interpolated_transforms,
+                      sizeof(matrix4_t) * instance->skeleton->joint_count,
+                      0,
+                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                      &queue->q);
 }

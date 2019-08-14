@@ -1482,6 +1482,7 @@ global_var struct entities_t
     skeleton_t entity_mesh_skeleton;
     animation_cycles_t entity_mesh_cycles;
     animated_instance_t entity_animation_instance;
+    uniform_layout_t animation_ubo_layout;
     model_t entity_model;
 
     // For now:
@@ -2021,7 +2022,12 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
     g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman.skeleton_custom");
     g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
-    g_entities.entity_animation_instance = initialize_animated_instance(&g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
+
+    uniform_layout_info_t animation_ubo_info = {};
+    animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+    g_entities.animation_ubo_layout = make_uniform_layout(&animation_ubo_info);
+    
+    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, &g_entities.animation_ubo_layout, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
     
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
@@ -2424,6 +2430,7 @@ update_world(input_state_t *input_state
     update_entities(input_state, dt);
     
     interpolate_skeleton_joints_into_instance(dt, &g_entities.entity_animation_instance);
+    update_animated_instance_ubo(cmdbuf, &g_entities.entity_animation_instance);
 
     add_staged_creation_terrains();
 

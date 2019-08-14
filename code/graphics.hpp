@@ -793,9 +793,13 @@ struct animated_instance_t
     animation_cycle_t *bound_cycle;
     // One for each joint
     matrix4_t *interpolated_transforms;
+    
+    gpu_buffer_t interpolated_transforms_ubo;
+    uniform_group_t group;
 };
 
-animated_instance_t initialize_animated_instance(skeleton_t *skeleton, animation_cycle_t *bound_cycle);
+animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycle_t *bound_cycle);
 void destroy_animated_instance(animated_instance_t *instance);
 
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);
+void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance);

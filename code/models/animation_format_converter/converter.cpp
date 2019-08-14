@@ -8,6 +8,7 @@
 #include <string>
 #include <stdint.h>
 #include <rapidxml.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #define DEBUG
 #define CORRECTION glm::rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f))
@@ -80,9 +81,9 @@ std::vector<uint32_t> organize_vertices(std::string const & raw_list,
             if (normals_raw.size())
                 normals_result[current_vertex] = normals_raw[std::stoi(current_int)];
         /* set uv coordinates at appropriate location */
-        else if (counter % 2 == 2)
+        /*        else if (counter % 2 == 2)
             if(uvs_raw.size())
-                uvs_result[current_vertex] = uvs_raw[std::stoi(current_int)];
+            uvs_result[current_vertex] = uvs_raw[std::stoi(current_int)];*/
 
         ++counter;
     }
@@ -456,6 +457,7 @@ auto load_hierarchy(rapidxml::xml_node<> * current,
 
     std::string raw_current_name = current->first_attribute()->value();
     std::string current_name = raw_current_name.substr(REMOVE.length());
+    //    std::string current_name = raw_current_name;
     joint * current_joint = joint_map[current_name];
     current_joint->get_parent() = parent;
 
@@ -561,7 +563,7 @@ void organize_skeleton_file(std::unordered_map<std::string, joint *> &joint_map_
     output.close();
 }
 
-void load_skeleton(xml_document<> *doc, const std::string &file_path)
+std::pair<joint *, std::unordered_map<std::string, joint *>> load_skeleton(xml_document<> *doc, const std::string &file_path)
 {
     xml_node<> * library_controllers = doc->last_node("COLLADA")->last_node("library_controllers")->first_node()->first_node();
 
@@ -583,7 +585,183 @@ void load_skeleton(xml_document<> *doc, const std::string &file_path)
     root->calculate_inverses();
 
     organize_skeleton_file(joint_map, index_joint_map, file_path);
+
+    return {root, std::move(joint_map)};
 }
+
+
+
+
+
+
+
+struct joint_transform
+{
+    glm::quat rotation;
+    glm::vec3 position;
+};
+
+class key_frame
+{
+public:
+    float time_stamp;
+
+    std::unordered_map<std::string, joint_transform> joint_transforms;
+public:
+    key_frame(float time_stamp);
+
+    auto get_time_stamp(void) -> float;
+
+    auto operator[](std::string const & name) -> joint_transform &;
+
+    auto begin(void)
+    {
+        return joint_transforms.begin();
+    }
+
+    auto end(void)
+    {
+        return joint_transforms.end();
+    }
+};
+
+
+std::vector<key_frame> get_key_frames(rapidxml::xml_node<char> * animations_node)
+{
+    std::vector<key_frame> key_frames;
+
+    std::istringstream stream(animations_node->value());
+    std::string current_time_stamp;
+
+    while (std::getline(stream, current_time_stamp, ' '))
+    {
+        key_frames.push_back(key_frame(std::stof(current_time_stamp)));
+    }
+
+    return key_frames;
+}
+
+void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame> & frames, joint * root)
+{
+    for (xml_node<> * a_node = animation; a_node; a_node = a_node->next_sibling())
+    {
+        /* get to the matrix output */
+        xml_node<> * src = a_node->first_node()->next_sibling();
+
+        /* load key frame data */
+        /* get name of joint */
+        std::string joint_name;
+        std::string whole_id = src->first_attribute()->value();
+        /* get the joint name */
+        std::istringstream stream(whole_id);
+        std::string current_word;
+        uint32_t count = 0;
+        while (std::getline(stream, current_word, '_'))
+        {
+            if (current_word == "pose")
+            {
+                joint_name.pop_back();
+                break;
+            }
+            else if (count++ >= 1)
+            {
+                joint_name += current_word + '_';
+            }
+        }
+
+        /* get float array */
+        xml_node<> * float_array = src->first_node();
+
+        std::istringstream stream_floats(float_array->value());
+        std::string current_float;
+        uint32_t float_count = 0;
+        glm::mat4 current_matrix;
+        while (std::getline(stream_floats, current_float, ' '))
+        {
+            current_matrix[(float_count / 4) % 4][float_count % 4] = std::stof(current_float);
+
+            ++float_count;
+
+            if (float_count % 16 == 0 && float_count != 0)
+            {
+                if (joint_name == root->get_name())
+                {
+                    current_matrix = CORRECTION * glm::transpose(current_matrix);
+                }
+                else current_matrix = glm::transpose(current_matrix);
+
+                /* convert to position and quaternion */
+                glm::vec3 position = glm::vec3(current_matrix[3][0], current_matrix[3][1], current_matrix[3][2]);
+                glm::quat rotation = glm::quat_cast(current_matrix);
+
+                auto & transform = frames[float_count / 16 - 1][joint_name];
+                transform.position = position;
+                transform.rotation = rotation;
+            }
+        }
+    }
+}
+
+// Formatted key frame :
+// float time stamp
+// Array of joint transforms (index = joint id) for each key frame
+// Key frames are stored in just a big array
+
+// TODO: MAKE SURE THAT THE FILE FORMAT SUPPORTS IMPORTATION OF MULTIPLE ANIMATION CYCLE (e.g. walking, running, idle )
+
+void organize_animations_buffer(std::vector<key_frame> &key_frames, std::unordered_map<std::string, joint *> &map, const std::string &file_path)
+{
+    uint32_t key_frame_formatted_size = sizeof(float) + sizeof(joint_transform) * map.size();
+    
+    std::vector<byte> bytes_vec;
+    bytes_vec.resize( key_frames.size() * key_frame_formatted_size );
+
+    byte *bytes = bytes_vec.data();
+    
+    uint32_t byte_counter = 0;
+    for (uint32_t k = 0; k < key_frames.size(); ++k)
+    {
+        key_frame *current_frame = &key_frames[k];
+        
+        float *time_stamp_ptr = (float *)(bytes + byte_counter);
+        *time_stamp_ptr = current_frame->get_time_stamp();
+
+        byte *transform_array_start = (byte *)(time_stamp_ptr) + sizeof(float);
+        joint_transform *transforms_array = (joint_transform *)transform_array_start;
+        
+        for (auto j : *current_frame)
+        {
+            std::string joint_name = j.first;
+            uint32_t joint_index = map[joint_name]->get_id();
+
+            joint_transform *transform = &j.second;
+
+            memcpy(transforms_array + joint_index, transform, sizeof(joint_transform));
+        }
+        
+        byte_counter += key_frame_formatted_size;
+    }
+
+    auto output_path = create_output_file(file_path, "animations_custom");
+    std::ofstream output(output_path, std::ios::binary);
+    output.write((char *)bytes, key_frames.size() * key_frame_formatted_size);
+    output.close();
+}
+
+void load_animations(xml_document<> *doc, const std::string &file_path, joint *root, std::unordered_map<std::string, joint *> &map)
+{
+    xml_node<> * library_animations = doc->last_node("COLLADA")->last_node("library_animations");
+    xml_node<> * first_joint_animation_node = library_animations->first_node();
+
+    std::vector<key_frame> key_frames = get_key_frames(first_joint_animation_node->first_node()->first_node()/* float array */);
+
+    load_key_frame(library_animations->first_node(), key_frames, root);
+
+    organize_animations_buffer(key_frames, map, file_path);
+}
+
+
+
 
 
 int32_t main(int32_t argc, char *argv[])
@@ -611,10 +789,10 @@ int32_t main(int32_t argc, char *argv[])
 
     load_mesh(dae_data, file_path);
 
-    // TODO: Load skeleton into a .skeleton_custom file
-    load_skeleton(dae_data, file_path);
+    auto unformatted_root_and_map = load_skeleton(dae_data, file_path);
 
     // TODO: Load animation into a .animation_custom file
+    load_animations(dae_data, file_path, unformatted_root_and_map.first, unformatted_root_and_map.second);
 
     std::cout << "Finished session" << std::endl;
 }
@@ -687,4 +865,20 @@ auto joint::get_animated_transform(void) -> glm::mat4 &
 auto joint::get_child_count(void) const -> uint32_t
 {
 	return children.size();
+}
+
+
+key_frame::key_frame(float time_stamp)
+	: time_stamp(time_stamp)
+{
+}
+
+auto key_frame::get_time_stamp(void) -> float
+{
+	return time_stamp;
+}
+
+auto key_frame::operator[](std::string const & name) -> joint_transform &
+{
+	return joint_transforms[name];
 }

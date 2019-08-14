@@ -337,7 +337,7 @@ int32_t main(int32_t argc, char * argv[])
     stack_allocator_global.capacity = megabytes(10);
     stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-    free_list_allocator_global.available_bytes = megabytes(10);
+    free_list_allocator_global.available_bytes = megabytes(50);
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
 	

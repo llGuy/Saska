@@ -2649,7 +2649,7 @@ skeleton_t load_skeleton(const char *path)
     skeleton_t skeleton = {};
     skeleton.joint_count = *((uint32_t *)skeleton_data.content);
 
-    skeleton.joint_names = (const char **)allocate_free_list(skeleton.joint_count);
+    skeleton.joint_names = (const char **)allocate_free_list(skeleton.joint_count * sizeof(const char *));
     
     // Allocate names
     char *names_bytes = (char *)(skeleton_data.content + sizeof(uint32_t));
@@ -2666,7 +2666,7 @@ skeleton_t load_skeleton(const char *path)
         skeleton.joint_names[joint] = name;
     }
 
-    skeleton.joints = (joint_t *)allocate_free_list(skeleton.joint_count);
+    skeleton.joints = (joint_t *)allocate_free_list(skeleton.joint_count * sizeof(joint_t));
 
     byte_t *joint_data_pointer = (byte_t *)(names_bytes + char_count);
     for (uint32_t i = 0; i < skeleton.joint_count; ++i)

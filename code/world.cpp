@@ -1480,6 +1480,7 @@ global_var struct entities_t
 
     mesh_t entity_mesh;
     skeleton_t entity_mesh_skeleton;
+    animation_cycles_t entity_mesh_cycles;
     model_t entity_model;
 
     // For now:
@@ -2014,10 +2015,11 @@ update_entities(input_state_t *input_state
 internal_function void
 initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 {
-    g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/cowboy.mesh_custom", cmdpool);
+    g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
     g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
     g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
     g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman.skeleton_custom");
+    g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
     
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);

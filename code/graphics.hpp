@@ -751,10 +751,34 @@ struct skeleton_t
     const char **joint_names;
 };
 
+struct key_frame_joint_transform_t
+{
+    quaternion_t rotation;
+    vector3_t position;
+};
+
+struct key_frame_t
+{
+    float32_t time_stamp;
+    uint32_t joint_transforms_count;
+    key_frame_joint_transform_t *joint_transforms;
+};
+
+struct animation_cycle_t
+{
+    uint32_t key_frame_count;
+    key_frame_t *key_frames;
+};
+
+struct animation_cycles_t
+{
+    persist_var constexpr uint32_t MAX_ANIMATIONS = 5;
+    animation_cycle_t cycles[MAX_ANIMATIONS];
+    uint32_t cycle_count;
+};
+
 joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton);
 
-// TODO: Skeleton loading stuff (currently under work)
 skeleton_t load_skeleton(const char *path);
 
-// TODO: Animation loading stuff (currently under work)
-void load_animation(const char *path);
+animation_cycles_t load_animations(const char *path);

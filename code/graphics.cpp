@@ -2641,7 +2641,6 @@ joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton)
     return &skeleton->joints[joint_id];
 }
 
-// TODO: Skeleton loading stuff (currently under work)
 skeleton_t load_skeleton(const char *path)
 {
     file_contents_t skeleton_data = read_file(path);
@@ -2676,4 +2675,43 @@ skeleton_t load_skeleton(const char *path)
     }
     
     return skeleton;
+}
+
+animation_cycles_t load_animations(const char *path)
+{
+    file_contents_t animation_data = read_file(path);
+    
+    animation_cycles_t animation_cycle = {};
+    animation_cycle.cycle_count = 1;
+
+    animation_cycle_t *current_cycle = &animation_cycle.cycles[0];
+
+    uint32_t *key_frame_count_ptr = (uint32_t *)animation_data.content;    
+    uint32_t key_frame_count = *key_frame_count_ptr;
+    uint32_t joints_per_key_frame = *(key_frame_count_ptr + 1);
+
+    byte_t *key_frame_bytes = animation_data.content + sizeof(uint32_t) * 2;
+
+    current_cycle->key_frame_count = key_frame_count;
+    current_cycle->key_frames = (key_frame_t *)allocate_free_list(sizeof(key_frame_t) * key_frame_count);
+
+    uint32_t key_frame_formatted_size = sizeof(float32_t) + sizeof(key_frame_joint_transform_t) * joints_per_key_frame;
+    
+    for (uint32_t k = 0; k < key_frame_count; ++k)
+    {
+        key_frame_t *current_frame = &current_cycle->key_frames[k];
+        current_frame->joint_transforms_count = joints_per_key_frame;
+        current_frame->joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+
+        float32_t *time_stamp_ptr = (float32_t *)key_frame_bytes;
+        current_frame->time_stamp = *time_stamp_ptr;
+
+        byte_t *joint_transforms_ptr = (byte_t *)(time_stamp_ptr) + sizeof(float32_t);
+
+        memcpy(current_frame->joint_transforms, joint_transforms_ptr, sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+
+        key_frame_bytes += key_frame_formatted_size;
+    }
+
+    return animation_cycle;
 }

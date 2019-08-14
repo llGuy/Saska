@@ -711,12 +711,21 @@ void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame>
 
 void organize_animations_buffer(std::vector<key_frame> &key_frames, std::unordered_map<std::string, joint *> &map, const std::string &file_path)
 {
+    uint32_t key_frame_count = key_frames.size();
+    uint32_t joint_transform_per_key_frame = map.size();
+    
     uint32_t key_frame_formatted_size = sizeof(float) + sizeof(joint_transform) * map.size();
     
     std::vector<byte> bytes_vec;
-    bytes_vec.resize( key_frames.size() * key_frame_formatted_size );
+    bytes_vec.resize( sizeof(uint32_t) * 2 + key_frames.size() * key_frame_formatted_size );
 
-    byte *bytes = bytes_vec.data();
+    byte *raw_bytes = bytes_vec.data();
+
+    uint32_t *frame_count_ptr = (uint32_t *)raw_bytes;
+    *frame_count_ptr = key_frame_count;
+    *(frame_count_ptr + 1) = joint_transform_per_key_frame;
+
+    byte *bytes = (byte *)(frame_count_ptr) + sizeof(uint32_t) * 2;
     
     uint32_t byte_counter = 0;
     for (uint32_t k = 0; k < key_frames.size(); ++k)
@@ -744,7 +753,7 @@ void organize_animations_buffer(std::vector<key_frame> &key_frames, std::unorder
 
     auto output_path = create_output_file(file_path, "animations_custom");
     std::ofstream output(output_path, std::ios::binary);
-    output.write((char *)bytes, key_frames.size() * key_frame_formatted_size);
+    output.write((char *)bytes_vec.data(), bytes_vec.size());
     output.close();
 }
 

@@ -2711,7 +2711,91 @@ animation_cycles_t load_animations(const char *path)
         memcpy(current_frame->joint_transforms, joint_transforms_ptr, sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
 
         key_frame_bytes += key_frame_formatted_size;
+
+        if (k == key_frame_count - 1)
+        {
+            current_cycle->total_animation_time = current_frame->time_stamp;
+        }
     }
 
     return animation_cycle;
+}
+
+animated_instance_t initialize_animated_instance(skeleton_t *skeleton, animation_cycle_t *bound_cycle)
+{
+    animated_instance_t instance = {};
+    
+    instance.current_animation_time = 0.0f;
+    instance.bound_cycle = bound_cycle;
+    instance.skeleton = skeleton;
+    instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
+
+    return(instance);
+}
+
+void destroy_animated_instance(animated_instance_t *instance)
+{
+    instance->current_animation_time = 0.0f;
+    instance->skeleton = nullptr;
+    instance->bound_cycle = nullptr;
+    deallocate_free_list(instance->interpolated_transforms);
+}
+
+void update_joint(uint32_t current_joint, skeleton_t *skeleton, matrix4_t *transforms_array, const matrix4_t &ms_parent_transform = matrix4_t(1.0f))
+{
+    // Relative to parent bone
+    matrix4_t *local_transform = &transforms_array[current_joint];
+    matrix4_t current_transform = ms_parent_transform * *local_transform;
+
+    joint_t *joint_ptr = &skeleton->joints[current_joint];
+    for (uint32_t i = 0; i < joint_ptr->children_joint_count; ++i)
+    {
+        update_joint(joint_ptr->children_joint_ids[i], skeleton, transforms_array, current_transform);
+    }
+
+    // Model space transform from default pose to current pose (relative to default position NOT 0,0,0)
+    matrix4_t iterative_model_space_transform = current_transform * joint_ptr->inverse_bind_transform;
+    transforms_array[current_joint] = iterative_model_space_transform;
+}
+
+void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance)
+{
+    // Increase the animation time
+    instance->current_animation_time += dt;
+    if (instance->current_animation_time > instance->bound_cycle->total_animation_time)
+    {
+        instance->current_animation_time = 0.0f;
+    }
+
+    // Get the frames to which the current time stamp is in between (frame_a and frame_b)
+    // frame_a  ----- current_time --- frame_b
+    key_frame_t *frame_before = &instance->bound_cycle->key_frames[0];
+    key_frame_t *frame_after = &instance->bound_cycle->key_frames[1];
+    for (uint32_t i = 0; i < instance->bound_cycle->key_frame_count - 1; ++i)
+    {
+        float32_t previous_stamp = instance->bound_cycle->key_frames[i].time_stamp;
+        float32_t next_stamp = instance->bound_cycle->key_frames[i + 1].time_stamp;
+
+        if (previous_stamp < instance->current_animation_time && next_stamp > instance->current_animation_time)
+        {
+            frame_before = &instance->bound_cycle->key_frames[i];
+            frame_after = &instance->bound_cycle->key_frames[i + 1];
+        }
+    }
+
+    float32_t progression = (instance->current_animation_time - frame_before->time_stamp) / (frame_after->time_stamp - frame_before->time_stamp);
+
+    // Interpolate (but all of the transforms are in bone space)
+    for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
+    {
+        key_frame_joint_transform_t *joint_previous_state = &frame_before->joint_transforms[joint];
+        key_frame_joint_transform_t *joint_next_state = &frame_after->joint_transforms[joint];
+
+        vector3_t translation = joint_previous_state->position + (joint_next_state->position - joint_previous_state->position) * progression;
+        quaternion_t rotation = glm::slerp(joint_previous_state->rotation, joint_next_state->rotation, progression);
+        instance->interpolated_transforms[joint] = glm::translate(translation) * glm::mat4_cast(rotation);
+    }
+
+    // Convert all the transforms to model space
+    update_joint(0, instance->skeleton, instance->interpolated_transforms);
 }

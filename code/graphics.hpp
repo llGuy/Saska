@@ -768,6 +768,8 @@ struct animation_cycle_t
 {
     uint32_t key_frame_count;
     key_frame_t *key_frames;
+
+    float32_t total_animation_time;
 };
 
 struct animation_cycles_t
@@ -782,3 +784,18 @@ joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton);
 skeleton_t load_skeleton(const char *path);
 
 animation_cycles_t load_animations(const char *path);
+
+struct animated_instance_t
+{
+    float32_t current_animation_time;
+    
+    skeleton_t *skeleton;
+    animation_cycle_t *bound_cycle;
+    // One for each joint
+    matrix4_t *interpolated_transforms;
+};
+
+animated_instance_t initialize_animated_instance(skeleton_t *skeleton, animation_cycle_t *bound_cycle);
+void destroy_animated_instance(animated_instance_t *instance);
+
+void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);

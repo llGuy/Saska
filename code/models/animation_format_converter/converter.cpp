@@ -111,6 +111,21 @@ std::vector<std::string> split(std::string const & str, char const splitter)
     return words;
 }
 
+std::string create_animation_name(std::string const &original_file_path /* .dae */)
+{
+    std::string result;
+
+    auto splitted = split(original_file_path, '/');
+    auto end_string = splitted.back();
+    auto pre_suff_splitted = split(end_string, '.');
+
+    auto whole_animation_name = pre_suff_splitted[pre_suff_splitted.size() - 2];
+
+    auto animation_name_split = split(whole_animation_name, '_');
+
+    return animation_name_split.back();
+}
+
 std::string create_output_file(std::string const &original_file_path, const std::string &extension)
 {
     std::string result;
@@ -298,7 +313,7 @@ void load_mesh_weights_and_joint_ids(std::vector<glm::vec3> &weights, std::vecto
     load_joint_weights_and_ids(vertex_weights_node, weights, joint_ids, weights_raw);
 }
 
-void load_mesh(xml_document<> *doc, std::string const &original_path)
+void load_mesh(xml_document<> *doc, std::string const &original_path, const std::string &final_path)
 {
     xml_node<> *first_node = doc->first_node("COLLADA");
 
@@ -342,7 +357,7 @@ void load_mesh(xml_document<> *doc, std::string const &original_path)
 
     std::vector<uint32_t> indices = organize_vertices(arr->value(), normals, uvs, normals_in_order, uvs_in_order, std::stoi(indices_node->last_attribute()->value()));
 
-    std::string dst_mesh_custom_file = create_output_file(original_path, "mesh_custom");
+    std::string dst_mesh_custom_file = final_path + ".mesh_custom";//create_output_file(original_path, "mesh_custom");
     
     auto buffer = organize_buffer(normals_in_order, vertices, uvs_in_order, weights, joint_ids, indices);
     auto output_path = create_output_file(original_path, "mesh_custom");
@@ -510,7 +525,7 @@ std::vector<byte> get_joint_name_array(std::vector<joint *> &joint_map_by_index)
 
 void organize_skeleton_file(std::unordered_map<std::string, joint *> &joint_map_by_name,
                             std::vector<joint *> &joint_map_by_index,
-                            const std::string &file_path)
+                            const std::string &final_path)
 {
     // Just contains the joint count
     const uint32_t HEADER_SIZE = sizeof(uint32_t);
@@ -556,14 +571,15 @@ void organize_skeleton_file(std::unordered_map<std::string, joint *> &joint_map_
     offset += name_array_bytes.size();
     memcpy(bytes + offset, formatted_joints.data(), formatted_joints.size() * sizeof(joint_file_t));
 
-    std::string output_path = create_output_file(file_path, "skeleton_custom");
-
+    //    std::string output_path = create_output_file(file_path, "skeleton_custom");
+    std::string output_path = final_path;
+    
     std::ofstream output(output_path, std::ios::binary);
     output.write((char*)bytes, bytes_vec.size());
     output.close();
 }
 
-std::pair<joint *, std::unordered_map<std::string, joint *>> load_skeleton(xml_document<> *doc, const std::string &file_path)
+std::pair<joint *, std::unordered_map<std::string, joint *>> load_skeleton(xml_document<> *doc, const std::string &file_path, const std::string &final_path)
 {
     xml_node<> * library_controllers = doc->last_node("COLLADA")->last_node("library_controllers")->first_node()->first_node();
 
@@ -584,7 +600,7 @@ std::pair<joint *, std::unordered_map<std::string, joint *>> load_skeleton(xml_d
 
     root->calculate_inverses();
 
-    organize_skeleton_file(joint_map, index_joint_map, file_path);
+    organize_skeleton_file(joint_map, index_joint_map, final_path);
 
     return {root, std::move(joint_map)};
 }
@@ -702,86 +718,151 @@ void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame>
     }
 }
 
-// Formatted key frame :
+// Animation count
+// Key frame name
 // float time stamp
 // Array of joint transforms (index = joint id) for each key frame
 // Key frames are stored in just a big array
 
 // TODO: MAKE SURE THAT THE FILE FORMAT SUPPORTS IMPORTATION OF MULTIPLE ANIMATION CYCLE (e.g. walking, running, idle )
 
-void organize_animations_buffer(std::vector<key_frame> &key_frames, std::unordered_map<std::string, joint *> &map, const std::string &file_path)
+// Animation count | ( Animation name | Animation key frame count | Animation key frame joints per frame | ( Time stamp | ( Joint transforms ) ) )
+
+
+
+void organize_animations_buffer(std::vector<std::vector<key_frame>> &animations,
+                                std::unordered_map<std::string, joint *> &map,
+                                const std::vector<std::string> &file_path,
+                                const std::vector<std::string> &animation_names,
+                                const std::string &final_path)
 {
-    uint32_t key_frame_count = key_frames.size();
-    uint32_t joint_transform_per_key_frame = map.size();
-    
-    uint32_t key_frame_formatted_size = sizeof(float) + sizeof(joint_transform) * map.size();
-    
-    std::vector<byte> bytes_vec;
-    bytes_vec.resize( sizeof(uint32_t) * 2 + key_frames.size() * key_frame_formatted_size );
+    const uint32_t ANIMATION_COUNT_SECTION_SIZE = sizeof(uint32_t);
+    // Animation name
+    const uint32_t ANIMATION_KEY_FRAME_INFO_SIZE = sizeof(uint32_t) * 2;
 
-    byte *raw_bytes = bytes_vec.data();
-
-    uint32_t *frame_count_ptr = (uint32_t *)raw_bytes;
-    *frame_count_ptr = key_frame_count;
-    *(frame_count_ptr + 1) = joint_transform_per_key_frame;
-
-    byte *bytes = (byte *)(frame_count_ptr) + sizeof(uint32_t) * 2;
-    
-    uint32_t byte_counter = 0;
-    for (uint32_t k = 0; k < key_frames.size(); ++k)
+    uint32_t key_frames_section_size = 0;
+    for (uint32_t i = 0; i <  animations.size(); ++i)
     {
-        key_frame *current_frame = &key_frames[k];
-        
-        float *time_stamp_ptr = (float *)(bytes + byte_counter);
-        *time_stamp_ptr = current_frame->get_time_stamp();
-
-        byte *transform_array_start = (byte *)(time_stamp_ptr) + sizeof(float);
-        joint_transform *transforms_array = (joint_transform *)transform_array_start;
-        
-        for (auto j : *current_frame)
-        {
-            std::string joint_name = j.first;
-            uint32_t joint_index = map[joint_name]->get_id();
-
-            joint_transform *transform = &j.second;
-
-            memcpy(transforms_array + joint_index, transform, sizeof(joint_transform));
-        }
-        
-        byte_counter += key_frame_formatted_size;
+        uint32_t animation_frame_count = animations[i].size();
+        key_frames_section_size += (sizeof(float) + sizeof(joint_transform) * map.size()) * animation_frame_count;
     }
 
-    auto output_path = create_output_file(file_path, "animations_custom");
+    uint32_t animation_names_size = 0;
+    for (uint32_t i = 0; i < animations.size(); ++i)
+    {
+        animation_names_size += animation_names[i].length() + 1 /* '\0' */;
+    }
+    
+    uint32_t buffer_size = ANIMATION_COUNT_SECTION_SIZE + ANIMATION_KEY_FRAME_INFO_SIZE * animations.size() + key_frames_section_size + animation_names_size;
+    
+    std::vector<byte> bytes_vec;
+    bytes_vec.resize(buffer_size);
+    byte *original = bytes_vec.data();
+    byte *current_byte = bytes_vec.data();
+
+    uint32_t animation_count = animations.size();
+    memcpy(current_byte, &animation_count, sizeof(uint32_t));
+
+    current_byte += sizeof(uint32_t);
+    
+    for (uint32_t animation = 0; animation < animations.size(); ++animation)
+    {
+        std::vector<key_frame> &key_frames = animations[animation];
+        //        std::vector<byte> bytes_vec;
+        //        bytes_vec.resize( sizeof(uint32_t) * 2 + key_frames.size() * key_frame_formatted_size );
+
+        std::string current_animation_name = animation_names[animation];
+        memcpy(current_byte, current_animation_name.c_str(), current_animation_name.length() + 1 /* '\0' */);
+        current_byte += current_animation_name.length() + 1;
+
+        
+        uint32_t key_frame_count = key_frames.size();
+        uint32_t joint_transform_per_key_frame = map.size();
+
+
+        
+        memcpy(current_byte, &key_frame_count, sizeof(uint32_t));
+        current_byte += sizeof(uint32_t);
+        memcpy(current_byte, &joint_transform_per_key_frame, sizeof(uint32_t));
+        current_byte += sizeof(uint32_t);
+
+        
+        uint32_t key_frame_formatted_size = sizeof(joint_transform) * map.size();
+
+        for (uint32_t k = 0; k < key_frames.size(); ++k)
+        {
+            key_frame *current_frame = &key_frames[k];
+        
+            float *time_stamp_ptr = (float *)current_byte;
+            *time_stamp_ptr = current_frame->get_time_stamp();
+
+            current_byte += sizeof(float);
+
+            byte *transform_array_start = current_byte;
+            joint_transform *transforms_array = (joint_transform *)transform_array_start;
+        
+            for (auto j : *current_frame)
+            {
+                std::string joint_name = j.first;
+                uint32_t joint_index = map[joint_name]->get_id();
+
+                joint_transform *transform = &j.second;
+
+                memcpy(transforms_array + joint_index, transform, sizeof(joint_transform));
+            }
+        
+            current_byte += key_frame_formatted_size;
+        }
+    }
+
+    auto output_path = final_path;
     std::ofstream output(output_path, std::ios::binary);
     output.write((char *)bytes_vec.data(), bytes_vec.size());
     output.close();
 }
 
-void load_animations(xml_document<> *doc, const std::string &file_path, joint *root, std::unordered_map<std::string, joint *> &map)
+void load_animations(std::vector<xml_document<> *> &docs,
+                     const std::vector<std::string> &file_paths,
+                     joint *root,
+                     std::unordered_map<std::string, joint *> &map,
+                     const std::vector<std::string> &animation_names,
+                     const std::string &final_path)
 {
-    xml_node<> * library_animations = doc->last_node("COLLADA")->last_node("library_animations");
-    xml_node<> * first_joint_animation_node = library_animations->first_node();
+    std::vector<std::vector<key_frame>> animations;// = get_key_frames(first_joint_animation_node->first_node()->first_node()/* float array */);
+    animations.resize(docs.size());
 
-    std::vector<key_frame> key_frames = get_key_frames(first_joint_animation_node->first_node()->first_node()/* float array */);
+    for (uint32_t i = 0; i < docs.size(); ++i)
+    {
+        xml_node<> * library_animations = docs[i]->last_node("COLLADA")->last_node("library_animations");
+        xml_node<> * first_joint_animation_node = library_animations->first_node();
 
-    load_key_frame(library_animations->first_node(), key_frames, root);
+        animations[i] = get_key_frames(first_joint_animation_node->first_node()->first_node()/* float array */);
 
-    organize_animations_buffer(key_frames, map, file_path);
+        load_key_frame(library_animations->first_node(), animations[i], root);
+    }
+
+    organize_animations_buffer(animations, map, file_paths, animation_names, final_path);
 }
 
 
 
 
-
+// Converter.exe ../spaceman ../spaceman_walk.dae ../spaceman_idle.dae ...
 int32_t main(int32_t argc, char *argv[])
 {
 #if defined (DEBUG)
     std::string file_path = "../spaceman.dae";
 #else
-    std::string file_path = argv[1];
+    std::string dst_string = argv[1];
+    std::vector<std::string> paths;
+    paths.resize(argc - 2);
+    for (uint32_t i = 0; i < paths.size(); ++i)
+    {
+        paths[i] = argv[i + 2];
+    }
 #endif    
 
-    std::ifstream ifile(file_path);
+    std::ifstream ifile(paths[0]);
     if (!ifile.good())
     {
         assert(0);
@@ -789,19 +870,45 @@ int32_t main(int32_t argc, char *argv[])
         return(0);
     }
 
-    std::cout << "Starting with file: " << file_path << std::endl;
+    auto dst_animations_file_name_path_split = split(dst_string, '/');
+    std::string dst_animations_file_name = dst_animations_file_name_path_split.back() + ".animations_custom";
     
-    std::string input_doc_content = std::string(std::istreambuf_iterator<char>(ifile), std::istreambuf_iterator<char>());
-    
-    xml_document<> *dae_data = new xml_document<>();
-    dae_data->parse<0>(const_cast<char *>(input_doc_content.c_str()));
+    std::cout << "Starting session" << std::endl;
 
-    load_mesh(dae_data, file_path);
+    std::vector<std::string> contents;
+    contents.resize(paths.size());
 
-    auto unformatted_root_and_map = load_skeleton(dae_data, file_path);
+    std::vector<std::ifstream> files;
+    files.resize(paths.size());
+
+    std::vector<std::string> animation_names;
+    animation_names.resize(paths.size());
+
+    std::vector<xml_document<> *> dae_docs;
+    dae_docs.resize(paths.size());
+    for (uint32_t i = 0; i < paths.size(); ++i)
+    {
+        files[i] = std::ifstream(paths[i]);
+        if (!files[i].good())
+        {
+            assert(0);
+            std::cin.get();
+            return(0);
+        }
+        
+        contents[i] = std::string(std::istreambuf_iterator<char>(files[i]), std::istreambuf_iterator<char>());
+        animation_names[i] = create_animation_name(paths[i]);
+        
+        dae_docs[i] = new xml_document<>();
+        dae_docs[i]->parse<0>(const_cast<char *>(contents[i].c_str()));
+    }
+
+    // Use the same file (all files will contain the same bone and mesh information)
+    load_mesh(dae_docs[0], paths[0], dst_animations_file_name_path_split.back());
+    auto unformatted_root_and_map = load_skeleton(dae_docs[0], paths[0], dst_animations_file_name_path_split.back());
 
     // TODO: Load animation into a .animation_custom file
-    load_animations(dae_data, file_path, unformatted_root_and_map.first, unformatted_root_and_map.second);
+    load_animations(dae_docs, paths, unformatted_root_and_map.first, unformatted_root_and_map.second, animation_names, dst_animations_file_name);
 
     std::cout << "Finished session" << std::endl;
 }

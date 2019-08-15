@@ -1442,7 +1442,7 @@ struct entity_t
 
     //    struct entity_body_t body;
     // For animated rendering component    
-    enum animated_state_t { MOVING_FORWARD, IDLE, RUNNING_FORWARD, JUMPING } animated_state;
+    enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state;
     
     struct components_t
     {
@@ -1612,19 +1612,39 @@ add_animation_component(entity_t *e,
     component->animation_instance = initialize_animated_instance(cmdpool,
                                                                  ubo_layout,
                                                                  skeleton,
-                                                                 &cycles->cycles[entity_t::animated_state_t::IDLE]);
+                                                                 cycles);
 
     return(component);
 }
 
 internal_function void
-update_animation_component(float32_t dt)
+update_animation_component(input_state_t *input_state, float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities.animation_component_count; ++i)
     {
         struct animation_component_t *component = &g_entities.animation_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
+        entity_t::animated_state_t previous_state = e->animated_state;
+        entity_t::animated_state_t new_state;
+        
+        uint32_t moving = 0;
+        //        if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 10.0f;}
+        if (input_state->keyboard[keyboard_button_type_t::UP].is_down) {new_state = entity_t::animated_state_t::WALK; moving = 1;}
+        if (input_state->keyboard[keyboard_button_type_t::LEFT].is_down); 
+        if (input_state->keyboard[keyboard_button_type_t::DOWN].is_down);
+        if (input_state->keyboard[keyboard_button_type_t::RIGHT].is_down); 
+        if (!moving)
+        {
+            new_state = entity_t::animated_state_t::IDLE;
+        }
+
+        if (new_state != previous_state)
+        {
+            e->animated_state = new_state;
+            bind_to_cycle(&component->animation_instance, new_state);
+        }
+        
         interpolate_skeleton_joints_into_instance(dt, &component->animation_instance);
     }
 }
@@ -2078,7 +2098,7 @@ update_entities(input_state_t *input_state
     update_physics_components(dt);
     update_camera_components(dt);
     update_rendering_component(dt);
-    update_animation_component(dt);
+    update_animation_component(input_state, dt);
 }
 
 internal_function void

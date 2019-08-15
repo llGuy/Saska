@@ -795,6 +795,7 @@ struct animated_instance_t
     
     skeleton_t *skeleton;
     animation_cycle_t *bound_cycle;
+    animation_cycles_t *cycles;
     // One for each joint
     matrix4_t *interpolated_transforms;
     
@@ -802,7 +803,10 @@ struct animated_instance_t
     uniform_group_t group;
 };
 
-animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycle_t *bound_cycle);
+void bind_to_cycle(animated_instance_t *instance, uint32_t cycle_index);
+/* TODO: interpolate_between_cycles() */
+
+animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles);
 void destroy_animated_instance(animated_instance_t *instance);
 
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);

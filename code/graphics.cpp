@@ -2742,12 +2742,13 @@ animation_cycles_t load_animations(const char *path)
     return animation_cycles;
 }
 
-animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycle_t *bound_cycle)
+animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles)
 {
     animated_instance_t instance = {};
     
     instance.current_animation_time = 0.0f;
-    instance.bound_cycle = bound_cycle;
+    instance.bound_cycle = &cycles->cycles[0];
+    instance.cycles = cycles;
     instance.skeleton = skeleton;
     instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
     for (uint32_t i = 0; i < skeleton->joint_count; ++i)
@@ -2876,4 +2877,10 @@ mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t
     mesh.indexed_data = *index_data;
 
     return(mesh);
+}
+
+void bind_to_cycle(animated_instance_t *instance, uint32_t cycle_index)
+{
+    instance->current_animation_time = 0.0f;
+    instance->bound_cycle = &instance->cycles->cycles[cycle_index];
 }

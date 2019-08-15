@@ -871,7 +871,8 @@ int32_t main(int32_t argc, char *argv[])
     }
 
     auto dst_animations_file_name_path_split = split(dst_string, '/');
-    std::string dst_animations_file_name = dst_animations_file_name_path_split.back() + ".animations_custom";
+    // TODO: Fix the hardcoded ../
+    std::string dst_animations_file_name = "../" + dst_animations_file_name_path_split.back() + ".animations_custom";
     
     std::cout << "Starting session" << std::endl;
 

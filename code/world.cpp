@@ -1330,7 +1330,7 @@ struct physics_component_t
     // Depending on the shape of the body (see formula for rectangle if using hitbox, and for sphere if using bounding sphere)
     vector3_t moment_of_inertia;
 
-    float32_t coefficient_of_restitution = 0.6f;
+    float32_t coefficient_of_restitution = 0.0f;
     
     vector3_t acceleration {0.0f};
     vector3_t velocity {0.0f};
@@ -1380,6 +1380,14 @@ struct input_component_t
 
     enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN };
     uint8_t movement_flags = 0;
+};
+
+struct animation_component_t
+{
+    uint32_t entity_index;
+    // Rendering the animated entity
+    animated_instance_t animation_instance;
+    animation_cycles_t *cycles;
 };
 
 struct rendering_component_t
@@ -1433,6 +1441,8 @@ struct entity_t
     float32_t animation_time = 0.0f;
 
     //    struct entity_body_t body;
+    // For animated rendering component    
+    enum animated_state_t { MOVING_FORWARD, IDLE, RUNNING_FORWARD, JUMPING } animated_state;
     
     struct components_t
     {
@@ -1441,6 +1451,7 @@ struct entity_t
         int32_t physics_component;
         int32_t input_component = -1;
         int32_t rendering_component;
+        int32_t animation_component;
         
     } components;
     
@@ -1475,6 +1486,9 @@ global_var struct entities_t
     int32_t rendering_component_count = {};
     struct rendering_component_t rendering_components[MAX_ENTITIES] = {};
 
+    int32_t animation_component_count = {};
+    struct animation_component_t animation_components[MAX_ENTITIES] = {};
+
     struct hash_table_inline_t<entity_handle_t, 30, 5, 5> name_map{"map.entities"};
 
     pipeline_handle_t entity_ppln;
@@ -1484,11 +1498,8 @@ global_var struct entities_t
     mesh_t entity_mesh;
     skeleton_t entity_mesh_skeleton;
     animation_cycles_t entity_mesh_cycles;
-    animated_instance_t entity_animation_instance;
     uniform_layout_t animation_ubo_layout;
     model_t entity_model;
-
-    
 
     // For now:
     uint32_t main_entity;
@@ -1585,6 +1596,49 @@ add_rendering_component(entity_t *e)
     component->push_k = {};
 
     return(component);
+}
+
+internal_function struct animation_component_t *
+add_animation_component(entity_t *e,
+                        uniform_layout_t *ubo_layout,
+                        skeleton_t *skeleton,
+                        animation_cycles_t *cycles,
+                        gpu_command_queue_pool_t *cmdpool)
+{
+    e->components.animation_component = g_entities.animation_component_count++;
+    animation_component_t *component = &g_entities.animation_components[ e->components.animation_component ];
+    component->entity_index = e->index;
+    component->cycles = cycles;
+    component->animation_instance = initialize_animated_instance(cmdpool,
+                                                                 ubo_layout,
+                                                                 skeleton,
+                                                                 &cycles->cycles[entity_t::animated_state_t::IDLE]);
+
+    return(component);
+}
+
+internal_function void
+update_animation_component(float32_t dt)
+{
+    for (uint32_t i = 0; i < g_entities.animation_component_count; ++i)
+    {
+        struct animation_component_t *component = &g_entities.animation_components[ i ];
+        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+
+        interpolate_skeleton_joints_into_instance(dt, &component->animation_instance);
+    }
+}
+
+internal_function void
+update_animation_gpu_data(gpu_command_queue_t *queue)
+{
+    for (uint32_t i = 0; i < g_entities.animation_component_count; ++i)
+    {
+        struct animation_component_t *component = &g_entities.animation_components[ i ];
+        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+
+        update_animated_instance_ubo(queue, &component->animation_instance);
+    }
 }
 
 internal_function void
@@ -1994,11 +2048,19 @@ push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
                      gpu_material_submission_queue_t *queue)
 {
     rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
+
+    uniform_group_t *group = nullptr;
+    
+    if (e_ptr->components.animation_component >= 0)
+    {
+        struct animation_component_t *component = &g_entities.animation_components[ e_ptr->components.animation_component ];
+        group = &component->animation_instance.group;
+    }
     
     queue->push_material(&component->push_k,
 			 sizeof(component->push_k),
                          mesh,
-                         &g_entities.entity_animation_instance.group);
+                         group);
 }
 
 internal_function void
@@ -2016,6 +2078,7 @@ update_entities(input_state_t *input_state
     update_physics_components(dt);
     update_camera_components(dt);
     update_rendering_component(dt);
+    update_animation_component(dt);
 }
 
 internal_function void
@@ -2025,7 +2088,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
     g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
     g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
-    g_entities.entity_mesh_cycles = load_animations("models/spaceman_walk.animations_custom");
+    g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
 
     uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager.add("uniform_layout.joint_ubo"_hash);
     uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager.get(animation_layout_hdl);
@@ -2033,7 +2096,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
     *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
     
-    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, animation_layout_ptr, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
+    //    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, animation_layout_ptr, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
     
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
@@ -2160,10 +2223,15 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     auto *r2_ptr = get_entity(rv2);
 
     rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
+    animation_component_t *r2_animation = add_animation_component(r2_ptr,
+                                                                  animation_layout_ptr,
+                                                                  &g_entities.entity_mesh_skeleton,
+                                                                  &g_entities.entity_mesh_cycles,
+                                                                  cmdpool);
     add_physics_component(r2_ptr, false);
 
     physics = add_physics_component(r2_ptr, false);
-    physics->enabled = false;
+    physics->enabled = true;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2437,9 +2505,10 @@ update_world(input_state_t *input_state
     
     update_entities(input_state, dt);
     
-    interpolate_skeleton_joints_into_instance(dt, &g_entities.entity_animation_instance);
-    update_animated_instance_ubo(cmdbuf, &g_entities.entity_animation_instance);
-
+    //    interpolate_skeleton_joints_into_instance(dt, &g_entities.entity_animation_instance);
+    //    update_animated_instance_ubo(cmdbuf, &g_entities.entity_animation_instance);
+    update_animation_gpu_data(cmdbuf);
+    
     add_staged_creation_terrains();
 
     // ---- Actually rendering the frame ----

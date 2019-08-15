@@ -769,6 +769,7 @@ struct key_frame_t
 
 struct animation_cycle_t
 {
+    const char *name;
     uint32_t key_frame_count;
     key_frame_t *key_frames;
 

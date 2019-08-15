@@ -2688,45 +2688,58 @@ skeleton_t load_skeleton(const char *path)
 animation_cycles_t load_animations(const char *path)
 {
     file_contents_t animation_data = read_file(path);
+
+    byte_t *current_byte = animation_data.content;
     
-    animation_cycles_t animation_cycle = {};
-    animation_cycle.cycle_count = 1;
+    animation_cycles_t animation_cycles = {};
+    memcpy(&animation_cycles.cycle_count, current_byte, sizeof(uint32_t));
+    current_byte += sizeof(uint32_t);
 
-    animation_cycle_t *current_cycle = &animation_cycle.cycles[0];
-
-    uint32_t *key_frame_count_ptr = (uint32_t *)animation_data.content;    
-    uint32_t key_frame_count = *key_frame_count_ptr;
-    uint32_t joints_per_key_frame = *(key_frame_count_ptr + 1);
-
-    byte_t *key_frame_bytes = animation_data.content + sizeof(uint32_t) * 2;
-
-    current_cycle->key_frame_count = key_frame_count;
-    current_cycle->key_frames = (key_frame_t *)allocate_free_list(sizeof(key_frame_t) * key_frame_count);
-
-    uint32_t key_frame_formatted_size = sizeof(float32_t) + sizeof(key_frame_joint_transform_t) * joints_per_key_frame;
-    
-    for (uint32_t k = 0; k < key_frame_count; ++k)
+    for (uint32_t i = 0; i < animation_cycles.cycle_count; ++i)
     {
-        key_frame_t *current_frame = &current_cycle->key_frames[k];
-        current_frame->joint_transforms_count = joints_per_key_frame;
-        current_frame->joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+        animation_cycle_t *current_cycle = &animation_cycles.cycles[i];
 
-        float32_t *time_stamp_ptr = (float32_t *)key_frame_bytes;
-        current_frame->time_stamp = *time_stamp_ptr;
+        uint32_t name_length = sizeof(char) * strlen((char *)current_byte) + 1;
+        current_cycle->name = (char *)allocate_linear(name_length);
+        memcpy((void *)current_cycle->name, current_byte, name_length);
+        current_byte += name_length;
 
-        byte_t *joint_transforms_ptr = (byte_t *)(time_stamp_ptr) + sizeof(float32_t);
+        uint32_t *key_frame_count_ptr = (uint32_t *)current_byte;
+        uint32_t key_frame_count = *key_frame_count_ptr;
+        uint32_t joints_per_key_frame = *(key_frame_count_ptr + 1);
+        current_byte += sizeof(uint32_t) * 2;
 
-        memcpy(current_frame->joint_transforms, joint_transforms_ptr, sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+        byte_t *key_frame_bytes = current_byte;
 
-        key_frame_bytes += key_frame_formatted_size;
+        current_cycle->key_frame_count = key_frame_count;
+        current_cycle->key_frames = (key_frame_t *)allocate_free_list(sizeof(key_frame_t) * key_frame_count);
 
-        if (k == key_frame_count - 1)
+        uint32_t key_frame_formatted_size = sizeof(float32_t) + sizeof(key_frame_joint_transform_t) * joints_per_key_frame;
+    
+        for (uint32_t k = 0; k < key_frame_count; ++k)
         {
-            current_cycle->total_animation_time = current_frame->time_stamp;
+            key_frame_t *current_frame = &current_cycle->key_frames[k];
+            current_frame->joint_transforms_count = joints_per_key_frame;
+            current_frame->joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+
+            float32_t *time_stamp_ptr = (float32_t *)key_frame_bytes;
+            current_frame->time_stamp = *time_stamp_ptr;
+
+            byte_t *joint_transforms_ptr = (byte_t *)(time_stamp_ptr) + sizeof(float32_t);
+
+            memcpy(current_frame->joint_transforms, joint_transforms_ptr, sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
+
+            key_frame_bytes += key_frame_formatted_size;
+            current_byte += key_frame_formatted_size;
+
+            if (k == key_frame_count - 1)
+            {
+                current_cycle->total_animation_time = current_frame->time_stamp;
+            }
         }
     }
 
-    return animation_cycle;
+    return animation_cycles;
 }
 
 animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycle_t *bound_cycle)

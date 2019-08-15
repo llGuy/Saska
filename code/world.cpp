@@ -44,7 +44,8 @@ struct morphable_terrain_t
     uint32_t offset_into_heights_gpu_buffer;
     // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
     gpu_buffer_t heights_gpu_buffer;
-    
+
+    mesh_t mesh;
     VkBuffer vbos[2];
 
     matrix4_t inverse_transform;
@@ -1030,11 +1031,13 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
     auto *model_info = g_model_manager.get(g_terrains.model_info);
     terrain->vbos[0] = g_terrains.mesh_xz_values.buffer;
     terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
-    g_world_submission_queues[TERRAIN_QUEUE].push_material(&terrain->push_k
-                                                           , sizeof(terrain->push_k)
-                                                           , {2, terrain->vbos}
-                                                           , model_info->index_data
-                                                           , init_draw_indexed_data_default(1, model_info->index_data.index_count));
+
+    auto draw_indexed_data = init_draw_indexed_data_default(1, model_info->index_data.index_count);
+    terrain->mesh = initialize_mesh(memory_buffer_view_t<VkBuffer>{2, terrain->vbos}, &draw_indexed_data, &model_info->index_data);
+    
+    g_world_submission_queues[TERRAIN_QUEUE].push_material(&terrain->push_k,
+                                                           sizeof(terrain->push_k),
+                                                           &terrain->mesh);
 
     terrain->ws_p = position;
     terrain->gs_r = rotation;
@@ -1986,18 +1989,16 @@ add_entity(const entity_t &e)
 }
 
 internal_function void
-push_entity_to_queue(entity_t *e_ptr // Needs a rendering component attached
-                     , model_t *model
-                     , gpu_material_submission_queue_t *queue)
+push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
+                     mesh_t *mesh,
+                     gpu_material_submission_queue_t *queue)
 {
     rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
     
-    queue->push_material(&component->push_k
-			 , sizeof(component->push_k)
-			 , model->raw_cache_for_rendering
-			 , model->index_data
-			 , init_draw_indexed_data_default(1, model->index_data.index_count)
-                         , &g_entities.entity_animation_instance.group);
+    queue->push_material(&component->push_k,
+			 sizeof(component->push_k),
+                         mesh,
+                         &g_entities.entity_animation_instance.group);
 }
 
 internal_function void
@@ -2117,7 +2118,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);
         
     // add rotating entity
-    vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
+    /*vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
     entity_t r = construct_entity("entity.blue"_hash
                                   , get_world_space_from_terrain_space_no_scale(vector3_t(100.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
                                   , vector3_t(1.0f, 0.0f, -1.0f)
@@ -2146,8 +2147,8 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     r_ptr_rendering->push_k.metalness = 0.2f;
     
     push_entity_to_queue(r_ptr
-                         , &g_entities.entity_model
-                         , &g_world_submission_queues[ENTITY_QUEUE]);
+                         , &g_entities.entity_mesh
+                         , &g_world_submission_queues[ENTITY_QUEUE]);*/
 
     entity_t r2 = construct_entity("entity.purple"_hash
                                    , get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
@@ -2176,7 +2177,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     r2_ptr->on_t = &g_terrains.terrains[0];
 
     push_entity_to_queue(r2_ptr
-                         , &g_entities.entity_model
+                         , &g_entities.entity_mesh
                          , &g_world_submission_queues[ENTITY_QUEUE]);
 }
 

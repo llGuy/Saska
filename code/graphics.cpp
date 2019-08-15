@@ -125,18 +125,14 @@ global_var struct gpu_material_submission_queue_manager_t // maybe in the future
 } material_queue_manager;
 
 uint32_t
-gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size
-                                               , const memory_buffer_view_t<VkBuffer> &vbo_bindings
-                                               , const model_index_data_t &index_data
-                                               , const draw_indexed_data_t &draw_index_data
-                                               , uniform_group_t *ubo)
+gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size,
+                                               mesh_t *mesh,
+                                               uniform_group_t *ubo)
 {
     material_t new_mtrl = {};
     new_mtrl.push_k_ptr = push_k_ptr;
     new_mtrl.push_k_size = push_k_size;
-    new_mtrl.vbo_bindings = vbo_bindings;
-    new_mtrl.index_data = index_data;
-    new_mtrl.draw_index_data = draw_index_data;
+    new_mtrl.mesh = mesh;
     new_mtrl.ubo = ubo;
 
     mtrls[mtrl_count] = new_mtrl;
@@ -187,8 +183,8 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
     {
         material_t *mtrl = &mtrls[i];
 
-        VkDeviceSize *zero = ALLOCA_T(VkDeviceSize, mtrl->vbo_bindings.count);
-        for (uint32_t z = 0; z < mtrl->vbo_bindings.count; ++z) zero[z] = 0;
+        VkDeviceSize *zero = ALLOCA_T(VkDeviceSize, mtrl->mesh->raw_buffer_list.count);
+        for (uint32_t z = 0; z < mtrl->mesh->raw_buffer_list.count; ++z) zero[z] = 0;
         
         // TODO: Make sure this doesn't happen to materials which don't need an extra UBO
         uint32_t uniform_count = uniform_groups.count;
@@ -197,28 +193,28 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
             groups[uniform_count] = *mtrl->ubo;
             ++uniform_count;
         }
-        command_buffer_bind_descriptor_sets(graphics_pipeline
-                                            , { uniform_count, groups }
-                                            , &dst_command_queue->q);
+        command_buffer_bind_descriptor_sets(graphics_pipeline,
+                                            { uniform_count, groups },
+                                            &dst_command_queue->q);
         
-        command_buffer_bind_vbos(mtrl->vbo_bindings
-                                         , {mtrl->vbo_bindings.count, zero}
-                                         , 0
-                                         , mtrl->vbo_bindings.count
-                                         , &dst_command_queue->q);
+        command_buffer_bind_vbos(mtrl->mesh->raw_buffer_list,
+                                 {mtrl->mesh->raw_buffer_list.count, zero},
+                                 0,
+                                 mtrl->mesh->raw_buffer_list.count,
+                                 &dst_command_queue->q);
 			
-        command_buffer_bind_ibo(mtrl->index_data
-                                        , &dst_command_queue->q);
+        command_buffer_bind_ibo(mtrl->mesh->index_data,
+                                &dst_command_queue->q);
 
-        command_buffer_push_constant(mtrl->push_k_ptr
-                                             , mtrl->push_k_size
-                                             , 0
-                                             , push_k_dst
-                                             , graphics_pipeline
-                                             , &dst_command_queue->q);
+        command_buffer_push_constant(mtrl->push_k_ptr,
+                                     mtrl->push_k_size,
+                                     0,
+                                     push_k_dst,
+                                     graphics_pipeline,
+                                     &dst_command_queue->q);
 
-        command_buffer_draw_indexed(&dst_command_queue->q
-                                            , mtrl->draw_index_data);
+        command_buffer_draw_indexed(&dst_command_queue->q,
+                                    mtrl->mesh->indexed_data);
     }
 
     if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
@@ -2629,8 +2625,8 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
         }
     }
 
-    // TODO: Get rid of this and replace the whole rendering system to account for new mesh structure
-    model.create_vbo_list();
+    create_mesh_raw_buffer_list(mesh);
+    mesh->indexed_data = init_draw_indexed_data_default(1, mesh->index_data.index_count);
 
     return(model);
 }
@@ -2834,4 +2830,37 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
                       VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                       VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
                       &queue->q);
+}
+
+void create_mesh_raw_buffer_list(mesh_t *mesh)
+{
+    uint32_t vbo_count = mesh->buffer_count;
+    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh))
+    {
+        --vbo_count;
+    }
+    allocate_memory_buffer(mesh->raw_buffer_list, vbo_count);
+
+    uint32_t buffer_index = 0;
+    for (uint32_t i = 0; i < mesh->buffer_count; ++i)
+    {
+        if (mesh->buffer_types_stack[i] != buffer_type_t::INDICES)
+        {
+            mesh->raw_buffer_list[buffer_index] = mesh->buffers[mesh->buffer_types_stack[i]].gpu_buffer.buffer;
+            ++buffer_index;
+        }
+    }
+}
+
+mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t *index_data, model_index_data_t *model_index_data)
+{
+    mesh_t mesh;
+
+    allocate_memory_buffer(mesh.raw_buffer_list, vbos.count);
+
+    memcpy(mesh.raw_buffer_list.buffer, vbos.buffer, vbos.count * sizeof(VkBuffer));
+    mesh.index_data = *model_index_data;
+    mesh.indexed_data = *index_data;
+
+    return(mesh);
 }

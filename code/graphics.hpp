@@ -269,15 +269,9 @@ struct material_t
     // ---- push constant information
     void *push_k_ptr = nullptr;
     uint32_t push_k_size = 0;
-    // ---- vbo information
-    memory_buffer_view_t<VkBuffer> vbo_bindings;
-    // ---- for sorting
-    uint32_t model_id;
-    // ---- ibo information
-    model_index_data_t index_data;
-    draw_indexed_data_t draw_index_data;
-
-    // Some materials may have a ubo per instance
+    // ---- vbo and ibo information
+    struct mesh_t *mesh;
+    // Some materials may have a ubo per instance (animated materials)
     uniform_group_t *ubo = nullptr;
 };
 
@@ -294,9 +288,7 @@ struct gpu_material_submission_queue_t
 
     uint32_t
     push_material(void *push_k_ptr, uint32_t push_k_size,
-		  const memory_buffer_view_t<VkBuffer> &vbo_bindings,
-		  const model_index_data_t &index_data,
-		  const draw_indexed_data_t &draw_index_data,
+                  mesh_t *mesh,
                   uniform_group_t *ubo = nullptr);
 
     gpu_command_queue_t *
@@ -724,13 +716,20 @@ struct mesh_t
     uint32_t buffer_count = 0;
     buffer_type_t buffer_types_stack[MAX_BUFFERS];
 
+    memory_buffer_view_t<VkBuffer> raw_buffer_list;
     model_index_data_t index_data;
+    draw_indexed_data_t indexed_data;
 };
+
+void create_mesh_raw_buffer_list(mesh_t *mesh);
 
 void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh);
 bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh);
 mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh);
 
+// Loaded internally (terrain)
+mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t *index_data, model_index_data_t *model_index_data);
+// Loaded externally
 mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_pool_t *cmdpool);
 model_t make_mesh_attribute_and_binding_information(mesh_t *mesh);
 

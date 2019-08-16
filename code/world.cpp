@@ -1631,7 +1631,17 @@ update_animation_component(input_state_t *input_state, float32_t dt)
         
         uint32_t moving = 0;
         //        if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 10.0f;}
-        if (input_state->keyboard[keyboard_button_type_t::UP].is_down) {new_state = entity_t::animated_state_t::WALK; moving = 1;}
+        if (input_state->keyboard[keyboard_button_type_t::UP].is_down)
+        {
+            if (input_state->keyboard[keyboard_button_type_t::R].is_down)
+            {
+                new_state = entity_t::animated_state_t::RUN; moving = 1;
+            }
+            else
+            {
+                new_state = entity_t::animated_state_t::WALK; moving = 1;
+            }
+        }
         if (input_state->keyboard[keyboard_button_type_t::LEFT].is_down); 
         if (input_state->keyboard[keyboard_button_type_t::DOWN].is_down);
         if (input_state->keyboard[keyboard_button_type_t::RIGHT].is_down); 

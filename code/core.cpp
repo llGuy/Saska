@@ -34,6 +34,10 @@
         - Change terrain morphing point to triangle
         - Add physics
      * Add skeletal animation (loading models + animations, etc...)
+     * Improve animation system -> interpolate between different cycles when changing cycles
+     * Add 3rd person camera 
+     * Add HDR, Bloom, DOF
+     * Start working on networking
      * Refactor code: separate the stuff a bit better
 
   ------------------------------------------------------------ */

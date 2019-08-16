@@ -1442,7 +1442,7 @@ struct entity_t
 
     //    struct entity_body_t body;
     // For animated rendering component    
-    enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state;
+    enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state = animated_state_t::IDLE;
     
     struct components_t
     {
@@ -1613,6 +1613,7 @@ add_animation_component(entity_t *e,
                                                                  ubo_layout,
                                                                  skeleton,
                                                                  cycles);
+    switch_to_cycle(&component->animation_instance, entity_t::animated_state_t::IDLE, 1);
 
     return(component);
 }
@@ -1642,7 +1643,7 @@ update_animation_component(input_state_t *input_state, float32_t dt)
         if (new_state != previous_state)
         {
             e->animated_state = new_state;
-            bind_to_cycle(&component->animation_instance, new_state);
+            switch_to_cycle(&component->animation_instance, new_state);
         }
         
         interpolate_skeleton_joints_into_instance(dt, &component->animation_instance);

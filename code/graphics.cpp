@@ -2747,10 +2747,12 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
     animated_instance_t instance = {};
     
     instance.current_animation_time = 0.0f;
-    instance.bound_cycle = &cycles->cycles[0];
     instance.cycles = cycles;
     instance.skeleton = skeleton;
+    instance.is_interpolating_between_cycles = 0;
+    instance.next_bound_cycle = 0;
     instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
+    instance.current_joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * skeleton->joint_count);
     for (uint32_t i = 0; i < skeleton->joint_count; ++i)
     {
         instance.interpolated_transforms[i] = matrix4_t(1.0f);
@@ -2772,7 +2774,7 @@ void destroy_animated_instance(animated_instance_t *instance)
 {
     instance->current_animation_time = 0.0f;
     instance->skeleton = nullptr;
-    instance->bound_cycle = nullptr;
+    instance->next_bound_cycle = 0;
     deallocate_free_list(instance->interpolated_transforms);
 }
 
@@ -2795,44 +2797,83 @@ void update_joint(uint32_t current_joint, skeleton_t *skeleton, matrix4_t *trans
 
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance)
 {
-    // Increase the animation time
-    instance->current_animation_time += dt;
-    if (instance->current_animation_time > instance->bound_cycle->total_animation_time)
+    if (instance->is_interpolating_between_cycles)
     {
-        instance->current_animation_time = 0.0f;
-    }
+        animation_cycle_t *next_cycle = &instance->cycles->cycles[instance->next_bound_cycle];
+        key_frame_t *first_key_frame_of_next_cycle = &next_cycle->key_frames[0];
 
-    // Get the frames to which the current time stamp is in between (frame_a and frame_b)
-    // frame_a  ----- current_time --- frame_b
-    key_frame_t *frame_before = &instance->bound_cycle->key_frames[0];
-    key_frame_t *frame_after = &instance->bound_cycle->key_frames[1];
-    for (uint32_t i = 0; i < instance->bound_cycle->key_frame_count - 1; ++i)
-    {
-        float32_t previous_stamp = instance->bound_cycle->key_frames[i].time_stamp;
-        float32_t next_stamp = instance->bound_cycle->key_frames[i + 1].time_stamp;
-
-        if (previous_stamp < instance->current_animation_time && next_stamp > instance->current_animation_time)
+        instance->current_animation_time += dt;
+        if (instance->current_animation_time > instance->in_between_interpolation_time)
         {
-            frame_before = &instance->bound_cycle->key_frames[i];
-            frame_after = &instance->bound_cycle->key_frames[i + 1];
+            instance->is_interpolating_between_cycles = 0;
+            instance->current_animation_time = 0.0f;
+        }
+        else
+        {
+            float32_t progression = instance->current_animation_time / instance->in_between_interpolation_time;
+            
+            // Interpolate (but all of the transforms are in bone space)
+            for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
+            {
+                key_frame_joint_transform_t *joint_next_state = &first_key_frame_of_next_cycle->joint_transforms[joint];
+
+                vector3_t previous_position = instance->current_joint_transforms[joint].position;
+                quaternion_t previous_rotation = instance->current_joint_transforms[joint].rotation;
+                // TODO: Check if memory usage goes to high in which case, don't cache the current joint transforms
+                vector3_t translation = previous_position + (joint_next_state->position - previous_position) * progression;
+                quaternion_t rotation = glm::slerp(previous_rotation, joint_next_state->rotation, progression);
+                instance->interpolated_transforms[joint] = glm::translate(translation) * glm::mat4_cast(rotation);
+            }
+
+            // Convert all the transforms to model space
+            update_joint(0, instance->skeleton, instance->interpolated_transforms);
         }
     }
 
-    float32_t progression = (instance->current_animation_time - frame_before->time_stamp) / (frame_after->time_stamp - frame_before->time_stamp);
-
-    // Interpolate (but all of the transforms are in bone space)
-    for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
+    if (!instance->is_interpolating_between_cycles)
     {
-        key_frame_joint_transform_t *joint_previous_state = &frame_before->joint_transforms[joint];
-        key_frame_joint_transform_t *joint_next_state = &frame_after->joint_transforms[joint];
+        animation_cycle_t *bound_cycle = &instance->cycles->cycles[instance->next_bound_cycle];
+        // Increase the animation time
+        instance->current_animation_time += dt;
+        if (instance->current_animation_time > bound_cycle->total_animation_time)
+        {
+            instance->current_animation_time = 0.0f;
+        }
 
-        vector3_t translation = joint_previous_state->position + (joint_next_state->position - joint_previous_state->position) * progression;
-        quaternion_t rotation = glm::slerp(joint_previous_state->rotation, joint_next_state->rotation, progression);
-        instance->interpolated_transforms[joint] = glm::translate(translation) * glm::mat4_cast(rotation);
+        // Get the frames to which the current time stamp is in between (frame_a and frame_b)
+        // frame_a  ----- current_time --- frame_b
+        key_frame_t *frame_before = &bound_cycle->key_frames[0];
+        key_frame_t *frame_after = &bound_cycle->key_frames[1];
+        for (uint32_t i = 0; i < bound_cycle->key_frame_count - 1; ++i)
+        {
+            float32_t previous_stamp = bound_cycle->key_frames[i].time_stamp;
+            float32_t next_stamp = bound_cycle->key_frames[i + 1].time_stamp;
+
+            if (previous_stamp < instance->current_animation_time && next_stamp > instance->current_animation_time)
+            {
+                frame_before = &bound_cycle->key_frames[i];
+                frame_after = &bound_cycle->key_frames[i + 1];
+            }
+        }
+
+        float32_t progression = (instance->current_animation_time - frame_before->time_stamp) / (frame_after->time_stamp - frame_before->time_stamp);
+
+        // Interpolate (but all of the transforms are in bone space)
+        for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
+        {
+            key_frame_joint_transform_t *joint_previous_state = &frame_before->joint_transforms[joint];
+            key_frame_joint_transform_t *joint_next_state = &frame_after->joint_transforms[joint];
+
+            // TODO: Check if memory usage goes to high in which case, don't cache the current joint transforms
+            vector3_t translation = joint_previous_state->position + (joint_next_state->position - joint_previous_state->position) * progression;
+            quaternion_t rotation = glm::slerp(joint_previous_state->rotation, joint_next_state->rotation, progression);
+            instance->current_joint_transforms[joint] = { rotation, translation };
+            instance->interpolated_transforms[joint] = glm::translate(translation) * glm::mat4_cast(rotation);
+        }
+
+        // Convert all the transforms to model space
+        update_joint(0, instance->skeleton, instance->interpolated_transforms);
     }
-
-    // Convert all the transforms to model space
-    update_joint(0, instance->skeleton, instance->interpolated_transforms);
 }
 
 void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance)
@@ -2879,8 +2920,13 @@ mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t
     return(mesh);
 }
 
-void bind_to_cycle(animated_instance_t *instance, uint32_t cycle_index)
+void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force)
 {
     instance->current_animation_time = 0.0f;
-    instance->bound_cycle = &instance->cycles->cycles[cycle_index];
+    if (!force)
+    {
+        instance->is_interpolating_between_cycles = 1;
+    }
+    instance->prev_bound_cycle = instance->next_bound_cycle;
+    instance->next_bound_cycle = cycle_index;
 }

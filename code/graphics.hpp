@@ -792,19 +792,24 @@ animation_cycles_t load_animations(const char *path);
 struct animated_instance_t
 {
     float32_t current_animation_time;
+
+    float32_t in_between_interpolation_time = 0.1f;
+    bool32_t is_interpolating_between_cycles;
     
     skeleton_t *skeleton;
-    animation_cycle_t *bound_cycle;
+    uint32_t prev_bound_cycle;
+    uint32_t next_bound_cycle;
     animation_cycles_t *cycles;
     // One for each joint
     matrix4_t *interpolated_transforms;
+    // Cached joint transforms used in case the player is interpolating between cycles
+    key_frame_joint_transform_t *current_joint_transforms;
     
     gpu_buffer_t interpolated_transforms_ubo;
     uniform_group_t group;
 };
 
-void bind_to_cycle(animated_instance_t *instance, uint32_t cycle_index);
-/* TODO: interpolate_between_cycles() */
+void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force = 0);
 
 animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles);
 void destroy_animated_instance(animated_instance_t *instance);

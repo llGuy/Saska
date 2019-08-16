@@ -49,6 +49,7 @@ struct morphable_terrain_t
     VkBuffer vbos[2];
 
     matrix4_t inverse_transform;
+    matrix4_t inverse_rotation;
     struct push_k_t
     {
         matrix4_t transform;
@@ -1048,6 +1049,7 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
         * glm::mat4_cast(terrain->gs_r)
         * glm::scale(terrain->size);
     terrain->inverse_transform = compute_ws_to_ts_matrix(terrain);
+    terrain->inverse_rotation = glm::transpose(glm::mat4_cast(terrain->gs_r));
 
     terrain->ws_n = vector3_t(glm::mat4_cast(terrain->gs_r) * vector4_t(0.0f, 1.0f, 0.0f, 0.0f));
 }
@@ -1372,6 +1374,9 @@ struct camera_component_t
     // Variable allows for smooth animation between up vectors when switching terrains
     bool in_animation = false;
     quaternion_t current_rotation;
+
+    bool is_third_person;
+    float32_t distance_from_player = 30.0f;
 };
 
 struct input_component_t
@@ -1380,6 +1385,9 @@ struct input_component_t
 
     enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN };
     uint8_t movement_flags = 0;
+
+    /*float32_t horizontal_angle = 0.0f;
+    float32_t vertical_angle = 0.0f;*/
 };
 
 struct animation_component_t
@@ -1438,10 +1446,11 @@ struct entity_t
     bool switch_terrain_animation_mode = false;
     quaternion_t previous_terrain_rot;
     quaternion_t current_rot;
+    quaternion_t current_physical_rotation;
     float32_t animation_time = 0.0f;
 
     //    struct entity_body_t body;
-    // For animated rendering component    
+    // For animated rendering component
     enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state = animated_state_t::IDLE;
     
     struct components_t
@@ -1565,6 +1574,7 @@ update_camera_components(float32_t dt)
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
         vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
+        
         if (e->on_t)
         {
             up = e->on_t->ws_n;
@@ -1573,8 +1583,14 @@ update_camera_components(float32_t dt)
                 up = vector3_t(glm::mat4_cast(e->current_rot) * vector4_t(0.0f, 1.0f, 0.0f, 1.0f));
             }
         }
+
+        vector3_t camera_position = e->ws_p + e->on_t->ws_n;
+        if (component->is_third_person)
+        {
+            camera_position += -component->distance_from_player * e->ws_d;
+        }
         
-        camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n
+        camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n - component->distance_from_player * e->ws_d
                                   , e->ws_p + e->on_t->ws_n + e->ws_d
                                   , up);
 
@@ -1631,7 +1647,7 @@ update_animation_component(input_state_t *input_state, float32_t dt)
         
         uint32_t moving = 0;
         //        if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 10.0f;}
-        if (input_state->keyboard[keyboard_button_type_t::UP].is_down)
+        if (input_state->keyboard[keyboard_button_type_t::W].is_down)
         {
             if (input_state->keyboard[keyboard_button_type_t::R].is_down)
             {
@@ -1680,11 +1696,19 @@ update_rendering_component(float32_t dt)
         struct rendering_component_t *component = &g_entities.rendering_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
+        vector3_t ts_view_dir = glm::normalize(vector3_t(e->on_t->inverse_rotation * vector4_t(e->ws_d, 0.0f)));
+        float32_t dir_x = ts_view_dir.x;
+        float32_t dir_z = ts_view_dir.z;
+        float32_t rotation_angle = atan2(dir_z, dir_x);
+
+        matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0.0f, 1.0f, 0.0f));
+        persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(90.0f), vector3_t(0.0f ,1.0f, 0.0f));
+        
         if (component->enabled)
         {
             if (e->on_t)
             {
-                component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->current_rot) * glm::scale(e->size);
+                component->push_k.ws_t = glm::translate(e->ws_p) * glm::mat4_cast(e->current_rot) * CORRECTION_90 * rot_matrix * glm::scale(e->size);
             }
             else
             {
@@ -2024,7 +2048,7 @@ update_input_components(input_state_t *input_state
  //            if (detected_collision) e->ws_v = vector3_t(0.0f);
     
             component->movement_flags = 0;
-            if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 10.0f;}
+            if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 6.0f;}
             if (input_state->keyboard[keyboard_button_type_t::W].is_down) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
             if (input_state->keyboard[keyboard_button_type_t::A].is_down) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
             if (input_state->keyboard[keyboard_button_type_t::S].is_down) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
@@ -2127,8 +2151,6 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
     *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
     
-    //    g_entities.entity_animation_instance = initialize_animated_instance(cmdpool, animation_layout_ptr, &g_entities.entity_mesh_skeleton, &g_entities.entity_mesh_cycles.cycles[0]);
-    
     g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
     {
@@ -2206,10 +2228,10 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
-    auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(input_state, get_backbuffer_resolution()));
+    /*auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(input_state, get_backbuffer_resolution()));
     add_input_component(e_ptr);
 
-    bind_camera_to_3d_scene_output(camera_component_ptr->camera);
+    bind_camera_to_3d_scene_output(camera_component_ptr->camera);*/
         
     // add rotating entity
     /*vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
@@ -2246,11 +2268,12 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 
     entity_t r2 = construct_entity("entity.purple"_hash
                                    , get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
-                                   , vector3_t(0.0f)
+                                   , vector3_t(1.0f, 0.0f, 1.0f)
                                    , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r2.size = vector3_t(10.0f);
     entity_handle_t rv2 = add_entity(r2);
+    g_entities.main_entity = rv2;
     auto *r2_ptr = get_entity(rv2);
 
     rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
@@ -2269,6 +2292,10 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
+    auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
+    add_input_component(r2_ptr);
+        
+    bind_camera_to_3d_scene_output(camera_component_ptr->camera);
     
     r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
     r2_ptr_rendering->push_k.roughness = 0.6f;

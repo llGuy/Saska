@@ -21,7 +21,7 @@ set BIN=Saska.exe
 
 set SRC=core.cpp
 
-set LIBS=user32.lib User32.lib Gdi32.lib Shell32.lib kernel32.lib gdi32.lib msvcrt.lib msvcmrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib C:/dependencies/Lua/lib/lua5.1.lib
+set LIBS=winmm.lib user32.lib User32.lib Gdi32.lib Shell32.lib kernel32.lib gdi32.lib msvcrt.lib msvcmrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib C:/dependencies/Lua/lib/lua5.1.lib
 
 If "%1" == "compile" goto :compile
 If "%1" == "debug" goto :debug

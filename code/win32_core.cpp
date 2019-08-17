@@ -153,7 +153,7 @@ LRESULT CALLBACK windows_callback(HWND window_handle,
     case WM_PAINT:
         {
             // Render
-            update_game(&input_state, g_dt);
+            game_tick(&input_state, g_dt);
         } break;
     default:
         {

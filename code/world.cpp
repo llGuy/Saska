@@ -1587,10 +1587,12 @@ update_camera_components(float32_t dt)
         vector3_t camera_position = e->ws_p + e->on_t->ws_n;
         if (component->is_third_person)
         {
-            camera_position += -component->distance_from_player * e->ws_d;
+            //            matrix4_t lateral_rotation_offset = glm::rotate(glm::radians(10.0f), e->on_t->ws_n);
+            vector3_t right = glm::cross(e->ws_d, e->on_t->ws_n);
+            camera_position += right * 10.0f + -component->distance_from_player * e->ws_d;
         }
         
-        camera->v_m = glm::lookAt(e->ws_p + e->on_t->ws_n - component->distance_from_player * e->ws_d
+        camera->v_m = glm::lookAt(camera_position
                                   , e->ws_p + e->on_t->ws_n + e->ws_d
                                   , up);
 
@@ -2293,6 +2295,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
     auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
+    camera_component_ptr->is_third_person = true;
     add_input_component(r2_ptr);
         
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);

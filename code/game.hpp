@@ -9,6 +9,6 @@ void
 destroy_game(gpu_t *gpu);
 
 void
-update_game(input_state_t *input_state, float32_t dt);
+game_tick(input_state_t *input_state, float32_t dt);
 
 

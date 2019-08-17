@@ -66,7 +66,7 @@ destroy_game(void)
 }
 
 void
-update_game(input_state_t *input_state, float32_t dt)
+game_tick(input_state_t *input_state, float32_t dt)
 {
     // ---- update different parts of the game (world, gui...)
     persist_var uint32_t current_frame = 0;

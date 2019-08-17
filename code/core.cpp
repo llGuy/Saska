@@ -37,6 +37,7 @@
      * Improve animation system -> interpolate between different cycles when changing cycles
      * Add 3rd person camera 
      * Add HDR, Bloom, DOF
+     * Get rid of third person camera and use a first person camera WITH a first person designed model of the character (no head)
      * Start working on networking
      * Refactor code: separate the stuff a bit better
 
@@ -70,6 +71,8 @@
 #include "game.hpp"
 #include "vulkan.hpp"
 #endif
+
+#include <windows.h>
 
 #define DEBUG_FILE ".debug"
 
@@ -329,6 +332,11 @@ void disable_cursor_display(void)
     glfwSetInputMode(g_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
+float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
+{
+    return float32_t(end_time.QuadPart - begin_time.QuadPart) / float32_t(frequency.QuadPart);
+}
+
 int32_t main(int32_t argc, char * argv[])
 {    
     open_debug_file();
@@ -390,11 +398,20 @@ int32_t main(int32_t argc, char * argv[])
         input_state.cursor_pos_y = (float32_t)m_y;
     }
     
-    auto now = std::chrono::high_resolution_clock::now();
+    //    auto now = std::chrono::high_resolution_clock::now();
+    uint32_t sleep_granularity_milliseconds = 1;
+    bool32_t success = (timeBeginPeriod(sleep_granularity_milliseconds) == TIMERR_NOERROR);
+
+    LARGE_INTEGER clock_frequency;
+    QueryPerformanceFrequency(&clock_frequency);
+    
     while(!glfwWindowShouldClose(g_window))
     {
+        LARGE_INTEGER tick_start;
+        QueryPerformanceCounter(&tick_start);
+        
         glfwPollEvents();
-        update_game(&input_state, g_dt);	   
+        game_tick(&input_state, g_dt);	   
 
         clear_linear();
 
@@ -409,13 +426,34 @@ int32_t main(int32_t argc, char * argv[])
         double xpos, ypos;
         glfwGetCursorPos(g_window, &xpos, &ypos);
         input_state.normalized_cursor_position = vector2_t((float32_t)xpos, (float32_t)ypos);
+
+        g_dt = TICK_TIME;
+        input_state.dt = g_dt;
+        g_game_time += g_dt;
         
-        auto new_now = std::chrono::high_resolution_clock::now();
+        LARGE_INTEGER tick_end;
+        QueryPerformanceCounter(&tick_end);
+        float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
+        // Set game tick period by sleeping
+        while (dt < TICK_TIME)
+        {
+            DWORD to_wait = DWORD( (TICK_TIME - dt) * 1000 );
+            if (to_wait > 0)
+            {
+                Sleep(to_wait);
+            }
+
+            LARGE_INTEGER now;
+            QueryPerformanceCounter(&now);
+            dt = measure_time_difference(tick_start, now, clock_frequency);
+        }
+        
+        /*auto new_now = std::chrono::high_resolution_clock::now();
         g_dt = std::chrono::duration<double, std::chrono::seconds::period>(new_now - now).count();
         g_game_time += g_dt;
         input_state.dt = g_dt;
 
-        now = new_now;
+        now = new_now;*/
     }
 
     OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);

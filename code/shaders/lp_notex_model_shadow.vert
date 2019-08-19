@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) in vec3 vertex_position;
-layout(location = 1) in vec3 vertex_color;
+layout(location = 1) in vec3 vertex_normal;
 layout(location = 2) in vec3 joint_weights;
 layout(location = 3) in ivec3 affected_joint_ids;
 

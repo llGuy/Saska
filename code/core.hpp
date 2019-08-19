@@ -167,9 +167,11 @@ enum keyboard_button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q,
                               ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, UP, LEFT, DOWN, RIGHT,
                               SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE, INVALID_KEY };
 
+enum is_down_t : bool { NOT_DOWN, INSTANT, REPEAT };
+
 struct keyboard_button_input_t
 {
-    bool is_down = 0;
+    is_down_t is_down = is_down_t::NOT_DOWN;
     float32_t down_amount = 0.0f;
 };
 
@@ -177,7 +179,7 @@ enum mouse_button_type_t { MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE, INVALID_MOUSE_
 
 struct mouse_button_input_t
 {
-    bool is_down = 0;
+    is_down_t is_down = is_down_t::NOT_DOWN;
     float32_t down_amount = 0.0f;
 };
 
@@ -198,7 +200,7 @@ struct input_state_t
     bool resized = 0;
     int32_t window_width, window_height;
 
-    glm::vec2 normalized_cursor_position;
+    vector2_t normalized_cursor_position;
 
     float32_t dt;
 };

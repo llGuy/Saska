@@ -1677,7 +1677,7 @@ dbg_handle_input(input_state_t *input_state)
             sprintf(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
             console_out(buffer);
 
-            input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down = false;
+            input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down = is_down_t::NOT_DOWN;
         }
     }
 }

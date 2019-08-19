@@ -183,13 +183,17 @@ internal_function void set_key_state(input_state_t *input_state, keyboard_button
     if (action == GLFW_PRESS)
     {
         keyboard_button_input_t *key = &input_state->keyboard[button];
-        key->is_down = 1;
+        switch(key->is_down)
+        {
+        case is_down_t::NOT_DOWN: {key->is_down = is_down_t::INSTANT;} break;
+        case is_down_t::INSTANT: {key->is_down = is_down_t::REPEAT;} break;
+        }
         key->down_amount += g_dt;
     }
     else if (action == GLFW_RELEASE)
     {
         keyboard_button_input_t *key = &input_state->keyboard[button];
-        key->is_down = 0;
+        key->is_down = is_down_t::NOT_DOWN;
         key->down_amount = 0.0f;
     }
 }
@@ -265,13 +269,17 @@ internal_function void set_mouse_button_state(input_state_t *input_state, mouse_
     if (action == GLFW_PRESS)
     {
         mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
-        mouse_button->is_down = 1;
+        switch(mouse_button->is_down)
+        {
+        case is_down_t::NOT_DOWN: {mouse_button->is_down = is_down_t::INSTANT;} break;
+        case is_down_t::INSTANT: case is_down_t::REPEAT: {mouse_button->is_down = is_down_t::REPEAT;} break;
+        }
         mouse_button->down_amount += g_dt;
     }
     else if (action == GLFW_RELEASE)
     {
         mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
-        mouse_button->is_down = 0;
+        mouse_button->is_down = is_down_t::NOT_DOWN;
         mouse_button->down_amount = 0.0f;
     }
 }
@@ -418,10 +426,10 @@ int32_t main(int32_t argc, char * argv[])
         input_state.cursor_moved = false;
 
         input_state.char_count = 0;
-        input_state.keyboard[keyboard_button_type_t::BACKSPACE].is_down = false;
-        input_state.keyboard[keyboard_button_type_t::ENTER].is_down = false;
-        input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = false;
-        input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = false;
+        input_state.keyboard[keyboard_button_type_t::BACKSPACE].is_down = is_down_t::NOT_DOWN;
+        input_state.keyboard[keyboard_button_type_t::ENTER].is_down = is_down_t::NOT_DOWN;
+        input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = is_down_t::NOT_DOWN;
+        input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = is_down_t::NOT_DOWN;
 
         double xpos, ypos;
         glfwGetCursorPos(g_window, &xpos, &ypos);

@@ -17,7 +17,7 @@ constexpr float32_t PI = 3.14159265359f;
 global_var constexpr uint32_t MAX_MTRLS = 10;
 global_var gpu_material_submission_queue_t g_world_submission_queues[MAX_MTRLS];
 
-enum { TERRAIN_QUEUE, ENTITY_QUEUE };
+enum { TERRAIN_QUEUE, ENTITY_QUEUE, ROLLING_ENTITY_QUEUE };
 
 // ---- terrain code ----
 struct morphable_terrain_t
@@ -1449,6 +1449,9 @@ struct entity_t
     quaternion_t current_physical_rotation;
     float32_t animation_time = 0.0f;
 
+    bool toggled_rolling_previous_frame = 0;
+    bool32_t rolling_mode;
+
     //    struct entity_body_t body;
     // For animated rendering component
     enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state = animated_state_t::IDLE;
@@ -1502,8 +1505,15 @@ global_var struct entities_t
 
     pipeline_handle_t entity_ppln;
     pipeline_handle_t entity_shadow_ppln;
+
+    pipeline_handle_t rolling_entity_ppln;
+    pipeline_handle_t rolling_entity_shadow_ppln;
+    
     pipeline_handle_t dbg_hitbox_ppln;
 
+    mesh_t rolling_entity_mesh;
+    model_t rolling_entity_model;
+    
     mesh_t entity_mesh;
     skeleton_t entity_mesh_skeleton;
     animation_cycles_t entity_mesh_cycles;
@@ -1515,6 +1525,44 @@ global_var struct entities_t
     
     // have some sort of stack of REMOVED entities
 } g_entities;
+
+internal_function void
+push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
+                     mesh_t *mesh,
+                     gpu_material_submission_queue_t *queue)
+{
+    rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
+
+    uniform_group_t *group = nullptr;
+    
+    if (e_ptr->components.animation_component >= 0)
+    {
+        struct animation_component_t *component = &g_entities.animation_components[ e_ptr->components.animation_component ];
+        group = &component->animation_instance.group;
+    }
+    
+    queue->push_material(&component->push_k,
+			 sizeof(component->push_k),
+                         mesh,
+                         group);
+}
+
+internal_function void push_entity_to_animated_queue(entity_t *e)
+{
+    push_entity_to_queue(e, &g_entities.entity_mesh, &g_world_submission_queues[ENTITY_QUEUE]);
+}
+
+internal_function void push_entity_to_rolling_queue(entity_t *e)
+{
+    rendering_component_t *component = &g_entities.rendering_components[ e->components.rendering_component ];
+
+    uniform_group_t *group = nullptr;
+    
+    g_world_submission_queues[ROLLING_ENTITY_QUEUE].push_material(&component->push_k,
+                                                                  sizeof(component->push_k),
+                                                                  &g_entities.rolling_entity_mesh,
+                                                                  group);
+}
 
 entity_t
 construct_entity(const constant_string_t &name
@@ -1690,6 +1738,9 @@ update_animation_gpu_data(gpu_command_queue_t *queue)
     }
 }
 
+internal_function void push_entity_to_animated_queue(entity_t *e);
+internal_function void push_entity_to_rolling_queue(entity_t *e);
+
 internal_function void
 update_rendering_component(float32_t dt)
 {
@@ -1720,6 +1771,15 @@ update_rendering_component(float32_t dt)
         else
         {
             component->push_k.ws_t = matrix4_t(0.0f);
+        }
+
+        if (e->rolling_mode)
+        {
+            push_entity_to_rolling_queue(e);
+        }
+        else
+        {
+            push_entity_to_animated_queue(e);
         }
     }
 }
@@ -2067,6 +2127,17 @@ update_input_components(input_state_t *input_state
                 component->movement_flags |= (1 << input_component_t::movement_flags_t::DOWN);
             }
 
+            if (input_state->keyboard[keyboard_button_type_t::E].is_down && !e->toggled_rolling_previous_frame)
+            {
+                e->toggled_rolling_previous_frame = 1;
+                e->rolling_mode ^= 1;
+            }
+            else if (!input_state->keyboard[keyboard_button_type_t::E].is_down)
+            {
+                e->toggled_rolling_previous_frame = 0;
+            }
+            
+
             if (movements > 0)
             {
                 res = res * 15.0f;
@@ -2093,31 +2164,10 @@ add_entity(const entity_t &e)
     g_entities.entity_list[g_entities.entity_count++] = e;
 
     auto e_ptr = get_entity(view);
-
+    e_ptr->rolling_mode = 0;
     e_ptr->index = view;
 
     return(view);
-}
-
-internal_function void
-push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
-                     mesh_t *mesh,
-                     gpu_material_submission_queue_t *queue)
-{
-    rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
-
-    uniform_group_t *group = nullptr;
-    
-    if (e_ptr->components.animation_component >= 0)
-    {
-        struct animation_component_t *component = &g_entities.animation_components[ e_ptr->components.animation_component ];
-        group = &component->animation_instance.group;
-    }
-    
-    queue->push_material(&component->push_k,
-			 sizeof(component->push_k),
-                         mesh,
-                         group);
 }
 
 internal_function void
@@ -2141,6 +2191,10 @@ update_entities(input_state_t *input_state
 internal_function void
 initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 {
+    g_entities.rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
+    g_entities.rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities.rolling_entity_mesh);
+    g_entities.rolling_entity_model.index_data = g_entities.rolling_entity_mesh.index_data;
+    
     g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
     g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
     g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
@@ -2168,6 +2222,23 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities.entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+    }
+    // TODO: Rename all the pipelines correctly : animated / normal
+    g_entities.rolling_entity_ppln = g_pipeline_manager.add("pipeline.ball"_hash);
+    auto *rolling_entity_ppln = g_pipeline_manager.get(g_entities.rolling_entity_ppln);
+    {
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+        shader_blend_states_t blending(false, false, false, false);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(rolling_entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities.rolling_entity_model,
                                true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
     }
 
@@ -2204,6 +2275,28 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
     }
 
+    g_entities.rolling_entity_shadow_ppln = g_pipeline_manager.add("pipeline.ball_shadow"_hash);
+    auto *rolling_entity_shadow_ppln = g_pipeline_manager.get(g_entities.rolling_entity_shadow_ppln);
+    {
+        auto shadow_display = get_shadow_display();
+        VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(false);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
+        make_graphics_pipeline(rolling_entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities.rolling_entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
+    }
+
+    g_world_submission_queues[ROLLING_ENTITY_QUEUE] = make_gpu_material_submission_queue(10
+                                                                                         , VK_SHADER_STAGE_VERTEX_BIT
+                                                                                         , VK_COMMAND_BUFFER_LEVEL_SECONDARY
+                                                                                         , cmdpool);
+    
     g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20
                                                                                  , VK_SHADER_STAGE_VERTEX_BIT
                                                                                  , VK_COMMAND_BUFFER_LEVEL_SECONDARY
@@ -2305,9 +2398,9 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     r2_ptr_rendering->push_k.metalness = 0.2f;
     r2_ptr->on_t = &g_terrains.terrains[0];
 
-    push_entity_to_queue(r2_ptr
+    /*push_entity_to_queue(r2_ptr
                          , &g_entities.entity_mesh
-                         , &g_world_submission_queues[ENTITY_QUEUE]);
+                         , &g_world_submission_queues[ENTITY_QUEUE]);*/
 }
 
 // ---- rendering of the entire world happens here ----
@@ -2464,6 +2557,12 @@ render_world(uint32_t image_index
                                                           , queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
+        auto *rolling_model_ppln = g_pipeline_manager.get(g_entities.rolling_entity_shadow_ppln);
+
+        g_world_submission_queues[ROLLING_ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln
+                                                                                , queue
+                                                                                , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
         auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);    
     
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
@@ -2477,10 +2576,16 @@ render_world(uint32_t image_index
     {
         auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);    
         auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
+        auto *rolling_entity_ppln = g_pipeline_manager.get(g_entities.rolling_entity_ppln);
     
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[ROLLING_ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, rolling_entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
+        //        g_world_submission_queues[TERRAIN_QUEUE].flush_queue();
+        g_world_submission_queues[ENTITY_QUEUE].flush_queue();
+        g_world_submission_queues[ROLLING_ENTITY_QUEUE].flush_queue();
+        
         //        prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
         render_terrain_pointer(queue, &transforms_ubo_uniform_groups[image_index]);
 

@@ -242,6 +242,26 @@ internal_function void set_key_state(input_state_t *input_state, keyboard_button
     }
 }
 
+internal_function void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
+{
+    if (action == key_action_t::KEY_ACTION_DOWN)
+    {
+        mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
+        switch(mouse_button->is_down)
+        {
+        case is_down_t::NOT_DOWN: {mouse_button->is_down = is_down_t::INSTANT;} break;
+        case is_down_t::INSTANT: case is_down_t::REPEAT: {mouse_button->is_down = is_down_t::REPEAT;} break;
+        }
+        mouse_button->down_amount += g_dt;
+    }
+    else if (action == key_action_t::KEY_ACTION_UP)
+    {
+        mouse_button_input_t *mouse_button = &input_state->mouse_buttons[button];
+        mouse_button->is_down = is_down_t::NOT_DOWN;
+        mouse_button->down_amount = 0.0f;
+    }
+}
+
 internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
 {
     switch(wparam)
@@ -287,7 +307,7 @@ internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32
     case VK_DOWN: { set_key_state(&g_input_state, keyboard_button_type_t::DOWN, action); } break;
     case VK_RIGHT: { set_key_state(&g_input_state, keyboard_button_type_t::RIGHT, action); } break;
     case VK_SPACE: { set_key_state(&g_input_state, keyboard_button_type_t::SPACE, action); } break;
-    case VK_LSHIFT: { set_key_state(&g_input_state, keyboard_button_type_t::LEFT_SHIFT, action); } break;
+    case VK_SHIFT: { set_key_state(&g_input_state, keyboard_button_type_t::LEFT_SHIFT, action); } break;
     case VK_CONTROL: { set_key_state(&g_input_state, keyboard_button_type_t::LEFT_CONTROL, action); } break;
     case VK_RETURN: { set_key_state(&g_input_state, keyboard_button_type_t::ENTER, action); } break;
     case VK_BACK: { set_key_state(&g_input_state, keyboard_button_type_t::BACKSPACE, action); } break;
@@ -303,8 +323,6 @@ LRESULT CALLBACK windows_callback(HWND window_handle,
     switch(message)
     {
         // Input ...
-
-
     case WM_MOUSEMOVE:
         {
             handle_mouse_move_event(lparam);
@@ -313,10 +331,37 @@ LRESULT CALLBACK windows_callback(HWND window_handle,
         {
             handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN);
         } break;
+    case WM_CHAR:
+        {
+            if (g_input_state.char_count != MAX_CHARS)
+            {
+                if (wparam >= 32)
+                {
+                    g_input_state.char_stack[g_input_state.char_count++] = (char)wparam;
+                }
+            }
+        } break;
     case WM_KEYUP:
         {
             handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_UP);
-        } break;           
+        } break;
+        // Mouse buttons
+    case WM_RBUTTONDOWN:
+        {
+            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_DOWN);
+        } break;
+    case WM_RBUTTONUP:
+        {
+            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_UP);
+        } break;
+    case WM_LBUTTONDOWN:
+        {
+            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN);
+        } break;
+    case WM_LBUTTONUP:
+        {
+            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP);
+        } break;
     case WM_SETCURSOR:
         {
             SetCursor(0);

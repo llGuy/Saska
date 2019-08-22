@@ -136,7 +136,7 @@ void
 main(void)
 {
     final_color = texture(g_final, fs_in.uvs);
-    /*    vec4 position = (textureLod(g_position, fs_in.uvs, 2));
+    /*vec4 position = (textureLod(g_position, fs_in.uvs, 2));
     vec3 view_position = vec3(position);
     vec4 vnormal = (textureLod(g_normal, fs_in.uvs, 2));
     vec3 view_normal = vnormal.xyz;

@@ -19,6 +19,17 @@ global_var gpu_material_submission_queue_t g_world_submission_queues[MAX_MTRLS];
 
 enum { TERRAIN_QUEUE, ENTITY_QUEUE, ROLLING_ENTITY_QUEUE };
 
+enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
+
+vector3_t matrix4_mul_vec3(const matrix4_t &matrix, const vector3_t &vector, matrix4_mul_vec3_with_translation_flag flag)
+{
+    switch(flag)
+    {
+    case WITH_TRANSLATION: return vector3_t( matrix * vector4_t(vector, 1.0f) );
+    case WITHOUT_TRANSLATION: case TRANSLATION_DONT_CARE: return vector3_t( matrix * vector4_t(vector, 0.0f) );
+    }
+}
+
 // ---- terrain code ----
 struct morphable_terrain_t
 {
@@ -91,7 +102,10 @@ struct terrain_triangle_t
     // Used for morphing function
     ivector2_t offsets[4];
     // Indices
-    uint32_t idx[4];
+    uint32_t idx[4 /* if need the entire square */];
+
+    // Extra information for sliding collision detection algorithm
+    vector3_t ts_collision_point;
 };
 
 global_var struct morphable_terrains_t
@@ -122,6 +136,8 @@ global_var struct morphable_terrains_t
         // will not be a pointer in the future
         morphable_terrain_t *t;
     } terrain_pointer;
+
+    bool dbg_is_rendering_sphere_collision_triangles = 0;
 } g_terrains;
 
 internal_function vector3_t
@@ -394,6 +410,162 @@ get_triangle_from_pos(const vector3_t ts_p,
 
     return {false};
 }
+
+struct all_triangles_under_dbg_return_t
+{
+    memory_buffer_view_t<terrain_triangle_t> triangles;
+    int32_t min_x;
+    int32_t max_x;
+    int32_t min_z;
+    int32_t max_z;
+};
+
+internal_function void
+check_sphere_triangle_collision(terrain_triangle_t *triangle,
+                                const vector3_t &ts_sphere_position,
+                                const vector3_t &ts_sphere_velocity,
+                                float32_t dt,
+                                float32_t ts_sphere_radius,
+                                morphable_terrain_t *terrain)
+{
+    ivector2_t a = get_ts_xz_coord_from_idx(triangle->idx[0], terrain);
+    ivector2_t b = get_ts_xz_coord_from_idx(triangle->idx[1], terrain);
+    ivector2_t c = get_ts_xz_coord_from_idx(triangle->idx[2], terrain);
+
+    vector3_t fa = vector3_t(a.x, terrain->heights[triangle->idx[0]], a.y);
+    vector3_t fb = vector3_t(b.x, terrain->heights[triangle->idx[1]], b.y);
+    vector3_t fc = vector3_t(c.x, terrain->heights[triangle->idx[2]], c.y);
+
+    vector3_t up_normal_of_triangle = glm::normalize(glm::cross(fb - fa, fc - fa));
+
+    // Plane equation = normal.x * point.x + normal.y * point.y + normal.z * point.z + CONSTANT = 0
+    // CONSTANT = -dot(normal, point);
+    float32_t plane_constant = -glm::dot(up_normal_of_triangle, fa);
+
+    float32_t distance_between_sphere_and_triangle = glm::dot(up_normal_of_triangle, ts_sphere_position) + plane_constant;
+
+    if (distance_between_sphere_and_triangle < 0.0f)
+    {
+        __debugbreak;
+        
+    }
+}
+
+// Get all the triangles that the sphere might collide with
+internal_function all_triangles_under_dbg_return_t
+detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
+                                                      const vector3_t &ws_sphere_position,
+                                                      const vector3_t &ws_sphere_size,
+                                                      const vector3_t &ws_sphere_velocity,
+                                                      float32_t dt)
+{
+    // Calculate the sphere's terrain space position
+    vector3_t ts_sphere_position = matrix4_mul_vec3(terrain->inverse_transform, ws_sphere_position, WITH_TRANSLATION);
+    vector3_t ts_sphere_velocity = matrix4_mul_vec3(terrain->inverse_transform, ws_sphere_velocity, WITHOUT_TRANSLATION);
+    vector3_t ts_sphere_size = matrix4_mul_vec3(glm::scale(1.0f / terrain->size), ws_sphere_size, TRANSLATION_DONT_CARE);
+
+    vector3_t ts_ceil_size = glm::ceil(ts_sphere_size);
+
+    float32_t x_max = ts_sphere_position.x + ts_ceil_size.x;
+    float32_t x_min = ts_sphere_position.x - ts_ceil_size.x;
+    float32_t z_max = ts_sphere_position.z + ts_ceil_size.z;
+    float32_t z_min = ts_sphere_position.z - ts_ceil_size.z;
+
+    // Index of the vertices (not faces)
+    int32_t max_x_idx = (int32_t)(glm::ceil(x_max));
+    int32_t min_x_idx = (int32_t)(glm::floor(x_min));
+    int32_t max_z_idx = (int32_t)(glm::ceil(z_max));
+    int32_t min_z_idx = (int32_t)(glm::floor(z_min));
+
+    int32_t x_diff = max_x_idx - min_x_idx;
+    int32_t z_diff = max_z_idx - min_z_idx;
+    
+    memory_buffer_view_t<terrain_triangle_t> triangles;
+    triangles.count = x_diff * z_diff * 2;
+    triangles.buffer = (terrain_triangle_t *)allocate_linear(sizeof(terrain_triangle_t) * x_diff * z_diff * 2);
+
+    uint32_t triangle_counter = 0;
+    for (int32_t x = min_x_idx; x < max_x_idx; ++x)
+    {
+        for (int32_t z = min_z_idx; z < max_z_idx; ++z)
+        {
+            if (x % 2 == 0)
+            {
+                if (z % 2 == 0)
+                {
+                    terrain_triangle_t triangle;
+                    triangle.triangle_exists = 1;
+                    triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                    
+                    triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                }
+                else
+                {
+                    terrain_triangle_t triangle;
+                    triangle.triangle_exists = 1;
+                    triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                    
+                    triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                }
+            }
+            else
+            {
+                if (z % 2 == 0)
+                {
+                    terrain_triangle_t triangle;
+                    triangle.triangle_exists = 1;
+                    triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                    
+                    triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                }
+                else
+                {
+                    terrain_triangle_t triangle;
+                    triangle.triangle_exists = 1;
+                    triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                    
+                    triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                    triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                    triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                    triangles[triangle_counter++] = triangle;
+                    check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                }
+            }
+        }
+    }
+
+    return {triangles, min_x_idx, max_x_idx, min_z_idx, max_z_idx};
+}
+
+
 
 internal_function terrain_triangle_t
 get_triangle_pointing_at(vector3_t ws_ray_p,
@@ -1804,6 +1976,8 @@ update_physics_components(float32_t dt)
         struct physics_component_t *component = &g_entities.physics_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
+        all_triangles_under_dbg_return_t all_triangles = detect_collision_against_possible_colliding_triangles(e->on_t, e->ws_p, e->size, e->ws_d, dt);
+        
         auto *which_terrain = on_which_terrain(e->ws_p);
         if (which_terrain)
         {
@@ -2302,7 +2476,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                                                                  , VK_COMMAND_BUFFER_LEVEL_SECONDARY
                                                                                  , cmdpool);
 
-    entity_t e = construct_entity("entity.main"_hash
+    /*entity_t e = construct_entity("entity.main"_hash
 				, vector3_t(50.0f, 10.0f, 280.0f)
 				, glm::normalize(vector3_t(1.0f, 0.0f, 1.0f))
 				, quaternion_t(0, 0, 0, 0));
@@ -2322,7 +2496,9 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.y_min = -2.001f;
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
-    physics->hitbox.z_max = 1.001f;
+    physics->hitbox.z_max = 1.001f;*/
+
+    
     /*auto *camera_component_ptr = add_camera_component(e_ptr, add_camera(input_state, get_backbuffer_resolution()));
     add_input_component(e_ptr);
 
@@ -2361,7 +2537,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                          , &g_entities.entity_mesh
                          , &g_world_submission_queues[ENTITY_QUEUE]);*/
 
-    entity_t r2 = construct_entity("entity.purple"_hash
+    entity_t r2 = construct_entity("entity.main"_hash
                                    , get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0])
                                    , vector3_t(1.0f, 0.0f, 1.0f)
                                    , quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
@@ -2379,8 +2555,8 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                                                   cmdpool);
     add_physics_component(r2_ptr, false);
 
-    physics = add_physics_component(r2_ptr, false);
-    physics->enabled = true;
+    physics_component_t *physics = add_physics_component(r2_ptr, false);
+    physics->enabled = false;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;
@@ -2406,6 +2582,60 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
 // ---- rendering of the entire world happens here ----
 internal_function void
 prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, framebuffer_t *fbo);
+
+internal_function void
+dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_ubo, morphable_terrain_t *terrain, gpu_command_queue_t *queue)
+{
+    if (g_terrains.dbg_is_rendering_sphere_collision_triangles)
+    {
+    auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+    command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+
+    command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+
+    for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
+    {
+        struct push_k_t
+        {
+            alignas(16) matrix4_t model_matrix;
+            alignas(16) vector4_t positions[8];
+            alignas(16) vector4_t color;
+        } pk;
+
+        entity_t *entity = get_entity(g_entities.main_entity);
+
+        if (entity->on_t)
+        {
+            pk.model_matrix = terrain->push_k.transform;
+
+            vector3_t ts_p = matrix4_mul_vec3(terrain->inverse_transform, entity->ws_p, matrix4_mul_vec3_with_translation_flag::WITH_TRANSLATION);
+            float32_t ts_y_coord_of_player = ts_p.y;
+            all_triangles_under_dbg_return_t triangles = detect_collision_against_possible_colliding_triangles(terrain, entity->ws_p, entity->size, entity->ws_d, 0.0f);
+            
+            pk.positions[0] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
+            pk.positions[1] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
+            pk.positions[2] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.max_z, 1.0f);
+            pk.positions[3] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.max_z, 1.0f);
+
+            pk.positions[4] = vector4_t(triangles.max_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
+            pk.positions[5] = vector4_t(triangles.max_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
+            pk.positions[6] = vector4_t(triangles.max_x, ts_y_coord_of_player, triangles.max_z, 1.0f);
+            pk.positions[7] = vector4_t(triangles.max_x, ts_y_coord_of_player, triangles.max_z, 1.0f);
+
+            pk.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
+
+            command_buffer_push_constant(&pk,
+                                         sizeof(pk),
+                                         0,
+                                         VK_SHADER_STAGE_VERTEX_BIT,
+                                         dbg_hitbox_ppln,
+                                         &queue->q);
+
+            command_buffer_draw(&queue->q, 24, 1, 0, 0);
+        }
+    }
+    }
+}
 
 internal_function void
 dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
@@ -2592,6 +2822,7 @@ render_world(uint32_t image_index
         render_3d_frustum_debug_information(queue, image_index);
         dbg_render_hitboxes(&uniform_groups[0], queue);
         dbg_render_sliding_vectors(&uniform_groups[0], queue);
+        dbg_render_underlying_possible_colliding_triangles(&uniform_groups[0], get_entity(g_entities.main_entity)->on_t, queue);
         
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2612,6 +2843,9 @@ lua_spawn_terrain(lua_State *state);
 
 internal_function int32_t
 lua_toggle_collision_box_render(lua_State *state);
+
+internal_function int32_t
+lua_toggle_sphere_collision_triangles_render(lua_State *state);
 
 internal_function int32_t
 lua_render_entity_direction_information(lua_State *state);
@@ -2645,6 +2879,7 @@ initialize_world(input_state_t *input_state
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "spawn_terrain", &lua_spawn_terrain);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_sphere_collision_triangles_display", &lua_toggle_sphere_collision_triangles_render);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_entity_direction_information);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_entity_model_display", &lua_toggle_entity_model_display);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_velocity", &lua_toggle_entity_model_display);
@@ -3031,5 +3266,12 @@ lua_print_player_terrain_position_info(lua_State *state)
 	}
     }
 
+    return(0);
+}
+
+internal_function int32_t
+lua_toggle_sphere_collision_triangles_render(lua_State *state)
+{
+    g_terrains.dbg_is_rendering_sphere_collision_triangles ^= 1;
     return(0);
 }

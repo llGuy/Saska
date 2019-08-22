@@ -1273,11 +1273,11 @@ lua_get_fps(lua_State *state)
 internal_function int32_t
 lua_print_fps(lua_State *state)
 {
-    float32_t fps = 1.0f / get_dt();
+    /*    float32_t fps = 1.0f / get_dt();
     uint32_t fps_ui = (uint32_t)fps;
     char buffer[20] = {};
     sprintf(buffer, "%d", fps_ui);
-    output_to_output_section(buffer, g_console.output_color);
+    output_to_output_section(buffer, g_console.output_color);*/
     return(0);
 }
 

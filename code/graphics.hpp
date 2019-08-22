@@ -693,7 +693,7 @@ destroy_graphics(void);
 
 
 
-// TODO: Model loading stuff
+// TODO: Organize model loading into some managers (like the gpu_buffer_manager) so that lua can load them
 // TODO: Possibly support more formats
 // TODO: Support colors and textures (for now, just positions and normals)
 enum mesh_file_format_t { OBJ, CUSTOM_MESH, INVALID_MESH_FILE_FORMAT };

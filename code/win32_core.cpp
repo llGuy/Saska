@@ -149,21 +149,9 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
     // In client space
     int32_t true_x_position = cursor_pos.x;
     int32_t true_y_position = cursor_pos.y;
-
-    if (true_x_position > client_rect.right)
-    {
-        g_input_state.cursor_moved = true;
-        g_input_state.previous_cursor_pos_x = g_input_state.cursor_pos_x;
-        g_input_state.previous_cursor_pos_y = g_input_state.cursor_pos_y;
-    }
     
     if (true_x_position != true_prev_x || true_y_position != true_prev_y)
     {
-        /*char num[10];
-        itoa((int32_t)g_input_state.cursor_pos_x, num, 10);
-        console_out(num);
-        char space[] = { ' ', 0 };
-        console_out(space);*/
         g_input_state.cursor_moved = true;
         g_input_state.previous_cursor_pos_x = g_input_state.cursor_pos_x;
         g_input_state.previous_cursor_pos_y = g_input_state.cursor_pos_y;
@@ -179,7 +167,7 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
     true_prev_x = true_x_position;
     true_prev_y = true_y_position;
     
-    if (true_x_position >= client_rect.right - 1)
+    if (true_x_position >= client_rect.right - 2)
     {
         POINT infinite = { 2, true_y_position };
         true_x_position = true_prev_x = 2;
@@ -200,7 +188,7 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
         ClientToScreen(g_window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
-    if (true_y_position >= client_rect.bottom - 1)
+    if (true_y_position >= client_rect.bottom - 2)
     {
         POINT infinite = { true_x_position, client_rect.top + 2 };
         true_y_position = true_prev_y = client_rect.top + 2;
@@ -315,22 +303,13 @@ internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32
     }
 }
 
-LRESULT CALLBACK windows_callback(HWND window_handle,
-                                  UINT message,
-                                  WPARAM wparam,
-                                  LPARAM lparam)
+LRESULT CALLBACK windows_callback(HWND window_handle, UINT message, WPARAM wparam, LPARAM lparam)
 {
     switch(message)
     {
         // Input ...
-    case WM_MOUSEMOVE:
-        {
-            handle_mouse_move_event(lparam);
-        } break;
-    case WM_KEYDOWN:
-        {
-            handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN);
-        } break;
+    case WM_MOUSEMOVE: { handle_mouse_move_event(lparam); } break;
+    case WM_KEYDOWN: { handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN); } break;
     case WM_CHAR:
         {
             if (g_input_state.char_count != MAX_CHARS)
@@ -341,39 +320,14 @@ LRESULT CALLBACK windows_callback(HWND window_handle,
                 }
             }
         } break;
-    case WM_KEYUP:
-        {
-            handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_UP);
-        } break;
-        // Mouse buttons
-    case WM_RBUTTONDOWN:
-        {
-            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_DOWN);
-        } break;
-    case WM_RBUTTONUP:
-        {
-            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_UP);
-        } break;
-    case WM_LBUTTONDOWN:
-        {
-            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN);
-        } break;
-    case WM_LBUTTONUP:
-        {
-            set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP);
-        } break;
-    case WM_SETCURSOR:
-        {
-            SetCursor(0);
-        } break;
-    case WM_DESTROY:
-        {
-            g_running = 0;
-            PostQuitMessage(0);
-        } break;
-    case WM_PAINT:
-        {
-        } break;
+    case WM_KEYUP: { handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_UP); } break;
+    case WM_RBUTTONDOWN: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_DOWN); } break;
+    case WM_RBUTTONUP: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_UP); } break;
+    case WM_LBUTTONDOWN: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN); } break;
+    case WM_LBUTTONUP: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP); } break;
+        // NOTE: Make sure this doesn't break anything in the future
+    case WM_SETCURSOR: { SetCursor(0);} break;
+    case WM_DESTROY: { g_running = 0; PostQuitMessage(0); } break;
     }
 
     return(DefWindowProc(window_handle, message, wparam, lparam));
@@ -404,12 +358,7 @@ init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allo
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
-#include <chrono>
-
-int32_t CALLBACK WinMain(HINSTANCE hinstance,
-                         HINSTANCE prev_instance,
-                         LPSTR cmdline,
-                         int32_t showcmd)
+int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
     // Initialize game's dynamic memory
     linear_allocator_global.capacity = megabytes(30);
@@ -461,7 +410,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
     
     SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
     ShowWindow(g_window, showcmd);
-    disable_cursor_display();
+    //    disable_cursor_display();
 
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
@@ -503,9 +452,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
         g_input_state.keyboard[keyboard_button_type_t::ENTER].is_down = is_down_t::NOT_DOWN;
         g_input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = is_down_t::NOT_DOWN;
         g_input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = is_down_t::NOT_DOWN;
-
-        // TODO: Set normalized cursor position
-        //        input_state.normalized_cursor_position = vector2_t((float32_t)xpos, (float32_t)ypos);
+        // TODO: Set input state's normalized cursor position
 
         LARGE_INTEGER tick_end;
         QueryPerformanceCounter(&tick_end);
@@ -529,11 +476,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance,
         g_input_state.dt = g_dt;
     }
 
-    close_debug_file();
-
     destroy_swapchain();
     destroy_game();
-	
+    
     destroy_vulkan_state();
 
     return(0);

@@ -2832,44 +2832,32 @@ render_world(uint32_t image_index
     apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
 }
 
-internal_function int32_t
-lua_get_player_position(lua_State *state);
-
-internal_function int32_t
-lua_set_player_position(lua_State *state);
-
-internal_function int32_t
-lua_spawn_terrain(lua_State *state);
-
-internal_function int32_t
-lua_toggle_collision_box_render(lua_State *state);
-
-internal_function int32_t
-lua_toggle_sphere_collision_triangles_render(lua_State *state);
-
-internal_function int32_t
-lua_render_entity_direction_information(lua_State *state);
-
-internal_function int32_t
-lua_toggle_entity_model_display(lua_State *state);
-
-internal_function int32_t
-lua_set_veclocity_in_view_direction(lua_State *state);
-
-internal_function int32_t
-lua_get_player_ts_view_direction(lua_State *state);
-
-internal_function int32_t
-lua_print_player_terrain_position_info(lua_State *state);
-
-internal_function int32_t
-lua_stop_simulation(lua_State *state);
-
-internal_function int32_t
-lua_move_entity(lua_State *state);
-
-internal_function int32_t
-lua_start_simulation(lua_State *state);
+internal_function int32_t lua_get_player_position(lua_State *state);
+internal_function int32_t lua_set_player_position(lua_State *state);
+internal_function int32_t lua_spawn_terrain(lua_State *state);
+internal_function int32_t lua_toggle_collision_box_render(lua_State *state);
+internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
+internal_function int32_t lua_render_entity_direction_information(lua_State *state);
+internal_function int32_t lua_toggle_entity_model_display(lua_State *state);
+internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
+internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
+internal_function int32_t lua_print_player_terrain_position_info(lua_State *state);
+internal_function int32_t lua_stop_simulation(lua_State *state);
+internal_function int32_t lua_move_entity(lua_State *state);
+internal_function int32_t lua_start_simulation(lua_State *state);
+internal_function int32_t lua_initialize_terrain_base(lua_State *state);
+internal_function int32_t lua_initialize_terrain_instance(lua_State *state);
+internal_function int32_t lua_load_mesh(lua_State *state);
+internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
+internal_function int32_t lua_load_skeleton(lua_State *state);
+internal_function int32_t lua_load_animations(lua_State *state);
+internal_function int32_t lua_initialize_entity(lua_State *state);
+internal_function int32_t lua_attach_rendering_component(lua_State *state);
+internal_function int32_t lua_attach_animation_component(lua_State *state);
+internal_function int32_t lua_attach_physics_component(lua_State *state);
+internal_function int32_t lua_attach_camera_component(lua_State *state);
+internal_function int32_t lua_attach_input_component(lua_State *state);
+internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
 
 void
 initialize_world(input_state_t *input_state

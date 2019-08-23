@@ -133,3 +133,8 @@ game_tick(input_state_t *input_state, float32_t dt)
 
     current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
+
+gpu_command_queue_pool_t *get_global_command_pool(void)
+{
+    return(&window_rendering.command_pool);
+}

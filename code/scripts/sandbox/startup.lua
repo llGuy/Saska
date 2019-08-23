@@ -1,24 +1,13 @@
-function startup ()
-   c_out("- Running startup -")
+function startup()
+   c_out("- Executing Startup Script -")
 
-   initialize_terrain_base("terrain_base.medium_terrain", 21, 21)
+   globals.initialize_terrain_base("terrain_base.medium_base", globals.terrain_dimensions(21, 21))
 
-   local main_terrain_information = {}
-   main_terrain_information.x = 0
-   main_terrain_information.y = 0
-   main_terrain_information.z = 0
-   main_terrain_information.r = 0
-   main_terrain_information.g = 0.8
-   main_terrain_information.b = 0
-
-   initialize_terrain_instance("terrain_base.medium_terrain",
-                               main_terrain_information.x,
-                               main_terrain_information.y,
-                               main_terrain_information.z,
-                               10,
-                               main_terrain_information.r,
-                               main_terrain_information.g,
-                               main_terrain_information.b)
-
-   load_mesh("spaceman.mesh_custom")
+   grass_color = globals.color3(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0)
+   globals.initialize_terrain_instance("terrain_base.medium_base",
+                                       globals.vector3(0, 0, 200),
+                                       globals.quaternion(60, 20, 0),
+                                       15,
+                                       grass_color,
+                                       8.5)
 end

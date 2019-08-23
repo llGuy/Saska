@@ -108,13 +108,20 @@ struct terrain_triangle_t
     vector3_t ts_collision_point;
 };
 
+struct terrain_base_info_t
+{
+    uint32_t width, depth;
+    gpu_buffer_t mesh_xz_values;
+    gpu_buffer_t idx_buffer;
+    model_t model_info;
+};
+
 global_var struct morphable_terrains_t
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
-    gpu_buffer_t mesh_xz_values;
-    
-    gpu_buffer_t idx_buffer;
-    model_handle_t model_info;
+    uint32_t base_count;
+    terrain_base_info_t terrain_bases[10];
+    hash_table_inline_t<int32_t, 10, 3, 3> terrain_base_table;
 
     static constexpr uint32_t MAX_TERRAINS = 10;
     morphable_terrain_t terrains[MAX_TERRAINS];
@@ -139,6 +146,23 @@ global_var struct morphable_terrains_t
 
     bool dbg_is_rendering_sphere_collision_triangles = 0;
 } g_terrains;
+
+internal_function int32_t add_terrain_base(const constant_string_t &name)
+{
+    uint32_t index = g_terrains.base_count;
+    g_terrains.terrain_base_table.insert(name.hash, g_terrains.base_count++);
+    return(index);
+}
+
+internal_function int32_t get_terrain_base_index(const constant_string_t &name)
+{
+    return(*g_terrains.terrain_base_table.get(name.hash));
+}
+
+internal_function terrain_base_info_t *get_terrain_base(int32_t index)
+{
+    return(&g_terrains.terrain_bases[index]);
+}
 
 internal_function vector3_t
 get_ws_terrain_vertex_position(uint32_t idx,
@@ -1198,11 +1222,11 @@ make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain)
 
 // TODO: make this take roughness and metalness to push to pushconstant or whatever 
 internal_function void
-make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue
+make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue
                             , const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color)
 {
-    auto *model_info = g_model_manager.get(g_terrains.model_info);
-    terrain->vbos[0] = g_terrains.mesh_xz_values.buffer;
+    auto *model_info = &base->model_info;
+    terrain->vbos[0] = base->mesh_xz_values.buffer;
     terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
 
     auto draw_indexed_data = init_draw_indexed_data_default(1, model_info->index_data.index_count);
@@ -1228,7 +1252,7 @@ make_terrain_rendering_data(morphable_terrain_t *terrain, gpu_material_submissio
 
 
 internal_function void
-make_planet(const vector3_t &position, const vector3_t &color, VkCommandPool *cmdpool)
+make_planet(terrain_base_info_t *base, const vector3_t &position, const vector3_t &color, VkCommandPool *cmdpool)
 {
     planet_t *planet = &g_terrains.test_planet;
     
@@ -1237,26 +1261,20 @@ make_planet(const vector3_t &position, const vector3_t &color, VkCommandPool *cm
         morphable_terrain_t *face = &planet->meshes[i];
         make_terrain_mesh_data(21, 21, face);
         quaternion_t rotation = quaternion_t(glm::radians(vector3_t(90.0f, 0.0f, 0.0f)));
-        make_terrain_rendering_data(face, &g_world_submission_queues[TERRAIN_QUEUE], position, rotation, vector3_t(10.0f), color);
+        make_terrain_rendering_data(base, face, &g_world_submission_queues[TERRAIN_QUEUE], position, rotation, vector3_t(10.0f), color);
         face->k_g = -8.5f;
     }
 }
 
 internal_function void
-make_terrain_instances(VkCommandPool *cmdpool)
+make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
 {
-    // Make the terrain render command recorder
-    g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10
-                                                                    , VK_SHADER_STAGE_VERTEX_BIT
-                                                                    // Parameter is obsolete, must remove
-                                                                    , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-                                                                    , cmdpool);
 
     vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
     
     auto *red_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, red_terrain);
-    make_terrain_rendering_data(red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
+    make_terrain_rendering_data(base, red_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(0.0f, 0.0f, 200.0f)
                                 , quaternion_t(glm::radians(vector3_t(60.0f, 20.0f, 0.0f)))
                                 , vector3_t(15.0f)
@@ -1265,7 +1283,7 @@ make_terrain_instances(VkCommandPool *cmdpool)
 
     auto *green_terrain = add_terrain();
     make_terrain_mesh_data(21, 21, green_terrain);
-    make_terrain_rendering_data(green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
+    make_terrain_rendering_data(base, green_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                 , vector3_t(200.0f, 0.0f, 0.0f)
                                 , quaternion_t(glm::radians(vector3_t(70.0f, 45.0f, 20.0f)))
                                 , vector3_t(10.0f)
@@ -1277,14 +1295,14 @@ make_terrain_instances(VkCommandPool *cmdpool)
 }
 
 internal_function void
-add_staged_creation_terrains(void)
+add_staged_creation_terrains(terrain_base_info_t *base)
 {
     for (uint32_t i = 0; i < g_terrains.create_count; ++i)
     {
         auto *create_staging_info = &g_terrains.create_stagings[i];
         auto *new_terrain = add_terrain();
         make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain);
-        make_terrain_rendering_data(new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
+        make_terrain_rendering_data(base, new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
                                     , create_staging_info->ws_p
                                     , quaternion_t(create_staging_info->rotation)
                                     , vector3_t(create_staging_info->size)
@@ -1315,21 +1333,13 @@ make_terrain_pointer(void)
 }
 
 internal_function void
-initialize_terrains(VkCommandPool *cmdpool)
+initialize_terrain_data(VkCommandPool *cmdpool)
 {
-    // ---- register the info of the model for json loader to access ---
-    g_terrains.model_info = g_model_manager.add("model.terrain_base_info"_hash);
-    auto *model_info = g_model_manager.get(g_terrains.model_info);
+    terrain_base_info_t *base = get_terrain_base(0);
+    auto *model_info = &base->model_info;
+
+
     
-    make_3D_terrain_base(21, 21
-			 , 1.0f
-			 , &g_terrains.mesh_xz_values
-			 , &g_terrains.idx_buffer
-			 , model_info
-			 , cmdpool);
-
-    make_terrain_instances(cmdpool);
-
     g_terrains.terrain_ppln = g_pipeline_manager.add("pipeline.terrain_pipeline"_hash);
     auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);
     {
@@ -2363,7 +2373,7 @@ update_entities(input_state_t *input_state
 }
 
 internal_function void
-initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
+initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities.rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
     g_entities.rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities.rolling_entity_mesh);
@@ -2466,15 +2476,7 @@ initialize_entities(VkCommandPool *cmdpool, input_state_t *input_state)
                                true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
     }
 
-    g_world_submission_queues[ROLLING_ENTITY_QUEUE] = make_gpu_material_submission_queue(10
-                                                                                         , VK_SHADER_STAGE_VERTEX_BIT
-                                                                                         , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-                                                                                         , cmdpool);
-    
-    g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20
-                                                                                 , VK_SHADER_STAGE_VERTEX_BIT
-                                                                                 , VK_COMMAND_BUFFER_LEVEL_SECONDARY
-                                                                                 , cmdpool);
+
 
     /*entity_t e = construct_entity("entity.main"_hash
 				, vector3_t(50.0f, 10.0f, 280.0f)
@@ -2859,9 +2861,21 @@ internal_function int32_t lua_attach_camera_component(lua_State *state);
 internal_function int32_t lua_attach_input_component(lua_State *state);
 internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
 
-void
-initialize_world(input_state_t *input_state
-                 , VkCommandPool *cmdpool)
+internal_function void entry_point(void)
+{
+    // Load globals
+    execute_lua("globals = require \"scripts/globals/globals\"");
+    
+    // Load startup code
+    const char *startup_script = "scripts/sandbox/startup.lua";
+    auto contents = read_file(startup_script);
+    execute_lua((const char *)contents.content);
+
+    // Execute startup code
+    execute_lua("startup()");    
+}
+
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool)
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
@@ -2876,9 +2890,31 @@ initialize_world(input_state_t *input_state
     add_global_to_lua(script_primitive_type_t::FUNCTION, "start_simulation", &lua_start_simulation);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "move_entity", &lua_move_entity);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "internal_initialize_terrain_base", &lua_initialize_terrain_base);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "internal_initialize_terrain_instance", &lua_initialize_terrain_instance);
+
+    g_world_submission_queues[ROLLING_ENTITY_QUEUE] = make_gpu_material_submission_queue(10,
+                                                                                         VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                         VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                         cmdpool);
     
-    initialize_terrains(cmdpool);
-    initialize_entities(cmdpool, input_state);
+    g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20,
+                                                                                 VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                 VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                 cmdpool);
+    
+    g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10,
+                                                                                  VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                  VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                  cmdpool);
+    
+    // Creation of terrains, entities, etc...
+    entry_point();
+    
+    // Rendering data, queues, etc...
+    initialize_terrain_data(cmdpool);
+    //    make_terrain_instances(&g_terrains.terrain_bases[0], cmdpool);
+    initialize_entities_data(cmdpool, input_state);
 
     clear_linear();
 }
@@ -2898,7 +2934,7 @@ update_world(input_state_t *input_state
     //    update_animated_instance_ubo(cmdbuf, &g_entities.entity_animation_instance);
     update_animation_gpu_data(cmdbuf);
     
-    add_staged_creation_terrains();
+    //    add_staged_creation_terrains();
 
     // ---- Actually rendering the frame ----
     update_3d_output_camera_transforms(image_index);
@@ -3261,5 +3297,57 @@ internal_function int32_t
 lua_toggle_sphere_collision_triangles_render(lua_State *state)
 {
     g_terrains.dbg_is_rendering_sphere_collision_triangles ^= 1;
+    return(0);
+}
+
+internal_function int32_t lua_initialize_terrain_base(lua_State *state)
+{
+    const char *base_name = lua_tostring(state, -3);
+    int32_t width = lua_tonumber(state, -2);
+    int32_t depth = lua_tonumber(state, -1);
+
+    terrain_base_info_t *base = get_terrain_base(add_terrain_base(make_constant_string(base_name, strlen(base_name))));
+    base->width = width;
+    base->depth = depth;
+    
+    auto *model_info = &base->model_info;
+    
+    make_3D_terrain_base(width, depth,
+			 1.0f,
+			 &base->mesh_xz_values,
+			 &base->idx_buffer,
+			 model_info,
+			 get_global_command_pool());
+
+    return(0);
+}
+
+internal_function int32_t lua_initialize_terrain_instance(lua_State *state)
+{
+    float32_t gravity_constant = lua_tonumber(state, -1);
+    float32_t color_b = lua_tonumber(state, -2);
+    float32_t color_g = lua_tonumber(state, -3);
+    float32_t color_r = lua_tonumber(state, -4);
+    float32_t size = lua_tonumber(state, -5);
+    float32_t rotation_z = lua_tonumber(state, -6);
+    float32_t rotation_y = lua_tonumber(state, -7);
+    float32_t rotation_x = lua_tonumber(state, -8);
+    float32_t position_z = lua_tonumber(state, -9);
+    float32_t position_y = lua_tonumber(state, -10);
+    float32_t position_x = lua_tonumber(state, -11);
+    const char *base_name = lua_tostring(state, -12);
+
+    auto *base = get_terrain_base(get_terrain_base_index(make_constant_string(base_name, strlen(base_name))));
+    auto *new_terrain = add_terrain();
+    make_terrain_mesh_data(base->width, base->depth, new_terrain);
+    make_terrain_rendering_data(base,
+                                new_terrain,
+                                &g_world_submission_queues[TERRAIN_QUEUE],
+                                vector3_t(position_x, position_y, position_z),
+                                quaternion_t(glm::radians(vector3_t(rotation_x, rotation_y, rotation_z))),
+                                vector3_t(size),
+                                vector3_t(color_r, color_g, color_b));
+    new_terrain->k_g = gravity_constant;
+    
     return(0);
 }

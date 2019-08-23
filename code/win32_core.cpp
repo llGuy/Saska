@@ -47,6 +47,8 @@ global_var HWND g_window;
 global_var HCURSOR g_cursor;
 global_var input_state_t g_input_state = {};
 
+// TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
+
 file_contents_t
 read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
 {
@@ -346,13 +348,12 @@ struct create_vulkan_surface_win32 : create_vulkan_surface
     }
 };
 
-float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
+internal_function float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
 {
     return float32_t(end_time.QuadPart - begin_time.QuadPart) / float32_t(frequency.QuadPart);
 }
 
-internal_function void
-init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
+internal_function void init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
 {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
@@ -410,7 +411,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     
     SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
     ShowWindow(g_window, showcmd);
-    //    disable_cursor_display();
+    // TODO: ReleaseCapture(void) when alt tab / alt f4
+    SetCapture(g_window);
+    disable_cursor_display();
 
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
@@ -439,6 +442,20 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             DispatchMessage(&message);
         }
 
+        RECT client_rect = {};
+        GetClientRect(g_window, &client_rect);
+
+        POINT top_left = { client_rect.left, client_rect.top }, bottom_right = { client_rect.right, client_rect.bottom };
+        ClientToScreen(g_window, &top_left);
+        ClientToScreen(g_window, &bottom_right);
+
+        client_rect.left = top_left.x;
+        client_rect.top = top_left.y;
+        client_rect.right = bottom_right.x;
+        client_rect.bottom = bottom_right.y;
+
+        ClipCursor(&client_rect);
+        
         // Render
         game_tick(&g_input_state, g_dt);
         RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
@@ -457,25 +474,35 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         LARGE_INTEGER tick_end;
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
-        // Set game tick period by sleeping
-        while (dt < TICK_TIME)
+
+        if (dt > TICK_TIME)
         {
-            DWORD to_wait = DWORD( (TICK_TIME - dt) * 1000 );
-            if (to_wait > 0)
+            g_dt = dt;
+            g_game_time += g_dt;
+            g_input_state.dt = g_dt;            
+        }
+        else
+        {
+            // Set game tick period by sleeping
+            while (dt < TICK_TIME)
             {
-                Sleep(to_wait);
+                DWORD to_wait = DWORD( (TICK_TIME - dt) * 1000 );
+                if (to_wait > 0)
+                {
+                    Sleep(to_wait);
+                }
+
+                LARGE_INTEGER now;
+                QueryPerformanceCounter(&now);
+                dt = measure_time_difference(tick_start, now, clock_frequency);
             }
 
-            LARGE_INTEGER now;
-            QueryPerformanceCounter(&now);
-            dt = measure_time_difference(tick_start, now, clock_frequency);
+            g_dt = TICK_TIME;
+            g_game_time += g_dt;
+            g_input_state.dt = g_dt;
         }
-
-        g_dt = TICK_TIME;
-        g_game_time += g_dt;
-        g_input_state.dt = g_dt;
     }
-
+    
     destroy_swapchain();
     destroy_game();
     

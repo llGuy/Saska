@@ -467,11 +467,7 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     vector3_t fb = vector3_t(b.x, terrain->heights[triangle->idx[1]], b.y);
     vector3_t fc = vector3_t(c.x, terrain->heights[triangle->idx[2]], c.y);
 
-    vector3_t up_normal_of_triangle = glm::normalize(glm::cross(fb - fa, fc - fa));
-
-    // Plane equation = normal.x * point.x + normal.y * point.y + normal.z * point.z + CONSTANT = 0
-    // CONSTANT = -dot(normal, point);
-    float32_t plane_constant = -glm::dot(up_normal_of_triangle, fa);
+    vector3_t up_normal_of_triangle = glm::normalize(glm::cross(fb - fa, fc - fa));   
 
     // --- Collision Detection
     // 1. Check if velocity points towards the back of the triangle
@@ -479,11 +475,26 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     float32_t velocity_dot_normal = glm::dot(normalized_ts_sphere_velocity, up_normal_of_triangle);
     if (velocity_dot_normal > 0.0f)
     {
-        return sphere_triangle_collision_return_t{false};
+        return {false};
     }
 
     // 2. Calculate plane equation + plane constant -> to get the distance between sphere and plane
+    float32_t plane_constant = -( (fa.x * up_normal_of_triangle.x) + (fa.y * up_normal_of_triangle.y) + (fa.z * up_normal_of_triangle.z) );
     // 3. Check if velocity is perpendicular to the plane normal. If they are, and the distance sphere-plane > radius, no collision is possible
+    bool32_t must_check_only_for_edges_and_vertices = 0;
+    float32_t normal_dot_velocity = glm::dot(ts_sphere_velocity, up_normal_of_triangle);
+    float32_t sphere_plane_distance = glm::dot(ts_sphere_position, up_normal_of_triangle) + plane_constant;
+    if (normal_dot_velocity == 0.0f)
+    {
+        if (sphere_plane_distance > ts_sphere_radius)
+        {
+            return {false};
+        }
+        else
+        {
+            must_check_only_for_edges_and_vertices = 1;
+        }
+    }
     // 4. If velocity and plane are not parallel, get t0 and t1 (2 moments where sphere rests on the plane)
     // 5. Check if t0 > dt or if t1 < 0 - if so, exit
     // 6. Check if t0 is inside the triangle + get contact point and sphere center's position

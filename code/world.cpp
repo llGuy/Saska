@@ -454,17 +454,20 @@ struct sphere_triangle_collision_return_t
 internal_function bool32_t
 is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
-    vector3_t cross1 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
-    vector3_t cross2 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
-    if(glm::dot(cross1, cross2) >= 0)
+    vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
+    vector3_t cross12 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
+    float32_t d1 = glm::dot(cross11, cross12);
+    if(d1 >= 0)
     {
-        cross1 = glm::cross((tri_point_c - tri_point_a), (point - tri_point_a));
-        cross2 = glm::cross((tri_point_c - tri_point_a), (tri_point_b - tri_point_a));
-        if(glm::dot(cross1, cross2) >= 0)
+        vector3_t cross21 = glm::cross((tri_point_c - tri_point_a), (point - tri_point_a));
+        vector3_t cross22 = glm::cross((tri_point_c - tri_point_a), (tri_point_b - tri_point_a));
+        float32_t d2 = glm::dot(cross21, cross22);
+        if(d2 >= 0)
         {
-            cross1 = glm::cross((tri_point_b - tri_point_a), (point - tri_point_a));
-            cross2 = glm::cross((tri_point_b - tri_point_a), (tri_point_c - tri_point_a));
-            if(glm::dot(cross1, cross2) >= 0)
+            vector3_t cross31 = glm::cross((tri_point_b - tri_point_a), (point - tri_point_a));
+            vector3_t cross32 = glm::cross((tri_point_b - tri_point_a), (tri_point_c - tri_point_a));
+            float32_t d3 = glm::dot(cross31, cross32);
+            if(d3 >= 0)
             {
                 return 1;
             }
@@ -534,12 +537,14 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     if (first_resting_instance < 0.0f) first_resting_instance = 0.0f;
     if (second_resting_instance < 1.0f) second_resting_instance = 1.0f;
     // 6. Check if t0 is inside the triangle + get contact point and sphere center's position
-    vector3_t sphere_contact_point = ts_sphere_position - (up_normal_of_triangle * ts_sphere_radius);
+    vector3_t sphere_contact_point = ts_sphere_position + (first_resting_instance * ts_sphere_velocity) - (up_normal_of_triangle * ts_sphere_radius);
+    
+    static float32_t time = 0.0f;
     if (is_point_in_triangle(sphere_contact_point, fa, fb, fc))
     {
-        // There was a collision in the triangle
-        printf("dummy");
+        printf("foo");
     }
+    
     // 7. If there was collision, store and make sure it is the closest collision (relative to sphere at time zero)
     // 8. If the collision was outside the triangle, check if collision happened with a vertex
     // 9. If there was no collision with vertex, check if collision happened with a edge
@@ -2068,7 +2073,7 @@ update_physics_components(float32_t dt)
         struct physics_component_t *component = &g_entities.physics_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
-        all_triangles_under_dbg_return_t all_triangles = detect_collision_against_possible_colliding_triangles(e->on_t, e->ws_p, e->size, e->ws_input_v, dt);
+        all_triangles_under_dbg_return_t all_triangles = detect_collision_against_possible_colliding_triangles(e->on_t, e->ws_p, e->size, e->ws_input_v * dt, dt);
         
         auto *which_terrain = on_which_terrain(e->ws_p);
         if (which_terrain)

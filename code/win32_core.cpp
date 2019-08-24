@@ -48,6 +48,7 @@ global_var HCURSOR g_cursor;
 global_var input_state_t g_input_state = {};
 
 // TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
+// TODO: Get rid of "static" globals in files to enable hot reloading of game code properly
 
 file_contents_t
 read_file(const char *filename, const char *flags, linear_allocator_t *allocator)

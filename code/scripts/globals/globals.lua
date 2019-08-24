@@ -22,4 +22,39 @@ globals.initialize_terrain_instance = function (base_name, position_xyz, rotatio
                                         gravity_f)
 end
 
+---globals.initialize_entity = function (entity_name, position_xyz, direction_xyz, size_f, is_main_b)
+---   internal_initialize_entity(entity_name,
+---                              position_xyz.x, position_xyz.y, position_xyz.z,
+---                              direction_xyz.x, direction_xyz.y, direction_xyz.z,
+---                              size_f,
+---                              is_main_b)
+---end
+---
+---globals.attach_rendering_component = function (entity_name, roughness, metalness, color_rgb)
+---   internal_attach_rendering_component(entity_name,
+---                                       roughness,
+---                                       metalness,
+---                                       color_rgb.r, color_rgb.g, color_rgb.b)
+---end
+---
+---globals.attach_animation_component = function (entity_name)
+---   internal_attach_animation_component(entity_name)
+---end
+---
+---globals.attach_physics_component = function (entity_name, enabled_b)
+---   internal_attach_physics_component(entity_name, enabled_b)
+---end
+---
+---globals.attach_camera_component = function (entity_name, is_third_person_b)
+---   internal_attach_physics_component(entity_name, is_third_person_b)
+---end
+---
+---globals.attach_input_component = function (entity_name)
+---   internal_attach_input_component(entity_name)
+---end
+---
+---globals.bind_camera_to_3d_output = function (entity_name)
+---   internal_bind_camera_to_3d_output(entity_name)
+---end
+
 return globals

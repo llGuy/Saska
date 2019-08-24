@@ -451,6 +451,28 @@ struct sphere_triangle_collision_return_t
     vector3_t ts_new_sphere_velocity;
 };
 
+internal_function bool32_t
+is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
+{
+    vector3_t cross1 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
+    vector3_t cross2 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
+    if(glm::dot(cross1, cross2) >= 0)
+    {
+        cross1 = glm::cross((tri_point_c - tri_point_a), (point - tri_point_a));
+        cross2 = glm::cross((tri_point_c - tri_point_a), (tri_point_b - tri_point_a));
+        if(glm::dot(cross1, cross2) >= 0)
+        {
+            cross1 = glm::cross((tri_point_b - tri_point_a), (point - tri_point_a));
+            cross2 = glm::cross((tri_point_b - tri_point_a), (tri_point_c - tri_point_a));
+            if(glm::dot(cross1, cross2) >= 0)
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 internal_function sphere_triangle_collision_return_t
 check_sphere_triangle_collision(terrain_triangle_t *triangle,
                                 const vector3_t &ts_sphere_position,
@@ -496,8 +518,28 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
         }
     }
     // 4. If velocity and plane are not parallel, get t0 and t1 (2 moments where sphere rests on the plane)
+    float32_t first_resting_instance = (1.0f - sphere_plane_distance) / normal_dot_velocity;
+    float32_t second_resting_instance = (-1.0f - sphere_plane_distance) / normal_dot_velocity;
     // 5. Check if t0 > dt or if t1 < 0 - if so, exit
+    if (first_resting_instance > second_resting_instance)
+    {
+        float32_t f = first_resting_instance;
+        first_resting_instance = second_resting_instance;
+        second_resting_instance = f;
+    }
+    if (first_resting_instance > 1.0f || second_resting_instance < 0.0f)
+    {
+        return {false};
+    }
+    if (first_resting_instance < 0.0f) first_resting_instance = 0.0f;
+    if (second_resting_instance < 1.0f) second_resting_instance = 1.0f;
     // 6. Check if t0 is inside the triangle + get contact point and sphere center's position
+    vector3_t sphere_contact_point = ts_sphere_position - (up_normal_of_triangle * ts_sphere_radius);
+    if (is_point_in_triangle(sphere_contact_point, fa, fb, fc))
+    {
+        // There was a collision in the triangle
+        printf("dummy");
+    }
     // 7. If there was collision, store and make sure it is the closest collision (relative to sphere at time zero)
     // 8. If the collision was outside the triangle, check if collision happened with a vertex
     // 9. If there was no collision with vertex, check if collision happened with a edge
@@ -506,6 +548,8 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     // 1. If there was collision, move sphere to the collision point (just above the point, so there is not a collision)
     // 2. Get new destination (original destination point - if no collision were to occur) and slide it up the plane's normal until it is on the plane
     // 3. Recurse the entire process again with the new sphere position and velocity vector (maximum 5 recurses)
+
+    return {false};
 }
 
 // Get all the triangles that the sphere might collide with
@@ -533,9 +577,13 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
 
         // Index of the vertices (not faces)
         int32_t max_x_idx = (int32_t)(glm::ceil(x_max));
+        if (max_x_idx >= terrain->xz_dim.x) max_x_idx = terrain->xz_dim.x - 1;
         int32_t min_x_idx = (int32_t)(glm::floor(x_min));
+        if (min_x_idx < 0) min_x_idx = 0;
         int32_t max_z_idx = (int32_t)(glm::ceil(z_max));
+        if (max_z_idx >= terrain->xz_dim.y) max_z_idx = terrain->xz_dim.y - 1;
         int32_t min_z_idx = (int32_t)(glm::floor(z_min));
+        if (min_z_idx < 0) min_z_idx = 0;
 
         int32_t x_diff = max_x_idx - min_x_idx;
         int32_t z_diff = max_z_idx - min_z_idx;
@@ -553,70 +601,66 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                 {
                     if (z % 2 == 0)
                     {
-                        terrain_triangle_t triangle;
-                        triangle.triangle_exists = 1;
-                        triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
-                    
-                        triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        terrain_triangle_t *triangle = &triangles[triangle_counter++];
+                        triangle->triangle_exists = 1;
+                        triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+
+                        triangle = &triangles[triangle_counter++];
+                        triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
                     }
                     else
                     {
-                        terrain_triangle_t triangle;
-                        triangle.triangle_exists = 1;
-                        triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
-                    
-                        triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        terrain_triangle_t *triangle = &triangles[triangle_counter++];
+                        triangle->triangle_exists = 1;
+                        triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+
+                        triangle = &triangles[triangle_counter++];
+                        triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
                     }
                 }
                 else
                 {
                     if (z % 2 == 0)
                     {
-                        terrain_triangle_t triangle;
-                        triangle.triangle_exists = 1;
-                        triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
-                    
-                        triangle.idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        terrain_triangle_t *triangle = &triangles[triangle_counter++];
+                        triangle->triangle_exists = 1;
+                        triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+
+                        triangle = &triangles[triangle_counter++];
+                        triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
                     }
                     else
                     {
-                        terrain_triangle_t triangle;
-                        triangle.triangle_exists = 1;
-                        triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
-                    
-                        triangle.idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        triangle.idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        triangle.idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        triangles[triangle_counter++] = triangle;
-                        check_sphere_triangle_collision(&triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        terrain_triangle_t *triangle = &triangles[triangle_counter++];
+                        triangle->triangle_exists = 1;
+                        triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+
+                        triangle = &triangles[triangle_counter++];
+                        triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
+                        triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
+                        triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
+                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
                     }
                 }
             }

@@ -447,8 +447,10 @@ struct all_triangles_under_dbg_return_t
 struct sphere_triangle_collision_return_t
 {
     bool32_t collision_detected;
+    float32_t distance;
     vector3_t ts_new_sphere_position;
     vector3_t ts_new_sphere_velocity;
+    vector3_t surface_normal;
 };
 
 internal_function bool32_t
@@ -521,8 +523,8 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
         }
     }
     // 4. If velocity and plane are not parallel, get t0 and t1 (2 moments where sphere rests on the plane)
-    float32_t first_resting_instance = (1.0f - sphere_plane_distance) / normal_dot_velocity;
-    float32_t second_resting_instance = (-1.0f - sphere_plane_distance) / normal_dot_velocity;
+    float32_t first_resting_instance = (ts_sphere_radius - sphere_plane_distance) / normal_dot_velocity;
+    float32_t second_resting_instance = (-ts_sphere_radius - sphere_plane_distance) / normal_dot_velocity;
     // 5. Check if t0 > dt or if t1 < 0 - if so, exit
     if (first_resting_instance > second_resting_instance)
     {
@@ -537,13 +539,28 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     if (first_resting_instance < 0.0f) first_resting_instance = 0.0f;
     if (second_resting_instance < 1.0f) second_resting_instance = 1.0f;
     // 6. Check if t0 is inside the triangle + get contact point and sphere center's position
-    vector3_t sphere_contact_point = ts_sphere_position + (first_resting_instance * ts_sphere_velocity) - (up_normal_of_triangle * ts_sphere_radius);
+    vector3_t new_sphere_position = ts_sphere_position + (first_resting_instance * ts_sphere_velocity);
+    vector3_t sphere_contact_point = new_sphere_position - (up_normal_of_triangle * ts_sphere_radius);
     
-    static float32_t time = 0.0f;
     if (is_point_in_triangle(sphere_contact_point, fa, fb, fc))
     {
-        printf("foo");
+        float32_t distance = first_resting_instance * distance_squared(ts_sphere_velocity);
+
+        float32_t very_close_distance = 0.005f;
+        
+        sphere_triangle_collision_return_t ret = {};
+        ret.collision_detected = 1;
+        ret.distance = distance;
+        ret.ts_new_sphere_position = new_sphere_position + up_normal_of_triangle * very_close_distance;
+        ret.surface_normal = up_normal_of_triangle;
+        // Calculate new velocity
+        vector3_t destination_point = ts_sphere_position + ts_sphere_velocity;
+        float32_t destination_point_distance_from_plane = (glm::dot(destination_point, up_normal_of_triangle) + plane_constant) - ts_sphere_radius;
+        vector3_t destination_point_parallel = destination_point - destination_point_distance_from_plane * up_normal_of_triangle;
+        ret.ts_new_sphere_velocity = destination_point_parallel - ret.ts_new_sphere_position;
+        return(ret);
     }
+    // TODO: Check edge and vertex collision
     
     // 7. If there was collision, store and make sure it is the closest collision (relative to sphere at time zero)
     // 8. If the collision was outside the triangle, check if collision happened with a vertex
@@ -557,22 +574,46 @@ check_sphere_triangle_collision(terrain_triangle_t *triangle,
     return {false};
 }
 
+internal_function void
+push_collision(const sphere_triangle_collision_return_t &collision, sphere_triangle_collision_return_t *stack, uint32_t &counter, uint32_t max)
+{
+    if (counter < max)
+    {
+        stack[counter++] = collision;
+    }
+}
+
+struct collide_and_slide_collision_t
+{
+    vector3_t ts_position;
+    vector3_t ts_velocity;
+};
+
+internal_function sphere_triangle_collision_return_t *
+find_closest_collision(sphere_triangle_collision_return_t *collisions, uint32_t collision_count)
+{
+    sphere_triangle_collision_return_t *closest = &collisions[0];
+    for (uint32_t i = 1; i < collision_count; ++i)
+    {
+        if (collisions[i].distance < closest->distance)
+        {
+            closest = &collisions[i];
+        }
+    }
+    return(closest);
+}
+
 // Get all the triangles that the sphere might collide with
-internal_function all_triangles_under_dbg_return_t
+internal_function collide_and_slide_collision_t
 detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
-                                                      const vector3_t &ws_sphere_position,
-                                                      const vector3_t &ws_sphere_size,
-                                                      const vector3_t &ws_sphere_velocity,
+                                                      const vector3_t &ts_sphere_position,
+                                                      const vector3_t &ts_sphere_size,
+                                                      const vector3_t &ts_sphere_velocity,
                                                       float32_t dt,
                                                       uint32_t recurse_depth = 0)
 {
     if (terrain)
     {
-        // Calculate the sphere's terrain space position
-        vector3_t ts_sphere_position = matrix4_mul_vec3(terrain->inverse_transform, ws_sphere_position, WITH_TRANSLATION);
-        vector3_t ts_sphere_velocity = matrix4_mul_vec3(terrain->inverse_transform, ws_sphere_velocity, WITHOUT_TRANSLATION);
-        vector3_t ts_sphere_size = matrix4_mul_vec3(glm::scale(1.0f / terrain->size), ws_sphere_size, TRANSLATION_DONT_CARE);
-
         vector3_t ts_ceil_size = glm::ceil(ts_sphere_size);
 
         float32_t x_max = ts_sphere_position.x + ts_ceil_size.x;
@@ -592,7 +633,12 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
 
         int32_t x_diff = max_x_idx - min_x_idx;
         int32_t z_diff = max_z_idx - min_z_idx;
-    
+
+        uint32_t maximum_collisions = 5;
+        
+        uint32_t collision_count = 0;
+        sphere_triangle_collision_return_t *collisions = (sphere_triangle_collision_return_t *)allocate_linear(sizeof(sphere_triangle_collision_return_t) * maximum_collisions);
+        
         memory_buffer_view_t<terrain_triangle_t> triangles;
         triangles.count = x_diff * z_diff * 2;
         triangles.buffer = (terrain_triangle_t *)allocate_linear(sizeof(terrain_triangle_t) * x_diff * z_diff * 2);
@@ -606,18 +652,21 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                 {
                     if (z % 2 == 0)
                     {
+                        // TODO: Organize into functions when this works
                         terrain_triangle_t *triangle = &triangles[triangle_counter++];
                         triangle->triangle_exists = 1;
                         triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        auto collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
 
                         triangle = &triangles[triangle_counter++];
                         triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
                     }
                     else
                     {
@@ -626,13 +675,15 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                         triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        auto collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
 
                         triangle = &triangles[triangle_counter++];
                         triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
                     }
                 }
                 else
@@ -644,13 +695,15 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                         triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x, z,         terrain->xz_dim.x);
-                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        auto collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
 
                         triangle = &triangles[triangle_counter++];
                         triangle->idx[0] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
                     }
                     else
                     {
@@ -659,19 +712,50 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                         triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x, z + 1,     terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
-                        auto ret = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        auto collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
 
                         triangle = &triangles[triangle_counter++];
                         triangle->idx[0] = get_terrain_index(x, z,         terrain->xz_dim.x);
                         triangle->idx[1] = get_terrain_index(x + 1, z + 1, terrain->xz_dim.x);
                         triangle->idx[2] = get_terrain_index(x + 1, z,     terrain->xz_dim.x);
-                        auto ret1 = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        collision = check_sphere_triangle_collision(triangle, ts_sphere_position, ts_sphere_velocity,dt, ts_sphere_size.x, terrain);
+                        if (collision.collision_detected) push_collision(collision, collisions, collision_count, maximum_collisions);
                     }
                 }
             }
         }
 
-        return {triangles, min_x_idx, max_x_idx, min_z_idx, max_z_idx};
+        if (collision_count)
+        {
+            uint32_t max_recursion_depth = 5;
+            
+            sphere_triangle_collision_return_t *closest = find_closest_collision(collisions, collision_count);
+            // There was a collision, must recurse
+            if (recurse_depth < max_recursion_depth)
+            {
+                return detect_collision_against_possible_colliding_triangles(terrain,
+                                                                             closest->ts_new_sphere_position,
+                                                                             ts_sphere_size,
+                                                                             closest->ts_new_sphere_velocity,
+                                                                             dt,
+                                                                             recurse_depth + 1);
+            }
+            else
+            {
+                collide_and_slide_collision_t ret = {};
+                ret.ts_position = closest->ts_new_sphere_position;
+                ret.ts_velocity = closest->ts_new_sphere_velocity;
+                return(ret);
+            }
+        }
+        else
+        {
+            collide_and_slide_collision_t ret = {};
+            ret.ts_position = ts_sphere_position + ts_sphere_velocity;
+            ret.ts_velocity = ts_sphere_velocity;
+            return(ret);
+        }
     }
     else return {};
 }
@@ -2073,7 +2157,12 @@ update_physics_components(float32_t dt)
         struct physics_component_t *component = &g_entities.physics_components[ i ];
         entity_t *e = &g_entities.entity_list[ component->entity_index ];
 
-        all_triangles_under_dbg_return_t all_triangles = detect_collision_against_possible_colliding_triangles(e->on_t, e->ws_p, e->size, e->ws_input_v * dt, dt);
+        collide_and_slide_collision_t collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                                                                                                        matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
+                                                                                                        matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
+                                                                                                        matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_input_v * dt, WITHOUT_TRANSLATION),
+                                                                                                        dt);
+        e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, collision.ts_position, WITH_TRANSLATION);
         
         auto *which_terrain = on_which_terrain(e->ws_p);
         if (which_terrain)
@@ -2101,8 +2190,24 @@ update_physics_components(float32_t dt)
         {
             e->is_on_terrain = false;
         }
+        if (e->animation_time > entity_t::SWITCH_TERRAIN_ANIMATION_TIME)
+        {
+            e->switch_terrain_animation_mode = false;
+        }
         
-        morphable_terrain_t *t = e->on_t;
+        if (e->switch_terrain_animation_mode && e->on_t)
+        {
+            e->animation_time += dt;
+            e->current_rot = glm::mix(e->previous_terrain_rot, e->on_t->gs_r, e->animation_time / entity_t::SWITCH_TERRAIN_ANIMATION_TIME);
+        }
+        else
+        {
+            e->current_rot = e->on_t->gs_r;
+        }
+    }
+
+    
+        /*morphable_terrain_t *t = e->on_t;
         if (component->enabled)
         {
             // TODO: Add a resting flag in the physics component for when the entity is just resting on the terrain (not collision)
@@ -2274,7 +2379,7 @@ update_physics_components(float32_t dt)
             e->current_rot = e->on_t->gs_r;
         }
         e->ws_acceleration = vector3_t(0.0f);
-    }
+        }*/
 }
 
 internal_function input_component_t *
@@ -2607,7 +2712,7 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set
 internal_function void
 dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_ubo, morphable_terrain_t *terrain, gpu_command_queue_t *queue)
 {
-    if (g_terrains.dbg_is_rendering_sphere_collision_triangles)
+    /*if (g_terrains.dbg_is_rendering_sphere_collision_triangles)
     {
     auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
     command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
@@ -2631,7 +2736,11 @@ dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_u
 
             vector3_t ts_p = matrix4_mul_vec3(terrain->inverse_transform, entity->ws_p, matrix4_mul_vec3_with_translation_flag::WITH_TRANSLATION);
             float32_t ts_y_coord_of_player = ts_p.y;
-            all_triangles_under_dbg_return_t triangles = detect_collision_against_possible_colliding_triangles(terrain, entity->ws_p, entity->size, entity->ws_d, 0.0f);
+            detect_collision_against_possible_colliding_triangles(entity->on_t,
+                                                                  matrix4_mul_vec3(entity->on_t->inverse_transform, entity->ws_p, WITH_TRANSLATION),
+                                                                  matrix4_mul_vec3(glm::scale(1.0f / entity->on_t->size), entity->size, TRANSLATION_DONT_CARE),
+                                                                  matrix4_mul_vec3(entity->on_t->inverse_transform, entity->ws_input_v * 0, WITHOUT_TRANSLATION),
+                                                                  0);
             
             pk.positions[0] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
             pk.positions[1] = vector4_t(triangles.min_x, ts_y_coord_of_player, triangles.min_z, 1.0f);
@@ -2655,7 +2764,7 @@ dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_u
             command_buffer_draw(&queue->q, 24, 1, 0, 0);
         }
     }
-    }
+    }*/
 }
 
 internal_function void

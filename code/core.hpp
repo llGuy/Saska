@@ -205,5 +205,8 @@ struct input_state_t
     float32_t dt;
 };
 
+// TODO: Remove when not debugging
+input_state_t *get_input_state(void);
+
 void enable_cursor_display(void);
 void disable_cursor_display(void);

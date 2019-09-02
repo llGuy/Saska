@@ -1,4 +1,3 @@
-
 #define NOMINMAX
 
 #include <stb_image.h>
@@ -47,6 +46,11 @@ global_var double g_dt = 0.0f;
 global_var HWND g_window;
 global_var HCURSOR g_cursor;
 global_var input_state_t g_input_state = {};
+
+input_state_t *get_input_state(void)
+{
+    return &g_input_state;
+}
 
 // TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
 // TODO: Get rid of "static" globals in files to enable hot reloading of game code properly
@@ -102,8 +106,7 @@ close_debug_file(void)
     fclose(output_file.fp);
 }
 
-extern void
-output_debug(const char *format, ...)
+extern void output_debug(const char *format, ...)
 {
     va_list arg_list;
     
@@ -118,8 +121,7 @@ output_debug(const char *format, ...)
     fflush(output_file.fp);
 }
 
-float32_t
-barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
+float32_t barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
 {
     float32_t det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
     float32_t l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
@@ -477,13 +479,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        if (dt > TICK_TIME)
+        /*if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;            
         }
-        else
+        else*/
         {
             // Set game tick period by sleeping
             while (dt < TICK_TIME)

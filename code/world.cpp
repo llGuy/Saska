@@ -459,6 +459,8 @@ struct all_triangles_under_dbg_return_t
 struct sphere_triangle_collision_return_t
 {
     bool32_t collision_happened;
+    bool32_t sphere_was_under_the_terrain; // This means, we need to adjust the sphere's position to be on top of the terrain
+    vector3_t ts_new_sphere_position; // Only for in the case of the sphere being underneath the terrain
     
     float32_t es_distance;
     vector3_t es_sphere_contact_point;
@@ -636,6 +638,7 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
     bool32_t must_check_only_for_edges_and_vertices = 0;
     float32_t normal_dot_velocity = glm::dot(es_sphere_velocity, es_up_normal_of_triangle);
     float32_t sphere_plane_distance = glm::dot(es_sphere_position, es_up_normal_of_triangle) + plane_constant;
+    
     if (normal_dot_velocity == 0.0f)
     {
         if (glm::abs(sphere_plane_distance) >= 1.0f)
@@ -673,6 +676,27 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
             float32_t es_distance = glm::length(es_sphere_velocity * first_resting_instance);
             if (es_distance < collision->es_distance)
             {
+                float32_t sphere_point_plane_distance = glm::dot(es_sphere_position - es_up_normal_of_triangle, es_up_normal_of_triangle) + plane_constant;
+                if (sphere_point_plane_distance < 0.0f && !collision->sphere_was_under_the_terrain)
+                {
+                    // Adjust the sphere position, and call the function
+                    vector3_t es_new_sphere_position = es_sphere_position - es_up_normal_of_triangle * sphere_point_plane_distance;
+                    es_new_sphere_position += 0.005f * es_up_normal_of_triangle;
+                    
+                    collision->sphere_was_under_the_terrain = 1;
+                    collision->ts_new_sphere_position = es_new_sphere_position * ts_sphere_radius;
+
+                    check_sphere_triangle_collision(collision,
+                                                    triangle,
+                                                    es_new_sphere_position * ts_sphere_radius,
+                                                    ts_sphere_velocity,
+                                                    dt,
+                                                    ts_sphere_radius,
+                                                    terrain);
+                    
+                    return;
+                }
+                
                 found_collision = 1;
                 collision->collision_happened = 1;
                 collision->es_distance = es_distance;
@@ -733,10 +757,20 @@ internal_function void collide_with_triangle(const vector3_t &ts_sphere_position
     check_sphere_triangle_collision(closest, triangle, ts_sphere_position, ts_sphere_velocity, dt, ts_sphere_size, terrain);
 }
 
+internal_function void adjust_if_sphere_was_under_terrain(sphere_triangle_collision_return_t *collision,
+                                                     vector3_t &ts_sphere_position)
+{
+    if (collision->sphere_was_under_the_terrain)
+    {
+        collision->sphere_was_under_the_terrain = 0;
+        ts_sphere_position = collision->ts_new_sphere_position;
+    }
+}
+
 // Get all the triangles that the sphere might collide with
 internal_function collide_and_slide_collision_t
 detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
-                                                      const vector3_t &ts_sphere_position,
+                                                      vector3_t ts_sphere_position,
                                                       const vector3_t &ts_sphere_size,
                                                       vector3_t ts_sphere_velocity,
                                                       float32_t dt,
@@ -746,7 +780,7 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
     if (terrain)
     {
         if (!slide) ts_sphere_velocity = vector3_t(0.0f);
-        
+
         vector3_t ts_ceil_size = glm::ceil(ts_sphere_size);
 
         float32_t x_max = ts_sphere_position.x + ts_ceil_size.x;
@@ -789,12 +823,16 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                     if (z % 2 == 0)
                     {
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                     }
                     else
                     {
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                     }
                 }
                 else
@@ -802,12 +840,16 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                     if (z % 2 == 0)
                     {
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                     }
                     else
                     {
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                         collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision);
+                        adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
                     }
                 }
             }
@@ -990,6 +1032,169 @@ struct detected_collision_return_t
 };
 
 enum terrain_space_t { TERRAIN_SPACE, WORLD_SPACE };
+
+internal_function float32_t
+get_height_of_terrain_at_entity_feet(bool is_sphere,
+                                     hitbox_t *hitbox,
+                                     const vector3_t &size,
+                                     const vector3_t &ws_p,
+                                     morphable_terrain_t *t)
+{
+    vector3_t ts_p;
+    vector3_t ts_entity_height_offset;
+    vector2_t ts_p_xz;
+    
+    matrix4_t ws_to_ts = t->inverse_transform;
+
+    // TODO: Make this more accurate (this is just for testing purposes at the moment)
+    //    vector3_t contact_point = ws_p + vector3_t(0.0f, hitbox->y_min, 0.0f) * size;
+
+    if (is_sphere)
+    {
+        ts_entity_height_offset = size * -t->ws_n;
+        ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f)) + ts_entity_height_offset;
+    }
+    else
+    {
+        ts_entity_height_offset = vector3_t( glm::scale(1.0f / t->size) * vector4_t(vector3_t(0.0f, hitbox->y_min, 0.0f) * size, 1.0f) );
+        ts_p = vector3_t(ws_to_ts * vector4_t(ws_p, 1.0f)) + ts_entity_height_offset;
+    }
+
+    ts_p_xz = vector2_t(ts_p.x, ts_p.z);
+        
+    // is outside the terrain
+    if (ts_p_xz.x < 0.0f || ts_p_xz.x > t->xz_dim.x
+        ||  ts_p_xz.y < 0.0f || ts_p_xz.y > t->xz_dim.y)
+    {
+	return {false};
+    }
+
+    // position of the player on one tile (square - two triangles)
+    vector2_t ts_position_on_tile = vector2_t(ts_p_xz.x - glm::floor(ts_p_xz.x)
+                                              , ts_p_xz.y - glm::floor(ts_p_xz.y));
+
+    // starting from (0, 0)
+    ivector2_t ts_tile_corner_position = ivector2_t(glm::floor(ts_p_xz));
+
+
+    // wrong math probably
+    auto get_height_with_offset = [&t, ts_tile_corner_position, ts_position_on_tile](const vector2_t &offset_a,
+										     const vector2_t &offset_b,
+										     const vector2_t &offset_c,
+                                                                                     vector3_t &normal) -> float32_t
+                                  {
+                                      float32_t tl_x = ts_tile_corner_position.x;
+                                      float32_t tl_z = ts_tile_corner_position.y;
+	
+                                      uint32_t triangle_indices[3] =
+                                          {
+                                           get_terrain_index(offset_a.x + tl_x, offset_a.y + tl_z, t->xz_dim.x)
+                                           , get_terrain_index(offset_b.x + tl_x, offset_b.y + tl_z, t->xz_dim.x)
+                                           , get_terrain_index(offset_c.x + tl_x, offset_c.y + tl_z, t->xz_dim.x)
+                                          };
+
+                                      float32_t *terrain_heights = (float32_t *)t->heights;
+                                      vector3_t a = vector3_t(offset_a.x, terrain_heights[triangle_indices[0]], offset_a.y);
+                                      vector3_t b = vector3_t(offset_b.x, terrain_heights[triangle_indices[1]], offset_b.y);
+                                      vector3_t c = vector3_t(offset_c.x, terrain_heights[triangle_indices[2]], offset_c.y);
+
+                                      normal = glm::normalize(glm::cross(glm::normalize(a - c), glm::normalize(b - c)));
+            
+                                      return(barry_centric(a, b, c, ts_position_on_tile));
+                                  };
+    
+    float32_t ts_height;
+
+    vector3_t normal;
+
+    if (ts_tile_corner_position.x % 2 == 0)
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                                                   vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+	else
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(0.0f, 0.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+    }
+    else
+    {
+	if (ts_tile_corner_position.y % 2 == 0)
+	{
+	    if (1.0f - ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   vector2_t(0.0f, 0.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+	else
+	{
+	    if (ts_position_on_tile.y >= ts_position_on_tile.x)
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                                                   vector2_t(0.0f, 1.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   normal);
+	    }
+	    else
+	    {
+		ts_height = get_height_with_offset(vector2_t(0.0f, 0.0f),
+                                                   vector2_t(1.0f, 1.0f),
+                                                   vector2_t(1.0f, 0.0f),
+                                                   normal);
+	    }
+	}
+    }
+    
+    // result of the terrain collision in terrain space
+    vector3_t ts_at (ts_p_xz.x, ts_height, ts_p_xz.y);
+
+    vector3_t ws_at = vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(ts_at, 1.0f));
+    vector3_t ws_normal = glm::normalize(vector3_t(compute_ts_to_ws_matrix(t) * vector4_t(normal, 0.0f)));
+    
+    if (ts_p.y < 0.0001f + ts_height)
+    {
+	return ts_height;
+    }
+
+    return ts_height;
+}
 
 internal_function detected_collision_return_t
 detect_terrain_collision(hitbox_t *hitbox,
@@ -1816,7 +2021,7 @@ struct physics_component_t
     vector3_t velocity {0.0f};
     vector3_t displacement {0.0f};
 
-    enum is_resting_t { NOT_RESTING = 0, JUST_COLLIDED = 1, RESTING = 2, SLIDING = 3 } is_resting;
+    enum is_resting_t { NOT_RESTING = 0, JUST_COLLIDED = 1, RESTING = 2 } is_resting {NOT_RESTING};
     float32_t sliding_momentum = 0.0f;
     
     // F = ma
@@ -2335,14 +2540,50 @@ update_physics_components(float32_t dt)
                                                                                                                     dt,
                                                                                                                     0);*/
 
+            // Calculate velocity vector (in the previous sliding plane)
+            vector3_t sliding_direction = vector3_t(0.0f);
+            if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
+            {
+                sliding_direction = e->ws_d;
+            }
+            else
+            {
+                sliding_direction = glm::normalize(get_sliding_down_direction(e->ws_d /* View direction */, e->on_t->ws_n, component->surface_normal));
+            }
+
+            collide_and_slide_collision_t slide_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                                                                                                                  matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
+                                                                                                                  matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
+                                                                                                                  matrix4_mul_vec3(e->on_t->inverse_transform, sliding_direction, WITHOUT_TRANSLATION),
+                                                                                                                  dt,
+                                                                                                                  1);
+
+            e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, slide_collision.ts_position, WITH_TRANSLATION);
             
-            vector3_t gravity = vector3_t(0.0f, -9.5f, 0.0f) * dt;
+            // Collide with gravity
+            vector3_t gravity = vector3_t(0.0f, -9.5f, 0.0f);
             collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                    matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_input_v * dt, WITHOUT_TRANSLATION),
+                                                                                                                    matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), gravity * dt, WITHOUT_TRANSLATION),
                                                                                                                     dt,
                                                                                                                     1);
+
+            component->surface_normal = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_normal, WITHOUT_TRANSLATION);
+            
+            if (gravity_collision.collided)
+            {
+                if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
+                {
+                    int32_t *i_is_resting = (int32_t *)&component->is_resting;
+                    ++(*i_is_resting);
+                }
+            }
+            else
+            {
+                component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
+            }
+            
             e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
         }
                

@@ -1,3 +1,4 @@
+// TODO: Get rid of most of the glm::length calls in the physics calculations (terrain collision stuff)
 // TODO: Have a startup script so that you can reload the game
 
 #include "ui.hpp"
@@ -461,11 +462,8 @@ struct sphere_triangle_collision_return_t
     
     float32_t es_distance;
     vector3_t es_sphere_contact_point;
-    
-    // For debugging only
-    // TODO: Remove this once debugging is finished
-    bool is_edge = 0;
-    vector3_t ts_a, ts_b;
+
+    vector3_t ts_surface_normal_at_collision_point;
 };
 
 internal_function bool32_t
@@ -506,19 +504,22 @@ internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, 
     float r1 = (-b - sqrt_d) / (2 * a);
     float r2 = (-b + sqrt_d) / (2 * a);
     // Sort so x1 <= x2
-    if (r1 > r2) {
+    if (r1 > r2)
+    {
         float32_t temp = r2;
         r2 = r1;
         r1 = temp;
     }
     // Get lowest root:
-    if (r1 > 0 && r1 < max_r) {
+    if (r1 > 0 && r1 < max_r)
+    {
         *root = r1;
         return true;
     }
     // It is possible that we want x2 - this can happen
     // if x1 < 0
-    if (r2 > 0 && r2 < max_r) {
+    if (r2 > 0 && r2 < max_r)
+    {
         *root = r2;
         return true;
     }
@@ -536,6 +537,63 @@ internal_function void make_triangle_collision_return(float32_t es_distance, con
 {
     ret->es_distance = es_distance;
     ret->es_sphere_contact_point = es_contact_point;
+}
+
+internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position,
+                                                   const vector3_t &es_vertex,
+                                                   const vector3_t &ts_surface_normal,
+                                                   sphere_triangle_collision_return_t *collision)
+{
+    float32_t a = distance_squared(es_sphere_velocity);
+    float32_t b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_vertex);
+    float32_t c = distance_squared(es_vertex - es_sphere_position) - 1.0f;
+            
+    float32_t new_resting_instance;
+    if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
+    {
+        float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
+                
+        if (es_distance < collision->es_distance)
+        {
+            collision->collision_happened = 1;
+            collision->es_distance = es_distance;
+            collision->es_sphere_contact_point = es_vertex;
+            collision->ts_surface_normal_at_collision_point = ts_surface_normal;
+        }
+    }
+}
+
+internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position,
+                                                 const vector3_t &es_vertex_a, const vector3_t &es_vertex_b,
+                                                 const vector3_t &ts_surface_normal,
+                                                 sphere_triangle_collision_return_t *collision)
+{
+    vector3_t es_edge_diff = es_vertex_b - es_vertex_a;
+    vector3_t es_sphere_pos_to_vertex = es_vertex_a - es_sphere_position;
+        
+    float32_t a = distance_squared(es_edge_diff) * -distance_squared(es_sphere_velocity) + squared(glm::dot(es_edge_diff, es_sphere_velocity));
+    float32_t b = distance_squared(es_edge_diff) * 2.0f * glm::dot(es_sphere_velocity, es_sphere_pos_to_vertex) - 2.0f * (glm::dot(es_edge_diff, es_sphere_velocity) * glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
+    float32_t c = distance_squared(es_edge_diff) * (1.0f - distance_squared(es_sphere_pos_to_vertex)) + squared(glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
+
+    float32_t new_resting_instance;
+    if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
+    {
+        float32_t in_edge_proportion = (glm::dot(es_edge_diff, es_sphere_velocity) * new_resting_instance - glm::dot(es_edge_diff, es_sphere_pos_to_vertex)) / distance_squared(es_edge_diff);
+            
+        if (in_edge_proportion >= 0.0f && in_edge_proportion <= 1.0f)
+        {
+            vector3_t es_sphere_contact_point = es_vertex_a + in_edge_proportion * es_edge_diff;
+            float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
+            
+            if (es_distance < collision->es_distance)
+            {
+                collision->collision_happened = 1;
+                collision->es_distance = es_distance;
+                collision->es_sphere_contact_point = es_sphere_contact_point;
+                collision->ts_surface_normal_at_collision_point = ts_surface_normal;
+            }
+        }
+    }
 }
 
 // TODO: Render the edge that is being detected as colliding
@@ -563,14 +621,15 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
     vector3_t es_fc = vector3_t(ic.x, terrain->heights[triangle->idx[2]], ic.y) / ts_sphere_radius;
 
     vector3_t es_up_normal_of_triangle = glm::normalize(glm::cross(es_fb - es_fa, es_fc - es_fa));
+    vector3_t ts_surface_normal = es_up_normal_of_triangle * ts_sphere_radius;
     
     vector3_t es_normalized_ts_sphere_velocity = glm::normalize(es_sphere_velocity);
     float32_t velocity_dot_normal = glm::dot(es_normalized_ts_sphere_velocity, es_up_normal_of_triangle);
+    
     if (velocity_dot_normal > 0.0f)
     {
         return;
     }
-
 
     float32_t plane_constant = -( (es_fa.x * es_up_normal_of_triangle.x) + (es_fa.y * es_up_normal_of_triangle.y) + (es_fa.z * es_up_normal_of_triangle.z) );
 
@@ -590,8 +649,8 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
     }
 
     if (!must_check_only_for_edges_and_vertices)
-    // --- Collision Detection with triangle face
     {
+        // Check collision with triangle face
         first_resting_instance = (1.0f - sphere_plane_distance) / normal_dot_velocity;
         float32_t second_resting_instance = (-1.0f - sphere_plane_distance) / normal_dot_velocity;
 
@@ -618,196 +677,22 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
                 collision->collision_happened = 1;
                 collision->es_distance = es_distance;
                 collision->es_sphere_contact_point = es_contact_point;
+                collision->ts_surface_normal_at_collision_point = ts_surface_normal;
             }
         }
     }
     
-    // Check collisions with all 3 vertices
     if (!found_collision)
     {
         // Check collision with vertices
-        /*{
-            // TODO: Organize into functions
-            float32_t a = distance_squared(es_sphere_velocity);
-            float32_t b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_fa);
-            float32_t c = distance_squared(es_fa - es_sphere_position) - 1.0f;
-
-            float32_t new_resting_instance;
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                vector3_t es_new_sphere_position = es_sphere_position + (first_resting_instance * es_sphere_velocity);
-                vector3_t es_sphere_contact_point = es_new_sphere_position - (es_up_normal_of_triangle);
-                float32_t distance = distance_squared(es_sphere_velocity * first_resting_instance);
-                float32_t very_close_distance = 0.005f;
-            
-                if (ret.distance > distance)
-                {
-                    first_resting_instance = new_resting_instance;
-                    found_collision = 1;
-                
-                    ret.collision_detected = 1;
-                    ret.distance = distance;
-                    ret.ts_new_sphere_position = (es_new_sphere_position + es_up_normal_of_triangle * very_close_distance) * ts_sphere_radius;
-                    ret.surface_normal = es_up_normal_of_triangle * ts_sphere_radius;
-                    // Calculate new velocity
-                    vector3_t es_destination_point = es_sphere_position + es_sphere_velocity;
-                    float32_t destination_point_distance_from_plane = (glm::dot(es_destination_point, es_up_normal_of_triangle) + plane_constant) - 1.0f;
-                    vector3_t ts_destination_point_parallel = (es_destination_point - destination_point_distance_from_plane * es_up_normal_of_triangle) * ts_sphere_radius;
-                    ret.ts_new_sphere_velocity = ts_destination_point_parallel - ret.ts_new_sphere_position;
-                }
-            }
-            a = distance_squared(es_sphere_velocity);
-            b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_fb);
-            c = distance_squared(es_fb - es_sphere_position) - 1.0f;
-
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                vector3_t es_new_sphere_position = es_sphere_position + (first_resting_instance * es_sphere_velocity);
-                vector3_t es_sphere_contact_point = es_new_sphere_position - (es_up_normal_of_triangle);
-                float32_t distance = distance_squared(es_sphere_velocity * first_resting_instance);
-                float32_t very_close_distance = 0.005f;
-                if (ret.distance > distance)
-                {
-                    first_resting_instance = new_resting_instance;
-                    found_collision = 1;
-                
-                    ret.collision_detected = 1;
-                    ret.distance = distance;
-                    ret.ts_new_sphere_position = (es_new_sphere_position + es_up_normal_of_triangle * very_close_distance) * ts_sphere_radius;
-                    ret.surface_normal = es_up_normal_of_triangle * ts_sphere_radius;
-                    // Calculate new velocity
-                    vector3_t es_destination_point = es_sphere_position + es_sphere_velocity;
-                    float32_t destination_point_distance_from_plane = (glm::dot(es_destination_point, es_up_normal_of_triangle) + plane_constant) - 1.0f;
-                    vector3_t ts_destination_point_parallel = (es_destination_point - destination_point_distance_from_plane * es_up_normal_of_triangle) * ts_sphere_radius;
-                    ret.ts_new_sphere_velocity = ts_destination_point_parallel - ret.ts_new_sphere_position;
-                }
-            }
-            a = distance_squared(es_sphere_velocity;
-            b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_fc);
-            c = distance_squared(es_fc - ts_sphere_position) - 1.0f;
-
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                vector3_t es_new_sphere_position = es_sphere_position + (first_resting_instance * es_sphere_velocity);
-                vector3_t es_sphere_contact_point = es_fc;
-                vector3_t es_normal = glm::normalize(es_new_sphere_position - es_sphere_contact_point);
-
-                float32_t distance = distance_squared(es_new_sphere_position - es_sphere_position);
-                float32_t very_close_distance = 0.005f;
-                
-                if (ret.distance > distance)
-                {
-                    first_resting_instance = new_resting_instance;
-                    found_collision = 1;
-                
-                    ret.collision_detected = 1;
-                    ret.distance = distance;
-                    ret.ts_new_sphere_position = (es_new_sphere_position + es_up_normal_of_triangle * very_close_distance) * ts_sphere_radius;
-                    ret.surface_normal = es_up_normal_of_triangle * ts_sphere_radius;
-                    // Calculate new velocity
-                    vector3_t es_destination_point = es_sphere_position + es_sphere_velocity;
-                    float32_t destination_point_distance_from_plane = (glm::dot(es_destination_point, es_up_normal_of_triangle) + plane_constant) - 1.0f;
-                    vector3_t ts_destination_point_parallel = (es_destination_point - destination_point_distance_from_plane * es_up_normal_of_triangle) * ts_sphere_radius;
-                    ret.ts_new_sphere_velocity = ts_destination_point_parallel - ret.ts_new_sphere_position;
-
-                    ret.collision_detected = 1;
-                    ret.ts_new_sphere_position = es_new_sphere_position * ts_sphere_radius;
-                    ret.ts_new_sphere_velocity = vector3_t(0.0f);
-                    ret.is_edge = 1;
-                    ret.distance = distance;
-                    ret.surface_normal = es_up_normal_of_triangle * ts_sphere_radius;
-                    g_terrains.dbg_edge_data.edge_container = terrain;
-                    g_terrains.dbg_edge_data.ts_a = es_fc * ts_sphere_radius;
-                    g_terrains.dbg_edge_data.ts_b = es_fa * ts_sphere_radius;
-
-                    found_collision = 1;
-                }
-            }
-            }*/
+        check_collision_with_vertex(es_sphere_velocity, es_sphere_position, es_fa, ts_surface_normal, collision);
+        check_collision_with_vertex(es_sphere_velocity, es_sphere_position, es_fb, ts_surface_normal, collision);
+        check_collision_with_vertex(es_sphere_velocity, es_sphere_position, es_fc, ts_surface_normal,collision);
 
         // Check collision with edges
-        {
-            // TODO: Organize into functions
-            // Origin is fa
-            vector3_t es_edge_diff = es_fb - es_fa;
-            vector3_t es_sphere_pos_to_vertex = es_fa - es_sphere_position;
-        
-            float32_t a = distance_squared(es_edge_diff) * -distance_squared(es_sphere_velocity) + squared(glm::dot(es_edge_diff, es_sphere_velocity));
-            float32_t b = distance_squared(es_edge_diff) * 2.0f * glm::dot(es_sphere_velocity, es_sphere_pos_to_vertex) - 2.0f * (glm::dot(es_edge_diff, es_sphere_velocity) * glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
-            float32_t c = distance_squared(es_edge_diff) * (1.0f - distance_squared(es_sphere_pos_to_vertex)) + squared(glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
-
-            float32_t new_resting_instance;
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                float32_t in_edge_proportion = (glm::dot(es_edge_diff, es_sphere_velocity) * new_resting_instance - glm::dot(es_edge_diff, es_sphere_pos_to_vertex)) / distance_squared(es_edge_diff);
-            
-                if (in_edge_proportion >= 0.0f && in_edge_proportion <= 1.0f)
-                {
-                    vector3_t es_sphere_contact_point = es_fa + in_edge_proportion * es_edge_diff;
-                    float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
-            
-                    if (es_distance < collision->es_distance)
-                    {
-                        collision->collision_happened = 1;
-                        collision->es_distance = es_distance;
-                        collision->es_sphere_contact_point = es_sphere_contact_point;
-                        found_collision = 1;
-                    }
-                }
-            }
-
-            es_edge_diff = es_fc - es_fb;
-            es_sphere_pos_to_vertex = es_fb - es_sphere_position;
-
-            a = distance_squared(es_edge_diff) * -distance_squared(es_sphere_velocity) + squared(glm::dot(es_edge_diff, es_sphere_velocity));
-            b = distance_squared(es_edge_diff) * 2.0f * glm::dot(es_sphere_velocity, es_sphere_pos_to_vertex) - 2.0f * (glm::dot(es_edge_diff, es_sphere_velocity) * glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
-            c = distance_squared(es_edge_diff) * (1.0f - distance_squared(es_sphere_pos_to_vertex)) + squared(glm::dot(es_edge_diff, es_sphere_pos_to_vertex));        
-
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                float32_t in_edge_proportion = (glm::dot(es_edge_diff, es_sphere_velocity) * new_resting_instance - glm::dot(es_edge_diff, es_sphere_pos_to_vertex)) / distance_squared(es_edge_diff);
-            
-                if (in_edge_proportion >= 0.0f && in_edge_proportion <= 1.0f)
-                {
-                    vector3_t es_sphere_contact_point = es_fb + in_edge_proportion * es_edge_diff;
-                    float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
-            
-                    if (es_distance < collision->es_distance)
-                    {
-                        collision->collision_happened = 1;
-                        collision->es_distance = es_distance;
-                        collision->es_sphere_contact_point = es_sphere_contact_point;
-                        found_collision = 1;
-                    }
-                }
-            }
-
-            es_edge_diff = es_fa - es_fc;
-            es_sphere_pos_to_vertex = es_fc - es_sphere_position;
-
-            a = distance_squared(es_edge_diff) * -distance_squared(es_sphere_velocity) + squared(glm::dot(es_edge_diff, es_sphere_velocity));
-            b = distance_squared(es_edge_diff) * 2.0f * glm::dot(es_sphere_velocity, es_sphere_pos_to_vertex) - 2.0f * (glm::dot(es_edge_diff, es_sphere_velocity) * glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
-            c = distance_squared(es_edge_diff) * (1.0f - distance_squared(es_sphere_pos_to_vertex)) + squared(glm::dot(es_edge_diff, es_sphere_pos_to_vertex));        
-
-            if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
-            {
-                float32_t in_edge_proportion = (glm::dot(es_edge_diff, es_sphere_velocity) * new_resting_instance - glm::dot(es_edge_diff, es_sphere_pos_to_vertex)) / distance_squared(es_edge_diff);
-            
-                if (in_edge_proportion >= 0.0f && in_edge_proportion <= 1.0f)
-                {
-                    vector3_t es_sphere_contact_point = es_fc + in_edge_proportion * es_edge_diff;
-                    float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
-            
-                    if (es_distance < collision->es_distance)
-                    {
-                        collision->collision_happened = 1;
-                        collision->es_distance = es_distance;
-                        collision->es_sphere_contact_point = es_sphere_contact_point;
-                        found_collision = 1;
-                    }
-                }
-            }
-        }
+        check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fa, es_fb, ts_surface_normal, collision);
+        check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fb, es_fc, ts_surface_normal, collision);
+        check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fc, es_fa, ts_surface_normal, collision);
     }
 }
 
@@ -825,25 +710,9 @@ struct collide_and_slide_collision_t
     
     vector3_t ts_position;
     vector3_t ts_velocity;
+    
     vector3_t ts_normal;
-
-    // TODO: Remove when not debugging
-    bool is_edge;
-    vector3_t ts_a, ts_b;
 };
-
-/*internal_function sphere_triangle_collision_return_t *find_closest_collision(sphere_triangle_collision_return_t *collisions, uint32_t collision_count)
-{
-    sphere_triangle_collision_return_t *closest = &collisions[0];
-    for (uint32_t i = 1; i < collision_count; ++i)
-    {
-        if (collisions[i].distance < closest->distance)
-        {
-            closest = &collisions[i];
-        }
-    }
-    return(closest);
-}*/
 
 internal_function void collide_with_triangle(const vector3_t &ts_sphere_position,
                                             const vector3_t &ts_sphere_velocity,
@@ -982,8 +851,7 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                 ret.collided = 1;
                 ret.ts_position = es_new_sphere_position * ts_sphere_size;
                 ret.ts_velocity = es_new_velocity * ts_sphere_size;
-                ret.is_edge = closest_collision.is_edge;
-                ret.ts_normal = es_slide_plane_normal;
+                ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
                 return(ret);
             }
             // There was a collision, must recurse
@@ -1003,6 +871,7 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                 ret.collided = 1;
                 ret.ts_position = es_new_sphere_position * ts_sphere_size;
                 ret.ts_velocity = es_new_velocity * ts_sphere_size;
+                ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
                 return(ret);
             }
         }
@@ -1017,8 +886,6 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
     }
     else return {};
 }
-
-
 
 internal_function terrain_triangle_t
 get_triangle_pointing_at(vector3_t ws_ray_p,

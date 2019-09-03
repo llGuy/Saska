@@ -2540,25 +2540,29 @@ update_physics_components(float32_t dt)
                                                                                                                     dt,
                                                                                                                     0);*/
 
-            // Calculate velocity vector (in the previous sliding plane)
-            vector3_t sliding_direction = vector3_t(0.0f);
-            if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
+            input_component_t *input = &g_entities.input_components[e->components.input_component];
+            if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
             {
-                sliding_direction = e->ws_d;
-            }
-            else
-            {
-                sliding_direction = glm::normalize(get_sliding_down_direction(e->ws_d /* View direction */, e->on_t->ws_n, component->surface_normal));
-            }
+                // Calculate velocity vector (in the previous sliding plane)
+                vector3_t sliding_direction = vector3_t(0.0f);
+                if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
+                {
+                    sliding_direction = e->ws_d;
+                }
+                else
+                {
+                    sliding_direction = glm::normalize(get_sliding_down_direction(e->ws_d /* View direction */, e->on_t->ws_n, component->surface_normal));
+                }
 
-            collide_and_slide_collision_t slide_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
-                                                                                                                  matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
-                                                                                                                  matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                  matrix4_mul_vec3(e->on_t->inverse_transform, sliding_direction, WITHOUT_TRANSLATION),
-                                                                                                                  dt,
-                                                                                                                  1);
+                collide_and_slide_collision_t slide_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                                                                                                                      matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
+                                                                                                                      matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
+                                                                                                                      matrix4_mul_vec3(e->on_t->inverse_transform, sliding_direction, WITHOUT_TRANSLATION),
+                                                                                                                      dt,
+                                                                                                                      1);
 
-            e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, slide_collision.ts_position, WITH_TRANSLATION);
+                e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, slide_collision.ts_position, WITH_TRANSLATION);
+            }
             
             // Collide with gravity
             vector3_t gravity = vector3_t(0.0f, -9.5f, 0.0f);

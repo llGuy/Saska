@@ -2008,6 +2008,8 @@ using entity_handle_t = int32_t;
 // Gravity acceleration on earth = 9.81 m/s^2
 struct physics_component_t
 {
+    vector3_t previous_velocity;
+    
     // Sum of mass of all particles
     float32_t mass = 1.0f; // KG
     // Sum ( all points of mass (vector quantity) * all masses of each point of mass ) / total body mass
@@ -2022,6 +2024,7 @@ struct physics_component_t
     vector3_t displacement {0.0f};
 
     enum is_resting_t { NOT_RESTING = 0, JUST_COLLIDED = 1, RESTING = 2 } is_resting {NOT_RESTING};
+
     float32_t sliding_momentum = 0.0f;
     
     // F = ma
@@ -2041,7 +2044,7 @@ struct physics_component_t
     vector3_t surface_position;
 
     vector3_t force;
-    
+
     // other forces (friction...)
 };
 
@@ -2540,6 +2543,12 @@ update_physics_components(float32_t dt)
                                                                                                                     dt,
                                                                                                                     0);*/
 
+            vector3_t ws_new_velocity = vector3_t(0.0f);
+
+            vector3_t ws_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
+            vector3_t ws_friction_force = vector3_t(0.0f);
+            vector3_t ws_sliding_force = vector3_t(0.0f);
+
             input_component_t *input = &g_entities.input_components[e->components.input_component];
             if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
             {
@@ -2548,16 +2557,40 @@ update_physics_components(float32_t dt)
                 if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
                 {
                     sliding_direction = e->ws_d;
+                    ws_sliding_force = glm::normalize(sliding_direction) * dt * 4.0f;
+                    
+                    ws_new_velocity = ws_sliding_force;
+
+                    if (component->sliding_momentum >= 0.0f)
+                    {
+                        component->sliding_momentum /= 2.0f;
+                    }
+
+                    if (component->sliding_momentum < 0.1f)
+                    {
+                        component->sliding_momentum = 0.0f;
+                    }
                 }
                 else
                 {
                     sliding_direction = glm::normalize(get_sliding_down_direction(e->ws_d /* View direction */, e->on_t->ws_n, component->surface_normal));
+                    
+                    float32_t friction_resistance = glm::dot(sliding_direction, -e->on_t->ws_n);
+
+                    component->sliding_momentum += friction_resistance * 9.81f * dt * 10.0f;
+                    
+                    // Is on the terrain
+                    // TODO: If inclination of the terrain is steep, then apply gravity, otherwise, don't
+                    //                    ws_sliding_force = glm::normalize(sliding_direction) * component->sliding_momentum * dt * 4.0f;
+                    ws_sliding_force = glm::normalize(sliding_direction) * dt * 1.0f;
+                    ws_new_velocity = ws_sliding_force;
                 }
 
+                // Slide down : apply sliding forces (friction, sliding)
                 collide_and_slide_collision_t slide_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                       matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                       matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                      matrix4_mul_vec3(e->on_t->inverse_transform, sliding_direction, WITHOUT_TRANSLATION),
+                                                                                                                      matrix4_mul_vec3(e->on_t->inverse_transform, ws_sliding_force, WITHOUT_TRANSLATION),
                                                                                                                       dt,
                                                                                                                       1);
 
@@ -2565,6 +2598,7 @@ update_physics_components(float32_t dt)
             }
             
             // Collide with gravity
+            // World-space scaled
             vector3_t gravity = vector3_t(0.0f, -9.5f, 0.0f);
             collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
@@ -2573,9 +2607,10 @@ update_physics_components(float32_t dt)
                                                                                                                     dt,
                                                                                                                     1);
 
-            component->surface_normal = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_normal, WITHOUT_TRANSLATION);
-            
-            if (gravity_collision.collided)
+            component->surface_normal = glm::normalize(matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_normal, WITHOUT_TRANSLATION));
+            component->previous_velocity = matrix4_mul_vec3(e->on_t->push_k.transform, glm::normalize(gravity_collision.ts_velocity), WITHOUT_TRANSLATION);
+
+            if (gravity_collision.collided || distance_squared(ws_new_velocity) > squared(30.0f))
             {
                 if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
                 {
@@ -2591,7 +2626,6 @@ update_physics_components(float32_t dt)
             e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
         }
                
-       
         auto *which_terrain = on_which_terrain(e->ws_p);
         if (which_terrain)
         {

@@ -55,8 +55,7 @@ input_state_t *get_input_state(void)
 // TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
 // TODO: Get rid of "static" globals in files to enable hot reloading of game code properly
 
-file_contents_t
-read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
+file_contents_t read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
 {
     FILE *file = fopen(filename, flags);
     if (file == nullptr)
@@ -81,8 +80,7 @@ read_file(const char *filename, const char *flags, linear_allocator_t *allocator
     return(contents);
 }
 
-external_image_data_t
-read_image(const char *filename)
+external_image_data_t read_image(const char *filename)
 {
     external_image_data_t external_image_data;
     external_image_data.pixels = stbi_load(filename,

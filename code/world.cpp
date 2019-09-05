@@ -466,6 +466,8 @@ struct sphere_triangle_collision_return_t
     vector3_t es_sphere_contact_point;
 
     vector3_t ts_surface_normal_at_collision_point;
+
+    bool32_t is_edge;
 };
 
 internal_function bool32_t
@@ -589,6 +591,7 @@ internal_function void check_collision_with_edge(const vector3_t &es_sphere_velo
             
             if (es_distance < collision->es_distance)
             {
+                collision->is_edge = 1;
                 collision->collision_happened = 1;
                 collision->es_distance = es_distance;
                 collision->es_sphere_contact_point = es_sphere_contact_point;
@@ -651,6 +654,8 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
         }
     }
 
+    const float32_t very_close_distance = 0.01f;
+    
     if (!must_check_only_for_edges_and_vertices)
     {
         // Check collision with triangle face
@@ -681,7 +686,7 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
                 {
                     // Adjust the sphere position, and call the function
                     vector3_t es_new_sphere_position = es_sphere_position - es_up_normal_of_triangle * sphere_point_plane_distance;
-                    es_new_sphere_position += 0.005f * es_up_normal_of_triangle;
+                    es_new_sphere_position += very_close_distance * es_up_normal_of_triangle;
                     
                     collision->sphere_was_under_the_terrain = 1;
                     collision->ts_new_sphere_position = es_new_sphere_position * ts_sphere_radius;
@@ -736,6 +741,8 @@ struct collide_and_slide_collision_t
     vector3_t ts_velocity;
     
     vector3_t ts_normal;
+
+    bool is_edge;
 };
 
 internal_function void collide_with_triangle(const vector3_t &ts_sphere_position,
@@ -774,6 +781,7 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
                                                       const vector3_t &ts_sphere_size,
                                                       vector3_t ts_sphere_velocity,
                                                       float32_t dt,
+                                                      bool previous_was_edge,
                                                       bool slide,
                                                       uint32_t recurse_depth = 0)
 {
@@ -855,7 +863,7 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
             }
         }
 
-        const float32_t es_very_close_distance_from_terrain = 0.005f;
+        const float32_t es_very_close_distance_from_terrain = 0.01f;
         
         if (closest_collision.collision_happened)
         {
@@ -887,7 +895,9 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
             vector3_t es_new_sphere_destination_point = es_sphere_destination_point - dest_point_dist_from_plane * es_slide_plane_normal;
             vector3_t es_new_velocity = es_new_sphere_destination_point - closest_collision.es_sphere_contact_point;
 
-            if (distance_squared(es_new_velocity) < squared(es_very_close_distance_from_terrain))
+            float32_t new_velocity_distance_squared = distance_squared(es_new_velocity);
+            float32_t very_close_distance_squared = squared(es_very_close_distance_from_terrain);
+            if (new_velocity_distance_squared < very_close_distance_squared)
             {
                 collide_and_slide_collision_t ret = {};
                 ret.collided = 1;
@@ -899,13 +909,14 @@ detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terra
             // There was a collision, must recurse
             else if (recurse_depth < max_recursion_depth && slide)
             {
-                return detect_collision_against_possible_colliding_triangles(terrain,
-                                                                             es_new_sphere_position * ts_sphere_size,
-                                                                             ts_sphere_size,
-                                                                             es_new_velocity * ts_sphere_size,
-                                                                             dt,
-                                                                             1,
-                                                                             recurse_depth + 1);
+                collide_and_slide_collision_t collide = detect_collision_against_possible_colliding_triangles(terrain,
+                                                                                                              es_new_sphere_position * ts_sphere_size,
+                                                                                                              ts_sphere_size,
+                                                                                                              es_new_velocity * ts_sphere_size,
+                                                                                                              dt,
+                                                                                                              0,
+                                                                                                              1,
+                                                                                                              recurse_depth + 1);
             }
             else
             {
@@ -1428,7 +1439,7 @@ morph_terrain_at_triangle(terrain_triangle_t *triangle,
 
                 if (index >= 0)
                 {
-                    height_ptr[index] += cos_theta * dt;
+                    height_ptr[index] += cos_theta * dt * 10.0f;
                 }
             }
         }
@@ -1839,8 +1850,6 @@ initialize_terrain_data(VkCommandPool *cmdpool)
     terrain_base_info_t *base = get_terrain_base(0);
     auto *model_info = &base->model_info;
 
-
-    
     g_terrains.terrain_ppln = g_pipeline_manager.add("pipeline.terrain_pipeline"_hash);
     auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);
     {
@@ -2543,6 +2552,15 @@ update_physics_components(float32_t dt)
                                                                                                                     dt,
                                                                                                                     0);*/
 
+            // How to do physics:
+            // 1: Figure out what the forces are on an object
+            // 2: Add those forces up to get a single resultant or net force
+            // 3: Use F = ma to calculate the objects accelration due to those forces
+            // 4: Use the object's acceleration to calculte the object's velocity
+            // 5: Use the object's velocity to calculate the object's position
+            // 6: Since the forces on the object may change from moment to moment, repeat this process from #1 forever.
+
+            
             vector3_t ws_new_velocity = vector3_t(0.0f);
 
             vector3_t ws_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
@@ -2563,12 +2581,12 @@ update_physics_components(float32_t dt)
 
                     if (component->sliding_momentum >= 0.0f)
                     {
-                        component->sliding_momentum /= 2.0f;
+                        //                        component->sliding_momentum -= 10.0f * dt;
                     }
 
-                    if (component->sliding_momentum < 0.1f)
+                    if (component->sliding_momentum < 0.0f)
                     {
-                        component->sliding_momentum = 0.0f;
+                        //component->sliding_momentum = 0.0f;
                     }
                 }
                 else
@@ -2581,8 +2599,8 @@ update_physics_components(float32_t dt)
                     
                     // Is on the terrain
                     // TODO: If inclination of the terrain is steep, then apply gravity, otherwise, don't
-                    //                    ws_sliding_force = glm::normalize(sliding_direction) * component->sliding_momentum * dt * 4.0f;
-                    ws_sliding_force = glm::normalize(sliding_direction) * dt * 1.0f;
+                    ws_sliding_force = glm::normalize(sliding_direction) * component->sliding_momentum * dt * 4.0f;
+                    //ws_sliding_force = glm::normalize(sliding_direction) * dt * 1.0f;
                     ws_new_velocity = ws_sliding_force;
                 }
 
@@ -2600,6 +2618,7 @@ update_physics_components(float32_t dt)
             // Collide with gravity
             // World-space scaled
             vector3_t gravity = vector3_t(0.0f, -9.5f, 0.0f);
+            // TODO: Figue out why edge collisions don't report collisions making it so that speed hack is not needed
             collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
@@ -2610,7 +2629,7 @@ update_physics_components(float32_t dt)
             component->surface_normal = glm::normalize(matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_normal, WITHOUT_TRANSLATION));
             component->previous_velocity = matrix4_mul_vec3(e->on_t->push_k.transform, glm::normalize(gravity_collision.ts_velocity), WITHOUT_TRANSLATION);
 
-            if (gravity_collision.collided || distance_squared(ws_new_velocity) > squared(30.0f))
+            if (gravity_collision.collided)
             {
                 if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
                 {
@@ -2620,6 +2639,13 @@ update_physics_components(float32_t dt)
             }
             else
             {
+                collide_and_slide_collision_t test_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
+                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
+                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), gravity * dt, WITHOUT_TRANSLATION),
+                                                                                                                     dt,
+                                                                                                                     1);
+                
                 component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
             }
             
@@ -3501,7 +3527,7 @@ internal_function void entry_point(void)
     execute_lua((const char *)contents.content);
 
     // Execute startup code
-    execute_lua("startup()");    
+    execute_lua("startup()");
 }
 
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool)

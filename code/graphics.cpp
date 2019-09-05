@@ -723,7 +723,7 @@ get_backbuffer_resolution(void)
 struct lighting_t
 {
     // Default value
-    vector3_t ws_light_position {0.00000001f, 10.0f, 0.00000001f};
+    vector3_t ws_light_position {5.0f, 10.0f, 5.0f};
 
     // Later, need to add PSSM
     struct shadows_t

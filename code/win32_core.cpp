@@ -504,6 +504,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             g_input_state.dt = g_dt;
         }
     }
+
+    ReleaseCapture();
+    ShowWindow(g_window, SW_HIDE);
     
     destroy_swapchain();
     destroy_game();

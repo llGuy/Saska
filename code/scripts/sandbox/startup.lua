@@ -1,5 +1,5 @@
 function startup()
-   c_out("- Executing Startup Script -")
+   c_out("- Executing Startup Script -\n")
 
    globals.initialize_terrain_base("terrain_base.medium_base", globals.terrain_dimensions(21, 21))
 

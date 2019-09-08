@@ -2175,7 +2175,7 @@ make_cube_model(gpu_command_queue_pool_t *pool)
     auto *vbo = g_gpu_buffer_manager.get(cube_vbo_hdl);
     {
         struct vertex_t { vector3_t pos, color; vector2_t uvs; };
-
+        
         vector3_t gray = vector3_t(0.2);
 	
         float32_t radius = 1.0f;

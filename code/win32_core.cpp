@@ -104,19 +104,9 @@ close_debug_file(void)
     fclose(output_file.fp);
 }
 
-extern void output_debug(const char *format, ...)
+void ouptut_debug_string(const char *string)
 {
-    va_list arg_list;
-    
-    va_start(arg_list, format);
-
-    fprintf(output_file.fp
-	    , format
-	    , arg_list);
-
-    va_end(arg_list);
-
-    fflush(output_file.fp);
+    OutputDebugString(string);
 }
 
 float32_t barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)

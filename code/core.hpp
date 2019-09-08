@@ -44,14 +44,13 @@ left_shift(uint32_t n)
     return 1 << n;
 }
 
-void
-output_debug(const char *format, ...);
-
 struct file_contents_t
 {
     uint32_t size;
     byte_t *content;
 };
+
+void output_debug_string(const char *string);
 
 file_contents_t
 read_file(const char *filename,

@@ -134,23 +134,6 @@ close_debug_file(void)
     fclose(output_file.fp);
 }
 
-extern void
-output_debug(const char *format
-	     , ...)
-{
-    va_list arg_list;
-    
-    va_start(arg_list, format);
-
-    fprintf(output_file.fp
-	    , format
-	    , arg_list);
-
-    va_end(arg_list);
-
-    fflush(output_file.fp);
-}
-
 float32_t get_dt(void)
 {
     return(g_dt);

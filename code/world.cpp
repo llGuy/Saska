@@ -7,8 +7,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/projection.hpp>
 
 #include "graphics.hpp"
+
+#include "core.hpp"
 
 #define MAX_ENTITIES_UNDER_TOP 10
 #define MAX_ENTITIES_UNDER_PLANET 150
@@ -2040,8 +2043,6 @@ using entity_handle_t = int32_t;
 // Gravity acceleration on earth = 9.81 m/s^2
 struct physics_component_t
 {
-    vector3_t previous_velocity;
-    
     // Sum of mass of all particles
     float32_t mass = 1.0f; // KG
     // Sum ( all points of mass (vector quantity) * all masses of each point of mass ) / total body mass
@@ -2052,7 +2053,7 @@ struct physics_component_t
     float32_t coefficient_of_restitution = 0.0f;
     
     vector3_t acceleration {0.0f};
-    vector3_t velocity {0.0f};
+    vector3_t ws_velocity {0.0f};
     vector3_t displacement {0.0f};
 
     enum is_resting_t { NOT_RESTING = 0, JUST_COLLIDED = 1, RESTING = 2 } is_resting {NOT_RESTING};
@@ -2538,33 +2539,74 @@ update_physics_components(float32_t dt)
             // 5: Use the object's velocity to calculate the object's position
             // 6: Since the forces on the object may change from moment to moment, repeat this process from #1 forever.
 
-            // Check if there was a collision before
-            collide_and_slide_collision_t initial_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+            if (component->is_resting == physics_component_t::is_resting_t::RESTING)
+            {
+                // Apply friction
+                // TODO: Don't hardcode the roughness of the terrain surface
+                const float32_t TERRAIN_ROUGHNESS = 0.5f;
+                float32_t cos_theta = glm::dot(-e->on_t->ws_n, -component->surface_normal);
+                vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 9.81f * cos_theta;
+
+                e->ws_v += friction_force * dt;
+            }
+            
+            const vector3_t gravity = -e->on_t->ws_n * 9.81f;
+            e->ws_v += gravity * dt;
+
+            collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                    vector3_t(0.0f),
+                                                                                                                    matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->ws_v * dt, WITHOUT_TRANSLATION),
                                                                                                                     dt,
                                                                                                                     0,
-                                                                                                                    0);
+                                                                                                                    1);
+
+            collide_and_slide_collision_t collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                                                                                                            matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
+                                                                                                            matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
+                                                                                                            vector3_t(0.0f),
+                                                                                                            dt,
+                                                                                                            0,
+                                                                                                            0);
             
-            vector3_t ws_new_velocity = vector3_t(0.0f);
+            // If there was a collision project the velocity vector onto the terrain
+            if (collision.collided)
+            {
+                vector3_t ws_new_sliding_direction = glm::normalize(get_sliding_down_direction(e->ws_v, e->on_t->ws_n, glm::normalize(matrix4_mul_vec3(e->on_t->push_k.transform, glm::normalize(collision.ts_normal), WITHOUT_TRANSLATION))));
+
+                vector3_t projected = glm::proj(e->ws_v, ws_new_sliding_direction);
+                
+                e->ws_v = projected;
+
+                component->surface_normal = glm::normalize(matrix4_mul_vec3(e->on_t->push_k.transform, collision.ts_normal, WITHOUT_TRANSLATION));
+                
+                // Is resting on the terrain (not in the air) 
+                component->is_resting = physics_component_t::is_resting_t::RESTING;
+            }
+            else
+            {
+
+                component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
+            }
+
+            /*vector3_t ws_new_velocity = vector3_t(0.0f);
             
-            vector3_t ws_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
-            vector3_t ws_friction_force = vector3_t(0.0f);
-            vector3_t ws_sliding_force = vector3_t(0.0f);
+              vector3_t ws_gravity_force = vector3_t(0.0f, -9.81f, 0.0f);
+              vector3_t ws_friction_force = vector3_t(0.0f);
+              vector3_t ws_sliding_force = vector3_t(0.0f);
 
             input_component_t *input = &g_entities.input_components[e->components.input_component];
             if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
             {
                 // Is sliding
-                vector3_t ws_down = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal);
-                /*collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
+                vector3_t ws_down = get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal) * 3.0f;
+                collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                         matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                         matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                        matrix4_mul_vec3(e->on_t->inverse_transform, down * dt, WITHOUT_TRANSLATION),
+                                                                                                                        matrix4_mul_vec3(e->on_t->inverse_transform, ws_down * dt, WITHOUT_TRANSLATION),
                                                                                                                         dt,
                                                                                                                         0,
-                                                                                                                        1);*/
+                                                                                                                        1);
             }
             
             // Collide with gravity
@@ -2572,46 +2614,7 @@ update_physics_components(float32_t dt)
             vector3_t gravity = vector3_t(0.0f, -9.81f, 0.0f);
 
             // TODO: Figue out why edge collisions don't report collisions making it so that speed hack is not needed
-            vector3_t first_acceleration = 0.5f * gravity /* last frame's acceleration which is the same */ * dt * dt;
-            
-            collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
-                                                                                                                    matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
-                                                                                                                    matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                    matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), component->velocity * dt + first_acceleration, WITHOUT_TRANSLATION),
-                                                                                                                    dt,
-                                                                                                                    0,
-                                                                                                                    1);
-
-            vector3_t average_velocity = (/*previous*/ gravity + /* current */gravity) / 2.0f;
-            component->velocity += gravity * dt;
-            component->momentum += glm::length(component->velocity);
-
-            component->surface_normal = glm::normalize(matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_normal, WITHOUT_TRANSLATION));
-            component->previous_velocity = matrix4_mul_vec3(e->on_t->push_k.transform, glm::normalize(gravity_collision.ts_velocity), WITHOUT_TRANSLATION);
-
-            if (gravity_collision.collided)
-            {
-                // Inclination of the terrain and the falling vector
-                //                glm::dot(21q);
-
-                /*if (component->is_resting == physics_component_t::is_resting_t::NOT_RESTING)
-                {
-                    int32_t *i_is_resting = (int32_t *)&component->is_resting;
-                    ++(*i_is_resting);
-                }*/
-            }
-            else
-            {
-                /*collide_and_slide_collision_t test_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
-                                                                                                                     matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
-                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                     matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), gravity * dt, WITHOUT_TRANSLATION),
-                                                                                                                     dt,
-                                                                                                                     0,
-                                                                                                                     1);
-                
-                component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;*/
-            }
+            vector3_t first_acceleration = 0.5f * gravity /* last frame's acceleration which is the same  * dt * dt;*/
             
             e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
         }
@@ -3125,7 +3128,8 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r2.size = vector3_t(10.0f);
+    r2.size = vector3_t(5.0f);
+    r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
     entity_handle_t rv2 = add_entity(r2);
     g_entities.main_entity = rv2;
     auto *r2_ptr = get_entity(rv2);
@@ -3146,6 +3150,10 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.y_max = 1.001f;
     physics->hitbox.z_min = -1.001f;
     physics->hitbox.z_max = 1.001f;
+    
+    r2_ptr->on_t = on_which_terrain(r2_ptr->ws_p);
+    physics->ws_velocity = glm::normalize(matrix4_mul_vec3(r2_ptr->on_t->push_k.transform, vector3_t(0.0f, 0.0f, -1.0f), WITHOUT_TRANSLATION)) * 20.0f;
+    
     auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
     camera_component_ptr->is_third_person = true;
     add_input_component(r2_ptr);
@@ -3155,7 +3163,6 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
     r2_ptr_rendering->push_k.roughness = 0.8f;
     r2_ptr_rendering->push_k.metalness = 0.6f;
-    r2_ptr->on_t = on_which_terrain(r2_ptr->ws_p);
 }
 
 // ---- rendering of the entire world happens here ----
@@ -3746,7 +3753,7 @@ lua_start_simulation(lua_State *state)
 
     physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
     component->enabled = true;
-    component->velocity = initial_velocity;
+    component->ws_velocity = initial_velocity;
     
     return(0);
 }
@@ -3761,7 +3768,7 @@ lua_move_entity(lua_State *state)
 
     physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
     vector3_t x_direction = vector3_t(entity->on_t->push_k.transform * vector4_t(1.0f, 0.0f, 0.0f, 0.0f)) * 10.0f;
-    component->velocity = x_direction;
+    component->ws_velocity = x_direction;
 
     console_out("moving entity");
     
@@ -3778,7 +3785,7 @@ lua_stop_simulation(lua_State *state)
 
     physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
     component->enabled = false;
-    component->velocity = vector3_t(0.0f);
+    component->ws_velocity = vector3_t(0.0f);
     
     return(0);
 }

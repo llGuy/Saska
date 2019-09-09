@@ -1465,7 +1465,7 @@ morph_terrain_at_triangle(terrain_triangle_t *triangle,
 
                 if (index >= 0)
                 {
-                    height_ptr[index] += cos_theta * dt * 10.0f;
+                    height_ptr[index] += cos_theta * dt;
                 }
             }
         }
@@ -2545,12 +2545,29 @@ update_physics_components(float32_t dt)
                 // TODO: Don't hardcode the roughness of the terrain surface
                 const float32_t TERRAIN_ROUGHNESS = 0.5f;
                 float32_t cos_theta = glm::dot(-e->on_t->ws_n, -component->surface_normal);
-                vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 9.81f * cos_theta;
+                vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 14.81f * cos_theta;
 
                 e->ws_v += friction_force * dt;
+
+                input_component_t *input = &g_entities.input_components[e->components.input_component];
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
+                {
+                    vector3_t sliding_down_dir = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
+                    float32_t inclination_diff = glm::length(glm::cross(component->surface_normal, e->on_t->ws_n));
+                    inclination_diff += 1.0f;
+                    inclination_diff /= 2.0f;
+                    component->momentum += inclination_diff * dt * 14.81f;
+
+                    e->ws_v += component->momentum * sliding_down_dir;
+                }
+                else
+                {
+                    component->momentum = glm::length(e->ws_v) * dt;
+                }
             }
-            
-            const vector3_t gravity = -e->on_t->ws_n * 9.81f;
+
+            const vector3_t gravity = -e->on_t->ws_n * 14.81f;
+
             e->ws_v += gravity * dt;
 
             collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
@@ -2585,8 +2602,8 @@ update_physics_components(float32_t dt)
             }
             else
             {
-
                 component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
+                component->momentum = 0.0f;
             }
 
             /*vector3_t ws_new_velocity = vector3_t(0.0f);

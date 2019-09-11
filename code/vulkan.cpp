@@ -5,7 +5,7 @@
 
 #include "vulkan.hpp"
 #include <limits.h>
-#include <GLFW/glfw3.h>
+//#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
 global_var vulkan_context_t g_context;

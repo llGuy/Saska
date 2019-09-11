@@ -16,6 +16,7 @@ megabytes(uint32_t mb)
 
 using alignment_t = uint8_t;
 
+// TODO: Sort out issues with allocating with this thing
 extern struct linear_allocator_t
 {
     void *start = nullptr;

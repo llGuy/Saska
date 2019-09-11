@@ -844,23 +844,31 @@ void load_animations(std::vector<xml_document<> *> &docs,
     organize_animations_buffer(animations, map, file_paths, animation_names, final_path);
 }
 
-
-
+#define DEBUG
 
 // Converter.exe ../spaceman ../spaceman_walk.dae ../spaceman_idle.dae ...
 int32_t main(int32_t argc, char *argv[])
 {
 #if defined (DEBUG)
     std::string file_path = "../spaceman.dae";
+#endif
+
+#if defined (DEBUG)
+    const char *argvs[] = { "Converter.exe\0", "../spaceman\0", "../spaceman_walk.dae\0", "../spaceman_idle.dae\0", "../spaceman_run.dae\0" };
+    int32_t arg_count = sizeof(argvs) / sizeof(argvs[0]);
 #else
-    std::string dst_string = argv[1];
+    int32_t arg_count = argc;
+    char **argvs = argv;
+#endif
+    
+    std::string dst_string = argvs[1];
     std::vector<std::string> paths;
-    paths.resize(argc - 2);
+    paths.resize(arg_count - 2);
     for (uint32_t i = 0; i < paths.size(); ++i)
     {
-        paths[i] = argv[i + 2];
+        paths[i] = argvs[i + 2];
     }
-#endif    
+
 
     std::ifstream ifile(paths[0]);
     if (!ifile.good())
@@ -872,6 +880,7 @@ int32_t main(int32_t argc, char *argv[])
 
     auto dst_animations_file_name_path_split = split(dst_string, '/');
     // TODO: Fix the hardcoded ../
+    
     std::string dst_animations_file_name = "../" + dst_animations_file_name_path_split.back() + ".animations_custom";
     
     std::cout << "Starting session" << std::endl;

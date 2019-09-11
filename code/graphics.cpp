@@ -621,7 +621,7 @@ update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
     
-    update_shadows(500.0f
+    update_shadows(300.0f
                    , 1.0f
                    , camera->fov
                    , camera->asp
@@ -837,7 +837,7 @@ render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
 	matrix4_t model_matrix;
     } push_k;
 
-    push_k.model_matrix = glm::scale(vector3_t(1000.0f));
+    push_k.model_matrix = glm::scale(vector3_t(100000.0f));
 
     command_buffer_push_constant(&push_k
                                  , sizeof(push_k)
@@ -1047,51 +1047,57 @@ calculate_ws_frustum_corners(vector4_t *corners
 }
 
 internal_function void
-render_debug_frustum(gpu_command_queue_t *queue
-                     , VkDescriptorSet ubo)
+render_debug_frustum(gpu_command_queue_t *queue,
+                     VkDescriptorSet ubo,
+                     graphics_pipeline_t *graphics_pipeline)
 {
-    auto *debug_frustum_ppln = g_pipeline_manager.get(g_lighting.shadows.debug_frustum_ppln);
-    command_buffer_bind_pipeline(debug_frustum_ppln, &queue->q);
-
-    command_buffer_bind_descriptor_sets(debug_frustum_ppln
-						, {1, &ubo}
-						, &queue->q);
-
-    struct push_k_t
+    if (get_camera_bound_to_3d_output()->captured)
     {
-	alignas(16) vector4_t positions[8];
-	alignas(16) vector4_t color;
-    } push_k1, push_k2;
+        command_buffer_bind_pipeline(graphics_pipeline, &queue->q);
 
-    calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
+        command_buffer_bind_descriptor_sets(graphics_pipeline
+                                            , {1, &ubo}
+                                            , &queue->q);
 
-    push_k1.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
-    push_k2.color = vector4_t(0.0f, 0.0f, 1.0f, 1.0f);
-    
-    command_buffer_push_constant(&push_k1
-					 , sizeof(push_k1)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , debug_frustum_ppln
-					 , &queue->q);
-    
-    command_buffer_draw(&queue->q, 24, 1, 0, 0);
+        struct push_k_t
+        {
+            alignas(16) matrix4_t model_matrix;
+            alignas(16) vector4_t positions[8];
+            alignas(16) vector4_t color;
+        } push_k1, push_k2;
 
-    command_buffer_push_constant(&push_k2
-					 , sizeof(push_k2)
-					 , 0
-					 , VK_SHADER_STAGE_VERTEX_BIT
-					 , debug_frustum_ppln
-					 , &queue->q);
+        calculate_ws_frustum_corners(push_k1.positions, push_k2.positions);
+
+        push_k1.model_matrix = matrix4_t(1.0f);
+        push_k1.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
+        push_k2.model_matrix = matrix4_t(1.0f);
+        push_k2.color = vector4_t(0.0f, 0.0f, 1.0f, 1.0f);
     
-    command_buffer_draw(&queue->q, 24, 1, 0, 0);
+        command_buffer_push_constant(&push_k1
+                                     , sizeof(push_k1)
+                                     , 0
+                                     , VK_SHADER_STAGE_VERTEX_BIT
+                                     , graphics_pipeline
+                                     , &queue->q);
+    
+        command_buffer_draw(&queue->q, 24, 1, 0, 0);
+
+        command_buffer_push_constant(&push_k2
+                                     , sizeof(push_k2)
+                                     , 0
+                                     , VK_SHADER_STAGE_VERTEX_BIT
+                                     , graphics_pipeline
+                                     , &queue->q);
+    
+        command_buffer_draw(&queue->q, 24, 1, 0, 0);
+    }
 }
 
 void
-render_3d_frustum_debug_information(gpu_command_queue_t *queue, uint32_t image_index)
+render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline)
 {
     auto *camera_transforms = g_uniform_group_manager.get(g_cameras.camera_transforms_ubos);
-    //    render_debug_frustum(queue, camera_transforms[image_index]);
+    render_debug_frustum(queue, *group, graphics_pipeline);
 }
 
 shadow_matrices_t

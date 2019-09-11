@@ -511,6 +511,8 @@ load_external_graphics_data(swapchain_t *swapchain
 // Rendering pipeline
 struct camera_t
 {
+    bool captured = 0;
+    
     vector2_t mp;
     vector3_t p; // position
     vector3_t d; // direction
@@ -537,7 +539,7 @@ struct camera_t
 	fov = glm::radians(60.0f);
 	asp = w / h;
 	n = 1.0f;
-	f = 100000.0f;
+	f = 10000000.0f;
     }
     
     void
@@ -619,7 +621,10 @@ struct shadow_display_t
 };
 
 void
-render_3d_frustum_debug_information(gpu_command_queue_t *queue, uint32_t image_index);
+render_3d_frustum_debug_information(uniform_group_t *group,
+                                    gpu_command_queue_t *queue,
+                                    uint32_t image_index,
+                                    graphics_pipeline_t *graphics_pipeline /* Llne renderer */);
 
 shadow_matrices_t
 get_shadow_matrices(void);

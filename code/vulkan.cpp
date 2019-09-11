@@ -348,6 +348,9 @@ vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity
     // TODO: Fix ALL validation layer errors
     //	OUTPUT_DEBUG_LOG("validation layer - %s\n", message_data->pMessage);
     //std::cout << "validation layer - " << message_data->pMessage << std::endl;
+    OutputDebugString("Vulkan > ");
+    OutputDebugString(message_data->pMessage);
+    OutputDebugString("\n");
 
     //	OUTPUT_DEBUG_LOG_VALIDATION("validation_t layer_t > %s\n", message_data->pMessage);
 

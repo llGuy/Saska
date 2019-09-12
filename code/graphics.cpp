@@ -620,14 +620,14 @@ void
 update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
-    
-    update_shadows(300.0f
+
+    /*update_shadows(50.0f
                    , 1.0f
                    , camera->fov
                    , camera->asp
                    , camera->p
                    , camera->d
-                   , camera->u);
+                   , camera->u);*/
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
@@ -723,7 +723,7 @@ get_backbuffer_resolution(void)
 struct lighting_t
 {
     // Default value
-    vector3_t ws_light_position {5.0f, 10.0f, 5.0f};
+    vector3_t ws_light_position {0.0000001f, 0.0000000001f, 10.00000001f};
 
     // Later, need to add PSSM
     struct shadows_t
@@ -734,6 +734,7 @@ struct lighting_t
         render_pass_handle_t pass;
         image_handle_t map;
         uniform_group_handle_t set;
+        uniform_layout_handle_t ulayout;
     
         pipeline_handle_t debug_frustum_ppln;
     
@@ -742,6 +743,8 @@ struct lighting_t
         matrix4_t inverse_light_view;
 
         vector4_t ls_corners[8];
+
+        graphics_pipeline_t dbg_shadow_tx_quad_ppln;
         
         union
         {
@@ -953,7 +956,20 @@ internal_function void
 make_shadow_data(void)
 {
     vector3_t light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
-    g_lighting.shadows.light_view_matrix = glm::lookAt(light_pos_normalized, vector3_t(0.0f), vector3_t(0.0f, 1.0f, 0.0f));
+    
+    vector3_t forward = light_pos_normalized;
+    //vector3_t forward = vector3_t(1.0f, 0.0f, 0.0f);
+    vector3_t right = glm::normalize(glm::cross(forward, vector3_t(0.0f, 1.0f, 0.0f)));
+    vector3_t up = glm::normalize(glm::cross(right, forward));
+
+    //vector3_t tforward = glm::transpose(forward);
+    //vector3_t tright = glm::transpose(right);
+    //vector3_t tup = glm::transpose(up);
+    //vector3_t d = vector3_t(light_pos_normalized.x, -light_pos_normalized.y, light_pos_normalized.z);
+    g_lighting.shadows.light_view_matrix = glm::lookAt(vector3_t(0.0f), -light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    
+    
+    
     g_lighting.shadows.inverse_light_view = glm::inverse(g_lighting.shadows.light_view_matrix);
 
     // ---- Make shadow render pass ----
@@ -984,6 +1000,7 @@ make_shadow_data(void)
     }
     
     uniform_layout_handle_t sampler2D_layout_hdl = g_uniform_layout_manager.add("descriptor_set_layout.2D_sampler_layout"_hash);
+    g_lighting.shadows.ulayout = sampler2D_layout_hdl;
     auto *sampler2D_layout_ptr = g_uniform_layout_manager.get(sampler2D_layout_hdl);
     {
         uniform_layout_info_t layout_info = {};
@@ -1100,6 +1117,38 @@ render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t 
     render_debug_frustum(queue, *group, graphics_pipeline);
 }
 
+void dbg_render_shadow_map_quad(gpu_command_queue_t *queue)
+{
+    graphics_pipeline_t *graphics_pipeline = &g_lighting.shadows.dbg_shadow_tx_quad_ppln;
+    
+    command_buffer_bind_pipeline(graphics_pipeline, &queue->q);
+
+    command_buffer_bind_descriptor_sets(graphics_pipeline
+                                        , {1, g_uniform_group_manager.get(g_lighting.shadows.set)}
+                                        , &queue->q);
+
+    struct push_k_t
+    {
+        alignas(16) vector2_t positions[4];
+    } push_k = {};
+
+    push_k.positions[0] = vector2_t(0.2f, -0.1f);
+    push_k.positions[1] = vector2_t(0.2f, -1.0f);
+    push_k.positions[2] = vector2_t(1.0f, -0.1f);
+    push_k.positions[3] = vector2_t(1.0f, -1.0f);
+
+    get_backbuffer_resolution();
+
+    command_buffer_push_constant(&push_k
+                                 , sizeof(push_k)
+                                 , 0
+                                 , VK_SHADER_STAGE_VERTEX_BIT
+                                 , graphics_pipeline
+                                 , &queue->q);
+    
+    command_buffer_draw(&queue->q, 4, 1, 0, 0);
+}
+
 shadow_matrices_t
 get_shadow_matrices(void)
 {
@@ -1147,6 +1196,14 @@ update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
     far_height = far_width / aspect;
     near_height = near_width / aspect;
 
+    /*far_height = 2.0f * tan(fov) * far;
+    far_width = far_height * aspect;
+    near_height = 2.0f * tan(fov) * near;
+    near_width = near_height * aspect;*/
+
+    vector3_t center_near = ws_p + ws_d * near;
+    vector3_t center_far = ws_p + ws_d * far;
+    
     vector3_t right_view_ax = glm::normalize(glm::cross(ws_d, ws_up));
     vector3_t up_view_ax = glm::normalize(glm::cross(ws_d, right_view_ax));
 
@@ -1646,6 +1703,19 @@ invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_
 void
 dbg_handle_input(input_state_t *input_state)
 {
+    if (input_state->keyboard[keyboard_button_type_t::P].is_down)
+    {
+        camera_t *camera = get_camera_bound_to_3d_output();
+
+        update_shadows(80.0f
+                       , 1.0f
+                       , camera->fov
+                       , camera->asp
+                       , camera->p
+                       , camera->d
+                       , camera->u);
+    }
+    
     if (g_postfx.dbg_in_frame_capture_mode)
     {
         if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
@@ -2079,6 +2149,9 @@ render_to_pre_final(gpu_command_queue_t *queue)
 
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
+
+    dbg_render_shadow_map_quad(queue);
+    
     queue->end_render_pass();
 }
 
@@ -2282,6 +2355,20 @@ void
 initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
 {
     make_postfx_data(pool);
+
+    // TODO: URGENT: REMOVE THIS ONCE DONE WITH DEBUGGING SHADOWS
+    auto *dbg_shadow_ppln = &g_lighting.shadows.dbg_shadow_tx_quad_ppln;
+    {
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/screen_quad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/screen_quad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_lighting.shadows.ulayout);
+        shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(false);
+        dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
+        make_graphics_pipeline(dbg_shadow_ppln, modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
+                               false, 0.0f, dynamic, g_render_pass_manager.get(g_postfx.pfx_render_pass), 0);
+    }
 
     clear_linear();
 }

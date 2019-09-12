@@ -3712,6 +3712,7 @@ render_world(uint32_t image_index
         dbg_render_sliding_vectors(&uniform_groups[0], queue);
         dbg_render_underlying_possible_colliding_triangles(&uniform_groups[0], get_entity(g_entities.main_entity)->on_t, queue);
         dbg_render_collision_edge_line(&uniform_groups[0], queue);
+        dbg_render_shadow_map_quad(queue);
         
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);

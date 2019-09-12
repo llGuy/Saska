@@ -678,6 +678,8 @@ get_pfx_framebuffer_hdl(void);
 void
 dbg_handle_input(input_state_t *input_state);
 
+void dbg_render_shadow_map_quad(gpu_command_queue_t *queue);
+
 void
 apply_pfx_on_scene(gpu_command_queue_t *queue
                    , uniform_group_t *transforms_group

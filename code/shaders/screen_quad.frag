@@ -1,6 +1,9 @@
 #version 450
 
-layout(location = 0) out vec4 final_color;
+layout(location = 0) out vec4 out_final;
+//layout(location = 1) out vec4 out_albedo;
+//layout(location = 2) out vec4 out_position;
+//layout(location = 3) out vec4 out_normal;
 
 layout(location = 0) in vec2 in_uvs;
 
@@ -25,7 +28,9 @@ main(void)
 {
     float d = texture(tex, in_uvs).r;
 
-    final_color = vec4(d);
+    out_final = vec4(d);
+    //    out_position = vec4(-100.0);
+    //    out_normal = vec4(-100.0);
     //    final_color = d;
 //    final_color = vec4(1 - d) * 10;
 }

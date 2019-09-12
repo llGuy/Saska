@@ -487,6 +487,18 @@ draw_string(ui_text_t *text, const char *string, uint32_t color)
     text->char_count += string_length;
 }
 
+// TODO: Make a textured quad renderer
+global_var struct dbg_ui_utils_t
+{
+    graphics_pipeline_t dbg_tx_quad_ppln;
+    uniform_layout_t dbg_tx_ulayout;
+} dbg_ui_utils;
+
+internal_function void initialize_debug_ui_utils(void)
+{
+    
+}
+
 struct ui_state_t
 {
     struct gui_vertex_t

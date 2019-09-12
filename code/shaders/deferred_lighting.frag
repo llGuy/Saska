@@ -82,7 +82,8 @@ pbr(void)
 
     vec3 radiance = vec3(24.47, 21.31, 20.79);
     vec3 ws_light = normalize(push_k.light_direction.xyz);
-    ws_light.y *= 1.0;
+    //    ws_light.y *= 1.0;
+    ws_light.xz *= -1.0f;
     vec3 light_vector = vec3(push_k.view_matrix * vec4(ws_light, 0.0));
     vec3 to_camera = normalize(vs_position);
     vec3 halfway = normalize(to_camera + light_vector);

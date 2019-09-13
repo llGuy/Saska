@@ -474,7 +474,7 @@ struct sphere_triangle_collision_return_t
     bool32_t is_edge;
 };
 
-internal_function bool32_t
+ internal_function bool32_t
 is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
     vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
@@ -2284,7 +2284,7 @@ struct input_component_t
 {
     uint32_t entity_index;
 
-    enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN };
+    enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN, RUN };
     uint8_t movement_flags = 0;
 
     /*float32_t horizontal_angle = 0.0f;
@@ -2343,6 +2343,8 @@ struct entity_t
     vector3_t surface_normal;
     vector3_t surface_position;
 
+    bool is_in_air = 0;
+
     static constexpr float32_t SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
     bool switch_terrain_animation_mode = false;
     quaternion_t previous_terrain_rot;
@@ -2355,7 +2357,7 @@ struct entity_t
 
     //    struct entity_body_t body;
     // For animated rendering component
-    enum animated_state_t { WALK, IDLE, RUN, JUMP } animated_state = animated_state_t::IDLE;
+    enum animated_state_t { WALK, IDLE, RUN, HOVER, JUMP } animated_state = animated_state_t::IDLE;
     
     struct components_t
     {
@@ -2623,6 +2625,11 @@ update_animation_component(input_state_t *input_state, float32_t dt)
             new_state = entity_t::animated_state_t::IDLE;
         }
 
+        if (e->is_in_air)
+        {
+            new_state = entity_t::animated_state_t::HOVER;
+        }
+
         if (new_state != previous_state)
         {
             e->animated_state = new_state;
@@ -2874,6 +2881,65 @@ update_physics_components(float32_t dt)
                   vector3_t first_acceleration = 0.5f * gravity /* last frame's acceleration which is the same  * dt * dt;*/
             
                 e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
+            }
+            else
+            {
+                // Not in rolling mode
+                input_component_t *input = &g_entities.input_components[e->components.input_component];
+
+                vector3_t sliding_down_dir = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
+
+                vector3_t result_force = vector3_t(0.0f);
+                
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
+                {
+                    result_force += sliding_down_dir;
+                }
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::BACK))
+                {
+                    result_force -= sliding_down_dir;
+                }
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::RIGHT))
+                {
+                    vector3_t right = glm::cross(sliding_down_dir, e->on_t->ws_n);
+                    result_force += right;
+                }
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::LEFT))
+                {
+                    vector3_t right = glm::cross(sliding_down_dir, e->on_t->ws_n);
+                    result_force -= right;
+                }
+
+                if (input->movement_flags)
+                {
+                    result_force = glm::normalize(result_force);
+                    if (input->movement_flags & (1 << input_component_t::movement_flags_t::RUN))
+                    {
+                        result_force *= 3.5f;
+                    }
+                }
+                
+                const vector3_t gravity = -e->on_t->ws_n * 14.81f;
+
+                e->ws_v += gravity * dt;
+
+                detected_collision_return_t collision = detect_terrain_collision(&component->hitbox,
+                                                                                 e->size,
+                                                                                 e->ws_p + e->ws_v * dt + result_force * dt * 15.0f,
+                                                                                 e->on_t);
+
+                component->surface_normal = collision.ws_normal;
+                
+                if (collision.detected)
+                {
+                    e->ws_p = collision.ws_at + vector3_t(0.0f, e->size.y, 0.0f);
+                    e->is_in_air = 0;
+                }
+                else
+                {
+                    e->ws_p = e->ws_p + e->ws_v * dt;
+                    e->is_in_air = 1;
+                }
             }
         }
         else
@@ -3203,7 +3269,7 @@ update_input_components(input_state_t *input_state
  //            if (detected_collision) e->ws_v = vector3_t(0.0f);
     
             component->movement_flags = 0;
-            if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 6.0f;}
+            if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 6.0f; component->movement_flags |= (1 << input_component_t::movement_flags_t::RUN);}
             if (input_state->keyboard[keyboard_button_type_t::W].is_down) {acc_v(d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::FORWARD);}
             if (input_state->keyboard[keyboard_button_type_t::A].is_down) {acc_v(-glm::cross(d, up), res);component->movement_flags |= (1 << input_component_t::movement_flags_t::LEFT);}
             if (input_state->keyboard[keyboard_button_type_t::S].is_down) {acc_v(-d, res); component->movement_flags |= (1 << input_component_t::movement_flags_t::BACK);} 
@@ -3386,13 +3452,13 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     }
 
     entity_t r2 = construct_entity("entity.main"_hash,
-                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 15.0f, 15.0f), WITH_TRANSLATION),
+                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 3.0f, 15.0f), WITH_TRANSLATION),
                                    //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0]),
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r2.size = vector3_t(5.0f);
-    r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
+    //r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
     entity_handle_t rv2 = add_entity(r2);
     g_entities.main_entity = rv2;
     auto *r2_ptr = get_entity(rv2);
@@ -3403,7 +3469,6 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
                                                                   &g_entities.entity_mesh_skeleton,
                                                                   &g_entities.entity_mesh_cycles,
                                                                   cmdpool);
-    add_physics_component(r2_ptr, false);
 
     physics_component_t *physics = add_physics_component(r2_ptr, false);
     physics->enabled = true;
@@ -3415,7 +3480,7 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     physics->hitbox.z_max = 1.001f;
     
     r2_ptr->on_t = on_which_terrain(r2_ptr->ws_p);
-    physics->ws_velocity = glm::normalize(matrix4_mul_vec3(r2_ptr->on_t->push_k.transform, vector3_t(0.0f, 0.0f, -1.0f), WITHOUT_TRANSLATION)) * 20.0f;
+    //physics->ws_velocity = glm::normalize(matrix4_mul_vec3(r2_ptr->on_t->push_k.transform, vector3_t(0.0f, 0.0f, -1.0f), WITHOUT_TRANSLATION)) * 20.0f;
     
     auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
     camera_component_ptr->is_third_person = true;
@@ -3712,7 +3777,7 @@ render_world(uint32_t image_index
         dbg_render_sliding_vectors(&uniform_groups[0], queue);
         dbg_render_underlying_possible_colliding_triangles(&uniform_groups[0], get_entity(g_entities.main_entity)->on_t, queue);
         dbg_render_collision_edge_line(&uniform_groups[0], queue);
-        dbg_render_shadow_map_quad(queue);
+        //dbg_render_shadow_map_quad(queue);
         
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);

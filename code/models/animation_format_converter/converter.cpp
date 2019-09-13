@@ -854,7 +854,7 @@ int32_t main(int32_t argc, char *argv[])
 #endif
 
 #if defined (DEBUG)
-    const char *argvs[] = { "Converter.exe\0", "../spaceman\0", "../spaceman_walk.dae\0", "../spaceman_idle.dae\0", "../spaceman_run.dae\0" };
+    const char *argvs[] = { "Converter.exe\0", "../spaceman\0", "../spaceman_walk.dae\0", "../spaceman_idle.dae\0", "../spaceman_run.dae\0", "../spaceman_hover.dae" };
     int32_t arg_count = sizeof(argvs) / sizeof(argvs[0]);
 #else
     int32_t arg_count = argc;

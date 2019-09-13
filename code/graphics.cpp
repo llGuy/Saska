@@ -2202,8 +2202,6 @@ render_to_pre_final(gpu_command_queue_t *queue)
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
 
-    dbg_render_shadow_map_quad(queue);
-    
     queue->end_render_pass();
 }
 

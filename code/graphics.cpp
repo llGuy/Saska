@@ -621,13 +621,13 @@ update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    /*update_shadows(50.0f
+    update_shadows(250.0f
                    , 1.0f
                    , camera->fov
                    , camera->asp
                    , camera->p
                    , camera->d
-                   , camera->u);*/
+                   , camera->u);
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
@@ -723,7 +723,7 @@ get_backbuffer_resolution(void)
 struct lighting_t
 {
     // Default value
-    vector3_t ws_light_position {0.0000001f, 0.0000000001f, 10.00000001f};
+    vector3_t ws_light_position {10.0000001f, 10.0000000001f, 10.00000001f};
 
     // Later, need to add PSSM
     struct shadows_t
@@ -956,6 +956,8 @@ internal_function void
 make_shadow_data(void)
 {
     vector3_t light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
+    light_pos_normalized.x *= -1.0f;
+    light_pos_normalized.z *= -1.0f;
     
     vector3_t forward = light_pos_normalized;
     //vector3_t forward = vector3_t(1.0f, 0.0f, 0.0f);
@@ -966,7 +968,9 @@ make_shadow_data(void)
     //vector3_t tright = glm::transpose(right);
     //vector3_t tup = glm::transpose(up);
     //vector3_t d = vector3_t(light_pos_normalized.x, -light_pos_normalized.y, light_pos_normalized.z);
-    g_lighting.shadows.light_view_matrix = glm::lookAt(vector3_t(0.0f), -light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    //g_lighting.shadows.light_view_matrix = glm::lookAt(vector3_t(0.0f), -light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    g_lighting.shadows.light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    //g_lighting.shadows.light_view_matrix = matrix4_t(1.0f);
     
     
     
@@ -1046,7 +1050,6 @@ calculate_ws_frustum_corners(vector4_t *corners
     corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
     corners[3] = shadow_data.inverse_light_view * camera->captured_frustum_corners[2];
     corners[2] = shadow_data.inverse_light_view * camera->captured_frustum_corners[3];
-    
     corners[4] = shadow_data.inverse_light_view * camera->captured_frustum_corners[4];
     corners[5] = shadow_data.inverse_light_view * camera->captured_frustum_corners[5];
     corners[7] = shadow_data.inverse_light_view * camera->captured_frustum_corners[6];
@@ -1056,7 +1059,6 @@ calculate_ws_frustum_corners(vector4_t *corners
     shadow_corners[1] = shadow_data.inverse_light_view * camera->captured_shadow_corners[1];
     shadow_corners[2] = shadow_data.inverse_light_view * camera->captured_shadow_corners[2];
     shadow_corners[3] = shadow_data.inverse_light_view * camera->captured_shadow_corners[3];
-    
     shadow_corners[4] = shadow_data.inverse_light_view * camera->captured_shadow_corners[4];
     shadow_corners[5] = shadow_data.inverse_light_view * camera->captured_shadow_corners[5];
     shadow_corners[6] = shadow_data.inverse_light_view * camera->captured_shadow_corners[6];
@@ -1221,17 +1223,36 @@ update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
 	nrt, nrb
     };    
 
-    // light space
+    /*vector4_t ws_corners[8] = {};
+    ws_corners[flt] = vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    ws_corners[flb] = vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    
+    ws_corners[frt] = vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    ws_corners[frb] = vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    
+    ws_corners[nlt] = vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    ws_corners[nlb] = vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    
+    ws_corners[nrt] = vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    ws_corners[nrb] = vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
+    vector4_t centerv4 = (ws_corners[flt] - ws_corners[nrb]) / 2.0f + ws_corners[nrb];
+    vector3_t centerv3 = vector3_t(centerv4.x, centerv4.y, centerv4.z);
+
+    vector3_t light_direction = -glm::normalize(g_lighting.ws_light_position);
+    g_lighting.shadows.light_view_matrix = glm::lookAt(centerv3, centerv3 + light_direction, vector3_t(0.0f, 1.0f, 0.0f));*/
+
+    /*vector3_t light_pos_normalized = glm::normalize(g_lighting.ws_light_position);
+    matrix4_t light_view = glm::lookAt(vector3_t(0.0f), -light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    matrix4_t inverse = glm::inverse(light_view);*/
+    
+    // light space
     g_lighting.shadows.ls_corners[flt] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
     g_lighting.shadows.ls_corners[flb] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
-    
     g_lighting.shadows.ls_corners[frt] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
     g_lighting.shadows.ls_corners[frb] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
-    
     g_lighting.shadows.ls_corners[nlt] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
     g_lighting.shadows.ls_corners[nlb] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
-
     g_lighting.shadows.ls_corners[nrt] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
     g_lighting.shadows.ls_corners[nrb] = g_lighting.shadows.light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
@@ -1252,17 +1273,47 @@ update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
 	if (z_min > g_lighting.shadows.ls_corners[i].z) z_min = g_lighting.shadows.ls_corners[i].z;
 	if (z_max < g_lighting.shadows.ls_corners[i].z) z_max = g_lighting.shadows.ls_corners[i].z;
     }
+    
+    /*vector4_t ls_frt = vector4_t(x_max, y_max, z_max, 1.0f);
+    vector4_t ls_nlb = vector4_t(x_min, y_min, z_min, 1.0f);
+    
+    vector4_t ws_frt = inverse * ls_frt;
+    vector4_t ws_nlb = inverse * ls_nlb;
+    vector4_t ws_center = (ws_frt - ws_nlb) / 2.0f + ws_nlb;
+    vector3_t ws_centerv3 = vector3_t(ws_center.x, ws_center.y, ws_center.z);
 
+    g_lighting.shadows.light_view_matrix = glm::lookAt(ws_centerv3, ws_centerv3 - light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+
+    vector3_t final_ls_frt = g_lighting.shadows.light_view_matrix * ws_frt;
+    vector3_t final_ls_nlb = g_lighting.shadows.light_view_matrix * ws_nlb;*/
+
+    /*g_lighting.shadows.x_min = x_min = final_ls_nlb.x;
+    g_lighting.shadows.y_min = y_min = final_ls_nlb.y;
+    g_lighting.shadows.z_min = z_min = final_ls_nlb.z;
+    g_lighting.shadows.x_max = x_max = final_ls_frt.x;
+    g_lighting.shadows.y_max = y_max = final_ls_frt.y;
+    g_lighting.shadows.z_max = z_max = final_ls_frt.z;*/
+    
     g_lighting.shadows.x_min = x_min = x_min;
     g_lighting.shadows.x_max = x_max = x_max;
-    
     g_lighting.shadows.y_min = y_min = y_min;
     g_lighting.shadows.y_max = y_max = y_max;
-    
     g_lighting.shadows.z_min = z_min = z_min;
     g_lighting.shadows.z_max = z_max = z_max;
 
-    g_lighting.shadows.projection_matrix = glm::ortho<float32_t>(x_min, x_max, y_min, y_max, z_min, z_max);
+    z_min = z_min - (z_max - z_min);
+    
+    /*g_lighting.shadows.projection_matrix = glm::ortho<float32_t>(g_lighting.shadows.x_min,
+                                                                 g_lighting.shadows.x_max,
+                                                                 g_lighting.shadows.y_min,
+                                                                 g_lighting.shadows.y_max,
+                                                                 g_lighting.shadows.z_min,
+                                                                 g_lighting.shadows.z_max);*/
+
+    g_lighting.shadows.projection_matrix = glm::transpose(matrix4_t(2.0f / (x_max - x_min), 0.0f, 0.0f, -(x_max + x_min) / (x_max - x_min),
+                                                     0.0f, 2.0f / (y_max - y_min), 0.0f, -(y_max + y_min) / (y_max - y_min),
+                                                     0.0f, 0.0f, 2.0f / (z_max - z_min), -(z_max + z_min) / (z_max - z_min),
+                                                                    0.0f, 0.0f, 0.0f, 1.0f));
 }
 
 void
@@ -1421,7 +1472,8 @@ begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height
     init_viewport(0, 0, shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
     vkCmdSetViewport(queue->q, 0, 1, &viewport);
 
-    vkCmdSetDepthBias(queue->q, 1.25f, 0.0f, 1.75f);
+    //vkCmdSetDepthBias(queue->q, 1.25f, 0.0f, 1.75f);
+    vkCmdSetDepthBias(queue->q, 0.0f, 0.0f, 0.0f);
 
     // Render the world to the shadow map
 }
@@ -1703,18 +1755,18 @@ invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_
 void
 dbg_handle_input(input_state_t *input_state)
 {
-    if (input_state->keyboard[keyboard_button_type_t::P].is_down)
+    /*if (input_state->keyboard[keyboard_button_type_t::P].is_down)
     {
         camera_t *camera = get_camera_bound_to_3d_output();
 
-        update_shadows(80.0f
+        update_shadows(100.0f
                        , 1.0f
                        , camera->fov
                        , camera->asp
                        , camera->p
                        , camera->d
                        , camera->u);
-    }
+                       }*/
     
     if (g_postfx.dbg_in_frame_capture_mode)
     {

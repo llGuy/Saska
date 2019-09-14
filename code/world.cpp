@@ -2343,7 +2343,9 @@ struct entity_t
     vector3_t surface_normal;
     vector3_t surface_position;
 
+    // Has effect on animations
     bool is_in_air = 0;
+    bool is_sliding_not_rolling_mode = 0;
 
     static constexpr float32_t SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
     bool switch_terrain_animation_mode = false;
@@ -2357,7 +2359,7 @@ struct entity_t
 
     //    struct entity_body_t body;
     // For animated rendering component
-    enum animated_state_t { WALK, IDLE, RUN, HOVER, JUMP } animated_state = animated_state_t::IDLE;
+    enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, JUMP } animated_state = animated_state_t::IDLE;
     
     struct components_t
     {
@@ -2630,6 +2632,11 @@ update_animation_component(input_state_t *input_state, float32_t dt)
             new_state = entity_t::animated_state_t::HOVER;
         }
 
+        if (e->is_sliding_not_rolling_mode)
+        {
+            new_state = entity_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
+        }
+
         if (new_state != previous_state)
         {
             e->animated_state = new_state;
@@ -2890,6 +2897,29 @@ update_physics_components(float32_t dt)
                 vector3_t sliding_down_dir = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
 
                 vector3_t result_force = vector3_t(0.0f);
+
+                if (component->momentum > 0.8f)
+                {
+                    e->is_sliding_not_rolling_mode = 1;
+                    
+                    const float32_t TERRAIN_ROUGHNESS = 0.5f;
+                    float32_t cos_theta = glm::dot(-e->on_t->ws_n, -component->surface_normal);
+                    vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 9.81f * cos_theta;
+
+                    e->ws_v += friction_force * dt;
+                    component->momentum = glm::length(e->ws_v);
+
+                    if (component->momentum < 0.8f)
+                    {
+                        component->momentum = 0.0f;
+                    }
+                }
+                else
+                {
+                    e->is_sliding_not_rolling_mode = 0;
+                    component->momentum = 0.0f;
+                    // Transition to jump
+                }
                 
                 if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
                 {
@@ -2934,6 +2964,10 @@ update_physics_components(float32_t dt)
                 {
                     e->ws_p = collision.ws_at + vector3_t(0.0f, e->size.y, 0.0f);
                     e->is_in_air = 0;
+
+                    vector3_t ts_v = matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_v, WITHOUT_TRANSLATION);
+                    vector3_t ws_v = matrix4_mul_vec3(e->on_t->push_k.transform, vector3_t(ts_v.x, 0.0f, ts_v.z), WITHOUT_TRANSLATION);
+                    e->ws_v = ws_v;
                 }
                 else
                 {
@@ -3452,7 +3486,7 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     }
 
     entity_t r2 = construct_entity("entity.main"_hash,
-                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 15.0f, 15.0f), WITH_TRANSLATION),
+                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 2.0f, 15.0f), WITH_TRANSLATION),
                                    //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0]),
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));

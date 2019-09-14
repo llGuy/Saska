@@ -2978,9 +2978,14 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
         animation_cycle_t *bound_cycle = &instance->cycles->cycles[instance->next_bound_cycle];
         // Increase the animation time
         instance->current_animation_time += dt;
-        if (instance->current_animation_time > bound_cycle->total_animation_time)
+        if (instance->current_animation_time >= bound_cycle->total_animation_time)
         {
             instance->current_animation_time = 0.0f;
+        }
+
+        if (instance->current_animation_time + dt > bound_cycle->total_animation_time)
+        {
+            OutputDebugString("Next one is going to fail");
         }
 
         // Get the frames to which the current time stamp is in between (frame_a and frame_b)
@@ -2992,7 +2997,7 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
             float32_t previous_stamp = bound_cycle->key_frames[i].time_stamp;
             float32_t next_stamp = bound_cycle->key_frames[i + 1].time_stamp;
 
-            if (previous_stamp < instance->current_animation_time && next_stamp > instance->current_animation_time)
+            if (previous_stamp < instance->current_animation_time && next_stamp >= instance->current_animation_time)
             {
                 frame_before = &bound_cycle->key_frames[i];
                 frame_after = &bound_cycle->key_frames[i + 1];

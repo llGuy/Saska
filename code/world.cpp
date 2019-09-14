@@ -3452,7 +3452,7 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     }
 
     entity_t r2 = construct_entity("entity.main"_hash,
-                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 3.0f, 15.0f), WITH_TRANSLATION),
+                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 15.0f, 15.0f), WITH_TRANSLATION),
                                    //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0]),
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));

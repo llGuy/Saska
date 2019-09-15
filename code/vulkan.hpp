@@ -1207,6 +1207,7 @@ VkFormat get_swapchain_format(void);
 VkExtent2D get_swapchain_extent(void);
 uint32_t get_swapchain_image_count(void);
 VkImageView *get_swapchain_image_views(void);
+VkCommandPool *get_global_command_pool(void);
 
 struct vulkan_context_t
 {
@@ -1219,10 +1220,34 @@ struct vulkan_context_t
     VkSurfaceKHR surface;
     
     swapchain_t swapchain;
+
+    VkSemaphore img_ready [2];
+    VkSemaphore render_finish [2];
+    VkFence cpu_wait [2];
+
+    VkCommandPool command_pool;
+    VkCommandBuffer command_buffer[3];
+
+    uint32_t image_index;
+    uint32_t current_frame;
 };
 
 /* entry point for vulkan stuff */
-void initialize_graphics_api(create_vulkan_surface *create_proc, input_state_t *input_state);
+struct graphics_api_initialize_ret_t
+{
+    VkCommandPool *command_pool;
+};
+
+graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_proc, input_state_t *input_state);
+
+struct frame_rendering_data_t
+{
+    uint32_t image_index;
+    VkCommandBuffer command_buffer;
+};
+
+frame_rendering_data_t begin_frame_rendering(void);
+void end_frame_rendering_and_refresh(void);
 
 void destroy_swapchain(void);
 

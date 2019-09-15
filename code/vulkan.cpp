@@ -234,6 +234,11 @@ VkQueue *get_graphics_queue(void)
     return &g_context.gpu.graphics_queue;
 }
 
+VkCommandPool *get_global_command_pool(void)
+{
+    return(&g_context.command_pool);
+}
+
 void
 gpu_t::find_queue_families(VkSurfaceKHR *surface)
 {
@@ -1802,7 +1807,7 @@ present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
                              , &present_info));
 }
     
-void initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
+graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
 {
     init_manager();
 	
@@ -1871,6 +1876,80 @@ void initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_s
 
     // create swapchain
     init_swapchain(input_state);
+
+    allocate_command_pool(g_context.gpu.queue_families.graphics_family, &g_context.command_pool);
+
+    allocate_command_buffers(&g_context.command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			     memory_buffer_view_t<VkCommandBuffer>{3, g_context.command_buffer});
+
+    for (uint32_t i = 0; i < 2; ++i)
+    {
+        init_semaphore(&g_context.img_ready[i]);
+        init_semaphore(&g_context.render_finish[i]);   
+        init_fence(VK_FENCE_CREATE_SIGNALED_BIT, &g_context.cpu_wait[i]);
+    }
+    
+    return graphics_api_initialize_ret_t{ &g_context.command_pool };
+}
+
+frame_rendering_data_t begin_frame_rendering(void)
+{
+    persist_var uint32_t current_frame = 0;
+    persist_var constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+    g_context.current_frame = 0;
+    
+    VkFence null_fence = VK_NULL_HANDLE;
+    
+    auto next_image_data = acquire_next_image(&g_context.img_ready[g_context.current_frame], &null_fence);
+    
+    if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+	// ---- recreate swapchain ----
+	return {};
+    }
+    else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
+    {
+	OUTPUT_DEBUG_LOG("Failed to acquire swapchain image");
+    }
+    
+    wait_fences(memory_buffer_view_t<VkFence>{1, &g_context.cpu_wait[g_context.current_frame]});
+    reset_fences({1, &g_context.cpu_wait[g_context.current_frame]});
+
+    g_context.image_index = next_image_data.image_index;
+    
+    begin_command_buffer(&g_context.command_buffer[g_context.current_frame], 0, nullptr);
+
+    return {g_context.image_index, g_context.command_buffer[g_context.current_frame]};
+}
+
+void end_frame_rendering_and_refresh(void)
+{
+    end_command_buffer(&g_context.command_buffer[g_context.current_frame]);
+
+    VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
+
+    submit(memory_buffer_view_t<VkCommandBuffer>{1, &g_context.command_buffer[g_context.current_frame]},
+           memory_buffer_view_t<VkSemaphore>{1, &g_context.img_ready[g_context.current_frame]},
+           memory_buffer_view_t<VkSemaphore>{1, &g_context.render_finish[g_context.current_frame]},
+           memory_buffer_view_t<VkPipelineStageFlags>{1, &wait_stages},
+           &g_context.cpu_wait[g_context.current_frame],
+           &g_context.gpu.graphics_queue);
+    
+    VkSemaphore signal_semaphores[] = {g_context.render_finish[g_context.current_frame]};
+
+    VkResult result = present(memory_buffer_view_t<VkSemaphore>{1, &g_context.render_finish[g_context.current_frame]},
+                              &g_context.image_index,
+                              &g_context.gpu.present_queue);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+	// recreate swapchain
+    }
+    else if (result != VK_SUCCESS)
+    {
+	OUTPUT_DEBUG_LOG("%s\n", "failed to present swapchain image");
+    }
 }
 
 void
@@ -1887,7 +1966,19 @@ destroy_debug_utils_messenger_ext(VkInstance instance
     
 void
 destroy_vulkan_state(void)
-{	
+{
+    free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{3, g_context.command_buffer}, &g_context.command_pool);
+
+    /*    vkDestroyCommandPool(gpu->logical_device, window_rendering.command_pool, nullptr);
+          vkDestroyFence(gpu->logical_device, window_rendering.cpu_wait[0], nullptr);
+          vkDestroyFence(gpu->logical_device, window_rendering.cpu_wait[1], nullptr);
+    
+          vkDestroySemaphore(gpu->logical_device, window_rendering.render_finish[0], nullptr);
+          vkDestroySemaphore(gpu->logical_device, window_rendering.img_ready[0], nullptr);
+
+          vkDestroySemaphore(gpu->logical_device, window_rendering.render_finish[1], nullptr);
+          vkDestroySemaphore(gpu->logical_device, window_rendering.img_ready[1], nullptr);*/
+    
     vkDestroyDevice(g_context.gpu.logical_device, nullptr);
 	
     vkDestroySurfaceKHR(g_context.instance, g_context.surface, nullptr);

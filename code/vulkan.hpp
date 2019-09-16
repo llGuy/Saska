@@ -1256,3 +1256,10 @@ void destroy_swapchain(void);
 void idle_gpu(void);
 
 void destroy_vulkan_state(void);
+
+struct graphics_context_t
+{
+    vulkan_context_t context;
+};
+
+void initialize_vulkan_translation_unit(struct game_memory_t *memory);

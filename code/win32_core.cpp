@@ -417,10 +417,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
     
-    graphics_api_initialize_ret_t ret = initialize_graphics_api(&create_surface_proc_win32, &g_input_state);
-
     load_game(&g_game);
-    initialize_game(&g_input_state, ret);
+    
+    initialize_game(&g_input_state, &create_surface_proc_win32);
 
     g_running = 1;
 

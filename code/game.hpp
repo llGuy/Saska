@@ -14,6 +14,7 @@ struct game_memory_t
     struct world_t world_state;
     // Contains all state to do with graphics: material queues, GPU object managers, etc...
     struct graphics_t graphics_state;
+    struct graphics_context_t graphics_context;
     // User interface stuff
     struct user_interface_t user_interface_state;
     // Script stuff
@@ -22,7 +23,7 @@ struct game_memory_t
 
 void load_game(game_memory_t *memory);
 
-void initialize_game(input_state_t *input_state, const graphics_api_initialize_ret_t &graphics);
+void initialize_game(input_state_t *input_state, create_vulkan_surface *create_surface_proc);
 
 void destroy_game(gpu_t *gpu);
 

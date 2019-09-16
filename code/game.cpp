@@ -8,15 +8,17 @@
 void load_game(game_memory_t *memory)
 {
     initialize_world_translation_unit(memory);
+    initialize_vulkan_translation_unit(memory);
     initialize_graphics_translation_unit(memory);
     initialize_ui_translation_unit(memory);
     initialize_script_translation_unit(memory);
 }
 
-void initialize_game(input_state_t *input_state, const graphics_api_initialize_ret_t &graphics)
+void initialize_game(input_state_t *input_state, create_vulkan_surface *create_surface_proc)
 {
     // ---- Initialize game data ----
-    // Initialize atmosphere, shadow, skeletal animation...
+    // Initialize graphics api, atmosphere, shadow, skeletal animation...
+    graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, input_state);
     initialize_scripting();
     initialize_game_3d_graphics(graphics.command_pool);
     initialize_game_2d_graphics(graphics.command_pool);

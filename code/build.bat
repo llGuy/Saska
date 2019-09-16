@@ -25,12 +25,14 @@ REM --------------------------------------------
 set INC=%GLM_INC_DIR% %VULKAN_INC_DIR% %LUA_INC_DIR% %VML_INC_DIR% %STB_INC_DIR%
  
 set BIN=Saska.exe
+set DLL_NAME=Saska.dll
 
 set SRC=win32_core.cpp
+set DLL_SRC=game.cpp
 
 REM Don't need GLFW for now: C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib
 REM If link errors appear, maybe add these libs into the list: Shell32.lib kernel32.lib msvcmrt.lib 
-set LIBS=winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/Lua/lib/lua5.1.lib
+set LIBS=ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/Lua/lib/lua5.1.lib
 
 If "%1" == "compile" goto compile
 If "%1" == "debug" goto debug

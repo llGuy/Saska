@@ -14,7 +14,7 @@ void load_game(game_memory_t *memory)
     initialize_script_translation_unit(memory);
 }
 
-void initialize_game(input_state_t *input_state, create_vulkan_surface *create_surface_proc)
+void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc)
 {
     // ---- Initialize game data ----
     // Initialize graphics api, atmosphere, shadow, skeletal animation...
@@ -26,13 +26,17 @@ void initialize_game(input_state_t *input_state, create_vulkan_surface *create_s
     initialize_world(input_state, graphics.command_pool);
 }
 
-void destroy_game(void)
+void destroy_game(game_memory_t *memory)
 {
+    destroy_swapchain();
+    
     // ---- destroy world data ----
     destroy_world();
+
+    destroy_vulkan_state();
 }
 
-void game_tick(input_state_t *input_state, float32_t dt)
+void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
 {
     // ---- begin recording instructions into the command buffers ----
     frame_rendering_data_t frame = begin_frame_rendering();

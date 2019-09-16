@@ -2,12 +2,16 @@
 
 #define NOMINMAX
 
+#include <winsock2.h>
+
 #include <stb_image.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
 
 #include "core.hpp"
 #include "utils.hpp"
+
+#include "game.hpp"
 
 #if defined(UNITY_BUILD)
 #include <vulkan/vulkan.h>
@@ -35,6 +39,8 @@
 
 #include <Windows.h>
 #include <Windowsx.h>
+
+
 
 #define DEBUG_FILE ".debug"
 
@@ -353,10 +359,56 @@ internal_function void init_free_list_allocator_head(free_list_allocator_t *allo
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
+// Network code stuff for windows
+global_var struct socket_manager_t
+{
+    static constexpr uint32_t MAX_SOCKETS = 50;
+    SOCKET sockets[MAX_SOCKETS] = {};
+    uint32_t socket_count = 0;
+} g_sockets;
+
+void add_network_socket(network_socket_t *socket)
+{
+    socket->socket = g_sockets.socket_count++;
+}
+
+
+void initialize_network_socket(network_socket_t *socket_p, int32_t family, int32_t type, int32_t protocol)
+{
+    g_sockets.sockets[socket_p->socket] = socket(family, type, protocol);
+}
 
 // Actual game memory
 global_var game_memory_t g_game;
+// Game code
+/*global_var struct game_code_t
+{
+    HMODULE game_code;
+    const char *original_dir;
+    const char *tmp_dir;
+    FILETIME file_time;
 
+    typedef void (*load_game_ptr_t)(game_memory_t *);
+    typedef void (*initialize_game_ptr_t)(game_memory_t *, input_state_t *, create_vulkan_surface *);
+    typedef void (*destroy_game_ptr_t)(game_memory_t *);
+    typedef void (*game_tick_ptr_t)(game_memory_t *, input_state_t *, float32_t);
+    
+    load_game_ptr_t load_game_proc;
+    initialize_game_ptr_t initialize_game_proc;
+    destroy_game_ptr_t destroy_game_proc;
+    game_tick_ptr_t game_tick_proc;
+} g_game_code;*/
+
+// TODO: Find a good way to do DLL hotloading
+void load_game_from_dll(void)
+{
+    /*g_game_code.game_code = LoadLibraryA(g_game_code.original_dir);
+    
+    g_game_code.load_game_proc = (game_code_t::load_game_ptr_t)GetProcAddress(g_game_code.game_code, "load_game");
+    g_game_code.initialize_game_proc = (game_code_t::initialize_game_ptr_t)GetProcAddress(g_game_code.game_code, "initialize_game");
+    g_game_code.destroy_game_proc = (game_code_t::destroy_game_ptr_t)GetProcAddress(g_game_code.game_code, "destroy_game");
+    g_game_code.game_tick_proc = (game_code_t::game_tick_ptr_t)GetProcAddress(g_game_code.game_code, "game_tick");*/
+}
 
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
@@ -414,12 +466,14 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     SetCapture(g_window);
     disable_cursor_display();
 
+    // Loads function pointers into memory
+    load_game_from_dll();
+    
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
-    
+
     load_game(&g_game);
-    
-    initialize_game(&g_input_state, &create_surface_proc_win32);
+    initialize_game(&g_game, &g_input_state, &create_surface_proc_win32);
 
     g_running = 1;
 
@@ -457,7 +511,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         ClipCursor(&client_rect);
         
         // Render
-        game_tick(&g_input_state, g_dt);
+        game_tick(&g_game, &g_input_state, g_dt);
         RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
         
         clear_linear();
@@ -506,10 +560,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     ReleaseCapture();
     ShowWindow(g_window, SW_HIDE);
     
-    destroy_swapchain();
-    destroy_game();
+    destroy_game(&g_game);
     
-    destroy_vulkan_state();
-
     return(0);
 }

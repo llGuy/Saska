@@ -2,6 +2,8 @@
 
 // TODO: Big refactor after animations are loaded
 
+#include <Windows.h>
+
 #include "core.hpp"
 #include "vulkan.hpp"
 

@@ -1,3 +1,5 @@
+/* core.hpp */
+
 #pragma once
 
 #include <cassert>

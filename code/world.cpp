@@ -1,3 +1,4 @@
+/* world.cpp */
 // TODO: Get rid of most of the glm::length calls in the physics calculations (terrain collision stuff)
 // TODO: Have a startup script so that you can reload the game
 
@@ -13,15 +14,17 @@
 
 #include "core.hpp"
 
+#include "game.hpp"
+
 #define MAX_ENTITIES_UNDER_TOP 10
 #define MAX_ENTITIES_UNDER_PLANET 150
 
 constexpr float32_t PI = 3.14159265359f;
 
-global_var constexpr uint32_t MAX_MTRLS = 10;
-global_var gpu_material_submission_queue_t g_world_submission_queues[MAX_MTRLS];
-
-global_var struct morphable_terrains_t g_terrains;
+// To initialize with initialize translation unit function
+global_var gpu_material_submission_queue_t *g_world_submission_queues;
+global_var struct morphable_terrains_t *g_terrains;
+global_var struct entities_t *g_entities;
 
 enum { TERRAIN_QUEUE, ENTITY_QUEUE, ROLLING_ENTITY_QUEUE };
 
@@ -46,19 +49,19 @@ internal_function vector3_t get_world_space_from_terrain_space_no_scale(const ve
 
 internal_function int32_t add_terrain_base(const constant_string_t &name)
 {
-    uint32_t index = g_terrains.base_count;
-    g_terrains.terrain_base_table.insert(name.hash, g_terrains.base_count++);
+    uint32_t index = g_terrains->base_count;
+    g_terrains->terrain_base_table.insert(name.hash, g_terrains->base_count++);
     return(index);
 }
 
 internal_function int32_t get_terrain_base_index(const constant_string_t &name)
 {
-    return(*g_terrains.terrain_base_table.get(name.hash));
+    return(*g_terrains->terrain_base_table.get(name.hash));
 }
 
 internal_function terrain_base_info_t *get_terrain_base(int32_t index)
 {
-    return(&g_terrains.terrain_bases[index]);
+    return(&g_terrains->terrain_bases[index]);
 }
 
 internal_function vector3_t
@@ -71,13 +74,13 @@ get_ws_terrain_vertex_position(uint32_t idx,
 internal_function morphable_terrain_t *
 add_terrain(void)
 {
-    return(&g_terrains.terrains[g_terrains.terrain_count++]);
+    return(&g_terrains->terrains[g_terrains->terrain_count++]);
 }    
 
 internal_function void
 clean_up_terrain(void)
 {
-    for (uint32_t i = 0; i < g_terrains.terrain_count; ++i)
+    for (uint32_t i = 0; i < g_terrains->terrain_count; ++i)
     {
 
     }
@@ -1640,16 +1643,16 @@ internal_function morphable_terrain_t *
 on_which_terrain(const vector3_t &ws_position)
 {
     struct distance_terrain_data_t { float32_t distance; morphable_terrain_t *terrain; };
-    distance_terrain_data_t *distances = ALLOCA_T(distance_terrain_data_t, g_terrains.terrain_count);
+    distance_terrain_data_t *distances = ALLOCA_T(distance_terrain_data_t, g_terrains->terrain_count);
     uint32_t distance_count = 0;
     
-    for (uint32_t i = 0; i < g_terrains.terrain_count; ++i)
+    for (uint32_t i = 0; i < g_terrains->terrain_count; ++i)
     {
         float32_t distance;
-        if (is_on_terrain(ws_position, &g_terrains.terrains[i], &distance))
+        if (is_on_terrain(ws_position, &g_terrains->terrains[i], &distance))
         {
             distances[distance_count].distance = distance;
-            distances[distance_count].terrain = &g_terrains.terrains[i];
+            distances[distance_count].terrain = &g_terrains->terrains[i];
             ++distance_count;
         }
     }
@@ -1679,10 +1682,10 @@ internal_function void
 update_terrain_on_gpu(gpu_command_queue_t *queue)
 {
     for (uint32_t terrain = 0;
-         terrain < g_terrains.terrain_count;
+         terrain < g_terrains->terrain_count;
          ++terrain)
     {
-        morphable_terrain_t *terrainptr = &g_terrains.terrains[terrain];
+        morphable_terrain_t *terrainptr = &g_terrains->terrains[terrain];
         if (terrainptr->is_modified)
         {
             update_gpu_buffer(&terrainptr->heights_gpu_buffer,
@@ -1879,9 +1882,9 @@ make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
 internal_function void
 add_staged_creation_terrains(terrain_base_info_t *base)
 {
-    for (uint32_t i = 0; i < g_terrains.create_count; ++i)
+    for (uint32_t i = 0; i < g_terrains->create_count; ++i)
     {
-        auto *create_staging_info = &g_terrains.create_stagings[i];
+        auto *create_staging_info = &g_terrains->create_stagings[i];
         auto *new_terrain = add_terrain();
         make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain);
         make_terrain_rendering_data(base, new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
@@ -1890,27 +1893,27 @@ add_staged_creation_terrains(terrain_base_info_t *base)
                                     , vector3_t(create_staging_info->size)
                                     , create_staging_info->color);
     }
-    g_terrains.create_count = 0;
+    g_terrains->create_count = 0;
 }
 
 internal_function void
 make_terrain_pointer(void)
 {
-    //    g_terrains.terrain_pointer.ppln = g_pipeline_manager.get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
+    //    g_terrains->terrain_pointer.ppln = g_pipeline_manager->get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
 
-    g_terrains.terrain_pointer.ppln = g_pipeline_manager.add("pipeline.terrain_mesh_pointer"_hash);
-    auto *terrain_pointer_ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
+    g_terrains->terrain_pointer.ppln = g_pipeline_manager->add("pipeline.terrain_mesh_pointer"_hash);
+    auto *terrain_pointer_ppln = g_pipeline_manager->get(g_terrains->terrain_pointer.ppln);
     {
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain_pointer.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain_pointer.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {200, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
     }
 }
 
@@ -1920,38 +1923,38 @@ initialize_terrain_data(VkCommandPool *cmdpool)
     terrain_base_info_t *base = get_terrain_base(0);
     auto *model_info = &base->model_info;
 
-    g_terrains.terrain_ppln = g_pipeline_manager.add("pipeline.terrain_pipeline"_hash);
-    auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);
+    g_terrains->terrain_ppln = g_pipeline_manager->add("pipeline.terrain_pipeline"_hash);
+    auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_ppln);
     {
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
                                shader_module_info_t{"shaders/SPV/terrain.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                       g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                       g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
     }
 
-    g_terrains.terrain_shadow_ppln = g_pipeline_manager.add("pipeline.terrain_shadow"_hash);
-    auto *terrain_shadow_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);
+    g_terrains->terrain_shadow_ppln = g_pipeline_manager->add("pipeline.terrain_shadow"_hash);
+    auto *terrain_shadow_ppln = g_pipeline_manager->get(g_terrains->terrain_shadow_ppln);
     {
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent = VkExtent2D{shadow_display.shadowmap_w, shadow_display.shadowmap_h};
-        render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending = {};
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
+                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
     }
     
     make_terrain_pointer();
@@ -1962,9 +1965,9 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 				   , VkDescriptorSet *ubo_set)
 {
     // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
-    //    if (g_terrains.terrain_pointer.ts_position.x >= 0)
+    //    if (g_terrains->terrain_pointer.ts_position.x >= 0)
     /*    {
-	auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
+	auto *ppln = g_pipeline_manager->get(g_terrains->terrain_pointer.ppln);
 	command_buffer_bind_pipeline(ppln
 					     , &queue->q);
 
@@ -1981,18 +1984,18 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 	    float32_t ts_heights[8];
 	} push_k;
 
-	push_k.ts_to_ws_terrain_model = g_terrains.terrain_pointer.t->push_k.transform;
+	push_k.ts_to_ws_terrain_model = g_terrains->terrain_pointer.t->push_k.transform;
 	push_k.color = vector4_t(1.0f);
-	push_k.ts_center_position = vector4_t((float32_t)g_terrains.terrain_pointer.ts_position.x
+	push_k.ts_center_position = vector4_t((float32_t)g_terrains->terrain_pointer.ts_position.x
 					      , 0.0f
-					      , (float32_t)g_terrains.terrain_pointer.ts_position.y
+					      , (float32_t)g_terrains->terrain_pointer.ts_position.y
 					      , 1.0f);
 
-	uint32_t x = g_terrains.terrain_pointer.ts_position.x;
-	uint32_t z = g_terrains.terrain_pointer.ts_position.y;
-	uint32_t width = g_terrains.terrain_pointer.t->xz_dim.x;
-	uint32_t depth = g_terrains.terrain_pointer.t->xz_dim.y;
-	float32_t *heights = (float32_t *)(g_terrains.terrain_pointer.t->heights);
+	uint32_t x = g_terrains->terrain_pointer.ts_position.x;
+	uint32_t z = g_terrains->terrain_pointer.ts_position.y;
+	uint32_t width = g_terrains->terrain_pointer.t->xz_dim.x;
+	uint32_t depth = g_terrains->terrain_pointer.t->xz_dim.y;
+	float32_t *heights = (float32_t *)(g_terrains->terrain_pointer.t->heights);
 
 	auto calculate_height = [width, depth, heights](int32_t x, int32_t z) -> float32_t
 	{
@@ -2037,11 +2040,11 @@ internal_function void
 render_terrain_pointer(gpu_command_queue_t *queue,
                        uniform_group_t *ubo_transforms_group)
 {
-    if (g_terrains.terrain_pointer.triangle.triangle_exists)
+    if (g_terrains->terrain_pointer.triangle.triangle_exists)
     {
         vkCmdSetLineWidth(queue->q, 4.0f);
         
-        auto *ppln = g_pipeline_manager.get(g_terrains.terrain_pointer.ppln);
+        auto *ppln = g_pipeline_manager->get(g_terrains->terrain_pointer.ppln);
         command_buffer_bind_pipeline(ppln, &queue->q);
 
 	command_buffer_bind_descriptor_sets(ppln,
@@ -2058,12 +2061,12 @@ render_terrain_pointer(gpu_command_queue_t *queue,
             vector4_t new_pointer_system[3];
 	} push_k;
 
-	push_k.ts_to_ws_terrain_model = g_terrains.terrain_pointer.t->push_k.transform;
+	push_k.ts_to_ws_terrain_model = g_terrains->terrain_pointer.t->push_k.transform;
 	push_k.color = vector4_t(1.0f);
         // The positions are already in world space (no need to push a world space matrix)
-        push_k.new_pointer_system[0] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[0], 1.0f);
-        push_k.new_pointer_system[1] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[1], 1.0f);
-        push_k.new_pointer_system[2] = vector4_t(g_terrains.terrain_pointer.triangle.ws_triangle_position[2], 1.0f);
+        push_k.new_pointer_system[0] = vector4_t(g_terrains->terrain_pointer.triangle.ws_triangle_position[0], 1.0f);
+        push_k.new_pointer_system[1] = vector4_t(g_terrains->terrain_pointer.triangle.ws_triangle_position[1], 1.0f);
+        push_k.new_pointer_system[2] = vector4_t(g_terrains->terrain_pointer.triangle.ws_triangle_position[2], 1.0f);
     
 	command_buffer_push_constant(&push_k,
                                      sizeof(push_k),
@@ -2082,12 +2085,11 @@ render_terrain_pointer(gpu_command_queue_t *queue,
 
 // TODO: Possibly remove the component system and just stick all the entity data into one big block of memory
 
-global_var struct entities_t g_entities;
 
 internal_function entity_t *
 get_main_entity(void)
 {
-    return &g_entities.entity_list[g_entities.main_entity];
+    return &g_entities->entity_list[g_entities->main_entity];
 }
 
 internal_function void
@@ -2095,13 +2097,13 @@ push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
                      mesh_t *mesh,
                      gpu_material_submission_queue_t *queue)
 {
-    rendering_component_t *component = &g_entities.rendering_components[ e_ptr->components.rendering_component ];
+    rendering_component_t *component = &g_entities->rendering_components[ e_ptr->components.rendering_component ];
 
     uniform_group_t *group = nullptr;
     
     if (e_ptr->components.animation_component >= 0)
     {
-        struct animation_component_t *component = &g_entities.animation_components[ e_ptr->components.animation_component ];
+        struct animation_component_t *component = &g_entities->animation_components[ e_ptr->components.animation_component ];
         group = &component->animation_instance.group;
     }
     
@@ -2113,18 +2115,18 @@ push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
 
 internal_function void push_entity_to_animated_queue(entity_t *e)
 {
-    push_entity_to_queue(e, &g_entities.entity_mesh, &g_world_submission_queues[ENTITY_QUEUE]);
+    push_entity_to_queue(e, &g_entities->entity_mesh, &g_world_submission_queues[ENTITY_QUEUE]);
 }
 
 internal_function void push_entity_to_rolling_queue(entity_t *e)
 {
-    rendering_component_t *component = &g_entities.rendering_components[ e->components.rendering_component ];
+    rendering_component_t *component = &g_entities->rendering_components[ e->components.rendering_component ];
 
     uniform_group_t *group = nullptr;
     
     g_world_submission_queues[ROLLING_ENTITY_QUEUE].push_material(&component->push_k,
                                                                   sizeof(component->push_k),
-                                                                  &g_entities.rolling_entity_mesh,
+                                                                  &g_entities->rolling_entity_mesh,
                                                                   group);
 }
 
@@ -2147,14 +2149,14 @@ construct_entity(const constant_string_t &name
 internal_function entity_t *
 get_entity(const constant_string_t &name)
 {
-    entity_handle_t v = *g_entities.name_map.get(name.hash);
-    return(&g_entities.entity_list[v]);
+    entity_handle_t v = *g_entities->name_map.get(name.hash);
+    return(&g_entities->entity_list[v]);
 }
 
 internal_function entity_t *
 get_entity(entity_handle_t v)
 {
-    return(&g_entities.entity_list[v]);
+    return(&g_entities->entity_list[v]);
 }
 
 void
@@ -2168,8 +2170,8 @@ internal_function struct camera_component_t *
 add_camera_component(entity_t *e
                      , uint32_t camera_index)
 {
-    e->components.camera_component = g_entities.camera_component_count++;
-    camera_component_t *component = &g_entities.camera_components[ e->components.camera_component ];
+    e->components.camera_component = g_entities->camera_component_count++;
+    camera_component_t *component = &g_entities->camera_components[ e->components.camera_component ];
     component->entity_index = e->index;
     component->camera = camera_index;
 
@@ -2179,11 +2181,11 @@ add_camera_component(entity_t *e
 internal_function void
 update_camera_components(float32_t dt)
 {
-    for (uint32_t i = 0; i < g_entities.camera_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->camera_component_count; ++i)
     {
-        struct camera_component_t *component = &g_entities.camera_components[ i ];
+        struct camera_component_t *component = &g_entities->camera_components[ i ];
         struct camera_t *camera = get_camera(component->camera);
-        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+        entity_t *e = &g_entities->entity_list[ component->entity_index ];
 
         vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
         
@@ -2220,8 +2222,8 @@ update_camera_components(float32_t dt)
 internal_function struct rendering_component_t *
 add_rendering_component(entity_t *e)
 {
-    e->components.rendering_component = g_entities.rendering_component_count++;
-    rendering_component_t *component = &g_entities.rendering_components[ e->components.rendering_component ];
+    e->components.rendering_component = g_entities->rendering_component_count++;
+    rendering_component_t *component = &g_entities->rendering_components[ e->components.rendering_component ];
     component->entity_index = e->index;
     component->push_k = {};
 
@@ -2235,8 +2237,8 @@ add_animation_component(entity_t *e,
                         animation_cycles_t *cycles,
                         gpu_command_queue_pool_t *cmdpool)
 {
-    e->components.animation_component = g_entities.animation_component_count++;
-    animation_component_t *component = &g_entities.animation_components[ e->components.animation_component ];
+    e->components.animation_component = g_entities->animation_component_count++;
+    animation_component_t *component = &g_entities->animation_components[ e->components.animation_component ];
     component->entity_index = e->index;
     component->cycles = cycles;
     component->animation_instance = initialize_animated_instance(cmdpool,
@@ -2251,10 +2253,10 @@ add_animation_component(entity_t *e,
 internal_function void
 update_animation_component(input_state_t *input_state, float32_t dt)
 {
-    for (uint32_t i = 0; i < g_entities.animation_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
     {
-        struct animation_component_t *component = &g_entities.animation_components[ i ];
-        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+        struct animation_component_t *component = &g_entities->animation_components[ i ];
+        entity_t *e = &g_entities->entity_list[ component->entity_index ];
 
         entity_t::animated_state_t previous_state = e->animated_state;
         entity_t::animated_state_t new_state;
@@ -2303,10 +2305,10 @@ update_animation_component(input_state_t *input_state, float32_t dt)
 internal_function void
 update_animation_gpu_data(gpu_command_queue_t *queue)
 {
-    for (uint32_t i = 0; i < g_entities.animation_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
     {
-        struct animation_component_t *component = &g_entities.animation_components[ i ];
-        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+        struct animation_component_t *component = &g_entities->animation_components[ i ];
+        entity_t *e = &g_entities->entity_list[ component->entity_index ];
 
         update_animated_instance_ubo(queue, &component->animation_instance);
     }
@@ -2318,10 +2320,10 @@ internal_function void push_entity_to_rolling_queue(entity_t *e);
 internal_function void
 update_rendering_component(float32_t dt)
 {
-    for (uint32_t i = 0; i < g_entities.rendering_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->rendering_component_count; ++i)
     {
-        struct rendering_component_t *component = &g_entities.rendering_components[ i ];
-        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+        struct rendering_component_t *component = &g_entities->rendering_components[ i ];
+        entity_t *e = &g_entities->entity_list[ component->entity_index ];
 
         vector3_t ts_view_dir = glm::normalize(vector3_t(e->on_t->inverse_rotation * vector4_t(e->ws_d, 0.0f)));
         float32_t dir_x = ts_view_dir.x;
@@ -2362,8 +2364,8 @@ internal_function struct physics_component_t *
 add_physics_component(entity_t *e
                       , bool enabled)
 {
-    e->components.physics_component = g_entities.physics_component_count++;
-    struct physics_component_t *component = &g_entities.physics_components[ e->components.physics_component ];
+    e->components.physics_component = g_entities->physics_component_count++;
+    struct physics_component_t *component = &g_entities->physics_components[ e->components.physics_component ];
     component->entity_index = e->index;
     component->enabled = enabled;
 
@@ -2373,10 +2375,10 @@ add_physics_component(entity_t *e
 internal_function void
 update_physics_components(float32_t dt)
 {
-    for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
     {
-        struct physics_component_t *component = &g_entities.physics_components[ i ];
-        entity_t *e = &g_entities.entity_list[ component->entity_index ];
+        struct physics_component_t *component = &g_entities->physics_components[ i ];
+        entity_t *e = &g_entities->entity_list[ component->entity_index ];
 
         if (component->enabled)
         {
@@ -2402,7 +2404,7 @@ update_physics_components(float32_t dt)
 
                     e->ws_v += friction_force * dt;
 
-                    input_component_t *input = &g_entities.input_components[e->components.input_component];
+                    input_component_t *input = &g_entities->input_components[e->components.input_component];
                     if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
                     {
                         vector3_t sliding_down_dir = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
@@ -2434,7 +2436,7 @@ update_physics_components(float32_t dt)
                 collide_and_slide_collision_t gravity_collision = detect_collision_against_possible_colliding_triangles(e->on_t,
                                                                                                                         matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_p, WITH_TRANSLATION),
                                                                                                                         matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->size, TRANSLATION_DONT_CARE),
-                                                                                                                        matrix4_mul_vec3(glm::scale(1.0f / e->on_t->size), e->ws_v * dt, WITHOUT_TRANSLATION),
+                                                                                                                        matrix4_mul_vec3(e->on_t->inverse_transform, e->ws_v * dt, WITHOUT_TRANSLATION),
                                                                                                                         dt,
                                                                                                                         0,
                                                                                                                         1);
@@ -2509,7 +2511,7 @@ update_physics_components(float32_t dt)
                       }else */
                     {
                         component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
-                        component->momentum = 0.0f;
+                        component->momentum = glm::length(e->ws_v);
                     }
                 }
 
@@ -2519,7 +2521,7 @@ update_physics_components(float32_t dt)
                   vector3_t ws_friction_force = vector3_t(0.0f);
                   vector3_t ws_sliding_force = vector3_t(0.0f);
 
-                  input_component_t *input = &g_entities.input_components[e->components.input_component];
+                  input_component_t *input = &g_entities->input_components[e->components.input_component];
                   if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
                   {
                   // Is sliding
@@ -2545,33 +2547,43 @@ update_physics_components(float32_t dt)
             else
             {
                 // Not in rolling mode
-                input_component_t *input = &g_entities.input_components[e->components.input_component];
+                input_component_t *input = &g_entities->input_components[e->components.input_component];
 
+                detected_collision_return_t precollision = detect_terrain_collision(&component->hitbox,
+                                                                                 e->size,
+                                                                                 e->ws_p,
+                                                                                 e->on_t);
+
+                component->surface_normal = precollision.ws_normal;
+                
                 vector3_t sliding_down_dir = glm::normalize(get_sliding_down_direction(e->ws_d, e->on_t->ws_n, component->surface_normal));
 
                 vector3_t result_force = vector3_t(0.0f);
 
-                if (component->momentum > 0.8f)
+                if (component->is_resting)
                 {
-                    e->is_sliding_not_rolling_mode = 1;
-                    
-                    const float32_t TERRAIN_ROUGHNESS = 0.5f;
-                    float32_t cos_theta = glm::dot(-e->on_t->ws_n, -component->surface_normal);
-                    vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 9.81f * cos_theta;
-
-                    e->ws_v += friction_force * dt;
-                    component->momentum = glm::length(e->ws_v);
-
-                    if (component->momentum < 0.8f)
+                    if (component->momentum > 0.8f)
                     {
-                        component->momentum = 0.0f;
+                        e->is_sliding_not_rolling_mode = 1;
+                    
+                        const float32_t TERRAIN_ROUGHNESS = 0.5f;
+                        float32_t cos_theta = glm::dot(-e->on_t->ws_n, -component->surface_normal);
+                        vector3_t friction_force = -e->ws_v * TERRAIN_ROUGHNESS * 9.81f * cos_theta;
+
+                        e->ws_v += friction_force * dt;
+                        component->momentum = glm::length(e->ws_v);
+
+                        if (component->momentum < 0.8f)
+                        {
+                            component->momentum = 0.0f;
+                        }
                     }
-                }
-                else
-                {
-                    e->is_sliding_not_rolling_mode = 0;
-                    component->momentum = 0.0f;
-                    // Transition to jump
+                    else
+                    {
+                        e->is_sliding_not_rolling_mode = 0;
+                        component->momentum = 0.0f;
+                        // Transition to jump
+                    }
                 }
                 
                 if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
@@ -2615,6 +2627,8 @@ update_physics_components(float32_t dt)
                 
                 if (collision.detected)
                 {
+                    component->is_resting = physics_component_t::is_resting_t::RESTING;
+                    
                     e->ws_p = collision.ws_at + vector3_t(0.0f, e->size.y, 0.0f);
                     e->is_in_air = 0;
 
@@ -2624,6 +2638,8 @@ update_physics_components(float32_t dt)
                 }
                 else
                 {
+                    component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
+                    
                     e->ws_p = e->ws_p + e->ws_v * dt;
                     e->is_in_air = 1;
                 }
@@ -2719,7 +2735,7 @@ update_physics_components(float32_t dt)
                 // Take into account input
                 if (e->components.input_component >= 0)
                 {
-                    input_component_t *input = &g_entities.input_components[e->components.input_component];
+                    input_component_t *input = &g_entities->input_components[e->components.input_component];
 
                     if (input->movement_flags & (1 << input_component_t::movement_flags_t::FORWARD))
                         input_velocity += forward;
@@ -2757,7 +2773,7 @@ update_physics_components(float32_t dt)
             }
             else if (component->is_resting == physics_component_t::is_resting_t::SLIDING)
             {
-                input_component_t *input = &g_entities.input_components[e->components.input_component];
+                input_component_t *input = &g_entities->input_components[e->components.input_component];
 
                 persist_var constexpr float32_t ROUGHNESS = 0.5f;
                 float32_t cos_theta = glm::dot(-collision.ts_normal, glm::vec3(0.0f, -1.0f, 0.0f));
@@ -2856,8 +2872,8 @@ update_physics_components(float32_t dt)
 internal_function input_component_t *
 add_input_component(entity_t *e)
 {
-    e->components.input_component = g_entities.input_component_count++;
-    input_component_t *component = &g_entities.input_components[ e->components.input_component ];
+    e->components.input_component = g_entities->input_component_count++;
+    input_component_t *component = &g_entities->input_components[ e->components.input_component ];
     component->entity_index = e->index;
 
     return(component);
@@ -2871,11 +2887,11 @@ update_input_components(input_state_t *input_state
     // TODO: organise input handling better to take into account console being opened
     if (!console_is_receiving_input())
     {
-        for (uint32_t i = 0; i < g_entities.input_component_count; ++i)
+        for (uint32_t i = 0; i < g_entities->input_component_count; ++i)
         {
-            input_component_t *component = &g_entities.input_components[i];
-            entity_t *e = &g_entities.entity_list[component->entity_index];
-            physics_component_t *e_physics = &g_entities.physics_components[e->components.physics_component];
+            input_component_t *component = &g_entities->input_components[i];
+            entity_t *e = &g_entities->entity_list[component->entity_index];
+            physics_component_t *e_physics = &g_entities->physics_components[e->components.physics_component];
 
             vector3_t up = e->on_t->ws_n;
         
@@ -2913,16 +2929,16 @@ update_input_components(input_state_t *input_state
                                                         , e->ws_d
                                                         , e->on_t
                                                         , dt);
-            g_terrains.terrain_pointer.triangle = get_triangle_pointing_at(e->ws_p, e->ws_d, e->on_t, dt);
-            //            g_terrains.terrain_pointer.ts_position = ts_coord;
-            g_terrains.terrain_pointer.t = e->on_t;
+            g_terrains->terrain_pointer.triangle = get_triangle_pointing_at(e->ws_p, e->ws_d, e->on_t, dt);
+            //            g_terrains->terrain_pointer.ts_position = ts_coord;
+            g_terrains->terrain_pointer.t = e->on_t;
     
             // ---- modify the terrain ----
             if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_RIGHT].is_down)
             {
                 if (ts_coord.x >= 0)
                 {
-                    morph_terrain_at_triangle(&g_terrains.terrain_pointer.triangle,
+                    morph_terrain_at_triangle(&g_terrains->terrain_pointer.triangle,
                                                e->on_t,
                                                3.0f,
                                                dt);
@@ -3003,11 +3019,11 @@ add_entity(const entity_t &e)
 
 {
     entity_handle_t view;
-    view = g_entities.entity_count;
+    view = g_entities->entity_count;
 
-    g_entities.name_map.insert(e.id.hash, view);
+    g_entities->name_map.insert(e.id.hash, view);
     
-    g_entities.entity_list[g_entities.entity_count++] = e;
+    g_entities->entity_list[g_entities->entity_count++] = e;
 
     auto e_ptr = get_entity(view);
     e_ptr->rolling_mode = 0;
@@ -3037,124 +3053,124 @@ update_entities(input_state_t *input_state
 internal_function void
 initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
-    g_entities.rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
-    g_entities.rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities.rolling_entity_mesh);
-    g_entities.rolling_entity_model.index_data = g_entities.rolling_entity_mesh.index_data;
+    g_entities->rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
+    g_entities->rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_entity_mesh);
+    g_entities->rolling_entity_model.index_data = g_entities->rolling_entity_mesh.index_data;
     
-    g_entities.entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
-    g_entities.entity_model = make_mesh_attribute_and_binding_information(&g_entities.entity_mesh);
-    g_entities.entity_model.index_data = g_entities.entity_mesh.index_data;
-    g_entities.entity_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
-    g_entities.entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
+    g_entities->entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
+    g_entities->entity_model = make_mesh_attribute_and_binding_information(&g_entities->entity_mesh);
+    g_entities->entity_model.index_data = g_entities->entity_mesh.index_data;
+    g_entities->entity_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
+    g_entities->entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
 
-    uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager.add("uniform_layout.joint_ubo"_hash);
-    uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager.get(animation_layout_hdl);
+    uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager->add("uniform_layout.joint_ubo"_hash);
+    uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager->get(animation_layout_hdl);
     uniform_layout_info_t animation_ubo_info = {};
     animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
     *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
     
-    g_entities.entity_ppln = g_pipeline_manager.add("pipeline.model"_hash);
-    auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
+    g_entities->entity_ppln = g_pipeline_manager->add("pipeline.model"_hash);
+    auto *entity_ppln = g_pipeline_manager->get(g_entities->entity_ppln);
     {
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_animated.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_animated.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                         g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
                                          animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities.entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
     }
     // TODO: Rename all the pipelines correctly : animated / normal
-    g_entities.rolling_entity_ppln = g_pipeline_manager.add("pipeline.ball"_hash);
-    auto *rolling_entity_ppln = g_pipeline_manager.get(g_entities.rolling_entity_ppln);
+    g_entities->rolling_entity_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
+    auto *rolling_entity_ppln = g_pipeline_manager->get(g_entities->rolling_entity_ppln);
     {
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
                                  shader_module_info_t{"shaders/SPV/lp_notex_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                         g_uniform_layout_manager.get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(rolling_entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities.rolling_entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
     }
 
-    g_entities.dbg_hitbox_ppln = g_pipeline_manager.add("pipeline.hitboxes"_hash);
-    auto *hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+    g_entities->dbg_hitbox_ppln = g_pipeline_manager->add("pipeline.hitboxes"_hash);
+    auto *hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
     {
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager.get_handle("render_pass.deferred_render_pass"_hash);
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/hitbox_render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         make_graphics_pipeline(hitbox_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(dfr_render_pass), 0);
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
     }
 
-    g_entities.entity_shadow_ppln = g_pipeline_manager.add("pipeline.model_shadow"_hash);
-    auto *entity_shadow_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
+    g_entities->entity_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
+    auto *entity_shadow_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
     {
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
-        render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash),
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities.entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
     }
 
-    g_entities.rolling_entity_shadow_ppln = g_pipeline_manager.add("pipeline.ball_shadow"_hash);
-    auto *rolling_entity_shadow_ppln = g_pipeline_manager.get(g_entities.rolling_entity_shadow_ppln);
+    g_entities->rolling_entity_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
+    auto *rolling_entity_shadow_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
     {
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
-        render_pass_handle_t shadow_render_pass = g_render_pass_manager.get_handle("render_pass.shadow_render_pass"_hash);
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/model_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager.get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         make_graphics_pipeline(rolling_entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities.rolling_entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager.get(shadow_render_pass), 0);
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_entity_model,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
     }
 
     entity_t r2 = construct_entity("entity.main"_hash,
-                                   matrix4_mul_vec3(g_terrains.terrains[0].push_k.transform, vector3_t(15.0f, 2.0f, 15.0f), WITH_TRANSLATION),
-                                   //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains.terrains[0]),
+                                   matrix4_mul_vec3(g_terrains->terrains[0].push_k.transform, vector3_t(15.0f, 2.0f, 15.0f), WITH_TRANSLATION),
+                                   //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains->terrains[0]),
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
     r2.size = vector3_t(5.0f);
     //r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
     entity_handle_t rv2 = add_entity(r2);
-    g_entities.main_entity = rv2;
+    g_entities->main_entity = rv2;
     auto *r2_ptr = get_entity(rv2);
 
     rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
     animation_component_t *r2_animation = add_animation_component(r2_ptr,
                                                                   animation_layout_ptr,
-                                                                  &g_entities.entity_mesh_skeleton,
-                                                                  &g_entities.entity_mesh_cycles,
+                                                                  &g_entities->entity_mesh_skeleton,
+                                                                  &g_entities->entity_mesh_cycles,
                                                                   cmdpool);
 
     physics_component_t *physics = add_physics_component(r2_ptr, false);
@@ -3187,14 +3203,14 @@ prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set
 internal_function void
 dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_ubo, morphable_terrain_t *terrain, gpu_command_queue_t *queue)
 {
-    /*if (g_terrains.dbg_is_rendering_sphere_collision_triangles)
+    /*if (g_terrains->dbg_is_rendering_sphere_collision_triangles)
     {
-    auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+    auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
     command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
 
     command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
 
-    for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
     {
         struct push_k_t
         {
@@ -3203,7 +3219,7 @@ dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_u
             alignas(16) vector4_t color;
         } pk;
 
-        entity_t *entity = get_entity(g_entities.main_entity);
+        entity_t *entity = get_entity(g_entities->main_entity);
 
         if (entity->on_t)
         {
@@ -3245,9 +3261,9 @@ dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_u
 internal_function void
 dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
-    if (g_terrains.dbg_is_rendering_edge_collision_line && g_terrains.dbg_edge_data.edge_container)
+    if (g_terrains->dbg_is_rendering_edge_collision_line && g_terrains->dbg_edge_data.edge_container)
     {
-        auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+        auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
         command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
 
         command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
@@ -3259,10 +3275,10 @@ dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queu
             alignas(16) vector4_t color;
         } pk;
         
-        pk.model_matrix = g_terrains.dbg_edge_data.edge_container->push_k.transform;
+        pk.model_matrix = g_terrains->dbg_edge_data.edge_container->push_k.transform;
 
-        pk.positions[0] = vector4_t(g_terrains.dbg_edge_data.ts_a, 1.0f);
-        pk.positions[1] = vector4_t(g_terrains.dbg_edge_data.ts_b, 1.0f);
+        pk.positions[0] = vector4_t(g_terrains->dbg_edge_data.ts_a, 1.0f);
+        pk.positions[1] = vector4_t(g_terrains->dbg_edge_data.ts_b, 1.0f);
 
         pk.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
 
@@ -3280,14 +3296,14 @@ dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queu
 internal_function void
 dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
-    if (g_entities.dbg.hit_box_display)
+    if (g_entities->dbg.hit_box_display)
     {
-        auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+        auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
         command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
 
         command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
 
-        for (uint32_t i = 0; i < g_entities.physics_component_count; ++i)
+        for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
         {
             struct push_k_t
             {
@@ -3295,10 +3311,10 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
                 alignas(16) vector4_t positions[8];
                 alignas(16) vector4_t color;
             } pk;
-            physics_component_t *physics_component = &g_entities.physics_components[i];
+            physics_component_t *physics_component = &g_entities->physics_components[i];
             entity_t *entity = get_entity(physics_component->entity_index);
 
-            if (entity->index != g_entities.main_entity)
+            if (entity->index != g_entities->main_entity)
             {
                 if (entity->on_t)
                 {
@@ -3338,9 +3354,9 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 internal_function void
 dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
-    if (g_entities.dbg.render_sliding_vector_entity)
+    if (g_entities->dbg.render_sliding_vector_entity)
     {
-        auto *dbg_hitbox_ppln = g_pipeline_manager.get(g_entities.dbg_hitbox_ppln);
+        auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
         command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
 
         command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
@@ -3352,8 +3368,8 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
             alignas(16) vector4_t color;
         } pk;
         
-        entity_t *entity = g_entities.dbg.render_sliding_vector_entity;
-        physics_component_t *physics = &g_entities.physics_components[entity->components.physics_component];
+        entity_t *entity = g_entities->dbg.render_sliding_vector_entity;
+        physics_component_t *physics = &g_entities->physics_components[entity->components.physics_component];
 
         pk.model_matrix = glm::translate(physics->surface_position) * glm::scale(entity->size * 3.5f);
 
@@ -3421,19 +3437,19 @@ render_world(uint32_t image_index
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, queue);
     {
-        auto *model_ppln = g_pipeline_manager.get(g_entities.entity_shadow_ppln);
+        auto *model_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
 
         g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
                                                           , queue
                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *rolling_model_ppln = g_pipeline_manager.get(g_entities.rolling_entity_shadow_ppln);
+        auto *rolling_model_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
 
         g_world_submission_queues[ROLLING_ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln
                                                                                 , queue
                                                                                 , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_shadow_ppln);    
+        auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_shadow_ppln);    
     
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
                                                            , queue
@@ -3444,9 +3460,9 @@ render_world(uint32_t image_index
     // Rendering the scene with lighting and everything
     begin_deferred_rendering(image_index, queue);
     {
-        auto *terrain_ppln = g_pipeline_manager.get(g_terrains.terrain_ppln);    
-        auto *entity_ppln = g_pipeline_manager.get(g_entities.entity_ppln);
-        auto *rolling_entity_ppln = g_pipeline_manager.get(g_entities.rolling_entity_ppln);
+        auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_ppln);    
+        auto *entity_ppln = g_pipeline_manager->get(g_entities->entity_ppln);
+        auto *rolling_entity_ppln = g_pipeline_manager->get(g_entities->rolling_entity_ppln);
     
         g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({2, uniform_groups}, terrain_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
         g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({2, uniform_groups}, entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -3459,10 +3475,10 @@ render_world(uint32_t image_index
         //        prepare_terrain_pointer_for_render(queue, &transforms_ubo_uniform_groups[image_index]);
         render_terrain_pointer(queue, &transforms_ubo_uniform_groups[image_index]);
 
-        render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager.get(g_entities.dbg_hitbox_ppln));
+        render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
         dbg_render_hitboxes(&uniform_groups[0], queue);
         dbg_render_sliding_vectors(&uniform_groups[0], queue);
-        dbg_render_underlying_possible_colliding_triangles(&uniform_groups[0], get_entity(g_entities.main_entity)->on_t, queue);
+        dbg_render_underlying_possible_colliding_triangles(&uniform_groups[0], get_entity(g_entities->main_entity)->on_t, queue);
         dbg_render_collision_edge_line(&uniform_groups[0], queue);
         //dbg_render_shadow_map_quad(queue);
         
@@ -3559,7 +3575,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool)
     
     // Rendering data, queues, etc...
     initialize_terrain_data(cmdpool);
-    //    make_terrain_instances(&g_terrains.terrain_bases[0], cmdpool);
+    //    make_terrain_instances(&g_terrains->terrain_bases[0], cmdpool);
     initialize_entities_data(cmdpool, input_state);
 
     clear_linear();
@@ -3576,8 +3592,8 @@ update_world(input_state_t *input_state
     
     update_entities(input_state, dt);
     
-    //    interpolate_skeleton_joints_into_instance(dt, &g_entities.entity_animation_instance);
-    //    update_animated_instance_ubo(cmdbuf, &g_entities.entity_animation_instance);
+    //    interpolate_skeleton_joints_into_instance(dt, &g_entities->entity_animation_instance);
+    //    update_animated_instance_ubo(cmdbuf, &g_entities->entity_animation_instance);
     update_animation_gpu_data(cmdbuf);
     
     //    add_staged_creation_terrains();
@@ -3601,9 +3617,9 @@ handle_input_debug(input_state_t *input_state
     {
         // ---- get bound entity ----
         // TODO make sure to check if main_entity < 0
-        entity_t *e_ptr = &g_entities.entity_list[g_entities.main_entity];
-        camera_component_t *e_camera_component = &g_entities.camera_components[e_ptr->components.camera_component];
-        physics_component_t *e_physics = &g_entities.physics_components[e_ptr->components.physics_component];
+        entity_t *e_ptr = &g_entities->entity_list[g_entities->main_entity];
+        camera_component_t *e_camera_component = &g_entities->camera_components[e_ptr->components.camera_component];
+        physics_component_t *e_physics = &g_entities->physics_components[e_ptr->components.physics_component];
         camera_t *e_camera = get_camera(e_camera_component->camera);
         vector3_t up = e_ptr->on_t->ws_n;
     
@@ -3638,17 +3654,17 @@ handle_input_debug(input_state_t *input_state
 void
 destroy_world(void)
 {
-    g_render_pass_manager.clean_up();
-    g_image_manager.clean_up();
-    g_framebuffer_manager.clean_up();
-    g_pipeline_manager.clean_up();
-    g_gpu_buffer_manager.clean_up();
+    g_render_pass_manager->clean_up();
+    g_image_manager->clean_up();
+    g_framebuffer_manager->clean_up();
+    g_pipeline_manager->clean_up();
+    g_gpu_buffer_manager->clean_up();
 
     clean_up_terrain();
 
-    /*for (uint32_t i = 0; i < g_uniform_layout_manager.count; ++i)
+    /*for (uint32_t i = 0; i < g_uniform_layout_manager->count; ++i)
     {
-	vkDestroyDescriptorSetLayout(gpu->logical_device, g_uniform_layout_manager.objects[i], nullptr);
+	vkDestroyDescriptorSetLayout(gpu->logical_device, g_uniform_layout_manager->objects[i], nullptr);
     }*/
 
     destroy_graphics();
@@ -3658,7 +3674,7 @@ internal_function int32_t
 lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
-    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
     lua_pushnumber(state, main_entity->ws_p.x);
     lua_pushnumber(state, main_entity->ws_p.y);
     lua_pushnumber(state, main_entity->ws_p.z);
@@ -3671,7 +3687,7 @@ lua_set_player_position(lua_State *state)
     float32_t x = lua_tonumber(state, -3);
     float32_t y = lua_tonumber(state, -2);
     float32_t z = lua_tonumber(state, -1);
-    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
     main_entity->ws_p.x = x;
     main_entity->ws_p.y = y;
     main_entity->ws_p.z = z;
@@ -3684,13 +3700,13 @@ lua_spawn_terrain(lua_State *state)
     uint32_t dimensions = lua_tonumber(state, -2);
     float32_t size = lua_tonumber(state, -1);
     
-    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
 
     uint32_t xrotation = rand() % 90;
     uint32_t yrotation = rand() % 90;
     uint32_t zrotation = rand() % 90;
     
-    auto *create = &g_terrains.create_stagings[g_terrains.create_count++];
+    auto *create = &g_terrains->create_stagings[g_terrains->create_count++];
     create->dimensions = dimensions;
     create->size = size;
     create->ws_p = main_entity->ws_p;
@@ -3703,7 +3719,7 @@ lua_spawn_terrain(lua_State *state)
 internal_function int32_t
 lua_toggle_collision_box_render(lua_State *state)
 {
-    g_entities.dbg.hit_box_display ^= true;
+    g_entities->dbg.hit_box_display ^= true;
     return(0);
 }
 
@@ -3713,7 +3729,7 @@ lua_render_entity_direction_information(lua_State *state)
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
 
-    g_entities.dbg.render_sliding_vector_entity = get_entity(kname);
+    g_entities->dbg.render_sliding_vector_entity = get_entity(kname);
 
     persist_var char buffer[50];
     sprintf(buffer, "rendering for entity: %s", name);
@@ -3730,7 +3746,7 @@ lua_toggle_entity_model_display(lua_State *state)
 
     entity_t *entity = get_entity(kname);
 
-    g_entities.rendering_components[entity->components.rendering_component].enabled ^= true;
+    g_entities->rendering_components[entity->components.rendering_component].enabled ^= true;
 
     return(0);
 }
@@ -3750,7 +3766,7 @@ internal_function int32_t
 lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
-    entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
     //    vector4_t dir = glm::scale(main_entity->on_t->size) * main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_d, 0.0f);
     lua_pushnumber(state, main_entity->ws_d.x);
     lua_pushnumber(state, main_entity->ws_d.y);
@@ -3768,7 +3784,7 @@ lua_start_simulation(lua_State *state)
 
     vector3_t initial_velocity = vector3_t(entity->on_t->push_k.transform * vector4_t(0.0f, 1.0f, 0.0f, 0.0f)) * 10.0f;
 
-    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    physics_component_t *component = &g_entities->physics_components[ entity->components.physics_component ];
     component->enabled = true;
     component->ws_velocity = initial_velocity;
     
@@ -3783,7 +3799,7 @@ lua_move_entity(lua_State *state)
 
     entity_t *entity = get_entity(kname);
 
-    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    physics_component_t *component = &g_entities->physics_components[ entity->components.physics_component ];
     vector3_t x_direction = vector3_t(entity->on_t->push_k.transform * vector4_t(1.0f, 0.0f, 0.0f, 0.0f)) * 10.0f;
     component->ws_velocity = x_direction;
 
@@ -3800,7 +3816,7 @@ lua_stop_simulation(lua_State *state)
 
     entity_t *entity = get_entity(kname);
 
-    physics_component_t *component = &g_entities.physics_components[ entity->components.physics_component ];
+    physics_component_t *component = &g_entities->physics_components[ entity->components.physics_component ];
     component->enabled = false;
     component->ws_velocity = vector3_t(0.0f);
     
@@ -3810,7 +3826,7 @@ lua_stop_simulation(lua_State *state)
 internal_function int32_t
 lua_print_player_terrain_position_info(lua_State *state)
 {
-    struct entity_t *main_entity = &g_entities.entity_list[g_entities.main_entity];
+    struct entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
 
     vector3_t ts_p = vector3_t(main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_p, 1.0f));
     struct morphable_terrain_t *t = main_entity->on_t;
@@ -3957,13 +3973,13 @@ lua_print_player_terrain_position(lua_State *state)
 internal_function int32_t
 lua_toggle_sphere_collision_triangles_render(lua_State *state)
 {
-    g_terrains.dbg_is_rendering_sphere_collision_triangles ^= 1;
+    g_terrains->dbg_is_rendering_sphere_collision_triangles ^= 1;
     return(0);
 }
 
 internal_function int32_t lua_toggle_collision_edge_render(lua_State *state)
 {
-    g_terrains.dbg_is_rendering_edge_collision_line ^= 1;
+    g_terrains->dbg_is_rendering_edge_collision_line ^= 1;
     return(0);
 }
 
@@ -4022,9 +4038,16 @@ internal_function int32_t lua_initialize_terrain_instance(lua_State *state)
 internal_function int32_t lua_go_down(lua_State *state)
 {
     entity_t *main = get_main_entity();
-    input_component_t *component = &g_entities.input_components[main->components.input_component];
+    input_component_t *component = &g_entities->input_components[main->components.input_component];
     auto *istate = get_input_state();
     istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down = is_down_t::REPEAT;
     istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].down_amount += 1.0f / 60.0f;
     return(0);
+}
+
+void initialize_world_translation_unit(struct game_memory_t *memory)
+{
+    g_entities = &memory->world_state.entities;
+    g_terrains = &memory->world_state.terrains;
+    g_world_submission_queues = memory->world_state.material_submission_queues;
 }

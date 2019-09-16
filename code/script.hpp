@@ -10,7 +10,10 @@ extern "C"
     #include <lualib.h>
 }
 
-extern struct lua_State *g_lua_state;
+struct game_scripts_t
+{
+    struct lua_State *script_state;
+};
 
 void
 initialize_scripting(void);
@@ -64,3 +67,5 @@ add_global_to_lua(script_primitive_type_t type, const char *name, const T &data)
 
 void
 execute_lua(const char *code);
+
+void initialize_script_translation_unit(struct game_memory_t *memory);

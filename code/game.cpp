@@ -5,6 +5,14 @@
 #include "script.hpp"
 #include "ui.hpp"
 
+void load_game(game_memory_t *memory)
+{
+    initialize_world_translation_unit(memory);
+    initialize_graphics_translation_unit(memory);
+    initialize_ui_translation_unit(memory);
+    initialize_script_translation_unit(memory);
+}
+
 void initialize_game(input_state_t *input_state, const graphics_api_initialize_ret_t &graphics)
 {
     // ---- Initialize game data ----
@@ -12,7 +20,7 @@ void initialize_game(input_state_t *input_state, const graphics_api_initialize_r
     initialize_scripting();
     initialize_game_3d_graphics(graphics.command_pool);
     initialize_game_2d_graphics(graphics.command_pool);
-    initialize_game_ui(graphics.command_pool, &g_uniform_pool, get_backbuffer_resolution());
+    initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
     initialize_world(input_state, graphics.command_pool);
 }
 

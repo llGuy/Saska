@@ -1,3 +1,5 @@
+/* graphics.hpp */
+
 #pragma once
 
 #include "core.hpp"
@@ -78,15 +80,16 @@ typedef VkExtent2D resolution_t;
 typedef VkRect2D rect2D_t;
 typedef object_manager_t<uniform_layout_t> uniform_layout_manager_t;
 typedef object_manager_t<uniform_group_t> uniform_group_manager_t;
-extern gpu_buffer_manager_t g_gpu_buffer_manager;
-extern image_manager_t g_image_manager;
-extern framebuffer_manager_t g_framebuffer_manager;
-extern render_pass_manager_t g_render_pass_manager;
-extern pipeline_manager_t g_pipeline_manager;
-extern uniform_layout_manager_t g_uniform_layout_manager;
-extern uniform_group_manager_t g_uniform_group_manager;
-extern model_manager_t g_model_manager;
-extern uniform_pool_t g_uniform_pool;
+
+extern gpu_buffer_manager_t *g_gpu_buffer_manager;
+extern image_manager_t *g_image_manager;
+extern framebuffer_manager_t *g_framebuffer_manager;
+extern render_pass_manager_t *g_render_pass_manager;
+extern pipeline_manager_t *g_pipeline_manager;
+extern uniform_layout_manager_t *g_uniform_layout_manager;
+extern uniform_group_manager_t *g_uniform_group_manager;
+extern model_manager_t *g_model_manager;
+extern uniform_pool_t *g_uniform_pool;
 
 struct gpu_command_queue_t
 {
@@ -118,8 +121,8 @@ struct gpu_command_queue_t
 
         VkClearValue clears[sizeof...(clear_values) + 1] = {clear_values..., VkClearValue{}};
 
-        auto *fbo_object = g_framebuffer_manager.get(fbo);
-        command_buffer_begin_render_pass(g_render_pass_manager.get(pass), fbo_object
+        auto *fbo_object = g_framebuffer_manager->get(fbo);
+        command_buffer_begin_render_pass(g_render_pass_manager->get(pass), fbo_object
                                                  , init_render_area({0, 0}, fbo_object->extent)
                                                  , {sizeof...(clear_values), clears}
                                                  , contents
@@ -823,3 +826,205 @@ void destroy_animated_instance(animated_instance_t *instance);
 
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);
 void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance);
+
+struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager
+{
+    persist_var constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
+
+    uint32_t active_queue_ptr {0};
+    gpu_command_queue_t active_queues[MAX_ACTIVE_QUEUES];
+};
+
+struct cameras_t
+{
+    persist_var constexpr uint32_t MAX_CAMERAS = 10;
+    uint32_t camera_count = 0;
+    camera_t cameras[MAX_CAMERAS] = {};
+    camera_handle_t camera_bound_to_3d_output;
+
+    gpu_buffer_handle_t camera_transforms_ubos;
+    uniform_group_handle_t camera_transforms_uniform_groups;
+    uint32_t ubo_count;
+};
+
+struct deferred_rendering_t
+{
+    resolution_t backbuffer_res = {1280, 720};
+    
+    render_pass_handle_t dfr_render_pass;
+    // at the moment, dfr_framebuffer points to multiple because it is the bound to swapchain - in future, change
+    framebuffer_handle_t dfr_framebuffer;
+    pipeline_handle_t dfr_lighting_ppln;
+    uniform_group_handle_t dfr_subpass_group;
+    uniform_group_handle_t dfr_g_buffer_group;
+};
+
+struct lighting_t
+{
+    // Default value
+    vector3_t ws_light_position {10.0000001f, 10.0000000001f, 10.00000001f};
+
+
+    // Later, need to add PSSM
+    struct shadows_t
+    {
+        persist_var constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+        
+        framebuffer_handle_t fbo;
+        render_pass_handle_t pass;
+        image_handle_t map;
+        uniform_group_handle_t set;
+        uniform_layout_handle_t ulayout;
+    
+        pipeline_handle_t debug_frustum_ppln;
+    
+        matrix4_t light_view_matrix;
+        matrix4_t projection_matrix;
+        matrix4_t inverse_light_view;
+
+        vector4_t ls_corners[8];
+
+        graphics_pipeline_t dbg_shadow_tx_quad_ppln;
+        
+        union
+        {
+            struct {float32_t x_min, x_max, y_min, y_max, z_min, z_max;};
+            float32_t corner_values[6];
+        };
+    } shadows;
+};
+
+struct atmosphere_t
+{
+    persist_var constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
+    
+    // gpu_t objects needed to create the atmosphere skybox cubemap
+    render_pass_handle_t make_render_pass;
+    framebuffer_handle_t make_fbo;
+    pipeline_handle_t make_pipeline;
+
+    // pipeline needed to render the cubemap to the screen
+    pipeline_handle_t render_pipeline;
+
+    // Descriptor set that will be used to sample (should not be used in world.cpp)
+    uniform_group_handle_t cubemap_uniform_group;
+
+    model_handle_t cube_handle;
+};
+
+struct pfx_stage_t
+{
+    // Max inputs is 10
+    image_handle_t inputs[10] = {};
+    uint32_t input_count;
+    // One input for now
+    image_handle_t output;
+    
+    pipeline_handle_t ppln;
+    framebuffer_handle_t fbo;
+    uniform_group_handle_t output_group; // For next one
+
+    void
+    introduce_to_managers(const constant_string_t &ppln_name,
+                          const constant_string_t &fbo_name,
+                          const constant_string_t &group_name);
+};
+
+// For debugging
+// TODO: Make sure that this functionality doesn't use Saska's abstraction of vulkan and uses pure and raw vulkan code for possible future users in their projects (if this thing works well)
+struct dbg_pfx_frame_capture_t
+{
+    // Debug a shader with this data:
+    void *pk_ptr;
+    uint32_t pk_size;
+
+    // Create a blitted image with uniform sampler to display
+    image2d_t blitted_image;
+    image2d_t blitted_image_linear;
+    mapped_gpu_memory_t mapped_image;
+    uniform_group_t blitted_image_uniform;
+
+    // Create blitted images (tiling linear) of input attachments / samplers
+    struct dbg_sampler2d_t
+    {
+        VkFormat format;
+
+        resolution_t resolution;
+        image_handle_t original_image;
+        image2d_t blitted_linear_image;
+        uint32_t index;
+
+        mapped_gpu_memory_t mapped;
+    };
+
+    uint32_t sampler_count;
+    // Maximum is 10 samplers
+    dbg_sampler2d_t samplers[10];
+
+    bool selected_pixel = false;
+    vector2_t window_cursor_position;
+    vector2_t backbuffer_cursor_position;
+
+    inline void
+    prepare_memory_maps(void)
+    {
+        for (uint32_t i = 0; i < sampler_count; ++i)
+        {
+            samplers[i].mapped = samplers[i].blitted_linear_image.construct_map();
+            samplers[i].mapped.begin();
+        }
+    }
+
+    inline void
+    end_memory_maps(void)
+    {
+        for (uint32_t i = 0; i < sampler_count; ++i)
+        {
+            samplers[i].mapped.end();
+        }
+    }
+};
+
+struct post_processing_t
+{
+    pfx_stage_t ssr_stage;
+    pfx_stage_t pre_final_stage;
+    pfx_stage_t final_stage;
+
+    uniform_layout_handle_t pfx_single_tx_layout;
+    render_pass_handle_t pfx_render_pass;
+    render_pass_handle_t final_render_pass;
+
+    // For debugging
+    bool dbg_requested_capture = false;
+    bool dbg_in_frame_capture_mode = false;
+    dbg_pfx_frame_capture_t dbg_capture;
+
+    rect2D_t render_rect2D;
+};
+
+// Contains all state to do with graphics
+struct graphics_t
+{
+    // Managers
+    gpu_buffer_manager_t gpu_buffer_manager;
+    image_manager_t image_manager;
+    framebuffer_manager_t framebuffer_manager;
+    render_pass_manager_t render_pass_manager;
+    pipeline_manager_t pipeline_manager;
+    uniform_layout_manager_t uniform_layout_manager;
+    uniform_group_manager_t uniform_group_manager;
+    model_manager_t model_manager;
+    uniform_pool_t uniform_pool;
+
+    gpu_material_submission_queue_manager_t material_queue_manager;
+    
+    deferred_rendering_t deferred_rendering;
+    post_processing_t postfx;
+    
+    cameras_t cameras;
+    lighting_t lighting;
+    atmosphere_t atmosphere;
+};
+
+void initialize_graphics_translation_unit(struct game_memory_t *memory);

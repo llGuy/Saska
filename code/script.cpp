@@ -9,7 +9,7 @@ extern "C"
     #include <lualib.h>
 }
 
-lua_State *g_lua_state = nullptr;
+global_var lua_State *g_lua_state = nullptr;
 
 void
 initialize_scripting(void)
@@ -87,4 +87,9 @@ execute_lua(const char *code)
         printf("%s", lua_tostring(g_lua_state, -1));
         lua_pop(g_lua_state, 1);
     }
+}
+
+void initialize_script_translation_unit(game_memory_t *memory)
+{
+    g_lua_state = memory->script_state.script_state;
 }

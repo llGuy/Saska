@@ -1,3 +1,5 @@
+/* win32_core.cpp */
+
 #define NOMINMAX
 
 #include <stb_image.h>
@@ -351,6 +353,11 @@ internal_function void init_free_list_allocator_head(free_list_allocator_t *allo
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
+
+// Actual game memory
+global_var game_memory_t g_game;
+
+
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
     // Initialize game's dynamic memory
@@ -411,6 +418,8 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     create_surface_proc_win32.window_ptr = &g_window;
     
     graphics_api_initialize_ret_t ret = initialize_graphics_api(&create_surface_proc_win32, &g_input_state);
+
+    load_game(&g_game);
     initialize_game(&g_input_state, ret);
 
     g_running = 1;

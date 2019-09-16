@@ -1,3 +1,5 @@
+/* vulkan.hpp */
+
 // TODO: Organize Vulkan API code, memory barriers, graphics pipeline, render pass creation, etc...
 
 #pragma once

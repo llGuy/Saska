@@ -2,35 +2,8 @@
 #include "utils.hpp"
 #include "script.hpp"
 #include "graphics.hpp"
-
-enum coordinate_type_t { PIXEL, GLSL };
-
-struct ui_vector2_t
-{
-    union
-    {
-        struct {int32_t ix, iy;};
-        struct {float32_t fx, fy;};
-    };
-    coordinate_type_t type;
-
-    ui_vector2_t(void) = default;
-    ui_vector2_t(float32_t x, float32_t y) : fx(x), fy(y), type(GLSL) {}
-    ui_vector2_t(int32_t x, int32_t y) : ix(x), iy(y), type(PIXEL) {}
-    ui_vector2_t(const ivector2_t &iv) : ix(iv.x), iy(iv.y) {}
-    
-    inline vector2_t
-    to_fvec2(void) const
-    {
-        return vector2_t(fx, fy);
-    }
-
-    inline ivector2_t
-    to_ivec2(void) const
-    {
-        return ivector2_t(ix, iy);
-    }
-};
+#include "game.hpp"
+#include "ui.hpp"
 
 internal_function inline vector2_t
 convert_glsl_to_normalized(const vector2_t &position)
@@ -56,7 +29,6 @@ pixel_to_glsl_coord(const ui_vector2_t &position,
 }
 
 // for_t now, doesn't support the relative to function (need to add in the fufure)
-enum relative_to_t { LEFT_DOWN, LEFT_UP, CENTER, RIGHT_DOWN, RIGHT_UP };
 global_var constexpr vector2_t RELATIVE_TO_ADD_VALUES[] { vector2_t(0.0f, 0.0f),
         vector2_t(0.0f, 1.0f),
         vector2_t(0.5f, 0.5f),
@@ -67,21 +39,6 @@ global_var constexpr vector2_t RELATIVE_TO_FACTORS[] { vector2_t(0.0f, 0.0f),
         vector2_t(-0.5f, -0.5f),
         vector2_t(-1.0f, 0.0f),
         vector2_t(-1.0f, -1.0f)};
-
-struct ui_box_t
-{
-    ui_box_t *parent {nullptr};
-    relative_to_t relative_to;
-    ui_vector2_t relative_position;
-    ui_vector2_t gls_position;
-    ui_vector2_t px_position;
-    ui_vector2_t gls_max_values;
-    ui_vector2_t px_current_size;
-    ui_vector2_t gls_current_size;
-    ui_vector2_t gls_relative_size;
-    float32_t aspect_ratio;
-    uint32_t color;
-};
 
 uint32_t
 vec4_color_to_ui32b(const vector4_t &color)
@@ -194,50 +151,6 @@ make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
     box.color = color;
     return(box);
 }
-
-struct font_character_t
-{
-    char character_value;
-    vector2_t uvs_base;
-    vector2_t uvs_size;
-    vector2_t display_size;
-    vector2_t offset;
-    float32_t advance;
-};
-
-struct font_t
-{
-    uint32_t char_count;
-    image_handle_t font_img;
-
-    font_character_t font_characters[126];
-};
-
-typedef int32_t font_handle_t;
-
-struct ui_text_t
-{
-    ui_box_t *dst_box;
-    font_t *font;
-    
-    // Max characters = 500
-    uint32_t colors[500] = {};
-    char characters[500] = {};
-    uint32_t char_count = 0;
-
-    enum font_stream_box_relative_to_t { TOP, BOTTOM /* add CENTER in the future */ };
-
-    font_stream_box_relative_to_t relative_to;
-
-    // Relative to xadvance
-    float32_t x_start;
-    float32_t y_start;
-
-    uint32_t chars_per_line;
-
-    // Relative to xadvance
-    float32_t line_height;
-};
 
 internal_function void
 make_text(ui_box_t *box,
@@ -488,53 +401,14 @@ draw_string(ui_text_t *text, const char *string, uint32_t color)
 }
 
 // TODO: Make a textured quad renderer
-global_var struct dbg_ui_utils_t
-{
-    graphics_pipeline_t dbg_tx_quad_ppln;
-    uniform_layout_t dbg_tx_ulayout;
-} dbg_ui_utils;
+global_var dbg_ui_utils_t *dbg_ui_utils;
 
 internal_function void initialize_debug_ui_utils(void)
 {
     
 }
 
-struct ui_state_t
-{
-    struct gui_vertex_t
-    {
-        vector2_t position;
-        uint32_t color;
-    };
-    persist_var constexpr uint32_t MAX_QUADS = 10;
-    gui_vertex_t cpu_vertex_pool[ MAX_QUADS * 6 ];
-    uint32_t cpu_vertex_count = 0;
-    model_handle_t ui_quads_model;
-    gpu_buffer_handle_t ui_quads_vbo;
-    pipeline_handle_t ui_pipeline;
-
-    struct textured_vertex_t
-    {
-        vector2_t position;
-        vector2_t uvs;
-        uint32_t color;
-    };
-    persist_var constexpr uint32_t MAX_TX_QUADS = 1000;
-    textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
-    uint32_t cpu_tx_vertex_count = 0;    
-    model_handle_t tx_quads_model;
-    gpu_buffer_handle_t tx_quads_vbo;
-    pipeline_handle_t tx_pipeline;
-    // may_t contain an array of textures
-    uniform_group_handle_t tx_group;
-
-    render_pass_handle_t ui_render_pass;
-    gpu_command_queue_t secondary_ui_q;
-    
-    ui_box_t box;
-    ui_box_t child;
-    ui_box_t test_character_placeholder;
-} g_ui;
+global_var ui_state_t *g_ui;
 
 internal_function ivector2_t
 get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
@@ -607,32 +481,32 @@ push_text(ui_text_t *text, const resolution_t &resolution)
         vector2_t current_uvs = font_character_data->uvs_base;
         current_uvs.y = 1.0f - current_uvs.y;
         
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust,
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust,
                                                                current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
         current_uvs.y = 1.0f - current_uvs.y;
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
                                                                current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
         current_uvs.y = 1.0f - current_uvs.y;
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
                                                                current_uvs, color};
         
         current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
         current_uvs.y = 1.0f - current_uvs.y;
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
                                                                current_uvs, color};
 
         current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
         current_uvs.y = 1.0f - current_uvs.y;
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
                                                                current_uvs, color};
 
         current_uvs = font_character_data->uvs_base + font_character_data->uvs_size;
         current_uvs.y = 1.0f - current_uvs.y;
-        g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
                                                                current_uvs, color};
 
         px_cursor_position += ivector2_t(px_char_width, 0.0f);
@@ -652,12 +526,12 @@ push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position, box->color};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), box->color};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), box->color};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), box->color};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), box->color};
-    g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position, box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), box->color};
+    g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
 }
 
 internal_function void
@@ -665,37 +539,15 @@ push_font_character_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position, vector2_t(0.0f, 0.0f)};
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
-    g_ui.cpu_tx_vertex_pool[g_ui.cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, vector2_t(1.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position, vector2_t(0.0f, 0.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
+    g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, vector2_t(1.0f)};
 }
 
-struct console_t
-{
-    bool render_console = true;
-    bool receive_input;
-
-    ui_box_t back_box;
-    
-    ui_text_t console_input;
-    char input_characters[60] = {};
-    uint32_t input_character_count = 0;
-
-    persist_var constexpr float32_t BLINK_SPEED = 2.0f;
-    enum fade_t { FADE_IN = false, FADE_OUT = true };
-    bool fade_in_or_out = FADE_OUT;
-    uint32_t cursor_position = 0;
-    uint32_t cursor_color;
-    int32_t cursor_fade;
-    
-    ui_text_t console_output;
-
-    uint32_t input_color = 0xFFFFBBFF;
-    uint32_t output_color = 0xBBFFFFFF;
-} g_console;
+global_var console_t *g_console;
 
 // Lua function declarations
 internal_function int32_t
@@ -716,56 +568,56 @@ lua_break(lua_State *state);
 bool
 console_is_receiving_input(void)
 {
-    return(g_console.receive_input);
+    return(g_console->receive_input);
 }
 
 internal_function void
 output_to_input_section(const char *string, uint32_t color)
 {
-    g_console.cursor_position += strlen(string);
-    draw_string(&g_console.console_input, string, color);
+    g_console->cursor_position += strlen(string);
+    draw_string(&g_console->console_input, string, color);
 }
 
 internal_function void
 output_to_output_section(const char *string, uint32_t color)
 {
-    draw_string(&g_console.console_output, string, color);
+    draw_string(&g_console->console_output, string, color);
 }
 
 void
 console_out(const char *string)
 {
-    draw_string(&g_console.console_output, string, g_console.output_color);
+    draw_string(&g_console->console_output, string, g_console->output_color);
 }
 
 void
 console_out_color_override(const char *string, uint32_t color)
 {
-    draw_string(&g_console.console_output, string, color);
+    draw_string(&g_console->console_output, string, color);
 }
 
 internal_function void
 output_char_to_output_section(char character)
 {
-    draw_char(&g_console.console_output, character, 0x00000000);
+    draw_char(&g_console->console_output, character, 0x00000000);
 }
 
 internal_function void
 clear_input_section(void)
 {
-    g_console.input_character_count = 0;
-    g_console.console_input.char_count = 0;
-    g_console.cursor_position = 0;
-    output_to_input_section("> ", g_console.input_color);
+    g_console->input_character_count = 0;
+    g_console->console_input.char_count = 0;
+    g_console->cursor_position = 0;
+    output_to_input_section("> ", g_console->input_color);
 }
 
 internal_function void
 initialize_console(void)
 {
-    g_console.cursor_color = 0x00ee00ff;
-    g_console.cursor_fade = 0xff;
+    g_console->cursor_color = 0x00ee00ff;
+    g_console->cursor_fade = 0xff;
     
-    g_console.back_box = make_ui_box(LEFT_DOWN, 0.8f,
+    g_console->back_box = make_ui_box(LEFT_DOWN, 0.8f,
                                      ui_vector2_t(0.05f, 0.05f),
                                      ui_vector2_t(1.0f, 0.9f),
                                      nullptr,
@@ -773,25 +625,25 @@ initialize_console(void)
                                      get_backbuffer_resolution());
 
     font_t *font_ptr = load_font("console_font"_hash, "font/liberation_mono.fnt", "");
-    make_text(&g_console.back_box,
+    make_text(&g_console->back_box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::BOTTOM,
               0.7f,
               1.0f,
               55,
               1.5f,
-              &g_console.console_input);
+              &g_console->console_input);
 
-    make_text(&g_console.back_box,
+    make_text(&g_console->back_box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::TOP,
               0.7f,
               0.7f,
               55,
               1.8f,
-              &g_console.console_output);
+              &g_console->console_output);
 
-    output_to_input_section("> ", g_console.input_color);
+    output_to_input_section("> ", g_console->input_color);
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "c_out", &lua_console_out);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "c_clear", &lua_console_clear);
@@ -803,33 +655,33 @@ initialize_console(void)
 internal_function void
 handle_console_input(input_state_t *input_state)
 {
-    if (g_console.receive_input)
+    if (g_console->receive_input)
     {
         for (uint32_t i = 0; i < input_state->char_count; ++i)
         {
             char character[2] = {input_state->char_stack[i], 0};
-            output_to_input_section(character, g_console.input_color);
-            g_console.input_characters[g_console.input_character_count++] = input_state->char_stack[i];
+            output_to_input_section(character, g_console->input_color);
+            g_console->input_characters[g_console->input_character_count++] = input_state->char_stack[i];
             input_state->char_stack[i] = 0;
         }
 
         if (input_state->keyboard[keyboard_button_type_t::BACKSPACE].is_down)
         {
-            if (g_console.input_character_count)
+            if (g_console->input_character_count)
             {
-                --g_console.cursor_position;
-                --g_console.console_input.char_count;
-                --g_console.input_character_count;
+                --g_console->cursor_position;
+                --g_console->console_input.char_count;
+                --g_console->input_character_count;
             }
         }
 
         if (input_state->keyboard[keyboard_button_type_t::ENTER].is_down)
         {
-            g_console.input_characters[g_console.input_character_count] = '\0';
-            output_to_output_section(g_console.input_characters, g_console.input_color);
+            g_console->input_characters[g_console->input_character_count] = '\0';
+            output_to_output_section(g_console->input_characters, g_console->input_color);
             output_char_to_output_section('\n');
             // Register this to the Lua API
-            execute_lua(g_console.input_characters);
+            execute_lua(g_console->input_characters);
             output_char_to_output_section('\n');
            
             clear_input_section();
@@ -838,17 +690,17 @@ handle_console_input(input_state_t *input_state)
 
     if (input_state->keyboard[keyboard_button_type_t::ESCAPE].is_down)
     {
-        g_console.receive_input = false;
+        g_console->receive_input = false;
     }
-    if (input_state->char_stack[0] == 't' && !g_console.receive_input)
+    if (input_state->char_stack[0] == 't' && !g_console->receive_input)
     {
-        g_console.receive_input = true;
+        g_console->receive_input = true;
         input_state->char_stack[0] = 0;
     }
     // Open console
-    if (input_state->char_stack[0] == 'c' && !g_console.receive_input)
+    if (input_state->char_stack[0] == 'c' && !g_console->receive_input)
     {
-        g_console.render_console ^= 0x1;
+        g_console->render_console ^= 0x1;
         input_state->char_stack[0] = 0;
     }
 }
@@ -856,55 +708,55 @@ handle_console_input(input_state_t *input_state)
 internal_function void
 push_console_to_render(input_state_t *input_state)
 {
-    if (g_console.cursor_fade > 0xff || g_console.cursor_fade <= 0x00)
+    if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
     {
-        g_console.fade_in_or_out ^= 0x1;
-        int32_t adjust = (int32_t)g_console.fade_in_or_out * 2 - 1;
-        g_console.cursor_fade -= adjust;
+        g_console->fade_in_or_out ^= 0x1;
+        int32_t adjust = (int32_t)g_console->fade_in_or_out * 2 - 1;
+        g_console->cursor_fade -= adjust;
     }
-    if (g_console.fade_in_or_out == console_t::fade_t::FADE_OUT)
+    if (g_console->fade_in_or_out == console_t::fade_t::FADE_OUT)
     {
-        g_console.cursor_fade -= (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
-        if (g_console.cursor_fade < 0x00)
+        g_console->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
+        if (g_console->cursor_fade < 0x00)
         {
-            g_console.cursor_fade = 0x00;
+            g_console->cursor_fade = 0x00;
         }
-        g_console.cursor_color >>= 8;
-        g_console.cursor_color <<= 8;
-        g_console.cursor_color |= g_console.cursor_fade;
+        g_console->cursor_color >>= 8;
+        g_console->cursor_color <<= 8;
+        g_console->cursor_color |= g_console->cursor_fade;
     }
     else
     {
-        g_console.cursor_fade += (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
-        g_console.cursor_color >>= 8;
-        g_console.cursor_color <<= 8;
-        g_console.cursor_color |= g_console.cursor_fade;
+        g_console->cursor_fade += (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
+        g_console->cursor_color >>= 8;
+        g_console->cursor_color <<= 8;
+        g_console->cursor_color |= g_console->cursor_fade;
     }
     
     resolution_t resolution = get_backbuffer_resolution();
     
     // Push input text
-    push_box_to_render(&g_console.back_box);
-    push_text(&g_console.console_input, resolution);
-    push_text(&g_console.console_output, resolution);
+    push_box_to_render(&g_console->back_box);
+    push_text(&g_console->console_input, resolution);
+    push_text(&g_console->console_output, resolution);
     // Push cursor quad
     {
-        ui_box_t *box = &g_console.back_box;
-        ui_text_t *text = &g_console.console_input;
+        ui_box_t *box = &g_console->back_box;
+        ui_text_t *text = &g_console->console_input;
         
         /*        uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start) / text->chars_per_line;
         // TODO: get rid of magic
         uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
-        ivector2_t px_cursor_start = get_px_cursor_position(&g_console.back_box, &g_console.console_input, get_backbuffer_resolution());
-        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console.cursor_position;*/
+        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, get_backbuffer_resolution());
+        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console->cursor_position;*/
 
         float32_t magic = 1.4f;
         uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
         uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
         px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
         uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
-        ivector2_t px_cursor_start = get_px_cursor_position(&g_console.back_box, &g_console.console_input, get_backbuffer_resolution());
-        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console.cursor_position;
+        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, get_backbuffer_resolution());
+        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console->cursor_position;
         
         vector2_t px_cursor_size = vector2_t((float32_t)px_char_width, (float32_t)px_char_height);
         vector2_t px_cursor_base_position =  vector2_t(px_cursor_position) + vector2_t(vector2_t(0.0f, 0.0f));
@@ -915,23 +767,23 @@ push_console_to_render(input_state_t *input_state)
         vector2_t normalized_size = (px_cursor_size / vector2_t((float32_t)resolution.width, (float32_t)resolution.height)) * 2.0f;
         vector2_t adjust = vector2_t(0.0f, -normalized_size.y);
         
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust,
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust,
+                                                               g_console->cursor_color};
         
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y),
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               g_console->cursor_color};
         
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f),
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               g_console->cursor_color};
         
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y),
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               g_console->cursor_color};
 
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f),
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               g_console->cursor_color};
 
-        g_ui.cpu_vertex_pool[g_ui.cpu_vertex_count++] = {normalized_cursor_position + adjust + normalized_size,
-                                                               g_console.cursor_color};
+        g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_cursor_position + adjust + normalized_size,
+                                                               g_console->cursor_color};
     }
     // Push output text
 }    
@@ -948,8 +800,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
                               const resolution_t &resolution,
                               gpu_command_queue_pool_t *queue_pool)
 {
-    g_ui.ui_quads_model = g_model_manager.add("model.ui_quads"_hash);
-    auto *ui_quads_ptr = g_model_manager.get(g_ui.ui_quads_model);
+    g_ui->ui_quads_model = g_model_manager->add("model.ui_quads"_hash);
+    auto *ui_quads_ptr = g_model_manager->get(g_ui->ui_quads_model);
     {
         ui_quads_ptr->attribute_count = 2;
 	ui_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
@@ -965,8 +817,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
 
 	binding->end_attributes_creation();
     }
-    g_ui.tx_quads_model = g_model_manager.add("model.tx_quads"_hash);
-    auto *tx_quads_ptr = g_model_manager.get(g_ui.tx_quads_model);
+    g_ui->tx_quads_model = g_model_manager->add("model.tx_quads"_hash);
+    auto *tx_quads_ptr = g_model_manager->get(g_ui->tx_quads_model);
     {
         tx_quads_ptr->attribute_count = 3;
 	tx_quads_ptr->attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
@@ -984,8 +836,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
 	binding->end_attributes_creation();
     }
 
-    g_ui.ui_quads_vbo = g_gpu_buffer_manager.add("vbo.ui_quads"_hash);
-    auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
+    g_ui->ui_quads_vbo = g_gpu_buffer_manager->add("vbo.ui_quads"_hash);
+    auto *vbo = g_gpu_buffer_manager->get(g_ui->ui_quads_vbo);
     {
         auto *main_binding = &ui_quads_ptr->bindings[0];
 	
@@ -998,8 +850,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
         main_binding->buffer = vbo->buffer;
         ui_quads_ptr->create_vbo_list();
     }
-    g_ui.tx_quads_vbo = g_gpu_buffer_manager.add("vbo.tx_quads"_hash);
-    auto *tx_vbo = g_gpu_buffer_manager.get(g_ui.tx_quads_vbo);
+    g_ui->tx_quads_vbo = g_gpu_buffer_manager->add("vbo.tx_quads"_hash);
+    auto *tx_vbo = g_gpu_buffer_manager->get(g_ui->tx_quads_vbo);
     {
         auto *main_binding = &tx_quads_ptr->bindings[0];
 	
@@ -1013,8 +865,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
         tx_quads_ptr->create_vbo_list();
     }
 
-    g_ui.ui_render_pass = g_render_pass_manager.add("render_pass.ui"_hash);
-    auto *ui_render_pass = g_render_pass_manager.get(g_ui.ui_render_pass);
+    g_ui->ui_render_pass = g_render_pass_manager->add("render_pass.ui"_hash);
+    auto *ui_render_pass = g_render_pass_manager->get(g_ui->ui_render_pass);
     {
         render_pass_attachment_t color_attachment = {swapchain_format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         render_pass_subpass_t subpass = {};
@@ -1027,8 +879,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
         make_render_pass(ui_render_pass, {1, &color_attachment}, {1, &subpass}, {2, dependencies}, false /*don_t't clear*/);
     }
 
-    g_ui.ui_pipeline = g_pipeline_manager.add("pipeline.uibox"_hash);
-    auto *ui_pipeline = g_pipeline_manager.get(g_ui.ui_pipeline);
+    g_ui->ui_pipeline = g_pipeline_manager->add("pipeline.uibox"_hash);
+    auto *ui_pipeline = g_pipeline_manager->get(g_ui->ui_pipeline);
     {
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/uiquad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/uiquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
@@ -1055,15 +907,15 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
                                0);
     }
     
-    uniform_layout_handle_t tx_layout_hdl = g_uniform_layout_manager.add("uniform_layout.tx_ui_quad"_hash);
-    auto *tx_layout_ptr = g_uniform_layout_manager.get(tx_layout_hdl);
+    uniform_layout_handle_t tx_layout_hdl = g_uniform_layout_manager->add("uniform_layout.tx_ui_quad"_hash);
+    auto *tx_layout_ptr = g_uniform_layout_manager->get(tx_layout_hdl);
     {
         uniform_layout_info_t layout_info;
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         *tx_layout_ptr = make_uniform_layout(&layout_info);
     }
-    image_handle_t tx_hdl = g_image_manager.add("image2D.fontmap"_hash);
-    auto *tx_ptr = g_image_manager.get(tx_hdl);
+    image_handle_t tx_hdl = g_image_manager->add("image2D.fontmap"_hash);
+    auto *tx_ptr = g_image_manager->get(tx_hdl);
     {
         external_image_data_t image_data = read_image("font/liberation_mono.png");
         make_texture(tx_ptr,
@@ -1090,16 +942,16 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                 queue_pool);
     }
-    g_ui.tx_group = g_uniform_group_manager.add("uniform_group.tx_ui_quad"_hash);
-    auto *tx_group_ptr = g_uniform_group_manager.get(g_ui.tx_group);
+    g_ui->tx_group = g_uniform_group_manager->add("uniform_group.tx_ui_quad"_hash);
+    auto *tx_group_ptr = g_uniform_group_manager->get(g_ui->tx_group);
     {
         *tx_group_ptr = make_uniform_group(tx_layout_ptr, uniform_pool);
         update_uniform_group(tx_group_ptr,
                              update_binding_t{ TEXTURE, tx_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
     }
     
-    g_ui.tx_pipeline = g_pipeline_manager.add("pipeline.txbox"_hash);
-    auto *tx_pipeline = g_pipeline_manager.get(g_ui.tx_pipeline);
+    g_ui->tx_pipeline = g_pipeline_manager->add("pipeline.txbox"_hash);
+    auto *tx_pipeline = g_pipeline_manager->get(g_ui->tx_pipeline);
     {
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/uifontquad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/uifontquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
@@ -1126,14 +978,14 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
                                0);
     }
 
-    g_ui.secondary_ui_q.submit_level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+    g_ui->secondary_ui_q.submit_level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 }
 
 // will be rendered to backbuffer first
 void
 initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &resolution)
 {
-    g_ui.secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+    g_ui->secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
     initialize_ui_rendering_state(get_swapchain_format(), uniform_pool, resolution, qpool);
     initialize_ui_elements(resolution);
@@ -1143,28 +995,28 @@ void
 update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state)
 {
     handle_console_input(input_state);
-    if (g_console.render_console)
+    if (g_console->render_console)
     {
         push_console_to_render(input_state);
     }
     
-    VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager.get(g_ui.ui_render_pass),
-                                                                             g_framebuffer_manager.get(get_pfx_framebuffer_hdl()));
-    begin_command_queue(&g_ui.secondary_ui_q, &inheritance);
+    VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager->get(g_ui->ui_render_pass),
+                                                                             g_framebuffer_manager->get(get_pfx_framebuffer_hdl()));
+    begin_command_queue(&g_ui->secondary_ui_q, &inheritance);
     {
         // may_t execute other stuff
-        auto *dst_framebuffer = g_framebuffer_manager.get(dst_framebuffer_hdl);
-        command_buffer_set_viewport(dst_framebuffer->extent.width, dst_framebuffer->extent.height, 0.0f, 1.0f, &g_ui.secondary_ui_q.q);
+        auto *dst_framebuffer = g_framebuffer_manager->get(dst_framebuffer_hdl);
+        command_buffer_set_viewport(dst_framebuffer->extent.width, dst_framebuffer->extent.height, 0.0f, 1.0f, &g_ui->secondary_ui_q.q);
         
-        auto *ui_pipeline = g_pipeline_manager.get(g_ui.ui_pipeline);
-        command_buffer_bind_pipeline(ui_pipeline, &g_ui.secondary_ui_q.q);
+        auto *ui_pipeline = g_pipeline_manager->get(g_ui->ui_pipeline);
+        command_buffer_bind_pipeline(ui_pipeline, &g_ui->secondary_ui_q.q);
         VkDeviceSize zero = 0;
-        auto *quads_model = g_model_manager.get(g_ui.ui_quads_model);
+        auto *quads_model = g_model_manager->get(g_ui->ui_quads_model);
         command_buffer_bind_vbos(quads_model->raw_cache_for_rendering,
                                  {1, &zero},
                                  0,
                                  quads_model->binding_count,
-                                 &g_ui.secondary_ui_q.q);
+                                 &g_ui->secondary_ui_q.q);
         
         struct UI_PK
         {
@@ -1172,73 +1024,73 @@ update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_st
         } pk;
         pk.color = vector4_t(0.2f, 0.2f, 0.2f, 1.0f);
 
-        if (g_ui.cpu_vertex_count)
+        if (g_ui->cpu_vertex_count)
         {
-            command_buffer_draw(&g_ui.secondary_ui_q.q,
-                                g_ui.cpu_vertex_count,
+            command_buffer_draw(&g_ui->secondary_ui_q.q,
+                                g_ui->cpu_vertex_count,
                                 1,
                                 0,
                                 0);
         }
 
-        auto *font_pipeline = g_pipeline_manager.get(g_ui.tx_pipeline);
-        command_buffer_bind_pipeline(font_pipeline, &g_ui.secondary_ui_q.q);
+        auto *font_pipeline = g_pipeline_manager->get(g_ui->tx_pipeline);
+        command_buffer_bind_pipeline(font_pipeline, &g_ui->secondary_ui_q.q);
 
-        auto *font_tx_group = g_uniform_group_manager.get(g_ui.tx_group);
-        command_buffer_bind_descriptor_sets(font_pipeline, {1, font_tx_group}, &g_ui.secondary_ui_q.q);
+        auto *font_tx_group = g_uniform_group_manager->get(g_ui->tx_group);
+        command_buffer_bind_descriptor_sets(font_pipeline, {1, font_tx_group}, &g_ui->secondary_ui_q.q);
         
-        auto *tx_quads_model = g_model_manager.get(g_ui.tx_quads_model);
+        auto *tx_quads_model = g_model_manager->get(g_ui->tx_quads_model);
         command_buffer_bind_vbos(tx_quads_model->raw_cache_for_rendering,
                                  {1, &zero},
                                  0,
                                  tx_quads_model->binding_count,
-                                 &g_ui.secondary_ui_q.q);
-        if (g_ui.cpu_tx_vertex_count)
+                                 &g_ui->secondary_ui_q.q);
+        if (g_ui->cpu_tx_vertex_count)
         {
-            command_buffer_draw(&g_ui.secondary_ui_q.q,
-                                g_ui.cpu_tx_vertex_count,
+            command_buffer_draw(&g_ui->secondary_ui_q.q,
+                                g_ui->cpu_tx_vertex_count,
                                 1,
                                 0,
                                 0);
         }
     }
-    end_command_queue(&g_ui.secondary_ui_q);
+    end_command_queue(&g_ui->secondary_ui_q);
 }
 
 void
 render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue)
 {
     // for_t the moment, this just executes one command buffer
-    auto *vbo = g_gpu_buffer_manager.get(g_ui.ui_quads_vbo);
-    if (g_ui.cpu_vertex_count)
+    auto *vbo = g_gpu_buffer_manager->get(g_ui->ui_quads_vbo);
+    if (g_ui->cpu_vertex_count)
     {
         update_gpu_buffer(vbo,
-                          g_ui.cpu_vertex_pool,
-                          sizeof(ui_state_t::gui_vertex_t) * g_ui.cpu_vertex_count,
+                          g_ui->cpu_vertex_pool,
+                          sizeof(ui_state_t::gui_vertex_t) * g_ui->cpu_vertex_count,
                           0,
                           VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                           VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
                           &queue->q);
     }
-    auto *tx_vbo = g_gpu_buffer_manager.get(g_ui.tx_quads_vbo);
-    if (g_ui.cpu_tx_vertex_count)
+    auto *tx_vbo = g_gpu_buffer_manager->get(g_ui->tx_quads_vbo);
+    if (g_ui->cpu_tx_vertex_count)
     {
         update_gpu_buffer(tx_vbo,
-                          g_ui.cpu_tx_vertex_pool,
-                          sizeof(ui_state_t::textured_vertex_t) * g_ui.cpu_tx_vertex_count,
+                          g_ui->cpu_tx_vertex_pool,
+                          sizeof(ui_state_t::textured_vertex_t) * g_ui->cpu_tx_vertex_count,
                           0,
                           VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                           VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
                           &queue->q);
     }
-    queue->begin_render_pass(g_ui.ui_render_pass,
+    queue->begin_render_pass(g_ui->ui_render_pass,
                              dst_framebuffer_hdl,
                              VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-    command_buffer_execute_commands(&queue->q, {1, &g_ui.secondary_ui_q.q});
+    command_buffer_execute_commands(&queue->q, {1, &g_ui->secondary_ui_q.q});
     queue->end_render_pass();
 
-    g_ui.cpu_vertex_count = 0;
-    g_ui.cpu_tx_vertex_count = 0;
+    g_ui->cpu_vertex_count = 0;
+    g_ui->cpu_tx_vertex_count = 0;
 }
 
 // All console-and-ui-linked commands (e.g. printing, ui stuff)
@@ -1253,13 +1105,13 @@ lua_console_out(lua_State *state)
             int32_t number =  lua_tonumber(state, -1);
             char buffer[20] = {};
             sprintf(buffer, "%d", number);
-            output_to_output_section(buffer, g_console.output_color);
+            output_to_output_section(buffer, g_console->output_color);
             break;
         }
     case LUA_TSTRING:
         {
             const char *string = lua_tostring(state, -1);
-            output_to_output_section(string, g_console.output_color);            
+            output_to_output_section(string, g_console->output_color);            
             break;
         }
     }
@@ -1270,7 +1122,7 @@ lua_console_out(lua_State *state)
 internal_function int32_t
 lua_console_clear(lua_State *state)
 {
-    g_console.console_output.char_count = 0;
+    g_console->console_output.char_count = 0;
     return(0);
 }
 
@@ -1289,7 +1141,7 @@ lua_print_fps(lua_State *state)
     uint32_t fps_ui = (uint32_t)fps;
     char buffer[20] = {};
     sprintf(buffer, "%d", fps_ui);
-    output_to_output_section(buffer, g_console.output_color);*/
+    output_to_output_section(buffer, g_console->output_color);*/
     return(0);
 }
 
@@ -1298,4 +1150,11 @@ lua_break(lua_State *state)
 {
     __debugbreak();
     return(0);
+}
+
+void initialize_ui_translation_unit(struct game_memory_t *memory)
+{
+    g_console = &memory->user_interface_state.console;
+    g_ui = &memory->user_interface_state.ui_state;
+    dbg_ui_utils = &memory->user_interface_state.dbg_ui_utils;
 }

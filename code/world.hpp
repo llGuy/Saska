@@ -1,3 +1,5 @@
+/* world.hpp */
+
 #pragma once
 
 #include "core.hpp"
@@ -330,6 +332,15 @@ struct entities_t
     // have some sort of stack of REMOVED entities
 };
 
+struct world_t
+{
+    struct entities_t entities;
+    struct morphable_terrains_t terrains;
+
+    static constexpr uint32_t MAX_MATERIALS = 10;
+    struct gpu_material_submission_queue_t material_submission_queues[MAX_MATERIALS];
+};
+
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
@@ -338,3 +349,5 @@ void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 
 void destroy_world(void);
+
+void initialize_world_translation_unit(struct game_memory_t *memory);

@@ -2,18 +2,18 @@
 
 #define NOMINMAX
 
-#include <winsock2.h>
-
 #include <stb_image.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
 
-#include "core.hpp"
+
+/*#include "core.hpp"
 #include "utils.hpp"
 
-#include "game.hpp"
+#include "game.hpp"*/
 
 #if defined(UNITY_BUILD)
+#include "network.cpp"
 #include <vulkan/vulkan.h>
 #include "memory.cpp"
 #include "ui.cpp"
@@ -357,25 +357,6 @@ internal_function void init_free_list_allocator_head(free_list_allocator_t *allo
 {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
-}
-
-// Network code stuff for windows
-global_var struct socket_manager_t
-{
-    static constexpr uint32_t MAX_SOCKETS = 50;
-    SOCKET sockets[MAX_SOCKETS] = {};
-    uint32_t socket_count = 0;
-} g_sockets;
-
-void add_network_socket(network_socket_t *socket)
-{
-    socket->socket = g_sockets.socket_count++;
-}
-
-
-void initialize_network_socket(network_socket_t *socket_p, int32_t family, int32_t type, int32_t protocol)
-{
-    g_sockets.sockets[socket_p->socket] = socket(family, type, protocol);
 }
 
 // Actual game memory

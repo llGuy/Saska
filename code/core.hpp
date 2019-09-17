@@ -211,12 +211,3 @@ input_state_t *get_input_state(void);
 
 void enable_cursor_display(void);
 void disable_cursor_display(void);
-
-// Network stuff, socket stuff, ...
-struct network_socket_t
-{
-    int32_t socket;
-};
-
-void add_network_socket(network_socket_t *socket);
-void initialize_network_socket(network_socket_t *socket, int32_t family, int32_t type, int32_t protocol);

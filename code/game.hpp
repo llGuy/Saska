@@ -5,6 +5,7 @@
 #include "graphics.hpp"
 #include "ui.hpp"
 #include "script.hpp"
+#include "network.hpp"
 
 struct game_memory_t
 {
@@ -17,6 +18,8 @@ struct game_memory_t
     struct user_interface_t user_interface_state;
     // Script stuff
     struct game_scripts_t script_state;
+    // Network stuff: client name, server address, etc...
+    struct network_state_t network_state;
 };
 
 void load_game(game_memory_t *memory);

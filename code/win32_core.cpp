@@ -40,8 +40,6 @@
 #include <Windows.h>
 #include <Windowsx.h>
 
-
-
 #define DEBUG_FILE ".debug"
 
 #define TICK_TIME 1.0f / 60.0f
@@ -454,7 +452,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     create_surface_proc_win32.window_ptr = &g_window;
 
     load_game(&g_game);
-    initialize_game(&g_game, &g_input_state, &create_surface_proc_win32);
+
+#if defined (SERVER_APPLICATION)
+    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::SERVER_MODE;
+#elif defined (CLIENT_APPLICATION)
+    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::CLIENT_MODE;
+#endif
+    initialize_game(&g_game, &g_input_state, &create_surface_proc_win32, app_mode);
 
     g_running = 1;
 

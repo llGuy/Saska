@@ -4,9 +4,11 @@
 
 #include "script.hpp"
 #include "ui.hpp"
+#include "network.hpp"
 
 void load_game(game_memory_t *memory)
 {
+    initialize_network_translation_unit(memory);
     initialize_world_translation_unit(memory);
     initialize_vulkan_translation_unit(memory);
     initialize_graphics_translation_unit(memory);
@@ -14,10 +16,11 @@ void load_game(game_memory_t *memory)
     initialize_script_translation_unit(memory);
 }
 
-void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc)
+void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, network_state_t::application_mode_t app_mode)
 {
     // ---- Initialize game data ----
     // Initialize graphics api, atmosphere, shadow, skeletal animation...
+    initialize_network_state(memory, app_mode);
     graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, input_state);
     initialize_scripting();
     initialize_game_3d_graphics(graphics.command_pool);
@@ -42,6 +45,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     frame_rendering_data_t frame = begin_frame_rendering();
     gpu_command_queue_t queue{frame.command_buffer};
     {
+        update_network_state();
         update_world(input_state, dt, frame.image_index, 0 /* Don't need this argument */, &queue);
 
         dbg_handle_input(input_state);

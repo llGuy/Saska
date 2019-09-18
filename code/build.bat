@@ -24,7 +24,8 @@ REM --------------------------------------------
 
 set INC=%GLM_INC_DIR% %VULKAN_INC_DIR% %LUA_INC_DIR% %VML_INC_DIR% %STB_INC_DIR%
  
-set BIN=Saska.exe
+set CLIENT_BIN=Saska.exe
+set SERVER_BIN=Server.exe
 set DLL_NAME=Saska.dll
 
 set SRC=win32_core.cpp
@@ -41,7 +42,8 @@ If "%1" == "run" goto run
 If "%1" == "help" goto help
 
 :compile
-%CC% %CFLAGS% %DEF% %INC% /Fe%BIN% %SRC% %LIBS%
+%CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
+%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%
 
 etags *.cpp *.hpp
 echo Built emacs tags

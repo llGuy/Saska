@@ -24,7 +24,7 @@ struct game_memory_t
 
 void load_game(game_memory_t *memory);
 
-void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc);
+void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, network_state_t::application_mode_t app_mode);
 
 void destroy_game(game_memory_t *memory);
 

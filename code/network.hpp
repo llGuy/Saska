@@ -18,9 +18,10 @@ struct network_address_t
 void add_network_socket(network_socket_t *socket);
 void initialize_network_socket(network_socket_t *socket, int32_t family, int32_t type, int32_t protocol);
 void bind_network_socket_to_port(network_socket_t *socket, network_address_t address);
+void set_socket_to_non_blocking_mode(network_socket_t *socket);
 
-network_address_t receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size);
-void send_to(network_socket_t *socket, network_address_t address, char *buffer, uint32_t buffer_size);
+bool receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size, network_address_t *address_dst);
+bool send_to(network_socket_t *socket, network_address_t address, char *buffer, uint32_t buffer_size);
 
 uint32_t str_to_ipv4_int32(const char *address);
 uint32_t host_to_network_byte_order(uint32_t bytes);
@@ -61,10 +62,11 @@ struct client_join_packet_t
 
 struct network_state_t
 {
-    enum application_mode_t { CLIENT_MODE, SERVER_MDOE };
+    enum application_mode_t { CLIENT_MODE, SERVER_MODE };
     application_mode_t current_app_mode;
 
-    const uint16_t GAME_OUTPUT_PORT = 6000;
+    const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
+    const uint16_t GAME_OUTPUT_PORT_CLIENT = 6001;
     network_socket_t main_network_socket;
 
     // API stuff

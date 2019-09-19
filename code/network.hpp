@@ -51,7 +51,7 @@ struct packet_header_t
 struct server_handshake_packet_t
 {
     packet_header_t header;
-    
+    uint16_t player_id;
 };
 
 #define CLIENT_NAME_MAX_LENGTH 40

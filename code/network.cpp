@@ -188,15 +188,39 @@ void initialize_network_translation_unit(struct game_memory_t *memory)
 void update_as_server(void)
 {
     network_address_t received_address = {};
-    char buffer[100] = {};
-    bool received = receive_from(&g_network_state->main_network_socket, buffer, sizeof(buffer), &received_address);
+    static char message_buffer[100] = {};
+    bool received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
 
     if (received)
     {
-        print_text_to_console("Player has joined\n");
-        
-        char *server_message = "server_speaking\0";
-        send_to(&g_network_state->main_network_socket, received_address, server_message, strlen(server_message));
+        packet_header_t *header = (packet_header_t *)message_buffer;
+
+        if (header->packet_mode == packet_header_t::CLIENT_MODE)
+        {
+            switch (header->packet_type)
+            {
+            case packet_header_t::client_packet_type_t::CLIENT_JOIN:
+                {
+                    client_join_packet_t *join_packet = (client_join_packet_t *)header;
+                    const char *client_user_name = join_packet->client_name;
+
+                    char log_buffer[100] = {};
+                    sprintf(log_buffer, "Server> %s has joined the game\n\0", client_user_name);
+                    
+                    print_text_to_console(log_buffer);
+
+                    server_handshake_packet_t handshake_packet = {};
+                    handshake_packet.header.packet_mode = packet_header_t::packet_mode_t::SERVER_MODE;
+                    handshake_packet.header.packet_type = packet_header_t::server_packet_type_t::SERVER_HANDSHAKE;
+                    handshake_packet.header.total_packet_size = sizeof(server_handshake_packet_t);
+                    
+                    // TODO: Create list of clients
+                    handshake_packet.player_id = 42;
+
+                    send_to(&g_network_state->main_network_socket, received_address, (char *)&handshake_packet, sizeof(handshake_packet));
+                } break;
+            }
+        }
     }
 }
 
@@ -208,7 +232,9 @@ void update_as_client(void)
 
     if (received)
     {
-        OutputDebugString("handshake received\n");
+        // TODO: Set up packet interpretation system
+
+        console_out("handshake received\n");
     }
 }
 

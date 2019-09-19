@@ -53,6 +53,7 @@ struct file_contents_t
 };
 
 void output_debug_string(const char *string);
+void print_text_to_console(const char *string);
 
 file_contents_t
 read_file(const char *filename,

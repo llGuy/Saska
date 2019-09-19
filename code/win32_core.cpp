@@ -389,6 +389,24 @@ void load_game_from_dll(void)
     g_game_code.game_tick_proc = (game_code_t::game_tick_ptr_t)GetProcAddress(g_game_code.game_code, "game_tick");*/
 }
 
+// TODO: Add this to server mode
+void initialize_win32_console(void)
+{
+    char text[] = "Started session\n";
+    if (WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), text, strlen(text), NULL, NULL) == FALSE)
+    {
+        if (AllocConsole() == TRUE)
+        {
+            WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), text, strlen(text), NULL, NULL);
+        }
+    }
+}
+
+void print_text_to_console(const char *string)
+{
+    WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), string, strlen(string), NULL, NULL);
+}
+
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
     // Initialize game's dynamic memory
@@ -401,67 +419,78 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     free_list_allocator_global.available_bytes = megabytes(10);
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
+
+#if defined (SERVER_APPLICATION)
+    application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
+    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::SERVER_MODE;
+#elif defined (CLIENT_APPLICATION)
+    application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
+    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::CLIENT_MODE;
+#endif
+
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        const char *window_class_name = "saska_window_class";
+        const char *window_name = "Saska";
+
+        g_cursor = LoadCursor(0, IDC_ARROW);
     
-    const char *window_class_name = "saska_window_class";
-    const char *window_name = "Saska";
+        WNDCLASS window_class = {};
+        ZeroMemory(&window_class, sizeof(window_class));
+        window_class.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
+        window_class.lpfnWndProc = windows_callback;
+        window_class.cbClsExtra = 0;
+        window_class.hInstance = hinstance;
+        window_class.hIcon = 0;
+        window_class.hCursor = g_cursor;
+        window_class.hbrBackground = 0;
+        window_class.lpszMenuName = 0;
+        window_class.lpszClassName = window_class_name;
 
-    g_cursor = LoadCursor(0, IDC_ARROW);
+        assert(RegisterClass(&window_class));
+
+        g_window = CreateWindowEx(0,
+                                  window_class_name,
+                                  window_name,
+                                  WS_OVERLAPPEDWINDOW,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  NULL,
+                                  NULL,
+                                  hinstance,
+                                  NULL);
+
+        POINT top_left_of_window;
+        top_left_of_window.x = 0;
+        top_left_of_window.y = 0;
+        ClientToScreen(g_window, &top_left_of_window);
     
-    WNDCLASS window_class = {};
-    ZeroMemory(&window_class, sizeof(window_class));
-    window_class.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
-    window_class.lpfnWndProc = windows_callback;
-    window_class.cbClsExtra = 0;
-    window_class.hInstance = hinstance;
-    window_class.hIcon = 0;
-    window_class.hCursor = g_cursor;
-    window_class.hbrBackground = 0;
-    window_class.lpszMenuName = 0;
-    window_class.lpszClassName = window_class_name;
-
-    assert(RegisterClass(&window_class));
-
-    g_window = CreateWindowEx(0,
-                              window_class_name,
-                              window_name,
-                              WS_OVERLAPPEDWINDOW,
-                              CW_USEDEFAULT,
-                              CW_USEDEFAULT,
-                              CW_USEDEFAULT,
-                              CW_USEDEFAULT,
-                              NULL,
-                              NULL,
-                              hinstance,
-                              NULL);
-
-    POINT top_left_of_window;
-    top_left_of_window.x = 0;
-    top_left_of_window.y = 0;
-    ClientToScreen(g_window, &top_left_of_window);
-    
-    SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
-    ShowWindow(g_window, showcmd);
-    // TODO: ReleaseCapture(void) when alt tab / alt f4
-    SetCapture(g_window);
-    disable_cursor_display();
+        SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
+        ShowWindow(g_window, showcmd);
+        // TODO: ReleaseCapture(void) when alt tab / alt f4
+        SetCapture(g_window);
+        disable_cursor_display();
+    }
 
     // Loads function pointers into memory
     load_game_from_dll();
-    
+
+    // If in console mode, surface obviously won't get created
     create_vulkan_surface_win32 create_surface_proc_win32 = {};
     create_surface_proc_win32.window_ptr = &g_window;
 
     load_game(&g_game);
+    initialize_game(&g_game, &g_input_state, &create_surface_proc_win32, app_mode, app_type);
 
-#if defined (SERVER_APPLICATION)
-    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::SERVER_MODE;
-#elif defined (CLIENT_APPLICATION)
-    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::CLIENT_MODE;
-#endif
-    initialize_game(&g_game, &g_input_state, &create_surface_proc_win32, app_mode);
-
+    if (app_type == application_type_t::CONSOLE_APPLICATION_MODE)
+    {
+        initialize_win32_console();
+    }
+    
     g_running = 1;
-
+    
     uint32_t sleep_granularity_milliseconds = 1;
     bool32_t success = (timeBeginPeriod(sleep_granularity_milliseconds) == TIMERR_NOERROR);
 
@@ -472,43 +501,53 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     {
         LARGE_INTEGER tick_start;
         QueryPerformanceCounter(&tick_start);
-        
-        MSG message;
-        while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
+
+        switch (app_type)
         {
-            if (message.message == WM_QUIT) g_running = false;
-            TranslateMessage(&message);
-            DispatchMessage(&message);
-        }
+        case application_type_t::WINDOW_APPLICATION_MODE:
+            {
+                MSG message;
+                while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
+                {
+                    if (message.message == WM_QUIT) g_running = false;
+                    TranslateMessage(&message);
+                    DispatchMessage(&message);
+                }
 
-        RECT client_rect = {};
-        GetClientRect(g_window, &client_rect);
+                RECT client_rect = {};
+                GetClientRect(g_window, &client_rect);
 
-        POINT top_left = { client_rect.left, client_rect.top }, bottom_right = { client_rect.right, client_rect.bottom };
-        ClientToScreen(g_window, &top_left);
-        ClientToScreen(g_window, &bottom_right);
+                POINT top_left = { client_rect.left, client_rect.top }, bottom_right = { client_rect.right, client_rect.bottom };
+                ClientToScreen(g_window, &top_left);
+                ClientToScreen(g_window, &bottom_right);
 
-        client_rect.left = top_left.x;
-        client_rect.top = top_left.y;
-        client_rect.right = bottom_right.x;
-        client_rect.bottom = bottom_right.y;
+                client_rect.left = top_left.x;
+                client_rect.top = top_left.y;
+                client_rect.right = bottom_right.x;
+                client_rect.bottom = bottom_right.y;
 
-        ClipCursor(&client_rect);
+                ClipCursor(&client_rect);
         
-        // Render
-        game_tick(&g_game, &g_input_state, g_dt);
-        RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
+                // Render
+                game_tick(&g_game, &g_input_state, g_dt);
+                RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
+
+                g_input_state.cursor_moved = false;
+
+                g_input_state.char_count = 0;
+                g_input_state.keyboard[keyboard_button_type_t::BACKSPACE].is_down = is_down_t::NOT_DOWN;
+                g_input_state.keyboard[keyboard_button_type_t::ENTER].is_down = is_down_t::NOT_DOWN;
+                g_input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = is_down_t::NOT_DOWN;
+                g_input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = is_down_t::NOT_DOWN;
+                // TODO: Set input state's normalized cursor position
+            } break;
+        case application_type_t::CONSOLE_APPLICATION_MODE:
+            {
+                game_tick(&g_game, &g_input_state, g_dt);
+            } break;
+        }
         
         clear_linear();
-
-        g_input_state.cursor_moved = false;
-
-        g_input_state.char_count = 0;
-        g_input_state.keyboard[keyboard_button_type_t::BACKSPACE].is_down = is_down_t::NOT_DOWN;
-        g_input_state.keyboard[keyboard_button_type_t::ENTER].is_down = is_down_t::NOT_DOWN;
-        g_input_state.keyboard[keyboard_button_type_t::ESCAPE].is_down = is_down_t::NOT_DOWN;
-        g_input_state.keyboard[keyboard_button_type_t::LEFT_CONTROL].is_down = is_down_t::NOT_DOWN;
-        // TODO: Set input state's normalized cursor position
 
         LARGE_INTEGER tick_end;
         QueryPerformanceCounter(&tick_end);

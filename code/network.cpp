@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include "network.hpp"
 #include "game.hpp"
+#include "ui.hpp"
 
 // Network code stuff for windows
 global_var network_state_t *g_network_state;
@@ -192,6 +193,8 @@ void update_as_server(void)
 
     if (received)
     {
+        print_text_to_console("Player has joined\n");
+        
         char *server_message = "server_speaking\0";
         send_to(&g_network_state->main_network_socket, received_address, server_message, strlen(server_message));
     }

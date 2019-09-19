@@ -341,10 +341,10 @@ struct world_t
     struct gpu_material_submission_queue_t material_submission_queues[MAX_MATERIALS];
 };
 
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool);
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
-                  uint32_t current_frame, gpu_command_queue_t *queue);
+                  uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type);
 
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 

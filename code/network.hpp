@@ -51,13 +51,20 @@ struct packet_header_t
 struct server_handshake_packet_t
 {
     packet_header_t header;
-    char server_message[32];
+    
 };
+
+#define CLIENT_NAME_MAX_LENGTH 40
 
 struct client_join_packet_t
 {
     packet_header_t header;
-    char client_name[32];
+    char client_name[CLIENT_NAME_MAX_LENGTH];
+};
+
+struct client_state_t
+{
+    // Name, id, etc...
 };
 
 struct network_state_t

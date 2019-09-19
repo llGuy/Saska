@@ -59,7 +59,7 @@ rm *.exe *.obj *.ilk *.pdb TAGS
 goto :eof
 
 :run
-%BIN%
+%CLIENT_BIN%
 goto :eof
 
 

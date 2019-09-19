@@ -7,6 +7,10 @@
 #include "script.hpp"
 #include "network.hpp"
 
+// This just decides whether the game should be run with a console, or with graphics. For servers, it would be better (if not debugging, to use console instead of having to initialize a vulkan context, graphics state, ui, etc...)
+// The client will always use WINDOW_APPLICATION_MODE
+enum application_type_t { WINDOW_APPLICATION_MODE, CONSOLE_APPLICATION_MODE };
+
 struct game_memory_t
 {
     // Contains the entities, and the terrains, and possibly more
@@ -20,14 +24,18 @@ struct game_memory_t
     struct game_scripts_t script_state;
     // Network stuff: client name, server address, etc...
     struct network_state_t network_state;
+
+    // If in CONSOLE_MODE, don't render anything, don't create window, don't create graphics context
+    application_type_t app_type;
 };
 
 void load_game(game_memory_t *memory);
 
-void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, network_state_t::application_mode_t app_mode);
+void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, network_state_t::application_mode_t app_mode, application_type_t app_type);
 
 void destroy_game(game_memory_t *memory);
 
 void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt);
 
 gpu_command_queue_pool_t *get_global_command_pool(void);
+application_type_t get_app_type(void);

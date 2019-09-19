@@ -1,4 +1,5 @@
 /* world.cpp */
+// TODO: DEFER ALL GPU RELATED OPERATIONS!!!
 // TODO: Get rid of most of the glm::length calls in the physics calculations (terrain collision stuff)
 // TODO: Have a startup script so that you can reload the game
 
@@ -1709,13 +1710,14 @@ terrain_noise()
 }
 
 internal_function void
-make_3D_terrain_base(uint32_t width_x
-		     , uint32_t depth_z
-		     , float32_t random_displacement_factor
-		     , gpu_buffer_t *mesh_xz_values
-		     , gpu_buffer_t *idx_buffer
-		     , model_t *model_info
-		     , VkCommandPool *cmdpool)
+make_3D_terrain_base(uint32_t width_x,
+		     uint32_t depth_z,
+		     float32_t random_displacement_factor,
+		     gpu_buffer_t *mesh_xz_values,
+		     gpu_buffer_t *idx_buffer,
+		     model_t *model_info,
+		     VkCommandPool *cmdpool,
+                     application_type_t app_type)
 {
     assert(width_x & 0X1 && depth_z & 0X1);
     
@@ -1758,9 +1760,12 @@ make_3D_terrain_base(uint32_t width_x
 	    idx[crnt_idx++] = 0XFFFFFFFF;
 	}
     }
-    
-    // load data into buffers
-    invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t{sizeof(float32_t) * 2 * width_x * depth_z, vtx}
+
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        // TODO: Defer this into another function that just handles GPU related functions
+        // load data into buffers
+        invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t{sizeof(float32_t) * 2 * width_x * depth_z, vtx}
 							  , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
 							  , cmdpool
 							  , mesh_xz_values);
@@ -1793,48 +1798,57 @@ make_3D_terrain_base(uint32_t width_x
     
     pop_stack();
     pop_stack();
+    }
 }
 
 internal_function void
-make_3D_terrain_mesh_instance(uint32_t width_x
-			      , uint32_t depth_z
-			      , float32_t *&cpu_side_heights
-			      , gpu_buffer_t *gpu_side_heights)
+make_3D_terrain_mesh_instance(uint32_t width_x,
+			      uint32_t depth_z,
+			      float32_t *&cpu_side_heights,
+			      gpu_buffer_t *gpu_side_heights,
+                              application_type_t app_type)
 {
     // don_t't need in the future
     cpu_side_heights = (float32_t *)allocate_free_list(sizeof(float32_t) * width_x * depth_z);
     memset(cpu_side_heights, 0, sizeof(float32_t) * width_x * depth_z);
 
-    init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(float32_t) * width_x * depth_z)
-			, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-			, VK_SHARING_MODE_EXCLUSIVE
-			, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			, gpu_side_heights);
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        init_buffer(adjust_memory_size_for_gpu_alignment(sizeof(float32_t) * width_x * depth_z)
+                    , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                    , VK_SHARING_MODE_EXCLUSIVE
+                    , VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+                    , gpu_side_heights);
+    }
 }
 
 internal_function void
-make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain)
+make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, application_type_t app_type)
 {
-    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer);
+    make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, app_type);
     terrain->xz_dim = ivector2_t(w, d);
 }
 
 
 // TODO: make this take roughness and metalness to push to pushconstant or whatever 
 internal_function void
-make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue
-                            , const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color)
+make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue,
+                            const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color,
+                            application_type_t app_type)
 {
     auto *model_info = &base->model_info;
     terrain->vbos[0] = base->mesh_xz_values.buffer;
     terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
 
-    auto draw_indexed_data = init_draw_indexed_data_default(1, model_info->index_data.index_count);
-    terrain->mesh = initialize_mesh(memory_buffer_view_t<VkBuffer>{2, terrain->vbos}, &draw_indexed_data, &model_info->index_data);
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        auto draw_indexed_data = init_draw_indexed_data_default(1, model_info->index_data.index_count);
+        terrain->mesh = initialize_mesh(memory_buffer_view_t<VkBuffer>{2, terrain->vbos}, &draw_indexed_data, &model_info->index_data);
     
-    g_world_submission_queues[TERRAIN_QUEUE].push_material(&terrain->push_k,
-                                                           sizeof(terrain->push_k),
-                                                           &terrain->mesh);
+        g_world_submission_queues[TERRAIN_QUEUE].push_material(&terrain->push_k,
+                                                               sizeof(terrain->push_k),
+                                                               &terrain->mesh);
+    }
 
     terrain->ws_p = position;
     terrain->gs_r = rotation;
@@ -1854,7 +1868,7 @@ make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terr
 internal_function void
 make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
 {
-
+    /*
     vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
     
     auto *red_terrain = add_terrain();
@@ -1874,7 +1888,7 @@ make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
                                 , vector3_t(10.0f)
                                 , grass_color);
 
-    green_terrain->k_g = -8.5f;
+    green_terrain->k_g = -8.5f;*/
 
     //make_planet(vector3_t(300.0f, 300.0f, 300.0f), grass_color, cmdpool);
 }
@@ -1886,12 +1900,13 @@ add_staged_creation_terrains(terrain_base_info_t *base)
     {
         auto *create_staging_info = &g_terrains->create_stagings[i];
         auto *new_terrain = add_terrain();
-        make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain);
-        make_terrain_rendering_data(base, new_terrain, &g_world_submission_queues[TERRAIN_QUEUE]
-                                    , create_staging_info->ws_p
-                                    , quaternion_t(create_staging_info->rotation)
-                                    , vector3_t(create_staging_info->size)
-                                    , create_staging_info->color);
+        make_terrain_mesh_data(create_staging_info->dimensions, create_staging_info->dimensions, new_terrain, get_app_type());
+        make_terrain_rendering_data(base, new_terrain, &g_world_submission_queues[TERRAIN_QUEUE],
+                                    create_staging_info->ws_p,
+                                    quaternion_t(create_staging_info->rotation),
+                                    vector3_t(create_staging_info->size),
+                                    create_staging_info->color,
+                                    get_app_type());
     }
     g_terrains->create_count = 0;
 }
@@ -1918,7 +1933,7 @@ make_terrain_pointer(void)
 }
 
 internal_function void
-initialize_terrain_data(VkCommandPool *cmdpool)
+initialize_graphics_terrain_data(VkCommandPool *cmdpool)
 {
     terrain_base_info_t *base = get_terrain_base(0);
     auto *model_info = &base->model_info;
@@ -3040,18 +3055,32 @@ make_entity_instanced_renderable(model_handle_t model_handle
 }
 
 internal_function void
-update_entities(input_state_t *input_state
-                , float32_t dt)
+update_entities(input_state_t *input_state, float32_t dt, application_type_t app_type)
 {
-    update_input_components(input_state, dt);
-    update_physics_components(dt);
-    update_camera_components(dt);
-    update_rendering_component(dt);
-    update_animation_component(input_state, dt);
+    switch (app_type)
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE:
+        {
+        update_input_components(input_state, dt);
+    
+        update_physics_components(dt);
+        update_camera_components(dt);
+
+        update_rendering_component(dt);
+        update_animation_component(input_state, dt);
+        } break;
+    case application_type_t::CONSOLE_APPLICATION_MODE:
+        {
+            // TODO: May need to change how this works when adding server mode
+            update_input_components(input_state, dt);
+    
+            update_physics_components(dt);
+        } break;
+    }
 }
 
 internal_function void
-initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
+initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities->rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
     g_entities->rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_entity_mesh);
@@ -3153,7 +3182,11 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_entity_model,
                                true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
     }
+}
 
+internal_function void
+initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type)
+{
     entity_t r2 = construct_entity("entity.main"_hash,
                                    matrix4_mul_vec3(g_terrains->terrains[0].push_k.transform, vector3_t(15.0f, 2.0f, 15.0f), WITH_TRANSLATION),
                                    //                                   get_world_space_from_terrain_space_no_scale(vector3_t(130.0f, 15.0f, 20.0f), &g_terrains->terrains[0]),
@@ -3166,12 +3199,24 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     g_entities->main_entity = rv2;
     auto *r2_ptr = get_entity(rv2);
 
-    rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
-    animation_component_t *r2_animation = add_animation_component(r2_ptr,
-                                                                  animation_layout_ptr,
-                                                                  &g_entities->entity_mesh_skeleton,
-                                                                  &g_entities->entity_mesh_cycles,
-                                                                  cmdpool);
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
+        animation_component_t *r2_animation = add_animation_component(r2_ptr,
+                                                                      g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash)),
+                                                                      &g_entities->entity_mesh_skeleton,
+                                                                      &g_entities->entity_mesh_cycles,
+                                                                      cmdpool);
+
+        r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
+        r2_ptr_rendering->push_k.roughness = 0.8f;
+        r2_ptr_rendering->push_k.metalness = 0.6f;
+
+        auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
+        camera_component_ptr->is_third_person = true;
+        
+        bind_camera_to_3d_scene_output(camera_component_ptr->camera);
+    }
 
     physics_component_t *physics = add_physics_component(r2_ptr, false);
     physics->enabled = true;
@@ -3184,16 +3229,10 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state)
     
     r2_ptr->on_t = on_which_terrain(r2_ptr->ws_p);
     //physics->ws_velocity = glm::normalize(matrix4_mul_vec3(r2_ptr->on_t->push_k.transform, vector3_t(0.0f, 0.0f, -1.0f), WITHOUT_TRANSLATION)) * 20.0f;
-    
-    auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
-    camera_component_ptr->is_third_person = true;
+   
     add_input_component(r2_ptr);
-        
-    bind_camera_to_3d_scene_output(camera_component_ptr->camera);
-    
-    r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
-    r2_ptr_rendering->push_k.roughness = 0.8f;
-    r2_ptr_rendering->push_k.metalness = 0.6f;
+       
+   
 }
 
 // ---- rendering of the entire world happens here ----
@@ -3519,6 +3558,7 @@ internal_function int32_t lua_attach_input_component(lua_State *state);
 internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
 internal_function int32_t lua_go_down(lua_State *state);
 internal_function int32_t lua_print_player_terrain_position(lua_State *state);
+internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
 
 internal_function void entry_point(void)
 {
@@ -3534,7 +3574,7 @@ internal_function void entry_point(void)
     execute_lua("startup()");
 }
 
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool)
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type)
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
@@ -3554,54 +3594,77 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_collision_edge_display", &lua_toggle_collision_edge_render);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "go_down", &lua_go_down);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_player_ts_pos", &lua_print_player_terrain_position);
+    if (app_type == application_type_t::CONSOLE_APPLICATION_MODE)
+    {
+        add_global_to_lua(script_primitive_type_t::FUNCTION, "c_out", &lua_placeholder_c_out);
+    }
 
-    g_world_submission_queues[ROLLING_ENTITY_QUEUE] = make_gpu_material_submission_queue(10,
-                                                                                         VK_SHADER_STAGE_VERTEX_BIT,
-                                                                                         VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-                                                                                         cmdpool);
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        g_world_submission_queues[ROLLING_ENTITY_QUEUE] = make_gpu_material_submission_queue(10,
+                                                                                             VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                             VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                             cmdpool);
     
-    g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20,
-                                                                                 VK_SHADER_STAGE_VERTEX_BIT,
-                                                                                 VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-                                                                                 cmdpool);
+        g_world_submission_queues[ENTITY_QUEUE] = make_gpu_material_submission_queue(20,
+                                                                                     VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                     VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                     cmdpool);
     
-    g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10,
-                                                                                  VK_SHADER_STAGE_VERTEX_BIT,
-                                                                                  VK_COMMAND_BUFFER_LEVEL_SECONDARY,
-                                                                                  cmdpool);
+        g_world_submission_queues[TERRAIN_QUEUE] = make_gpu_material_submission_queue(10,
+                                                                                      VK_SHADER_STAGE_VERTEX_BIT,
+                                                                                      VK_COMMAND_BUFFER_LEVEL_SECONDARY,
+                                                                                      cmdpool);
+    }
     
     // Creation of terrains, entities, etc...
     entry_point();
     
     // Rendering data, queues, etc...
-    initialize_terrain_data(cmdpool);
-    //    make_terrain_instances(&g_terrains->terrain_bases[0], cmdpool);
-    initialize_entities_data(cmdpool, input_state);
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
+    {
+        // This wouldnot happen if the user wants just to run a server without displaying anything to a graphics context
+        initialize_graphics_terrain_data(cmdpool);
+        initialize_entities_graphics_data(cmdpool, input_state);
+    }
+    // In future, this should only happen in a .lua script file
+    initialize_entities_data(cmdpool, input_state, app_type);
 
     clear_linear();
 }
 
 void
-update_world(input_state_t *input_state
-	     , float32_t dt
-	     , uint32_t image_index
-	     , uint32_t current_frame
-	     , gpu_command_queue_t *cmdbuf)
-{
-    handle_input_debug(input_state, dt);
-    
-    update_entities(input_state, dt);
-    
+update_world(input_state_t *input_state,
+	     float32_t dt,
+	     uint32_t image_index,
+	     uint32_t current_frame,
+	     gpu_command_queue_t *cmdbuf,
+             application_type_t app_type)
+{    
     //    interpolate_skeleton_joints_into_instance(dt, &g_entities->entity_animation_instance);
     //    update_animated_instance_ubo(cmdbuf, &g_entities->entity_animation_instance);
-    update_animation_gpu_data(cmdbuf);
-    
-    //    add_staged_creation_terrains();
 
-    // ---- Actually rendering the frame ----
-    update_3d_output_camera_transforms(image_index);
+    switch (app_type)
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE:
+        {
+            handle_input_debug(input_state, dt);
     
-    render_world(image_index, current_frame, cmdbuf);    
+            update_entities(input_state, dt, app_type);
+            
+            update_animation_gpu_data(cmdbuf);
+            // Update some other gpu data stuff
+
+            // ---- Actually rendering the frame ----
+            update_3d_output_camera_transforms(image_index);
+    
+            render_world(image_index, current_frame, cmdbuf);
+        }
+    case application_type_t::CONSOLE_APPLICATION_MODE:
+        {
+            update_entities(input_state, dt, app_type);
+        } break;
+    }
 }
 
 
@@ -3610,8 +3673,8 @@ update_world(input_state_t *input_state
 
 // Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
 void
-handle_input_debug(input_state_t *input_state
-                   , float32_t dt)
+handle_input_debug(input_state_t *input_state,
+                   float32_t dt)
 {
     if (!console_is_receiving_input())
     {
@@ -3994,13 +4057,15 @@ internal_function int32_t lua_initialize_terrain_base(lua_State *state)
     base->depth = depth;
     
     auto *model_info = &base->model_info;
-    
+
+    // TODO: Defer this operation so that all GPU-related operations go into one function
     make_3D_terrain_base(width, depth,
 			 1.0f,
 			 &base->mesh_xz_values,
 			 &base->idx_buffer,
 			 model_info,
-			 get_global_command_pool());
+			 get_global_command_pool(),
+                         get_app_type());
 
     return(0);
 }
@@ -4022,14 +4087,17 @@ internal_function int32_t lua_initialize_terrain_instance(lua_State *state)
 
     auto *base = get_terrain_base(get_terrain_base_index(make_constant_string(base_name, strlen(base_name))));
     auto *new_terrain = add_terrain();
-    make_terrain_mesh_data(base->width, base->depth, new_terrain);
+
+    // TODO: Defer all GPU operations
+    make_terrain_mesh_data(base->width, base->depth, new_terrain, get_app_type());
     make_terrain_rendering_data(base,
                                 new_terrain,
                                 &g_world_submission_queues[TERRAIN_QUEUE],
                                 vector3_t(position_x, position_y, position_z),
                                 quaternion_t(glm::radians(vector3_t(rotation_x, rotation_y, rotation_z))),
                                 vector3_t(size),
-                                vector3_t(color_r, color_g, color_b));
+                                vector3_t(color_r, color_g, color_b),
+                                get_app_type());
     new_terrain->k_g = gravity_constant;
     
     return(0);

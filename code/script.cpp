@@ -84,7 +84,8 @@ execute_lua(const char *code)
 
     if (error)
     {
-        printf("%s", lua_tostring(g_lua_state, -1));
+        const char *error = lua_tostring(g_lua_state, -1);
+        printf("%s", error);
         lua_pop(g_lua_state, 1);
     }
 }

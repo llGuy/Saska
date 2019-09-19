@@ -3659,7 +3659,7 @@ update_world(input_state_t *input_state,
             update_3d_output_camera_transforms(image_index);
     
             render_world(image_index, current_frame, cmdbuf);
-        }
+        } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             update_entities(input_state, dt, app_type);

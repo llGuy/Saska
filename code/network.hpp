@@ -48,10 +48,11 @@ struct packet_header_t
     uint32_t total_packet_size: 27;
 };
 
+// This also needs to send the state of the world
 struct server_handshake_packet_t
 {
     packet_header_t header;
-    uint16_t player_id;
+    uint16_t client_id;
 };
 
 #define CLIENT_NAME_MAX_LENGTH 40
@@ -65,7 +66,12 @@ struct client_join_packet_t
 struct client_state_t
 {
     // Name, id, etc...
+    char client_name[CLIENT_NAME_MAX_LENGTH];
+    uint16_t client_id;
+    network_address_t network_address;
 };
+
+#define MAX_CLIENTS 40
 
 struct network_state_t
 {
@@ -78,6 +84,9 @@ struct network_state_t
 
     // API stuff
     socket_manager_t sockets;
+
+    uint32_t client_count;
+    client_state_t clients[MAX_CLIENTS];
 };
 
 void update_network_state(void);

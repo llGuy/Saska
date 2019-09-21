@@ -3540,8 +3540,6 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, app
     //physics->ws_velocity = glm::normalize(matrix4_mul_vec3(r2_ptr->on_t->push_k.transform, vector3_t(0.0f, 0.0f, -1.0f), WITHOUT_TRANSLATION)) * 20.0f;
    
     add_input_component(r2_ptr);
-       
-   
 }
 
 // ---- rendering of the entire world happens here ----

@@ -5,6 +5,7 @@
 #include "network.hpp"
 #include "game.hpp"
 #include "ui.hpp"
+#include "script.hpp"
 
 // Network code stuff for windows
 global_var network_state_t *g_network_state;
@@ -67,7 +68,7 @@ bool receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size, 
 
     if (bytes_received == SOCKET_ERROR)
     {
-        //        OutputDebugString("recvfrom failed\n");
+        OutputDebugString("recvfrom failed\n");
     }
     else
     {
@@ -134,6 +135,24 @@ void initialize_socket_api(void)
     }
 }
 
+void join_server(const char *ip_address)
+{
+    client_join_packet_t packet_to_send = {};
+    packet_to_send.header.packet_mode = packet_header_t::packet_mode_t::CLIENT_MODE;
+    packet_to_send.header.packet_type = packet_header_t::client_packet_type_t::CLIENT_JOIN;
+    packet_to_send.header.total_packet_size = sizeof(packet_to_send);
+    const char *message = "saska\0";
+    memcpy(packet_to_send.client_name, message, strlen(message));
+
+    network_address_t server_address { host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
+    send_to(&g_network_state->main_network_socket,
+            server_address,
+            (char *)&packet_to_send,
+            sizeof(packet_to_send));
+}
+
+internal_function int32_t lua_join_server(lua_State *state);
+
 void initialize_as_client(void)
 {
     add_network_socket(&g_network_state->main_network_socket);
@@ -147,20 +166,9 @@ void initialize_as_client(void)
     bind_network_socket_to_port(&g_network_state->main_network_socket,
                                 address);
 
-     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
-    
-    client_join_packet_t packet_to_send = {};
-    packet_to_send.header.packet_mode = packet_header_t::packet_mode_t::CLIENT_MODE;
-    packet_to_send.header.packet_type = packet_header_t::client_packet_type_t::CLIENT_JOIN;
-    packet_to_send.header.total_packet_size = sizeof(packet_to_send);
-    const char *message = "saska\0";
-    memcpy(packet_to_send.client_name, message, strlen(message));
+    set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
 
-    network_address_t server_address { host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32("127.0.0.1") };
-    send_to(&g_network_state->main_network_socket,
-            server_address,
-            (char *)&packet_to_send,
-            sizeof(packet_to_send));
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
 }
 
 void initialize_as_server(void)
@@ -215,7 +223,7 @@ void update_as_server(void)
                     handshake_packet.header.total_packet_size = sizeof(server_handshake_packet_t);
                     
                     // TODO: Create list of clients
-                    handshake_packet.player_id = 42;
+                    handshake_packet.client_id = 42;
 
                     send_to(&g_network_state->main_network_socket, received_address, (char *)&handshake_packet, sizeof(handshake_packet));
                 } break;
@@ -257,4 +265,13 @@ void initialize_network_state(game_memory_t *memory, network_state_t::applicatio
     case network_state_t::application_mode_t::CLIENT_MODE: { initialize_as_client(); } break;
     case network_state_t::application_mode_t::SERVER_MODE: { initialize_as_server(); } break;
     }
+}
+
+internal_function int32_t lua_join_server(lua_State *state)
+{
+    const char *string = lua_tostring(state, -1);
+
+    join_server(string);
+
+    return(0);
 }

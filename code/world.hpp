@@ -330,7 +330,6 @@ struct entities_t
 
     // For now:
     uint32_t main_entity;
-    
     // have some sort of stack of REMOVED entities
 };
 

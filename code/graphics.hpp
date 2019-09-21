@@ -788,7 +788,7 @@ struct animation_cycle_t
 
 struct animation_cycles_t
 {
-    persist_var constexpr uint32_t MAX_ANIMATIONS = 5;
+    persist_var constexpr uint32_t MAX_ANIMATIONS = 10;
     animation_cycle_t cycles[MAX_ANIMATIONS];
     uint32_t cycle_count;
 };

@@ -260,9 +260,11 @@ struct entity_t
     float32_t rolling_rotation_angle = 0.0f;
     matrix4_t rolling_rotation = matrix4_t(1.0f);
 
+    bool is_sitting = 0;
+
     //    struct entity_body_t body;
     // For animated rendering component
-    enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, JUMP } animated_state = animated_state_t::IDLE;
+    enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, SITTING, JUMP } animated_state = animated_state_t::IDLE;
     
     struct components_t
     {

@@ -566,6 +566,9 @@ lua_print_fps(lua_State *state);
 internal_function int32_t
 lua_break(lua_State *state);
 
+internal_function int32_t
+lua_quit(lua_State *state);
+
 bool
 console_is_receiving_input(void)
 {
@@ -651,6 +654,7 @@ initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_fps", &lua_get_fps);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_fps", &lua_print_fps);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "debug_break", &lua_break);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
 }
 
 internal_function void
@@ -1158,4 +1162,11 @@ void initialize_ui_translation_unit(struct game_memory_t *memory)
     g_console = &memory->user_interface_state.console;
     g_ui = &memory->user_interface_state.ui_state;
     dbg_ui_utils = &memory->user_interface_state.dbg_ui_utils;
+}
+
+internal_function int32_t
+lua_quit(lua_State *state)
+{
+    request_quit();
+    return(0);
 }

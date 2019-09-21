@@ -47,6 +47,7 @@
 debug_output_t output_file;
 
 global_var bool g_running;
+global_var bool g_hasfocus;
 global_var double g_game_time = 0.0f;
 global_var double g_dt = 0.0f;
 global_var HWND g_window;
@@ -56,6 +57,12 @@ global_var input_state_t g_input_state = {};
 input_state_t *get_input_state(void)
 {
     return &g_input_state;
+}
+
+void request_quit(void)
+{
+    g_running = 0;
+    PostQuitMessage(0);
 }
 
 // TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
@@ -327,7 +334,9 @@ LRESULT CALLBACK windows_callback(HWND window_handle, UINT message, WPARAM wpara
     case WM_LBUTTONUP: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP); } break;
         // NOTE: Make sure this doesn't break anything in the future
     case WM_SETCURSOR: { SetCursor(0);} break;
-    case WM_DESTROY: { g_running = 0; PostQuitMessage(0); } break;
+    case WM_CLOSE: { g_running = 0; PostQuitMessage(0); return 0; } break;
+    case WM_DESTROY: { g_running = 0; PostQuitMessage(0); return 0; } break;
+    case WM_QUIT: { g_running = 0; return 0 ; } break;
     }
 
     return(DefWindowProc(window_handle, message, wparam, lparam));
@@ -509,7 +518,10 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 MSG message;
                 while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
                 {
-                    if (message.message == WM_QUIT) g_running = false;
+                    if (message.message == WM_QUIT)
+                    {
+                        g_running = false;
+                    }
                     TranslateMessage(&message);
                     DispatchMessage(&message);
                 }

@@ -2573,6 +2573,11 @@ update_animation_component(input_state_t *input_state, float32_t dt)
             new_state = entity_t::animated_state_t::IDLE;
         }
 
+        if (e->is_sitting)
+        {
+            new_state = entity_t::animated_state_t::SITTING;
+        }
+
         if (e->is_in_air)
         {
             new_state = entity_t::animated_state_t::HOVER;
@@ -2922,6 +2927,15 @@ update_physics_components(float32_t dt, input_state_t *input_state)
                     result_force -= right;
                 }
 
+                if (input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN))
+                {
+                    e->is_sitting = 1;
+                }
+                else
+                {
+                    e->is_sitting = 0;
+                }
+                
                 if (input->movement_flags && !(input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN)))
                 {
                     result_force = glm::normalize(result_force);

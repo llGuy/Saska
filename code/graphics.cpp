@@ -1813,8 +1813,8 @@ make_postfx_data(gpu_command_queue_pool_t *pool)
                                false, 0.0f, dynamic, pfx_render_pass, 0);
     }
     
-    shader_modules_t modules(shader_module_info_t{"shaders/pfx_ssr.vert", VK_SHADER_STAGE_VERTEX_BIT},
-                             shader_module_info_t{"shaders/pfx_ssr.frag", VK_SHADER_STAGE_FRAGMENT_BIT});
+    shader_modules_t modules(shader_module_info_t{"shaders/SPV/pfx_ssr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                             shader_module_info_t{"shaders/SPV/pfx_ssr.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
     shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.g_buffer_layout"_hash),
                                      g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
                                      g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));

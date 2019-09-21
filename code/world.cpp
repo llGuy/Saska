@@ -2922,7 +2922,7 @@ update_physics_components(float32_t dt, input_state_t *input_state)
                     result_force -= right;
                 }
 
-                if (input->movement_flags)
+                if (input->movement_flags && !(input->movement_flags & (1 << input_component_t::movement_flags_t::DOWN)))
                 {
                     result_force = glm::normalize(result_force);
                     result_force -= e->on_t->ws_n;

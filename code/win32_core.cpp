@@ -181,17 +181,17 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
         ClientToScreen(g_window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
-    if (true_y_position <= client_rect.top + 1)
-    {
-        POINT infinite = { true_x_position, client_rect.bottom - 2 };
-        true_y_position = true_prev_y = client_rect.bottom - 2;
-        ClientToScreen(g_window, &infinite);
-        SetCursorPos(infinite.x, infinite.y);
-    }
     if (true_y_position >= client_rect.bottom - 2)
     {
         POINT infinite = { true_x_position, client_rect.top + 2 };
         true_y_position = true_prev_y = client_rect.top + 2;
+        ClientToScreen(g_window, &infinite);
+        SetCursorPos(infinite.x, infinite.y);
+    }
+    if (true_y_position <= client_rect.top + 1)
+    {
+        POINT infinite = { true_x_position, client_rect.bottom - 2 };
+        true_y_position = true_prev_y = client_rect.bottom - 2;
         ClientToScreen(g_window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
@@ -553,13 +553,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        if (dt > TICK_TIME)
+        /*if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;            
         }
-        else
+        else*/
         {
             // Set game tick period by sleeping
             while (dt < TICK_TIME)

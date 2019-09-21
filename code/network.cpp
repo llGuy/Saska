@@ -67,7 +67,7 @@ bool receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size, 
 
     if (bytes_received == SOCKET_ERROR)
     {
-        OutputDebugString("recvfrom failed\n");
+        //        OutputDebugString("recvfrom failed\n");
     }
     else
     {

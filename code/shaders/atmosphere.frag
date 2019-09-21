@@ -14,9 +14,9 @@ layout(push_constant) uniform Push_K
 } push_k;
 
 mat4
-look_at(vec3 eye
-	, vec3 center
-	, vec3 up)
+look_at(vec3 eye,
+	vec3 center,
+	vec3 up)
 {
     vec3 f = vec3(normalize(center - eye));
     vec3 s = vec3(normalize(cross(f, up)));
@@ -47,8 +47,7 @@ square(float a)
 /*G < 0 --> light is scattered a lot 
   Mie : -0.75 > G > -0.999 */
 float
-phase(float difference_light_dir_view_dir
-      , const float G)
+phase(float difference_light_dir_view_dir, const float G)
 {
     float left = (3.0 * (1.0 - square(G))) / (2.0 * (2.0 + square(G)));
     float right = (1.0 + square(difference_light_dir_view_dir)) / (pow(1.0 + square(G) - 2.0 * G * difference_light_dir_view_dir, 1.5));
@@ -59,8 +58,7 @@ const float RAYLEIGH_G	= -0.01;
 const float MIE_G	= -0.8;
 
 float
-calculate_atmosphere_depth_at_dir(vec3 ws_camera_position
-				  , vec3 ws_camera_view_dir)
+calculate_atmosphere_depth_at_dir(vec3 ws_camera_position, vec3 ws_camera_view_dir)
 {
     float a = dot(ws_camera_view_dir, ws_camera_view_dir);
     float b = 2.0 * dot(ws_camera_view_dir, ws_camera_position);
@@ -77,9 +75,9 @@ const uint SAMPLE_COUNT = 10;
 const vec3 AIR_COLOR = vec3(0.18867780, 0.49784429, 0.4616065);
 
 vec3
-absorb_light_from_sun_at_ray_position(float ray_distance
-				      , vec3 intensity
-				      , float absorb_factor)
+absorb_light_from_sun_at_ray_position(float ray_distance,
+				      vec3 intensity,
+				      float absorb_factor)
 {
     // further away the ray goes, smaller the intensity is
     return(intensity - intensity * pow(AIR_COLOR, vec3(absorb_factor / ray_distance)));
@@ -88,9 +86,9 @@ absorb_light_from_sun_at_ray_position(float ray_distance
 void
 main(void)
 {
-    mat3 inverse_view_rotate = inverse(mat3(look_at(vec3(0.0f)
-						    , in_cube_face_direction
-						    , vec3(0.0f, 1.0f, 0.0f))));
+    mat3 inverse_view_rotate = inverse(mat3(look_at(vec3(0.0f),
+						    in_cube_face_direction,
+						    vec3(0.0f, 1.0f, 0.0f))));
     
     vec2 ds_view_dir = gl_FragCoord.xy / push_k.viewport;
     if (gl_Layer == 2 || gl_Layer == 3)
@@ -110,8 +108,7 @@ main(void)
     float rayleigh_scattering_factor	= phase(difference_light_dir_view_dir, RAYLEIGH_G);
 
     vec3 ws_camera_position = vec3(0.0, SURFACE_HEIGHT, 0.0);
-    float atmosphere_depth_at_dir = calculate_atmosphere_depth_at_dir(ws_camera_position
-								      , ws_view_dir);
+    float atmosphere_depth_at_dir = calculate_atmosphere_depth_at_dir(ws_camera_position, ws_view_dir);
     float step_distance = atmosphere_depth_at_dir / float(SAMPLE_COUNT);
 
     vec3 total_mie = vec3(0.0);

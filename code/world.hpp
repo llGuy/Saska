@@ -257,6 +257,8 @@ struct entity_t
 
     bool toggled_rolling_previous_frame = 0;
     bool32_t rolling_mode;
+    float32_t rolling_rotation_angle = 0.0f;
+    matrix4_t rolling_rotation = matrix4_t(1.0f);
 
     //    struct entity_body_t body;
     // For animated rendering component

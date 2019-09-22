@@ -1213,6 +1213,8 @@ VkCommandPool *get_global_command_pool(void);
 
 struct vulkan_context_t
 {
+    bool is_initialized;
+    
     VkInstance instance;
     
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -1248,9 +1250,14 @@ struct frame_rendering_data_t
     VkCommandBuffer command_buffer;
 };
 
-frame_rendering_data_t begin_frame_rendering(void);
-void end_frame_rendering_and_refresh(void);
+frame_rendering_data_t begin_frame_rendering(input_state_t *input_state);
+void end_frame_rendering_and_refresh(input_state_t *input_state);
 
+void recreate_swapchain(input_state_t *state);
+
+void destroy_framebuffer(VkFramebuffer *fbo);
+void destroy_image_view(VkImageView *image_view);
+void destroy_render_pass(VkRenderPass *render_pass);
 void destroy_swapchain(void);
 
 void idle_gpu(void);
@@ -1263,3 +1270,5 @@ struct graphics_context_t
 };
 
 void initialize_vulkan_translation_unit(struct game_memory_t *memory);
+
+bool is_graphics_api_initialized(void);

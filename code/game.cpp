@@ -64,7 +64,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             // ---- begin recording instructions into the command buffers ----
-            frame_rendering_data_t frame = begin_frame_rendering();
+            frame_rendering_data_t frame = begin_frame_rendering(input_state);
             gpu_command_queue_t queue{frame.command_buffer};
             {
                 update_network_state();
@@ -76,7 +76,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
         
                 render_final_output(frame.image_index, &queue);
             }
-            end_frame_rendering_and_refresh();
+            end_frame_rendering_and_refresh(input_state);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {

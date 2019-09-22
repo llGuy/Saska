@@ -2164,7 +2164,7 @@ lua_end_frame_capture(lua_State *state);
 void
 initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
 {
-    g_dfr_rendering->backbuffer_res = {1500, 1000};
+    g_dfr_rendering->backbuffer_res = {1920, 1080};
     
     make_uniform_pool();
     make_dfr_rendering_data();
@@ -2883,4 +2883,51 @@ void initialize_graphics_translation_unit(game_memory_t *memory)
     // Post processing pipeline stuff:
     g_dfr_rendering = &memory->graphics_state.deferred_rendering;
     g_postfx = &memory->graphics_state.postfx;
+}
+
+void handle_window_resize(input_state_t *input_state)
+{
+    idle_gpu();
+    
+    // Destroy final framebuffer as well as final framebuffer attachments
+    auto *final_fbo = g_framebuffer_manager->get(g_postfx->final_stage.fbo);
+    for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
+    {
+        destroy_framebuffer(&final_fbo[i].framebuffer);
+    }
+
+    g_postfx->final_render_pass = g_render_pass_manager->add("render_pass.final_render_pass"_hash);
+    auto *final_render_pass = g_render_pass_manager->get(g_postfx->final_render_pass);
+
+    destroy_render_pass(&final_render_pass->render_pass);
+    
+    recreate_swapchain(input_state);
+
+    VkFormat swapchain_format = get_swapchain_format();
+    {
+        // only_t one attachment
+        render_pass_attachment_t attachment = { swapchain_format, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR };
+        render_pass_subpass_t subpass;
+        subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        render_pass_dependency_t dependencies[2];
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
+                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
+    }
+    
+    {
+        VkImageView *swapchain_image_views = get_swapchain_image_views();
+        
+        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
+        {
+            final_fbo[i].extent = get_swapchain_extent();
+            
+            allocate_memory_buffer(final_fbo[i].color_attachments, 1);
+            final_fbo[i].color_attachments[0] = swapchain_image_views[i];
+            final_fbo[i].depth_attachment = VK_NULL_HANDLE;
+            init_framebuffer(final_render_pass, final_fbo[i].extent.width, final_fbo[i].extent.height, 1, &final_fbo[i]);
+        }
+    }
 }

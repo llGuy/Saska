@@ -315,11 +315,17 @@ LRESULT CALLBACK windows_callback(HWND window_handle, UINT message, WPARAM wpara
     switch(message)
     {
         // Input ...
-    case WM_MOUSEMOVE: { handle_mouse_move_event(lparam); } break;
-    case WM_KEYDOWN: { handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN); } break;
+    case WM_SIZE:
+        {
+            g_input_state.resized = 1;
+            g_input_state.window_width = LOWORD(lparam);
+            g_input_state.window_height = HIWORD(lparam);
+        } break;
+    case WM_MOUSEMOVE: { if (g_hasfocus) handle_mouse_move_event(lparam); } break;
+    case WM_KEYDOWN: { if (g_hasfocus) handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN); } break;
     case WM_CHAR:
         {
-            if (g_input_state.char_count != MAX_CHARS)
+            if (g_input_state.char_count != MAX_CHARS && g_hasfocus)
             {
                 if (wparam >= 32)
                 {
@@ -327,16 +333,18 @@ LRESULT CALLBACK windows_callback(HWND window_handle, UINT message, WPARAM wpara
                 }
             }
         } break;
-    case WM_KEYUP: { handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_UP); } break;
-    case WM_RBUTTONDOWN: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_DOWN); } break;
-    case WM_RBUTTONUP: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_UP); } break;
-    case WM_LBUTTONDOWN: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN); } break;
-    case WM_LBUTTONUP: { set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP); } break;
+    case WM_KEYUP: { if (g_hasfocus) handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_UP); } break;
+    case WM_RBUTTONDOWN: { if (g_hasfocus) set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_DOWN); } break;
+    case WM_RBUTTONUP: { if (g_hasfocus) set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_RIGHT, key_action_t::KEY_ACTION_UP); } break;
+    case WM_LBUTTONDOWN: { if (g_hasfocus) set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN); } break;
+    case WM_LBUTTONUP: { if (g_hasfocus) set_mouse_button_state(&g_input_state, mouse_button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP); } break;
         // NOTE: Make sure this doesn't break anything in the future
     case WM_SETCURSOR: { SetCursor(0);} break;
     case WM_CLOSE: { g_running = 0; PostQuitMessage(0); return 0; } break;
     case WM_DESTROY: { g_running = 0; PostQuitMessage(0); return 0; } break;
     case WM_QUIT: { g_running = 0; return 0 ; } break;
+    case WM_SETFOCUS: { g_hasfocus = 1; } break;
+    case WM_KILLFOCUS: { g_hasfocus = 0; } break;
     }
 
     return(DefWindowProc(window_handle, message, wparam, lparam));
@@ -479,7 +487,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
         ShowWindow(g_window, showcmd);
         // TODO: ReleaseCapture(void) when alt tab / alt f4
-        SetCapture(g_window);
+        //SetCapture(g_window);
         disable_cursor_display();
     }
 
@@ -515,6 +523,8 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         {
         case application_type_t::WINDOW_APPLICATION_MODE:
             {
+                g_input_state.resized = 0;
+                
                 MSG message;
                 while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
                 {
@@ -524,6 +534,11 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                     }
                     TranslateMessage(&message);
                     DispatchMessage(&message);
+                }
+
+                if (g_input_state.resized)
+                {
+                    handle_window_resize(&g_input_state);
                 }
 
                 RECT client_rect = {};
@@ -538,7 +553,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 client_rect.right = bottom_right.x;
                 client_rect.bottom = bottom_right.y;
 
-                ClipCursor(&client_rect);
+                if (g_hasfocus) ClipCursor(&client_rect);
         
                 // Render
                 game_tick(&g_game, &g_input_state, g_dt);
@@ -593,7 +608,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         }
     }
 
-    ReleaseCapture();
+    //ReleaseCapture();
     ShowWindow(g_window, SW_HIDE);
     
     destroy_game(&g_game);

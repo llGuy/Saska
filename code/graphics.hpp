@@ -1028,3 +1028,5 @@ struct graphics_t
 };
 
 void initialize_graphics_translation_unit(struct game_memory_t *memory);
+
+void handle_window_resize(input_state_t *input_state);

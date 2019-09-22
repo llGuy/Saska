@@ -352,9 +352,9 @@ vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity
                   , const VkDebugUtilsMessengerCallbackDataEXT *message_data
                   , void *user_data)
 {
-    /*OutputDebugString("Vulkan > ");
+    OutputDebugString("Vulkan > ");
     OutputDebugString(message_data->pMessage);
-    OutputDebugString("\n");*/
+    OutputDebugString("\n");
 
     //	OUTPUT_DEBUG_LOG_VALIDATION("validation_t layer_t > %s\n", message_data->pMessage);
 
@@ -1891,7 +1891,16 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
     return graphics_api_initialize_ret_t{ &g_context->command_pool };
 }
 
-frame_rendering_data_t begin_frame_rendering(void)
+void recreate_swapchain(input_state_t *input_state)
+{
+    destroy_swapchain();
+
+    get_swapchain_support(&g_context->surface);
+    
+    init_swapchain(input_state);
+}
+
+frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
 {
     persist_var uint32_t current_frame = 0;
     persist_var constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -1904,7 +1913,7 @@ frame_rendering_data_t begin_frame_rendering(void)
     
     if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-	// ---- recreate swapchain ----
+        //recreate_swapchain(input_state);
 	return {};
     }
     else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
@@ -1922,7 +1931,7 @@ frame_rendering_data_t begin_frame_rendering(void)
     return {g_context->image_index, g_context->command_buffer[g_context->current_frame]};
 }
 
-void end_frame_rendering_and_refresh(void)
+void end_frame_rendering_and_refresh(input_state_t *input_state)
 {
     end_command_buffer(&g_context->command_buffer[g_context->current_frame]);
 
@@ -1943,7 +1952,7 @@ void end_frame_rendering_and_refresh(void)
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-	// recreate swapchain
+        //recreate_swapchain(input_state);
     }
     else if (result != VK_SUCCESS)
     {
@@ -1991,6 +2000,21 @@ void idle_gpu(void)
     vkDeviceWaitIdle(g_context->gpu.logical_device);
 }
 
+void destroy_framebuffer(VkFramebuffer *fbo)
+{
+    vkDestroyFramebuffer(g_context->gpu.logical_device, *fbo, nullptr);
+}
+
+void destroy_render_pass(VkRenderPass *render_pass)
+{
+    vkDestroyRenderPass(g_context->gpu.logical_device, *render_pass, nullptr);
+}
+
+void destroy_image_view(VkImageView *image_view)
+{
+    vkDestroyImageView(g_context->gpu.logical_device, *image_view, nullptr);
+}
+
 void destroy_swapchain(void)
 {
     for (uint32_t i = 0; i < g_context->swapchain.views.count; ++i)
@@ -2004,4 +2028,9 @@ void destroy_swapchain(void)
 void initialize_vulkan_translation_unit(game_memory_t *memory)
 {
     g_context = &memory->graphics_context.context;
+}
+
+bool is_graphics_api_initialized(void)
+{
+    return g_context != nullptr;
 }

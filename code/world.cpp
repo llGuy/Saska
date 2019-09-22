@@ -3248,13 +3248,30 @@ update_input_components(input_state_t *input_state
                 vector3_t rotate_y = glm::cross(res, up);
                 res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
 
+                res = glm::normalize(res);
+                
                 float32_t up_dot_view = glm::dot(up, res);
                 float32_t minus_up_dot_view = glm::dot(-up, res);
+                
 
-                if (up_dot_view > -0.999f && minus_up_dot_view > -0.999f)
+                float32_t limit = 0.99f;
+                if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
                 {
-                    e->ws_d = res;    
+                    e->ws_d = res;
+
+                    char buffer[40] = {};
+                    sprintf(buffer, "%f, %f\n", up_dot_view, minus_up_dot_view);
+                    OutputDebugString(buffer);
                 }
+                else
+                {
+                    OutputDebugString("Too far\n");
+                }
+
+                //if (up_dot_view > -0.99999999f && minus_up_dot_view > -0.99999999f)
+                /*if (up_dot_view > -1.0f && minus_up_dot_view > -1.0f)
+                {
+                }*/
             }
 
             // Mouse input
@@ -3880,6 +3897,7 @@ internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
 internal_function int32_t lua_go_down(lua_State *state);
 internal_function int32_t lua_print_player_terrain_position(lua_State *state);
 internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
+internal_function int32_t lua_reinitialize(lua_State *state);
 
 internal_function void entry_point(void)
 {
@@ -4440,3 +4458,9 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
     g_terrains = &memory->world_state.terrains;
     g_world_submission_queues = memory->world_state.material_submission_queues;
 }
+
+internal_function int32_t lua_reinitialize(lua_State *state)
+{
+    return(0);
+}
+

@@ -105,7 +105,7 @@ struct memory_buffer_view_t
 	return(buffer[i]);
     }
 };
-
+//"
 // fast and relatively cheap hash table
 template <typename T
 	  , uint32_t Bucket_Count
@@ -132,6 +132,14 @@ template <typename T
 
     hash_table_inline_t(void) = default;
     hash_table_inline_t(const char *name) : map_debug_name(name) {}
+
+    void clean_up(void)
+    {
+        for (uint32_t i = 0; i < Bucket_Count; ++i)
+        {
+            buckets[i].bucket_usage_count = 0;
+        }
+    }
 
     void
     insert(uint32_t hash, T value, const char *debug_name = "")

@@ -2688,7 +2688,11 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
                                gpu_buffer_usage_t::UNIFORM_BUFFER,
                                pool);
 
-    instance.group = make_uniform_group(gpu_ubo_layout, g_uniform_pool);
+    if (instance.group != VK_NULL_HANDLE)
+    {
+        instance.group = make_uniform_group(gpu_ubo_layout, g_uniform_pool);
+    }
+    
     update_uniform_group(&instance.group, update_binding_t{BUFFER, &instance.interpolated_transforms_ubo, 0});
     
     return(instance);
@@ -2847,6 +2851,11 @@ mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t
     mesh.indexed_data = *index_data;
 
     return(mesh);
+}
+
+void destroy_animation_instance(animated_instance_t *instance)
+{
+    instance->interpolated_transforms_ubo.destroy();
 }
 
 void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force)

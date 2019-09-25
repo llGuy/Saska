@@ -479,6 +479,8 @@ struct model_binding_t
 // describes the attributes and bindings of the model
 struct model_t
 {
+    // TODO: Don't allocate this stuff on free list allocater (just make it a fixed size array)
+
     // model bindings
     uint32_t binding_count;
     // allocated on free list allocator
@@ -492,6 +494,13 @@ struct model_t
 
     memory_buffer_view_t<VkBuffer> raw_cache_for_rendering;
 
+    void clean_up(void)
+    {
+        deallocate_free_list(bindings);
+        deallocate_free_list(attributes_buffer);
+        deallocate_free_list(raw_cache_for_rendering.buffer);
+    }
+    
     void
     prepare_bindings(uint32_t binding_count)
     {
@@ -1072,9 +1081,11 @@ command_buffer_bind_descriptor_sets(graphics_pipeline_t *pipeline
 }
     
 void
-allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets
-                         , const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
-                         , VkDescriptorPool *descriptor_pool);
+allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets,
+                         const memory_buffer_view_t<VkDescriptorSetLayout> &layouts,
+                         VkDescriptorPool *descriptor_pool);
+
+void destroy_descriptor_set(VkDescriptorSet *set);
 
 VkDescriptorSet
 allocate_descriptor_set(VkDescriptorSetLayout *layout

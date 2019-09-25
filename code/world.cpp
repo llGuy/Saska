@@ -3972,6 +3972,59 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     clear_linear();
 }
 
+internal_function void clean_up_entities(void)
+{
+    // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
+    g_entities->entity_count = 0;
+    g_entities->physics_component_count = 0;
+    g_entities->camera_component_count = 0;
+    g_entities->input_component_count = 0;
+    g_entities->rendering_component_count = 0;
+
+    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
+    {
+        destroy_animated_instance(&g_entities->animation_components[i].animation_instance);
+    }
+    g_entities->animation_component_count = 0;
+    
+    g_entities->main_entity = 0;
+
+    g_entities->name_map.clean_up();
+}
+
+internal_function void clean_up_terrains(void)
+{
+    for (uint32_t i = 0; i < g_terrains->base_count; ++i)
+    {
+        g_terrains->terrain_bases[i].mesh_xz_values.destroy();
+        g_terrains->terrain_bases[i].idx_buffer.destroy();
+        g_terrains->terrain_bases[i].model_info.clean_up();
+        g_terrains->terrain_bases[i].model_info = model_t{};
+    }
+    g_terrains->base_count = 0;
+
+    for (uint32_t i = 0; i < g_terrains->terrain_count; ++i)
+    {
+        deallocate_free_list(g_terrains->terrains[i].heights);
+        g_terrains->terrains[i].heights_gpu_buffer.destroy();
+        deallocate_free_list(g_terrains->terrains[i].mesh.raw_buffer_list.buffer);
+    }
+    g_terrains->terrain_count = 0;
+
+    g_terrains->terrain_base_table.clean_up();
+}
+
+void clean_up_world_data(void)
+{
+    clean_up_entities();
+    clean_up_terrains();
+}
+
+void make_world_data(void /* Some kind of state */)
+{
+    
+}
+
 void
 update_world(input_state_t *input_state,
 	     float32_t dt,

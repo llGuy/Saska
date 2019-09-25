@@ -178,7 +178,7 @@ struct camera_component_t
     quaternion_t current_rotation;
 
     bool is_third_person;
-    float32_t distance_from_player = 30.0f;
+    float32_t distance_from_player = 40.0f;
 };
 
 struct input_component_t
@@ -323,7 +323,7 @@ struct entities_t
 
     mesh_t rolling_entity_mesh;
     model_t rolling_entity_model;
-    
+
     mesh_t entity_mesh;
     skeleton_t entity_mesh_skeleton;
     animation_cycles_t entity_mesh_cycles;
@@ -344,6 +344,11 @@ struct world_t
     struct gpu_material_submission_queue_t material_submission_queues[MAX_MATERIALS];
 };
 
+void clean_up_world_data(void);
+
+void make_world_data(void);
+
+// Initializes all of the rendering data, and stuff whereas make_world_data just initializes entities, terrains, etc..
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,

@@ -810,14 +810,17 @@ struct animated_instance_t
     uint32_t prev_bound_cycle;
     uint32_t next_bound_cycle;
     animation_cycles_t *cycles;
+
     // One for each joint
     matrix4_t *interpolated_transforms;
     // Cached joint transforms used in case the player is interpolating between cycles
     key_frame_joint_transform_t *current_joint_transforms;
     
     gpu_buffer_t interpolated_transforms_ubo;
-    uniform_group_t group;
+    uniform_group_t group = VK_NULL_HANDLE;
 };
+
+void destroy_animation_instance(animated_instance_t *instance);
 
 void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force = 0);
 

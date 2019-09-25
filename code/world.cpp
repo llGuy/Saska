@@ -26,6 +26,7 @@ constexpr float32_t PI = 3.14159265359f;
 global_var gpu_material_submission_queue_t *g_world_submission_queues;
 global_var struct morphable_terrains_t *g_terrains;
 global_var struct entities_t *g_entities;
+global_var struct network_world_state_t *g_network_world_state;
 
 enum { TERRAIN_QUEUE, ENTITY_QUEUE, ROLLING_ENTITY_QUEUE };
 
@@ -2106,6 +2107,8 @@ make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terr
                             const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color,
                             application_type_t app_type)
 {
+    terrain->terrain_base_id = base->base_id;
+    
     auto *model_info = &base->model_info;
     terrain->vbos[0] = base->mesh_xz_values.buffer;
     terrain->vbos[1] = terrain->heights_gpu_buffer.buffer;
@@ -3970,6 +3973,8 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     initialize_entities_data(cmdpool, input_state, app_type);
 
     clear_linear();
+
+    update_network_world_state();
 }
 
 internal_function void clean_up_entities(void)
@@ -4023,6 +4028,45 @@ void clean_up_world_data(void)
 void make_world_data(void /* Some kind of state */)
 {
     
+}
+
+void update_network_world_state(void)
+{
+    g_network_world_state->terrains.terrain_base_count = (uint8_t)g_terrains->base_count;
+    if (!g_network_world_state->terrains.terrain_bases)
+    {
+        g_network_world_state->terrains.terrain_bases = (server_terrain_base_state_t *)allocate_free_list(sizeof(server_terrain_base_state_t) * g_terrains->base_count);
+    }
+
+    for (uint32_t i = 0; i < g_network_world_state->terrains.terrain_base_count; ++i)
+    {
+        g_network_world_state->terrains.terrain_bases[i].x = g_terrains->terrain_bases[i].width;
+        g_network_world_state->terrains.terrain_bases[i].z = g_terrains->terrain_bases[i].depth;
+    }
+    
+    // Initialize terrain part of the world state
+    g_network_world_state->terrains.terrain_count = (uint8_t)g_terrains->terrain_count;
+    if (!g_network_world_state->terrains.terrains)
+    {
+        g_network_world_state->terrains.terrains = (server_terrain_state_t *)allocate_free_list(sizeof(server_terrain_state_t) * g_terrains->terrain_count);
+    }
+
+    for (uint32_t i = 0; i < g_network_world_state->terrains.terrain_count; ++i)
+    {
+        g_network_world_state->terrains.terrains[i].k_g = g_terrains->terrains[i].k_g;
+        g_network_world_state->terrains.terrains[i].size = g_terrains->terrains[i].size;
+        g_network_world_state->terrains.terrains[i].ws_position = g_terrains->terrains[i].ws_p;
+        g_network_world_state->terrains.terrains[i].quat = g_terrains->terrains[i].gs_r;
+        g_network_world_state->terrains.terrains[i].terrain_base_id = g_terrains->terrains[i].terrain_base_id;
+        g_network_world_state->terrains.terrains[i].heights = g_terrains->terrains[i].heights;
+    }
+    
+    // Initialize entities part of the world state
+}
+
+network_world_state_t *get_network_world_state(void)
+{
+    return(g_network_world_state);
 }
 
 void
@@ -4444,7 +4488,9 @@ internal_function int32_t lua_initialize_terrain_base(lua_State *state)
     int32_t width = lua_tonumber(state, -2);
     int32_t depth = lua_tonumber(state, -1);
 
-    terrain_base_info_t *base = get_terrain_base(add_terrain_base(make_constant_string(base_name, strlen(base_name))));
+    uint32_t base_id = add_terrain_base(make_constant_string(base_name, strlen(base_name)));
+    terrain_base_info_t *base = get_terrain_base(base_id);
+    base->base_id = base_id;
     base->width = width;
     base->depth = depth;
     
@@ -4509,6 +4555,7 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
 {
     g_entities = &memory->world_state.entities;
     g_terrains = &memory->world_state.terrains;
+    g_network_world_state = &memory->world_state.network_world_state;
     g_world_submission_queues = memory->world_state.material_submission_queues;
 }
 

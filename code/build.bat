@@ -51,7 +51,7 @@ echo Built emacs tags
 goto :eof
 
 :debug
-%DB% %BIN%
+%DB% %CLIENT_BIN%
 goto :eof
 
 :clean

@@ -498,7 +498,10 @@ struct model_t
     {
         deallocate_free_list(bindings);
         deallocate_free_list(attributes_buffer);
-        deallocate_free_list(raw_cache_for_rendering.buffer);
+        if (raw_cache_for_rendering.buffer)
+        {
+            deallocate_free_list(raw_cache_for_rendering.buffer);
+        }
     }
     
     void

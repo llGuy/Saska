@@ -10,6 +10,8 @@
 
 struct morphable_terrain_t
 {
+    uint32_t terrain_base_id;
+    
     // TODO: Possible fix to hard setting position at collision whilst morphing
     persist_var constexpr uint32_t MAX_MORPHED_POINTS = 20;
     ivector2_t morphed_points[MAX_MORPHED_POINTS] = {};
@@ -75,6 +77,8 @@ struct terrain_base_info_t
     gpu_buffer_t mesh_xz_values;
     gpu_buffer_t idx_buffer;
     model_t model_info;
+
+    uint32_t base_id;
 };
 
 struct morphable_terrains_t
@@ -335,6 +339,41 @@ struct entities_t
     // have some sort of stack of REMOVED entities
 };
 
+struct server_terrain_base_state_t
+{
+    // Dimensions
+    uint8_t x, z;
+};
+
+struct server_terrain_state_t
+{
+    // Gravity constant
+    float32_t k_g;
+    vector3_t size;
+    vector3_t ws_position;
+    quaternion_t quat;
+    
+    // Float array
+    uint8_t terrain_base_id;
+    float32_t *heights = nullptr;
+};
+
+// Only to send at the beginning of game
+struct server_terrains_state_t
+{
+    uint8_t terrain_base_count;
+    server_terrain_base_state_t *terrain_bases = nullptr;
+    
+    uint8_t terrain_count;
+    // Terrain array
+    server_terrain_state_t *terrains = nullptr;
+};
+
+struct network_world_state_t
+{
+    server_terrains_state_t terrains;
+};
+
 struct world_t
 {
     struct entities_t entities;
@@ -342,7 +381,12 @@ struct world_t
 
     static constexpr uint32_t MAX_MATERIALS = 10;
     struct gpu_material_submission_queue_t material_submission_queues[MAX_MATERIALS];
+
+    network_world_state_t network_world_state;
 };
+
+network_world_state_t *get_network_world_state(void);
+void update_network_world_state(void);
 
 void clean_up_world_data(void);
 

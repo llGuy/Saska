@@ -599,6 +599,14 @@ make_camera_data(VkDescriptorPool *pool)
                                  update_binding_t{BUFFER, &camera_ubos[i], 0});
         }
     }
+
+    g_cameras->invalid_camera.set_default((float32_t)get_backbuffer_resolution().width,
+                                          (float32_t)get_backbuffer_resolution().height,
+                                          0.0f,
+                                          0.0f);
+    
+    g_cameras->invalid_camera.compute_projection();
+    g_cameras->invalid_camera.v_m = matrix4_t(1.0f);
 }
 
 void
@@ -612,8 +620,13 @@ make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
     *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector };
 }
 
-void
-update_3d_output_camera_transforms(uint32_t image_index)
+void clean_up_cameras(void)
+{
+    g_cameras->camera_count = 0;
+    g_cameras->camera_bound_to_3d_output = -1;
+}
+
+void update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
@@ -677,7 +690,11 @@ get_camera(camera_handle_t handle)
 camera_t *
 get_camera_bound_to_3d_output(void)
 {
-    return(&g_cameras->cameras[g_cameras->camera_bound_to_3d_output]);
+    switch (g_cameras->camera_bound_to_3d_output)
+    {
+    case -1: return &g_cameras->invalid_camera;
+    default: return &g_cameras->cameras[g_cameras->camera_bound_to_3d_output];
+    }
 }
 
 void
@@ -2688,7 +2705,7 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
                                gpu_buffer_usage_t::UNIFORM_BUFFER,
                                pool);
 
-    if (instance.group != VK_NULL_HANDLE)
+    if (instance.group == VK_NULL_HANDLE)
     {
         instance.group = make_uniform_group(gpu_ubo_layout, g_uniform_pool);
     }

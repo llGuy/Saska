@@ -598,6 +598,8 @@ make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
 void
 update_3d_output_camera_transforms(uint32_t image_index);
 
+void clean_up_cameras(void);
+
 struct shadow_matrices_t
 {
     matrix4_t projection_matrix;
@@ -843,7 +845,8 @@ struct cameras_t
     persist_var constexpr uint32_t MAX_CAMERAS = 10;
     uint32_t camera_count = 0;
     camera_t cameras[MAX_CAMERAS] = {};
-    camera_handle_t camera_bound_to_3d_output;
+    camera_handle_t camera_bound_to_3d_output = -1;
+    camera_t invalid_camera = {};
 
     gpu_buffer_handle_t camera_transforms_ubos;
     uniform_group_handle_t camera_transforms_uniform_groups;

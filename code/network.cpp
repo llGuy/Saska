@@ -242,6 +242,9 @@ void update_as_client(void)
     {
         // TODO: Set up packet interpretation system
 
+        // TODO: Handle join packet
+        clean_up_world_data();
+        
         console_out("handshake received\n");
     }
 }

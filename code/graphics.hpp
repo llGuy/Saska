@@ -846,12 +846,15 @@ struct cameras_t
     uint32_t camera_count = 0;
     camera_t cameras[MAX_CAMERAS] = {};
     camera_handle_t camera_bound_to_3d_output = -1;
-    camera_t invalid_camera = {};
+    camera_t spectator_camera = {};
 
     gpu_buffer_handle_t camera_transforms_ubos;
     uniform_group_handle_t camera_transforms_uniform_groups;
     uint32_t ubo_count;
 };
+
+bool is_in_spectator_mode(void);
+void update_spectator_camera(const matrix4_t &view_matrix);
 
 struct deferred_rendering_t
 {

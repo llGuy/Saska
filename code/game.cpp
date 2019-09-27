@@ -5,11 +5,14 @@
 #include "script.hpp"
 #include "ui.hpp"
 #include "network.hpp"
+#include <ctime>
 
 global_var game_memory_t *g_game_memory;
 
 void load_game(game_memory_t *memory)
 {
+    srand(time(NULL));
+    
     g_game_memory = memory;
 
     initialize_network_translation_unit(memory);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core.hpp"
+#include "world.hpp"
 
 // Send, receive, etc...
 // Network stuff, socket stuff, ...
@@ -53,6 +54,7 @@ struct server_handshake_packet_t
 {
     packet_header_t header;
     uint16_t client_id;
+    uint8_t color;
 };
 
 #define CLIENT_NAME_MAX_LENGTH 40
@@ -69,6 +71,8 @@ struct client_state_t
     char client_name[CLIENT_NAME_MAX_LENGTH];
     uint16_t client_id;
     network_address_t network_address;
+
+    uint32_t network_component_index;
 };
 
 #define MAX_CLIENTS 40
@@ -85,10 +89,14 @@ struct network_state_t
     // API stuff
     socket_manager_t sockets;
 
-    uint32_t client_count;
-    client_state_t clients[MAX_CLIENTS];
+    uint32_t client_count = {};
+    client_state_t clients[MAX_CLIENTS] = {};
+
+    // THIS IS ONLY FOR THE CLIENT, NOT THE SERVER APPLICATION
+    uint16_t client_id_stack[MAX_CLIENTS] = {};
 };
 
+uint32_t add_client(network_address_t network_address, const char *client_name, entity_handle_t entity_handle);
 void update_network_state(void);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);

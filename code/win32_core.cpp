@@ -438,7 +438,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     init_free_list_allocator_head(&free_list_allocator_global);
 
 #if defined (SERVER_APPLICATION)
-    application_type_t app_type = application_type_t::CONSOLE_APPLICATION_MODE;
+    application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
     network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::SERVER_MODE;
 #elif defined (CLIENT_APPLICATION)
     application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;

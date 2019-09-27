@@ -99,6 +99,8 @@ struct morphable_terrains_t
     pipeline_handle_t terrain_ppln;
     pipeline_handle_t terrain_shadow_ppln;
 
+    uint32_t spectating_terrain_index = 0;
+    
     struct
     {
         pipeline_handle_t ppln;
@@ -185,17 +187,6 @@ struct camera_component_t
     float32_t distance_from_player = 40.0f;
 };
 
-struct input_component_t
-{
-    uint32_t entity_index;
-
-    enum movement_flags_t { FORWARD, LEFT, BACK, RIGHT, DOWN, RUN };
-    uint8_t movement_flags = 0;
-
-    /*float32_t horizontal_angle = 0.0f;
-    float32_t vertical_angle = 0.0f;*/
-};
-
 struct animation_component_t
 {
     uint32_t entity_index;
@@ -226,6 +217,15 @@ struct entity_body_t
 {
     float32_t weight = 1.0f;
     hitbox_t hitbox;
+};
+
+// Action components can be modified over keyboard / mouse input, or on a network
+enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT };
+
+struct network_component_t
+{
+    uint32_t entity_index;
+    uint32_t client_state_index;
 };
 
 struct entity_t
@@ -266,6 +266,8 @@ struct entity_t
 
     bool is_sitting = 0;
 
+    uint32_t action_flags = 0;
+    
     //    struct entity_body_t body;
     // For animated rendering component
     enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, SITTING, JUMP } animated_state = animated_state_t::IDLE;
@@ -275,9 +277,9 @@ struct entity_t
 
         int32_t camera_component;
         int32_t physics_component;
-        int32_t input_component = -1;
         int32_t rendering_component;
         int32_t animation_component;
+        int32_t network_component;
         
     } components;
     
@@ -306,14 +308,14 @@ struct entities_t
     int32_t camera_component_count = {};
     struct camera_component_t camera_components[MAX_ENTITIES] = {};
 
-    int32_t input_component_count = {};
-    struct input_component_t input_components[MAX_ENTITIES] = {};
-
     int32_t rendering_component_count = {};
     struct rendering_component_t rendering_components[MAX_ENTITIES] = {};
 
     int32_t animation_component_count = {};
     struct animation_component_t animation_components[MAX_ENTITIES] = {};
+
+    int32_t network_component_count = {};
+    struct network_component_t network_components[MAX_ENTITIES] = {};
 
     struct hash_table_inline_t<entity_handle_t, 30, 5, 5> name_map{"map.entities"};
 
@@ -335,9 +337,12 @@ struct entities_t
     model_t entity_model;
 
     // For now:
-    uint32_t main_entity;
+    int32_t main_entity = -1;
     // have some sort of stack of REMOVED entities
 };
+
+uint32_t add_network_component(void);
+struct network_component_t *get_network_component(uint32_t index);
 
 struct server_terrain_base_state_t
 {
@@ -385,6 +390,15 @@ struct world_t
     network_world_state_t network_world_state;
 };
 
+enum entity_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, INVALID_COLOR };
+
+entity_t *get_entity(entity_handle_t entity_handle);
+
+// For now, take in the color
+entity_handle_t spawn_entity(const char *entity_name, entity_color_t color);
+void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color);
+void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state);
+
 network_world_state_t *get_network_world_state(void);
 void update_network_world_state(void);
 
@@ -397,6 +411,8 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum a
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
                   uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type);
+
+void handle_world_input(input_state_t *input_state, float32_t dt);
 
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 

@@ -192,11 +192,33 @@ void initialize_network_translation_unit(struct game_memory_t *memory)
     g_network_state = &memory->network_state;
 }
 
+// Adds a client to the network_component_t array in entities_t
+uint32_t add_client(network_address_t network_address, const char *client_name, entity_handle_t entity_handle)
+{
+    uint16_t client_id = g_network_state->client_count++;
+    g_network_state->clients[client_id].client_id = client_id;
+    g_network_state->clients[client_id].network_address = network_address;
+    memcpy(g_network_state->clients[client_id].client_name, client_name, strlen(client_name) + 1);
+
+    uint32_t component_index = add_network_component();
+    g_network_state->clients[client_id].network_component_index = component_index;
+
+    network_component_t *component_ptr = get_network_component(component_index);
+    component_ptr->entity_index = entity_handle;
+    component_ptr->client_state_index = client_id;
+
+    entity_t *entity = get_entity(entity_handle);
+    entity->components.network_component = component_index;
+
+    return(client_id);
+}
+
+global_var char message_buffer[1000] = {};
+
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(void)
 {
     network_address_t received_address = {};
-    static char message_buffer[100] = {};
     bool received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
 
     if (received)
@@ -216,14 +238,22 @@ void update_as_server(void)
                     sprintf(log_buffer, "Server> %s has joined the game\n\0", client_user_name);
                     
                     print_text_to_console(log_buffer);
+                    console_out(log_buffer);
 
                     server_handshake_packet_t handshake_packet = {};
                     handshake_packet.header.packet_mode = packet_header_t::packet_mode_t::SERVER_MODE;
                     handshake_packet.header.packet_type = packet_header_t::server_packet_type_t::SERVER_HANDSHAKE;
                     handshake_packet.header.total_packet_size = sizeof(server_handshake_packet_t);
+
+                    entity_color_t color = (entity_color_t)(rand() % entity_color_t::INVALID_COLOR);
+                    // The handle is the same as the client ID
+                    entity_handle_t handle = spawn_entity(client_user_name, color); 
+                    make_entity_renderable(handle, color);
                     
-                    // TODO: Create list of clients
-                    handshake_packet.client_id = 42;
+                    uint32_t client_id = add_client(received_address, client_user_name, handle);
+
+                    handshake_packet.client_id = client_id;
+                    handshake_packet.color = (uint8_t)color;
 
                     send_to(&g_network_state->main_network_socket, received_address, (char *)&handshake_packet, sizeof(handshake_packet));
                 } break;
@@ -235,17 +265,27 @@ void update_as_server(void)
 void update_as_client(void)
 {
     network_address_t received_address = {};
-    char buffer[100] = {};
-    bool received = receive_from(&g_network_state->main_network_socket, buffer, sizeof(buffer), &received_address);
+    bool received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
 
     if (received)
     {
-        // TODO: Set up packet interpretation system
+        packet_header_t *header = (packet_header_t *)message_buffer;
 
-        // TODO: Handle join packet
-        clean_up_world_data();
-        
-        console_out("handshake received\n");
+        if (header->packet_mode == packet_header_t::packet_mode_t::CLIENT_MODE)
+        {
+            switch(header->packet_type)
+            {
+            case packet_header_t::server_packet_type_t::SERVER_HANDSHAKE:
+                {
+                    server_handshake_packet_t *handshake_packet = (server_handshake_packet_t *)header;
+                    uint16_t client_id = handshake_packet->client_id;
+                    uint8_t color = handshake_packet->color;
+
+                    clean_up_world_data();
+                    console_out("handshake received\n");
+                } break;
+            }
+        }
     }
 }
 

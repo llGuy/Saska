@@ -600,13 +600,23 @@ make_camera_data(VkDescriptorPool *pool)
         }
     }
 
-    g_cameras->invalid_camera.set_default((float32_t)get_backbuffer_resolution().width,
+    g_cameras->spectator_camera.set_default((float32_t)get_backbuffer_resolution().width,
                                           (float32_t)get_backbuffer_resolution().height,
                                           0.0f,
                                           0.0f);
     
-    g_cameras->invalid_camera.compute_projection();
-    g_cameras->invalid_camera.v_m = matrix4_t(1.0f);
+    g_cameras->spectator_camera.compute_projection();
+    g_cameras->spectator_camera.v_m = matrix4_t(1.0f);
+}
+
+bool is_in_spectator_mode(void)
+{
+    return(!g_cameras->camera_count);
+}
+
+void update_spectator_camera(const matrix4_t &view_matrix)
+{
+    g_cameras->spectator_camera.v_m = view_matrix;
 }
 
 void
@@ -630,13 +640,13 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    update_shadows(250.0f
-                   , 1.0f
-                   , camera->fov
-                   , camera->asp
-                   , camera->p
-                   , camera->d
-                   , camera->u);
+    update_shadows(250.0f,
+                   1.0f,
+                   camera->fov,
+                   camera->asp,
+                   camera->p,
+                   camera->d,
+                   camera->u);
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
@@ -668,7 +678,6 @@ add_camera(input_state_t *input_state, resolution_t resolution)
     return(index);
 }
 
-// windows.h fucking conflicts jesus christ
 #undef near
 #undef far
 
@@ -692,7 +701,7 @@ get_camera_bound_to_3d_output(void)
 {
     switch (g_cameras->camera_bound_to_3d_output)
     {
-    case -1: return &g_cameras->invalid_camera;
+    case -1: return &g_cameras->spectator_camera;
     default: return &g_cameras->cameras[g_cameras->camera_bound_to_3d_output];
     }
 }

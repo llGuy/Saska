@@ -433,16 +433,16 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     stack_allocator_global.capacity = megabytes(10);
     stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-    free_list_allocator_global.available_bytes = megabytes(10);
+    free_list_allocator_global.available_bytes = megabytes(30);
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
 
 #if defined (SERVER_APPLICATION)
     application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
-    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::SERVER_MODE;
+    application_mode_t app_mode = application_mode_t::SERVER_MODE;
 #elif defined (CLIENT_APPLICATION)
     application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
-    network_state_t::application_mode_t app_mode = network_state_t::application_mode_t::CLIENT_MODE;
+    application_mode_t app_mode = application_mode_t::CLIENT_MODE;
 #endif
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)

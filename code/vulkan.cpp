@@ -1972,6 +1972,11 @@ destroy_debug_utils_messenger_ext(VkInstance instance
     }
 }
     
+void destroy_pipeline(VkPipeline *pipeline)
+{
+    vkDestroyPipeline(g_context->gpu.logical_device, *pipeline, nullptr);
+}
+
 void
 destroy_vulkan_state(void)
 {

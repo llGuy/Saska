@@ -350,12 +350,18 @@ struct server_terrain_base_state_t
     uint8_t x, z;
 };
 
+void add_and_initialize_terrain_base(uint32_t x, uint32_t z);
+void add_and_initialize_terrain(uint32_t base_id, const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color);
+
+void reinitialize_terrain_graphics_data(void);
+
 struct server_terrain_state_t
 {
     // Gravity constant
     float32_t k_g;
     vector3_t size;
     vector3_t ws_position;
+    vector3_t color;
     quaternion_t quat;
     
     // Float array
@@ -396,6 +402,7 @@ entity_t *get_entity(entity_handle_t entity_handle);
 
 // For now, take in the color
 entity_handle_t spawn_entity(const char *entity_name, entity_color_t color);
+entity_handle_t spawn_entity_at(const char *entity_name, entity_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
 void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color);
 void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state);
 
@@ -407,7 +414,7 @@ void clean_up_world_data(void);
 void make_world_data(void);
 
 // Initializes all of the rendering data, and stuff whereas make_world_data just initializes entities, terrains, etc..
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type);
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
                   uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type);

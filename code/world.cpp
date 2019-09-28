@@ -2204,6 +2204,86 @@ make_terrain_pointer(void)
     }
 }
 
+void add_and_initialize_terrain(uint32_t base_id, const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color)
+{
+    auto *base = get_terrain_base(base_id);
+    auto *new_terrain = add_terrain();
+
+    make_terrain_mesh_data(base->width, base->depth, new_terrain, get_app_type());
+    make_terrain_rendering_data(base,
+                                new_terrain,
+                                &g_world_submission_queues[TERRAIN_QUEUE],
+                                position,
+                                rotation,
+                                size,
+                                color,
+                                get_app_type());
+    
+    new_terrain->k_g = 9.81f;
+}
+
+void add_and_initialize_terrain_base(uint32_t x, uint32_t z)
+{
+    uint32_t base_id = add_terrain_base(""_hash);
+    terrain_base_info_t *base = get_terrain_base(base_id);
+    base->base_id = base_id;
+    base->width = x;
+    base->depth = z;
+    
+    auto *model_info = &base->model_info;
+
+    // TODO: Defer this operation so that all GPU-related operations go into one function
+    make_3D_terrain_base(x, z,
+			 1.0f,
+			 &base->mesh_xz_values,
+			 &base->idx_buffer,
+			 model_info,
+			 get_global_command_pool(),
+                         get_app_type());
+}
+
+void reinitialize_terrain_graphics_data(void)
+{
+    auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_ppln);
+    auto *terrain_shadow_ppln = g_pipeline_manager->get(g_terrains->terrain_shadow_ppln);
+    
+    destroy_pipeline(&terrain_ppln->pipeline);
+    destroy_pipeline(&terrain_shadow_ppln->pipeline);
+    
+    terrain_base_info_t *base = get_terrain_base(0);
+    auto *model_info = &base->model_info;    
+
+    {
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/terrain.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                               shader_module_info_t{"shaders/SPV/terrain.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                       g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(false, false, false, false);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+    }
+
+    {
+        auto shadow_display = get_shadow_display();
+        VkExtent2D shadow_extent = VkExtent2D{shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/terrain_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending = {};
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
+                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
+    }
+}
+
 internal_function void
 initialize_graphics_terrain_data(VkCommandPool *cmdpool)
 {
@@ -3275,6 +3355,8 @@ void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state)
     camera_component_ptr->is_third_person = true;
         
     bind_camera_to_3d_scene_output(camera_component_ptr->camera);
+
+    g_entities->main_entity = entity_handle;
 }
 
 void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color)
@@ -3825,7 +3907,7 @@ internal_function void entry_point(void)
     execute_lua("startup()");
 }
 
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type)
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
@@ -3869,7 +3951,10 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     }
     
     // Creation of terrains, entities, etc...
-    entry_point();
+    if (app_mode == application_mode_t::SERVER_MODE)
+    {
+        entry_point();
+    }
     
     // Rendering data, queues, etc...
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
@@ -3975,6 +4060,8 @@ void update_network_world_state(void)
         g_network_world_state->terrains.terrains[i].quat = g_terrains->terrains[i].gs_r;
         g_network_world_state->terrains.terrains[i].terrain_base_id = g_terrains->terrains[i].terrain_base_id;
         g_network_world_state->terrains.terrains[i].heights = g_terrains->terrains[i].heights;
+        auto color = g_terrains->terrains[i].push_k.color;
+        g_network_world_state->terrains.terrains[i].color = vector3_t(color.r, color.g, color.b);
     }
     
     // Initialize entities part of the world state

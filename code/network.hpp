@@ -55,6 +55,9 @@ struct server_handshake_packet_t
     packet_header_t header;
     uint16_t client_id;
     uint8_t color;
+
+    uint32_t terrain_base_count;
+    uint32_t terrain_count;
 };
 
 #define CLIENT_NAME_MAX_LENGTH 40
@@ -77,9 +80,10 @@ struct client_state_t
 
 #define MAX_CLIENTS 40
 
+enum application_mode_t { CLIENT_MODE, SERVER_MODE };
+
 struct network_state_t
 {
-    enum application_mode_t { CLIENT_MODE, SERVER_MODE };
     application_mode_t current_app_mode;
 
     const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
@@ -100,4 +104,4 @@ uint32_t add_client(network_address_t network_address, const char *client_name, 
 void update_network_state(void);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);
-void initialize_network_state(struct game_memory_t *memory, network_state_t::application_mode_t app_mode);
+void initialize_network_state(struct game_memory_t *memory, application_mode_t app_mode);

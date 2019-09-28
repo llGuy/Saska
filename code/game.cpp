@@ -23,7 +23,7 @@ void load_game(game_memory_t *memory)
     initialize_script_translation_unit(memory);
 }
 
-void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, network_state_t::application_mode_t app_mode, application_type_t app_type)
+void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, application_mode_t app_mode, application_type_t app_type)
 {
     memory->app_type = app_type;
     
@@ -39,13 +39,13 @@ void initialize_game(game_memory_t *memory, input_state_t *input_state, create_v
             initialize_game_3d_graphics(graphics.command_pool);
             initialize_game_2d_graphics(graphics.command_pool);
             initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
-            initialize_world(input_state, graphics.command_pool, app_type);
+            initialize_world(input_state, graphics.command_pool, app_type, app_mode);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             initialize_network_state(memory, app_mode);
             initialize_scripting();
-            initialize_world(input_state, VK_NULL_HANDLE, app_type);
+            initialize_world(input_state, VK_NULL_HANDLE, app_type, app_mode);
         } break;
     }
 }
@@ -66,11 +66,12 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
+            update_network_state();
+            
             // ---- begin recording instructions into the command buffers ----
             frame_rendering_data_t frame = begin_frame_rendering(input_state);
             gpu_command_queue_t queue{frame.command_buffer};
             {
-                update_network_state();
                 update_world(input_state, dt, frame.image_index, 0 /* Don't need this argument */, &queue, memory->app_type);
 
                 dbg_handle_input(input_state);

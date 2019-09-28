@@ -1273,6 +1273,7 @@ void destroy_framebuffer(VkFramebuffer *fbo);
 void destroy_image_view(VkImageView *image_view);
 void destroy_render_pass(VkRenderPass *render_pass);
 void destroy_swapchain(void);
+void destroy_pipeline(VkPipeline *pipeline);
 
 void idle_gpu(void);
 

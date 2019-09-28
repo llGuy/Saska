@@ -81,6 +81,28 @@ struct terrain_base_info_t
     uint32_t base_id;
 };
 
+enum terrain_gpu_operation_t { CREATE_BASE_VERTEX_AND_INDEX_BUFFER, CREATE_MODEL_INFO, CREATE_HEIGHT_BUFFER };
+
+struct terrain_gpu_operation_t
+{
+    enum affected_object_type_t { BASE, TERRAIN } affected_type;
+
+    union
+    {
+        uint32_t terrain_index;
+        uint32_t terrain_base_index;
+    };
+
+    terrain_gpu_operation_t operation_type;
+};
+
+struct terrain_gpu_operation_event_queue_t
+{
+    static constexpr uint32_t MAX_EVENTS = 20;
+    uint32_t event_count = {};
+    terrain_gpu_operation_t events[MAX_EVENTS] = {};
+};
+
 struct morphable_terrains_t
 {
     // ---- X and Z values stored as vec2 (binding 0) ----
@@ -100,6 +122,8 @@ struct morphable_terrains_t
     pipeline_handle_t terrain_shadow_ppln;
 
     uint32_t spectating_terrain_index = 0;
+
+    terrain_gpu_operation_event_queue_t gpu_event_queue;
     
     struct
     {

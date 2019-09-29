@@ -22,6 +22,7 @@
 #include "script.cpp"
 #include "vulkan.cpp"
 #include "graphics.cpp"
+#include "file_system.cpp"
 #else
 
 #include "memory.hpp"

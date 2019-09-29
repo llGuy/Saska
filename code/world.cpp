@@ -1948,6 +1948,27 @@ on_which_terrain(const vector3_t &ws_position)
 
 internal_function void sync_gpu_with_terrains(gpu_command_queue_t *queue)
 {
+    // Go through terrain gpu event queue
+    for (uint32_t gpu_event = 0; gpu_event < g_terrains->gpu_event_queue.event_count; ++gpu_event)
+    {
+        terrain_gpu_operation_t *operation = &g_terrains->gpu_event_queue.events[gpu_event];
+        
+        switch (operation->operation_type)
+        {
+        case terrain_gpu_operation_type_t::CREATE_BASE_VERTEX_AND_INDEX_BUFFER:
+            {
+            } break;
+        case terrain_gpu_operation_type_t::CREATE_MODEL_INFO:
+            {
+            } break;
+        case terrain_gpu_operation_type_t::CREATE_HEIGHT_BUFFER:
+            {
+            } break;
+        }
+    }
+    // Reset event queue
+    g_terrains->gpu_event_queue.event_count = 0;
+    
     for (uint32_t terrain = 0;
          terrain < g_terrains->terrain_count;
          ++terrain)
@@ -1975,7 +1996,7 @@ terrain_noise()
     return(r);
 }
 
-internal_function void submit_terrain_gpu_operation(terrain_gpu_oeprationt_t::affected_object_type_t affected_type, uint32_t index, terrain_gpu_operation_t operation_type)
+internal_function void submit_terrain_gpu_operation(terrain_gpu_operation_t::affected_object_type_t affected_type, uint32_t index, terrain_gpu_operation_type_t operation_type)
 {
     terrain_gpu_operation_t operation = {};
     operation.affected_type = affected_type;
@@ -2639,7 +2660,7 @@ add_animation_component(entity_t *e,
     return(component);
 }
 
-internal_function void update_animation_component(input_state_t *input_state, float32_t dt)
+internal_function void update_animation_component(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
     {
@@ -2775,11 +2796,9 @@ internal_function struct physics_component_t *add_physics_component(entity_t *e,
     return(component);
 }
 
-internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags)
+internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
     // Not in rolling mode
-    uint32_t *action_flags = &e->action_flags;
-
     detected_collision_return_t precollision = detect_terrain_collision(&component->hitbox, e->size, e->ws_p, e->on_t);
 
     component->surface_normal = precollision.ws_normal;
@@ -2863,7 +2882,7 @@ internal_function void update_standing_entity_physics(struct physics_component_t
     }
 }
 
-internal_function void check_if_entity_needs_to_rotate_between_terrains(entity_t *e)
+internal_function void check_if_entity_needs_to_rotate_between_terrains(entity_t *e, float32_t dt)
 {
     auto *which_terrain = on_which_terrain(e->ws_p);
     if (which_terrain)
@@ -2907,7 +2926,7 @@ internal_function void check_if_entity_needs_to_rotate_between_terrains(entity_t
     }
 }
 
-internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags)
+internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
     bool hardcode_position = 0;
 
@@ -2938,14 +2957,6 @@ internal_function void update_rolling_entity_physics(struct physics_component_t 
             if (distance_squared(e->ws_v) < 100.0f /* && distance to terrain is small */)
             {
                 hardcode_position = 1;
-            }
-        }
-
-        if (*action_flags & (1 << action_flags_t::ACTION_LEFT))
-        {
-            if (input_state->cursor_moved)
-            {
-                // When in the air
             }
         }
 
@@ -3020,7 +3031,7 @@ internal_function void update_rolling_entity_physics(struct physics_component_t 
     e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
 }
 
-internal_function void update_physics_components(float32_t dt, input_state_t *input_state)
+internal_function void update_physics_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
     {
@@ -3032,15 +3043,15 @@ internal_function void update_physics_components(float32_t dt, input_state_t *in
         {
             if (e->rolling_mode)
             {
-                update_rolling_entity_physics(component, e, action_flags);
+                update_rolling_entity_physics(component, e, action_flags, dt);
             }
             else
             {
-                update_standing_entity_physics(component, e, action_flags);
+                update_standing_entity_physics(component, e, action_flags, dt);
             }
         }
                
-        check_if_entity_needs_to_rotate_between_terrains(e);
+        check_if_entity_needs_to_rotate_between_terrains(e, dt);
     }
 }
 
@@ -3069,21 +3080,21 @@ make_entity_instanced_renderable(model_handle_t model_handle
     // TODO(luc) : first need to add support for instance rendering in material renderers.
 }
 
-internal_function void update_entities(input_state_t *input_state, float32_t dt, application_type_t app_type)
+internal_function void update_entities(float32_t dt, application_type_t app_type)
 {
     switch (app_type)
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
-        update_physics_components(dt, input_state);
+        update_physics_components(dt);
         update_camera_components(dt);
 
         update_rendering_component(dt);
-        update_animation_component(input_state, dt);
+        update_animation_component(dt);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            update_physics_components(dt, input_state);
+            update_physics_components(dt);
         } break;
     }
 }
@@ -3814,10 +3825,14 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
     update_3d_output_camera_transforms(image_index);
 }
 
-void handle_all_input(input_state_t *input_state, float32_t dt)
+void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus)
 {
-    handle_world_input(input_state, dt);
-    handle_input_debug(input_state, dt);
+    // If world has focus
+    if (focus == WORLD_3D_ELEMENT_FOCUS)
+    {
+        handle_world_input(input_state, dt);
+        handle_input_debug(input_state, dt);
+    }
 }
 
 void update_world(input_state_t *input_state,
@@ -3825,22 +3840,24 @@ void update_world(input_state_t *input_state,
                   uint32_t image_index,
                   uint32_t current_frame,
                   gpu_command_queue_t *cmdbuf,
-                  application_type_t app_type)
+                  application_type_t app_type,
+                  element_focus_t focus)
 {    
     switch (app_type)
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
-            handle_all_input(input_state, dt);
-            update_entities(input_state, dt, app_type);
+            handle_all_input(input_state, dt, focus);
+            
+            update_entities(dt, app_type);
 
-            sync_gpu_memory_with_world_state(image_index);
+            sync_gpu_memory_with_world_state(cmdbuf, image_index);
     
             render_world(image_index, current_frame, cmdbuf);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            update_entities(input_state, dt, app_type);
+            update_entities(dt, app_type);
         } break;
     }
 }
@@ -4011,63 +4028,57 @@ void handle_main_entity_action(input_state_t *input_state, float32_t dt)
 
 void handle_world_input(input_state_t *input_state, float32_t dt)
 {
-    if (!console_is_receiving_input())
-    {
-        handle_main_entity_action(input_state, dt);
-    }
+    handle_main_entity_action(input_state, dt);
 }
 
 // Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
 void handle_input_debug(input_state_t *input_state, float32_t dt)
 {
-    if (!console_is_receiving_input())
+    persist_var bool switched_previous_frame = 0;
+    if (input_state->keyboard[keyboard_button_type_t::S].is_down && is_in_spectator_mode() && !switched_previous_frame)
     {
-        persist_var bool switched_previous_frame = 0;
-        if (input_state->keyboard[keyboard_button_type_t::S].is_down && is_in_spectator_mode() && !switched_previous_frame)
-        {
-            g_terrains->spectating_terrain_index = (g_terrains->spectating_terrain_index + 1) % g_terrains->terrain_count;
-            spectate_terrain(g_terrains->spectating_terrain_index);
-            switched_previous_frame = 1;
-        }
-        else if (!input_state->keyboard[keyboard_button_type_t::S].is_down)
-        {
-            switched_previous_frame = 0;
-        }
-
-        
-        
-        // ---- get bound entity ----
-        // TODO make sure to check if main_entity < 0
-        /*entity_t *e_ptr = &g_entities->entity_list[g_entities->main_entity];
-        camera_component_t *e_camera_component = &g_entities->camera_components[e_ptr->components.camera_component];
-        physics_component_t *e_physics = &g_entities->physics_components[e_ptr->components.physics_component];
-        camera_t *e_camera = get_camera(e_camera_component->camera);
-        vector3_t up = e_ptr->on_t->ws_n;
-    
-        shadow_matrices_t shadow_data = get_shadow_matrices();
-        shadow_debug_t    shadow_debug = get_shadow_debug();
-    
-        //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
-
-        if (input_state->keyboard[keyboard_button_type_t::P].is_down)
-        {
-            for (uint32_t i = 0; i < 8; ++i)
-            {
-                e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
-            }
-
-            e_camera->captured = 1;
-            e_camera->captured_shadow_corners[0] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-            e_camera->captured_shadow_corners[1] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
-            e_camera->captured_shadow_corners[2] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
-            e_camera->captured_shadow_corners[3] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
-
-            e_camera->captured_shadow_corners[4] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-            e_camera->captured_shadow_corners[5] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
-            e_camera->captured_shadow_corners[6] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-            e_camera->captured_shadow_corners[7] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
-            }*/
+        g_terrains->spectating_terrain_index = (g_terrains->spectating_terrain_index + 1) % g_terrains->terrain_count;
+        spectate_terrain(g_terrains->spectating_terrain_index);
+        switched_previous_frame = 1;
     }
+    else if (!input_state->keyboard[keyboard_button_type_t::S].is_down)
+    {
+        switched_previous_frame = 0;
+    }
+
+        
+        
+    // ---- get bound entity ----
+    // TODO make sure to check if main_entity < 0
+    /*entity_t *e_ptr = &g_entities->entity_list[g_entities->main_entity];
+      camera_component_t *e_camera_component = &g_entities->camera_components[e_ptr->components.camera_component];
+      physics_component_t *e_physics = &g_entities->physics_components[e_ptr->components.physics_component];
+      camera_t *e_camera = get_camera(e_camera_component->camera);
+      vector3_t up = e_ptr->on_t->ws_n;
+    
+      shadow_matrices_t shadow_data = get_shadow_matrices();
+      shadow_debug_t    shadow_debug = get_shadow_debug();
+    
+      //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
+
+      if (input_state->keyboard[keyboard_button_type_t::P].is_down)
+      {
+      for (uint32_t i = 0; i < 8; ++i)
+      {
+      e_camera->captured_frustum_corners[i] = shadow_debug.frustum_corners[i];
+      }
+
+      e_camera->captured = 1;
+      e_camera->captured_shadow_corners[0] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+      e_camera->captured_shadow_corners[1] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_min, 1.0f);
+      e_camera->captured_shadow_corners[2] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+      e_camera->captured_shadow_corners[3] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_min, 1.0f);
+
+      e_camera->captured_shadow_corners[4] = vector4_t(shadow_debug.x_min, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+      e_camera->captured_shadow_corners[5] = vector4_t(shadow_debug.x_max, shadow_debug.y_max, shadow_debug.z_max, 1.0f);
+      e_camera->captured_shadow_corners[6] = vector4_t(shadow_debug.x_max, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+      e_camera->captured_shadow_corners[7] = vector4_t(shadow_debug.x_min, shadow_debug.y_min, shadow_debug.z_max, 1.0f);
+      }*/
 }
 
 

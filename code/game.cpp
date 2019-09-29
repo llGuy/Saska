@@ -60,22 +60,48 @@ void destroy_game(game_memory_t *memory)
     destroy_vulkan_state();
 }
 
+// Decides which element gets input focus
+internal_function void handle_global_game_input(game_memory_t *memory, input_state_t *input_state)
+{
+    if (input_state->char_stack[0] == 't' && memory->screen_focus != element_focus_t::UI_ELEMENT_CONSOLE)
+    {
+        input_state->char_stack[0] = 0;
+        
+        memory->screen_focus = element_focus_t::UI_ELEMENT_CONSOLE;
+    }
+    else if (input_state->keyboard[keyboard_button_type_t::ESCAPE].is_down)
+    {
+        switch (memory->screen_focus)
+        {
+        case element_focus_t::UI_ELEMENT_CONSOLE:
+            {
+                memory->screen_focus = element_focus_t::WORLD_3D_ELEMENT_FOCUS;
+            } break;
+        case element_focus_t::WORLD_3D_ELEMENT_FOCUS:
+            {
+                // Set focus to like some escape menu or something
+            } break;
+        }
+    }
+}
+
 void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
 {
     switch (memory->app_type)
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
+            handle_global_game_input(memory, input_state);
             update_network_state();
             
             // ---- begin recording instructions into the command buffers ----
             frame_rendering_data_t frame = begin_frame_rendering(input_state);
             gpu_command_queue_t queue{frame.command_buffer};
             {
-                update_world(input_state, dt, frame.image_index, 0 /* Don't need this argument */, &queue, memory->app_type);
+                update_world(input_state, dt, frame.image_index, 0 /* Don't need this argument */, &queue, memory->app_type, memory->screen_focus);
 
                 dbg_handle_input(input_state);
-                update_game_ui(get_pfx_framebuffer_hdl(), input_state);
+                update_game_ui(get_pfx_framebuffer_hdl(), input_state, memory->screen_focus);
                 render_game_ui(get_pfx_framebuffer_hdl(), &queue);
         
                 render_final_output(frame.image_index, &queue);
@@ -85,7 +111,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             update_network_state();
-            update_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type);
+            update_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type, memory->screen_focus);
         } break;
     }
 }

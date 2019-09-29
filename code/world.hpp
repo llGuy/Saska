@@ -81,7 +81,8 @@ struct terrain_base_info_t
     uint32_t base_id;
 };
 
-enum terrain_gpu_operation_t { CREATE_BASE_VERTEX_AND_INDEX_BUFFER, CREATE_MODEL_INFO, CREATE_HEIGHT_BUFFER };
+// For terrain stuff (entity stuff will have this in the future when introducing hotreloading of assets)
+enum terrain_gpu_operation_type_t { CREATE_BASE_VERTEX_AND_INDEX_BUFFER, CREATE_MODEL_INFO, CREATE_HEIGHT_BUFFER, CREATE_MESH_STRUCTURE };
 
 struct terrain_gpu_operation_t
 {
@@ -93,7 +94,7 @@ struct terrain_gpu_operation_t
         uint32_t terrain_base_index;
     };
 
-    terrain_gpu_operation_t operation_type;
+    terrain_gpu_operation_type_t operation_type;
 };
 
 struct terrain_gpu_operation_event_queue_t
@@ -437,11 +438,14 @@ void clean_up_world_data(void);
 
 void make_world_data(void);
 
+void set_focus_for_world(void);
+void remove_focus_for_world(void);
+
 // Initializes all of the rendering data, and stuff whereas make_world_data just initializes entities, terrains, etc..
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
-                  uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type);
+                  uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
 
 void handle_world_input(input_state_t *input_state, float32_t dt);
 

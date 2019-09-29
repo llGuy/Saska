@@ -2,6 +2,8 @@
 
 #include "script.hpp"
 
+#include "ui.hpp"
+
 extern "C"
 {
     #include <lua.h>
@@ -85,7 +87,9 @@ execute_lua(const char *code)
     if (error)
     {
         const char *error = lua_tostring(g_lua_state, -1);
-        printf("%s", error);
+
+        console_out_color_override(error, 0xff0000ff);
+
         lua_pop(g_lua_state, 1);
     }
 }

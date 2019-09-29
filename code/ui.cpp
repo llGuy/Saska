@@ -656,17 +656,19 @@ initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
 }
 
-internal_function void
-handle_console_input(input_state_t *input_state)
+internal_function void handle_console_input(input_state_t *input_state, element_focus_t focus)
 {
-    if (g_console->receive_input)
+    if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
         for (uint32_t i = 0; i < input_state->char_count; ++i)
         {
             char character[2] = {input_state->char_stack[i], 0};
-            output_to_input_section(character, g_console->input_color);
-            g_console->input_characters[g_console->input_character_count++] = input_state->char_stack[i];
-            input_state->char_stack[i] = 0;
+            if (character[0])
+            {
+                output_to_input_section(character, g_console->input_color);
+                g_console->input_characters[g_console->input_character_count++] = input_state->char_stack[i];
+                input_state->char_stack[i] = 0;
+            }
         }
 
         if (input_state->keyboard[keyboard_button_type_t::BACKSPACE].is_down)
@@ -696,12 +698,7 @@ handle_console_input(input_state_t *input_state)
     {
         g_console->receive_input = false;
     }
-    if (input_state->char_stack[0] == 't' && !g_console->receive_input)
-    {
-        g_console->receive_input = true;
-        input_state->char_stack[0] = 0;
-    }
-    // Open console
+    // Open console - This happens no matter if console has focus or not (or if no "typing" element has focus)
     if (input_state->char_stack[0] == 'c' && !g_console->receive_input)
     {
         g_console->render_console ^= 0x1;
@@ -996,9 +993,10 @@ initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool
 }
 
 void
-update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state)
+update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state, element_focus_t focus)
 {
-    handle_console_input(input_state);
+    handle_console_input(input_state, focus);
+    
     if (g_console->render_console)
     {
         push_console_to_render(input_state);

@@ -6,9 +6,7 @@ linear_allocator_t linear_allocator_global;
 stack_allocator_t stack_allocator_global;
 free_list_allocator_t free_list_allocator_global;
 
-inline uint8_t
-get_alignment_adjust(void *ptr
-		     , uint32_t alignment)
+inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
 {
     byte_t *byte_cast_ptr = (byte_t *)ptr;
     uint8_t adjustment = alignment - reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1);
@@ -17,11 +15,7 @@ get_alignment_adjust(void *ptr
     return(adjustment);
 }
 
-void *
-allocate_linear(uint32_t alloc_size
-		, alignment_t alignment
-		, const char *name
-		, linear_allocator_t *allocator)
+void *allocate_linear(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
 {
     void *prev = allocator->current;
     void *new_crnt = (byte_t *)allocator->current + alloc_size;
@@ -31,17 +25,12 @@ allocate_linear(uint32_t alloc_size
     return(prev);
 }
 
-void
-clear_linear(linear_allocator_t *allocator)
+void clear_linear(linear_allocator_t *allocator)
 {
     allocator->current = allocator->start;
 }
 
-void *
-allocate_stack(uint32_t allocation_size
-	       , alignment_t alignment
-	       , const char *name
-	       , stack_allocator_t *allocator)
+void *allocate_stack(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
 {
     byte_t *would_be_address;
 
@@ -74,16 +63,13 @@ allocate_stack(uint32_t allocation_size
     return(start_address + sizeof(stack_allocation_header_t));
 }
 
-void
-extend_stack_top(uint32_t extension_size
-		 , stack_allocator_t *allocator)
+void extend_stack_top(uint32_t extension_size, stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     current_header->size += extension_size;
 }
 
-void
-pop_stack(stack_allocator_t *allocator)
+void pop_stack(stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     
@@ -108,20 +94,14 @@ pop_stack(stack_allocator_t *allocator)
     --(allocator->allocation_count);
 }
 
-void *
-allocate_free_list(uint32_t allocation_size
-		   , alignment_t alignment
-		   , const char *name
-		   , free_list_allocator_t *allocator)
+void *allocate_free_list(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
 {
     uint32_t total_allocation_size = allocation_size + sizeof(free_list_allocation_header_t);
     // find best fit free block
     // TODO(luc) : make free list allocator adjust the smallest free block according to the alignment as well
     free_block_header_t *previous_free_block = nullptr;
     free_block_header_t *smallest_free_block = allocator->free_block_head;
-    for (free_block_header_t *header = allocator->free_block_head
-	     ; header
-	     ; header = header->next_free_block)
+    for (free_block_header_t *header = allocator->free_block_head; header; header = header->next_free_block)
     {
 	if (header->free_block_size >= total_allocation_size)
 	{
@@ -174,8 +154,7 @@ deallocate_free_list(void *pointer
     
     // check if possible to merge free blocks
     bool merged = false;
-    for (; current_header
-	     ; current_header = current_header->next_free_block)
+    for (; current_header; current_header = current_header->next_free_block)
     {
 	if (new_free_block_header > previous && new_free_block_header < current_header)
 	{
@@ -254,8 +233,7 @@ struct memory_register_info_t
 global_var free_list_allocator_t object_allocator;
 global_var hash_table_inline_t<memory_register_info_t /* destroyed count */, 20, 4, 4> objects_list("map.object_removed_list");
 
-void
-init_manager(void)
+void init_manager(void)
 {
     object_allocator.start = malloc(megabytes(10));
     object_allocator.available_bytes = megabytes(10);
@@ -265,14 +243,9 @@ init_manager(void)
     object_allocator.free_block_head->free_block_size = object_allocator.available_bytes;
 }
     
-registered_memory_base_t
-register_memory(const constant_string_t &id
-		, uint32_t bytes_size)
+registered_memory_base_t register_memory(const constant_string_t &id, uint32_t bytes_size)
 {
-    void *p = allocate_free_list(bytes_size
-				 , 1
-				 , ""
-				 , &object_allocator);
+    void *p = allocate_free_list(bytes_size, 1, "", &object_allocator);
 
     memory_register_info_t register_info {0, p, bytes_size};
     objects_list.insert(id.hash, register_info, "");
@@ -280,10 +253,7 @@ register_memory(const constant_string_t &id
     return(registered_memory_base_t(p, id, bytes_size));
 }
 
-registered_memory_base_t
-register_existing_memory(void *p
-			 , const constant_string_t &id
-			 , uint32_t bytes_size)
+registered_memory_base_t register_existing_memory(void *p, const constant_string_t &id, uint32_t bytes_size)
 {
     memory_register_info_t register_info {0, p, bytes_size};
     objects_list.insert(id.hash, register_info, "");
@@ -291,14 +261,12 @@ register_existing_memory(void *p
     return(registered_memory_base_t(p, id, bytes_size));
 }
 
-void
-deregister_memory(const constant_string_t &id)
+void deregister_memory(const constant_string_t &id)
 {
     objects_list.remove(id.hash);
 }
 
-registered_memory_base_t
-get_memory(const constant_string_t &id)
+registered_memory_base_t get_memory(const constant_string_t &id)
 {
     memory_register_info_t *info = objects_list.get(id.hash);
 
@@ -310,8 +278,7 @@ get_memory(const constant_string_t &id)
     return(registered_memory_base_t(info->p, id, info->size));
 }
 
-void
-remove_memory(const constant_string_t &id)
+void remove_memory(const constant_string_t &id)
 {
     memory_register_info_t *info = objects_list.get(id.hash);
     if (info->active_count == 0)
@@ -324,15 +291,13 @@ remove_memory(const constant_string_t &id)
     }
 }
 
-void
-decrease_shared_count(const constant_string_t &id)
+void decrease_shared_count(const constant_string_t &id)
 {
     memory_register_info_t *ri = objects_list.get(id.hash);
     --ri->active_count;
 }
 
-void
-increase_shared_count(const constant_string_t &id)
+void increase_shared_count(const constant_string_t &id)
 {
     memory_register_info_t *ri = objects_list.get(id.hash);
     ++ri->active_count;

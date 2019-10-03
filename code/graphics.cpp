@@ -38,24 +38,19 @@ global_var atmosphere_t *g_atmosphere;
 global_var deferred_rendering_t *g_dfr_rendering;
 global_var post_processing_t *g_postfx;
 
-gpu_command_queue_t
-make_command_queue(VkCommandPool *pool, submit_level_t level)
+gpu_command_queue_t make_command_queue(VkCommandPool *pool, submit_level_t level)
 {
     gpu_command_queue_t result;
     allocate_command_buffers(pool, level, {1, &result.q});
     return(result);
 }
 
-void
-begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance)
+void begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance)
 {
-    begin_command_buffer(&queue->q,
-                         (queue->submit_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0) | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT,
-                         inheritance);
+    begin_command_buffer(&queue->q, (queue->submit_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0) | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, inheritance);
 }
     
-void
-end_command_queue(gpu_command_queue_t *queue)
+void end_command_queue(gpu_command_queue_t *queue)
 {
     end_command_buffer(&queue->q);
 }
@@ -64,8 +59,7 @@ end_command_queue(gpu_command_queue_t *queue)
 
 // --------------------- Uniform stuff ---------------------
 
-internal_function void
-make_uniform_pool(void)
+internal_function void make_uniform_pool(void)
 {
     VkDescriptorPoolSize pool_sizes[3] = {};
 
@@ -79,36 +73,26 @@ make_uniform_pool(void)
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
 using uniform_binding_t = VkDescriptorSetLayoutBinding;
 
-uniform_binding_t
-make_uniform_binding_s(uint32_t count
-		       , uint32_t binding
-		       , VkDescriptorType uniform_type
-		       , VkShaderStageFlags shader_flags)
+uniform_binding_t make_uniform_binding_s(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags)
 {
     return init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 
 
-void
-uniform_layout_info_t::push(const uniform_binding_t &binding_info)
+void uniform_layout_info_t::push(const uniform_binding_t &binding_info)
 {
     bindings_buffer[binding_count++] = binding_info;
 }
 
-void
-uniform_layout_info_t::push(uint32_t count
-			  , uint32_t binding
-			  , VkDescriptorType uniform_type
-			  , VkShaderStageFlags shader_flags)
+void uniform_layout_info_t::push(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags)
 {
     bindings_buffer[binding_count++] = init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 using uniform_layout_t = VkDescriptorSetLayout;
 
-uniform_layout_t
-make_uniform_layout(uniform_layout_info_t *blueprint)
+uniform_layout_t make_uniform_layout(uniform_layout_info_t *blueprint)
 {
     VkDescriptorSetLayout layout;
     init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, &layout);
@@ -120,8 +104,7 @@ make_uniform_layout(uniform_layout_info_t *blueprint)
 // Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
 using uniform_group_t = VkDescriptorSet;
 
-uniform_group_t
-make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
+uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
 {
     uniform_group_t uniform_group = allocate_descriptor_set(layout, pool);
 
@@ -133,10 +116,7 @@ make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
 
 // --------------------- Rendering stuff ---------------------
 
-uint32_t
-gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size,
-                                               mesh_t *mesh,
-                                               uniform_group_t *ubo)
+uint32_t gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size, mesh_t *mesh, uniform_group_t *ubo)
 {
     material_t new_mtrl = {};
     new_mtrl.push_k_ptr = push_k_ptr;
@@ -149,8 +129,7 @@ gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k
     return(mtrl_count++);
 }
 
-gpu_command_queue_t *
-gpu_material_submission_queue_t::get_command_buffer(gpu_command_queue_t *queue)
+gpu_command_queue_t *gpu_material_submission_queue_t::get_command_buffer(gpu_command_queue_t *queue)
 {
     if (cmdbuf_index >= 0)
     {
@@ -159,11 +138,7 @@ gpu_material_submission_queue_t::get_command_buffer(gpu_command_queue_t *queue)
     else return(queue);
 }
     
-void
-gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups
-						       , graphics_pipeline_t *graphics_pipeline
-						       , gpu_command_queue_t *main_queue
-						       , submit_level_t level)
+void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups, graphics_pipeline_t *graphics_pipeline, gpu_command_queue_t *main_queue, submit_level_t level)
 {
     // Depends on the cmdbuf_index var, not on the submit level that is given
     gpu_command_queue_t *dst_command_queue = get_command_buffer(main_queue);
@@ -178,12 +153,10 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
 	inheritance_info.subpass = main_queue->subpass;
 	inheritance_info.framebuffer = g_framebuffer_manager->get(main_queue->fbo_handle)->framebuffer;
 	
-	begin_command_buffer(&dst_command_queue->q
-				     , VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT
-				     , &inheritance_info);
+	begin_command_buffer(&dst_command_queue->q, VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT | VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT, &inheritance_info);
     }
 	    
-    command_buffer_bind_pipeline(graphics_pipeline, &dst_command_queue->q);
+    command_buffer_bind_pipeline(&graphics_pipeline->pipeline, &dst_command_queue->q);
 
     uniform_group_t *groups = ALLOCA_T(uniform_group_t, uniform_groups.count + 1);
     memcpy(groups, uniform_groups.buffer, sizeof(uniform_group_t) * uniform_groups.count);
@@ -202,28 +175,11 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
             groups[uniform_count] = *mtrl->ubo;
             ++uniform_count;
         }
-        command_buffer_bind_descriptor_sets(graphics_pipeline,
-                                            { uniform_count, groups },
-                                            &dst_command_queue->q);
-        
-        command_buffer_bind_vbos(mtrl->mesh->raw_buffer_list,
-                                 {mtrl->mesh->raw_buffer_list.count, zero},
-                                 0,
-                                 mtrl->mesh->raw_buffer_list.count,
-                                 &dst_command_queue->q);
-			
-        command_buffer_bind_ibo(mtrl->mesh->index_data,
-                                &dst_command_queue->q);
-
-        command_buffer_push_constant(mtrl->push_k_ptr,
-                                     mtrl->push_k_size,
-                                     0,
-                                     push_k_dst,
-                                     graphics_pipeline,
-                                     &dst_command_queue->q);
-
-        command_buffer_draw_indexed(&dst_command_queue->q,
-                                    mtrl->mesh->indexed_data);
+        command_buffer_bind_descriptor_sets(&graphics_pipeline->layout, { uniform_count, groups }, &dst_command_queue->q);
+        command_buffer_bind_vbos(mtrl->mesh->raw_buffer_list, {mtrl->mesh->raw_buffer_list.count, zero}, 0, mtrl->mesh->raw_buffer_list.count, &dst_command_queue->q);
+        command_buffer_bind_ibo(mtrl->mesh->index_data, &dst_command_queue->q);
+        command_buffer_push_constant(mtrl->push_k_ptr, mtrl->push_k_size, 0, push_k_dst, graphics_pipeline->layout, &dst_command_queue->q);
+        command_buffer_draw_indexed(&dst_command_queue->q, mtrl->mesh->indexed_data);
     }
 
     if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
@@ -232,21 +188,17 @@ gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_vie
     }
 }
 
-void
-gpu_material_submission_queue_t::flush_queue(void)
+void gpu_material_submission_queue_t::flush_queue(void)
 {
     mtrl_count = 0;
 }
 
-void
-gpu_material_submission_queue_t::submit_to_cmdbuf(gpu_command_queue_t *queue)
+void gpu_material_submission_queue_t::submit_to_cmdbuf(gpu_command_queue_t *queue)
 {
     //    command_buffer_execute_commands(&queue->q, {1, get_command_buffer(nullptr)});
 }
 
-gpu_material_submission_queue_t
-make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
-				   , submit_level_t level, gpu_command_queue_pool_t *pool)
+gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst, submit_level_t level, gpu_command_queue_pool_t *pool)
 {
     gpu_material_submission_queue_t material_queue;
 
@@ -274,14 +226,12 @@ make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags pu
     return(material_queue);
 }
 
-void
-submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue)
+void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue)
 {
     //    command_buffer_execute_commands(queue, {g_material_queue_manager->active_queue_ptr, g_material_queue_manager->active_queues});
 }
 
-void
-make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions)
+void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
@@ -297,48 +247,24 @@ make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat for
 
     if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
     {
-        init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR
-                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                                   , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                                   , VK_FALSE
-                                   , 1
-                                   , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-                                   , VK_FALSE
-                                   , (VkCompareOp)0
-                                   , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                                   , 0.0f, 0.0f, 0.0f, &img->image_sampler);
+        init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                           VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                           VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, 0.0f, &img->image_sampler);
     }
 }
 
-void
-make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
+void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, flags);
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
     init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count);
-    init_image_sampler(filter, filter
-                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                       , VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE
-                       , VK_FALSE
-                       , 1
-                       , VK_BORDER_COLOR_INT_OPAQUE_BLACK
-                       , VK_FALSE
-                       , (VkCompareOp)0
-                       , VK_SAMPLER_MIPMAP_MODE_LINEAR
-                       , 0.0f, 0.0f, 0.0f, &img->image_sampler);
+    init_image_sampler(filter, filter, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+                       VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, 0.0f, &img->image_sampler);
 }
 
-void
-make_framebuffer(framebuffer_t *fbo
-                 , uint32_t w, uint32_t h
-                 , uint32_t layer_count
-                 , render_pass_t *compatible
-                 , const memory_buffer_view_t<image2d_t> &colors
-                 , image2d_t *depth)
+void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth)
 {
     if (colors.count)
     {
@@ -363,36 +289,19 @@ make_framebuffer(framebuffer_t *fbo
     fbo->extent = VkExtent2D{ w, h };
 }
 
-render_pass_dependency_t
-make_render_pass_dependency(int32_t src_index,
-                            VkPipelineStageFlags src_stage,
-                            uint32_t src_access,
-                            int32_t dst_index,
-                            VkPipelineStageFlags dst_stage,
-                            uint32_t dst_access)
+render_pass_dependency_t make_render_pass_dependency(int32_t src_index, VkPipelineStageFlags src_stage, uint32_t src_access, int32_t dst_index, VkPipelineStageFlags dst_stage, uint32_t dst_access)
 {
     return render_pass_dependency_t{ src_index, src_stage, src_access, dst_index, dst_stage, dst_access };
 }
 
-void
-make_render_pass(render_pass_t *render_pass
-                 , const memory_buffer_view_t<render_pass_attachment_t> &attachments
-                 , const memory_buffer_view_t<render_pass_subpass_t> &subpasses
-                 , const memory_buffer_view_t<render_pass_dependency_t> &dependencies
-                 , bool clear_every_instance)
+void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<render_pass_attachment_t> &attachments, const memory_buffer_view_t<render_pass_subpass_t> &subpasses, const memory_buffer_view_t<render_pass_dependency_t> &dependencies, bool clear_every_instance)
 {
     VkAttachmentDescription descriptions_vk[10] = {};
     uint32_t att_i = 0;
     for (; att_i < attachments.count; ++att_i)
     {
-        descriptions_vk[att_i] = init_attachment_description(attachments[att_i].format
-                                                             , VK_SAMPLE_COUNT_1_BIT
-                                                             , clear_every_instance ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE
-                                                             , VK_ATTACHMENT_STORE_OP_STORE
-                                                             , VK_ATTACHMENT_LOAD_OP_DONT_CARE
-                                                             , VK_ATTACHMENT_STORE_OP_DONT_CARE
-                                                             , VK_IMAGE_LAYOUT_UNDEFINED
-                                                             , attachments[att_i].final_layout);
+        descriptions_vk[att_i] = init_attachment_description(attachments[att_i].format, VK_SAMPLE_COUNT_1_BIT, clear_every_instance ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                                                             VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, attachments[att_i].final_layout);
     }
     // Max is 5
     VkSubpassDescription subpasses_vk[5] = {};
@@ -406,23 +315,20 @@ make_render_pass(render_pass_t *render_pass
         uint32_t color_reference_start = reference_count;
         for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i, ++reference_count)
         {
-            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index,
-                                                                                  subpasses[sub_i].color_attachments[ref_i].layout);
+            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index, subpasses[sub_i].color_attachments[ref_i].layout);
         }
 
         uint32_t input_reference_start = reference_count;
         uint32_t inp_i = 0;
         for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i, ++reference_count)
         {
-            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index,
-                                                                                  subpasses[sub_i].input_attachments[inp_i].layout);
+            reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index, subpasses[sub_i].input_attachments[inp_i].layout);
         }
 
         uint32_t depth_reference_ptr = reference_count;
         if (subpasses[sub_i].enable_depth)
         {
-            reference_buffer[reference_count++] = init_attachment_reference(subpasses[sub_i].depth_attachment.index,
-                                                                                    subpasses[sub_i].depth_attachment.layout);
+            reference_buffer[reference_count++] = init_attachment_reference(subpasses[sub_i].depth_attachment.index, subpasses[sub_i].depth_attachment.layout);
         }
         
         subpasses_vk[sub_i] = init_subpass_description({ref_i, &reference_buffer[color_reference_start]}, subpasses[sub_i].enable_depth ? &reference_buffer[depth_reference_ptr] : nullptr, {inp_i, &reference_buffer[input_reference_start]});
@@ -433,10 +339,7 @@ make_render_pass(render_pass_t *render_pass
     for (; dep_i < dependencies.count; ++dep_i)
     {
         const render_pass_dependency_t *info = &dependencies[dep_i];
-        dependencies_vk[dep_i] = init_subpass_dependency(info->src_index, info->dst_index
-                                                                 , info->src_stage, info->src_access
-                                                                 , info->dst_stage, info->dst_access
-                                                                 , VK_DEPENDENCY_BY_REGION_BIT);
+        dependencies_vk[dep_i] = init_subpass_dependency(info->src_index, info->dst_index, info->src_stage, info->src_access, info->dst_stage, info->dst_access, VK_DEPENDENCY_BY_REGION_BIT);
     }
     
     init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, render_pass);
@@ -445,36 +348,82 @@ make_render_pass(render_pass_t *render_pass
 void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool)
 {
     memory_byte_buffer_t byte_buffer{ size, data };
-    invoke_staging_buffer_for_device_local_buffer(byte_buffer,
-                                                  usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                                  pool,
-                                                  dst_buffer);
+    invoke_staging_buffer_for_device_local_buffer(byte_buffer, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, pool, dst_buffer);
 }
 
-void
-make_graphics_pipeline(graphics_pipeline_t *ppln
-                       , const shader_modules_t &modules
-                       , bool primitive_restart, VkPrimitiveTopology topology
-                       , VkPolygonMode polygonmode, VkCullModeFlags culling
-                       , shader_uniform_layouts_t &layouts
-                       , const shader_pk_data_t &pk
-                       , VkExtent2D viewport
-                       , const shader_blend_states_t &blends
-                       , model_t *model
-                       , bool enable_depth
-                       , float32_t depth_bias
-                       , const dynamic_states_t &dynamic_states
-                       , render_pass_t *compatible
-                       , uint32_t subpass)
+void fill_graphics_pipeline_info(const shader_modules_t &modules,
+                                 bool primitive_restart, VkPrimitiveTopology topology,
+                                 VkPolygonMode polygonmode, VkCullModeFlags culling,
+                                 shader_uniform_layouts_t &layouts,
+                                 const shader_pk_data_t &pk,
+                                 VkExtent2D viewport,
+                                 const shader_blend_states_t &blends,
+                                 model_t *model,
+                                 bool enable_depth,
+                                 float32_t depth_bias,
+                                 const dynamic_states_t &dynamic_states,
+                                 render_pass_t *compatible,
+                                 uint32_t subpass,
+                                 graphics_pipeline_info_t *info)
 {
+    info->modules = modules;
+    info->primitive_restart = primitive_restart;
+    info->topology = topology;
+    info->polygon_mode = polygonmode;
+    info->culling = culling;
+    info->layouts = layouts;
+    info->pk = pk;
+    info->viewport = viewport;
+    info->blends = blends;
+    info->model = model;
+    info->enable_depth = enable_depth;
+    info->depth_bias = depth_bias;
+    info->dynamic_states = dynamic_states;
+    info->compatible = compatible;
+    info->subpass = subpass;
+}
+
+void graphics_pipeline_t::destroy(void)
+{
+    vkDestroyPipelineLayout(g_context->gpu.logical_device, layout, nullptr);
+    vkDestroyPipeline(g_context->gpu.logical_device, pipeline, nullptr);
+}
+
+void make_graphics_pipeline(graphics_pipeline_t *ppln)
+{
+    // Declaration of parameters
+    shader_modules_t &modules = ppln->info->modules;
+    bool primitive_restart = ppln->info->primitive_restart;
+    VkPrimitiveTopology topology = ppln->info->topology;
+    VkPolygonMode polygonmode = ppln->info->polygon_mode;
+    VkCullModeFlags culling = ppln->info->culling;
+    shader_uniform_layouts_t &layouts = ppln->info->layouts;
+    const shader_pk_data_t &pk = ppln->info->pk;
+    VkExtent2D viewport = ppln->info->viewport;
+    const shader_blend_states_t &blends = ppln->info->blends;
+    model_t *model = ppln->info->model;
+    bool enable_depth = ppln->info->enable_depth;
+    float32_t depth_bias = ppln->info->depth_bias;
+    const dynamic_states_t &dynamic_states = ppln->info->dynamic_states;
+    render_pass_t *compatible = ppln->info->compatible;
+    uint32_t subpass = ppln->info->subpass;
+
+    // Making graphics pipeline
     VkShaderModule module_objects[shader_modules_t::MAX_SHADERS] = {};
     VkPipelineShaderStageCreateInfo infos[shader_modules_t::MAX_SHADERS] = {};
+    
     for (uint32_t i = 0; i < modules.count; ++i)
     {
-        file_contents_t bytecode = read_file(modules.modules[i].filename);
+        if (modules.modules[i].file_handle == -1)
+        {
+            modules.modules[i].file_handle = create_file(modules.modules[i].file_path, file_type_t::BINARY);
+        }
+
+        file_contents_t bytecode = read_file_tmp(modules.modules[i].file_handle);
         init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, &module_objects[i]);
         init_shader_pipeline_info(&module_objects[i], modules.modules[i].stage, &infos[i]);
     }
+    
     VkPipelineVertexInputStateCreateInfo v_input = {};
     init_pipeline_vertex_input_info(model, &v_input);
     VkPipelineInputAssemblyStateCreateInfo assembly = {};
@@ -493,29 +442,16 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
     {
         if (blends.blend_states[i])
         {
-            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-                                        , VK_TRUE
-                                        , VK_BLEND_FACTOR_SRC_ALPHA
-                                        , VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-                                        , VK_BLEND_OP_ADD
-                                        , VK_BLEND_FACTOR_ONE
-                                        , VK_BLEND_FACTOR_ZERO
-                                        , VK_BLEND_OP_ADD
-                                        , &blend_states[i]);
+            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                                        VK_TRUE, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, &blend_states[i]);
         }
         else
         {
-            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-                                        , VK_FALSE
-                                        , VK_BLEND_FACTOR_ONE
-                                        , VK_BLEND_FACTOR_ZERO
-                                        , VK_BLEND_OP_ADD
-                                        , VK_BLEND_FACTOR_ONE
-                                        , VK_BLEND_FACTOR_ZERO
-                                        , VK_BLEND_OP_ADD
-                                        , &blend_states[i]);
+            init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+                                        VK_FALSE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, &blend_states[i]);
         }
     }
+    
     init_pipeline_blending_info(VK_FALSE, VK_LOGIC_OP_COPY, {blends.count, blend_states}, &blending_info);
     VkPipelineDynamicStateCreateInfo dynamic_info = {};
     dynamic_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -535,15 +471,7 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
     }
     init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, &ppln->layout);
     memory_buffer_view_t<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
-    init_graphics_pipeline(&shaders_mb
-                                   , &v_input
-                                   , &assembly
-                                   , &view_info
-                                   , &raster
-                                   , &multi
-                                   , &blending_info
-                                   , &dynamic_info
-                                   , &depth, &ppln->layout, compatible, subpass, &ppln->pipeline);
+    init_graphics_pipeline(&shaders_mb, &v_input, &assembly, &view_info, &raster, &multi, &blending_info, &dynamic_info, &depth, &ppln->layout, compatible, subpass, &ppln->pipeline);
 
     for (uint32_t i = 0; i < modules.count; ++i)
     {
@@ -554,8 +482,7 @@ make_graphics_pipeline(graphics_pipeline_t *ppln
 
 
 
-internal_function void
-make_camera_data(VkDescriptorPool *pool)
+internal_function void make_camera_data(VkDescriptorPool *pool)
 {
     uint32_t swapchain_image_count = get_swapchain_image_count();
     uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
@@ -575,15 +502,9 @@ make_camera_data(VkDescriptorPool *pool)
 	
         VkDeviceSize buffer_size = sizeof(camera_transform_uniform_data_t);
 
-        for (uint32_t i = 0
-                 ; i < uniform_buffer_count
-                 ; ++i)
+        for (uint32_t i = 0; i < uniform_buffer_count; ++i)
         {
-            init_buffer(buffer_size
-                                , VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-                                , VK_SHARING_MODE_EXCLUSIVE
-                                , VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-                                , &camera_ubos[i]);
+            init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &camera_ubos[i]);
         }
     }
 
@@ -595,15 +516,11 @@ make_camera_data(VkDescriptorPool *pool)
         for (uint32_t i = 0; i < swapchain_image_count; ++i)
         {
             transforms[i] = make_uniform_group(layout_ptr, pool);
-            update_uniform_group(&transforms[i],
-                                 update_binding_t{BUFFER, &camera_ubos[i], 0});
+            update_uniform_group(&transforms[i], update_binding_t{BUFFER, &camera_ubos[i], 0});
         }
     }
 
-    g_cameras->spectator_camera.set_default((float32_t)get_backbuffer_resolution().width,
-                                          (float32_t)get_backbuffer_resolution().height,
-                                          0.0f,
-                                          0.0f);
+    g_cameras->spectator_camera.set_default((float32_t)get_backbuffer_resolution().width, (float32_t)get_backbuffer_resolution().height, 0.0f, 0.0f);
     
     g_cameras->spectator_camera.compute_projection();
     g_cameras->spectator_camera.v_m = matrix4_t(1.0f);
@@ -619,13 +536,7 @@ void update_spectator_camera(const matrix4_t &view_matrix)
     g_cameras->spectator_camera.v_m = view_matrix;
 }
 
-void
-make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
-                                   const matrix4_t &view_matrix,
-                                   const matrix4_t &projection_matrix,
-                                   const matrix4_t &shadow_view_matrix,
-                                   const matrix4_t &shadow_projection_matrix,
-                                   const vector4_t &debug_vector)
+void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data, const matrix4_t &view_matrix, const matrix4_t &projection_matrix, const matrix4_t &shadow_view_matrix, const matrix4_t &shadow_projection_matrix, const vector4_t &debug_vector)
 {
     *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector };
 }
@@ -640,25 +551,14 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    update_shadows(250.0f,
-                   1.0f,
-                   camera->fov,
-                   camera->asp,
-                   camera->p,
-                   camera->d,
-                   camera->u);
+    update_shadows(250.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u);
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
     camera_transform_uniform_data_t transform_data = {};
     matrix4_t projection_matrix = camera->p_m;
     projection_matrix[1][1] *= -1.0f;
-    make_camera_transform_uniform_data(&transform_data,
-                                       camera->v_m,
-                                       projection_matrix,
-                                       shadow_data.light_view_matrix,
-                                       shadow_data.projection_matrix,
-                                       vector4_t(1.0f, 0.0f, 0.0f, 1.0f));
+    make_camera_transform_uniform_data(&transform_data, camera->v_m, projection_matrix, shadow_data.light_view_matrix, shadow_data.projection_matrix, vector4_t(1.0f, 0.0f, 0.0f, 1.0f));
     
     gpu_buffer_t &current_ubo = *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos + image_index);
 
@@ -669,8 +569,7 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 }
 
 
-camera_handle_t
-add_camera(input_state_t *input_state, resolution_t resolution)
+camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution)
 {
     uint32_t index = g_cameras->camera_count;
     g_cameras->cameras[index].set_default(resolution.width, resolution.height, input_state->cursor_pos_x, input_state->cursor_pos_y);
@@ -681,8 +580,7 @@ add_camera(input_state_t *input_state, resolution_t resolution)
 #undef near
 #undef far
 
-void
-make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far)
+void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far)
 {
     camera->fov = fov;
     camera->asp = asp;
@@ -690,14 +588,12 @@ make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, floa
     camera->f = far;
 }
 
-camera_t *
-get_camera(camera_handle_t handle)
+camera_t *get_camera(camera_handle_t handle)
 {
     return(&g_cameras->cameras[handle]);
 }
 
-camera_t *
-get_camera_bound_to_3d_output(void)
+camera_t *get_camera_bound_to_3d_output(void)
 {
     switch (g_cameras->camera_bound_to_3d_output)
     {
@@ -706,37 +602,29 @@ get_camera_bound_to_3d_output(void)
     }
 }
 
-void
-bind_camera_to_3d_scene_output(camera_handle_t handle)
+void bind_camera_to_3d_scene_output(camera_handle_t handle)
 {
     g_cameras->camera_bound_to_3d_output = handle;
 }
 
-memory_buffer_view_t<gpu_buffer_t>
-get_camera_transform_ubos(void)
+memory_buffer_view_t<gpu_buffer_t> get_camera_transform_ubos(void)
 {
     return {g_cameras->ubo_count, g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos)};
 }
 
-memory_buffer_view_t<uniform_group_t>
-get_camera_transform_uniform_groups(void)
+memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void)
 {
     return {g_cameras->ubo_count, g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_groups)};
 }
 
-resolution_t
-get_backbuffer_resolution(void)
+resolution_t get_backbuffer_resolution(void)
 {
     return(g_dfr_rendering->backbuffer_res);
 }
 
-void
-update_atmosphere(gpu_command_queue_t *queue)
+void update_atmosphere(gpu_command_queue_t *queue)
 {
-    queue->begin_render_pass(g_atmosphere->make_render_pass
-                             , g_atmosphere->make_fbo
-                             , VK_SUBPASS_CONTENTS_INLINE
-                             , init_clear_color_color(0, 0.0, 0.0, 0));
+    queue->begin_render_pass(g_atmosphere->make_render_pass, g_atmosphere->make_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
 
     VkViewport viewport;
     init_viewport(0, 0, 1000, 1000, 0.0f, 1.0f, &viewport);
@@ -744,7 +632,7 @@ update_atmosphere(gpu_command_queue_t *queue)
 
     auto *make_ppln = g_pipeline_manager->get(g_atmosphere->make_pipeline);
     
-    command_buffer_bind_pipeline(make_ppln, &queue->q);
+    command_buffer_bind_pipeline(&make_ppln->pipeline, &queue->q);
 
     struct atmos_push_k_t
     {
@@ -759,32 +647,22 @@ update_atmosphere(gpu_command_queue_t *queue)
 
     k.light_dir = vector4_t(glm::normalize(-g_lighting->ws_light_position), 1.0f);
     
-    command_buffer_push_constant(&k
-                                 , sizeof(k)
-                                 , 0
-                                 , VK_SHADER_STAGE_FRAGMENT_BIT
-                                 , make_ppln
-                                 , &queue->q);
-    
-    command_buffer_draw(&queue->q
-                        , 1, 1, 0, 0);
+    command_buffer_push_constant(&k, sizeof(k), 0, VK_SHADER_STAGE_FRAGMENT_BIT, make_ppln->layout, &queue->q);
+    command_buffer_draw(&queue->q, 1, 1, 0, 0);
 
     queue->end_render_pass();
 }
 
-void
-render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
-                  , const vector3_t &camera_position // To change to camera structure
-                  , gpu_command_queue_t *queue)
+void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue)
 {
     auto *render_pipeline = g_pipeline_manager->get(g_atmosphere->render_pipeline);
-    command_buffer_bind_pipeline(render_pipeline, &queue->q);
+    command_buffer_bind_pipeline(&render_pipeline->pipeline, &queue->q);
 
     uniform_group_t *groups = ALLOCA_T(uniform_group_t, sets.count + 1);
     for (uint32_t i = 0; i < sets.count; ++i) groups[i] = sets[i];
     groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
     
-    command_buffer_bind_descriptor_sets(render_pipeline, {sets.count + 1, groups}, &queue->q);
+    command_buffer_bind_descriptor_sets(&render_pipeline->layout, {sets.count + 1, groups}, &queue->q);
 
     model_t *cube = g_model_manager->get(g_atmosphere->cube_handle);
     
@@ -800,20 +678,12 @@ render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
 
     push_k.model_matrix = glm::scale(vector3_t(100000.0f));
 
-    command_buffer_push_constant(&push_k
-                                 , sizeof(push_k)
-                                 , 0
-                                 , VK_SHADER_STAGE_VERTEX_BIT
-                                 , render_pipeline
-                                 , &queue->q);
+    command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, render_pipeline->layout, &queue->q);
 
-    command_buffer_draw_indexed(&queue->q
-                                , cube->index_data.init_draw_indexed_data(0, 0));
+    command_buffer_draw_indexed(&queue->q, cube->index_data.init_draw_indexed_data(0, 0));
 }
 
-internal_function void
-make_atmosphere_data(VkDescriptorPool *pool
-                     , VkCommandPool *cmdpool)
+internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
 {
     g_atmosphere->make_render_pass = g_render_pass_manager->add("render_pass.atmosphere_render_pass"_hash);
     auto *atmosphere_render_pass = g_render_pass_manager->get(g_atmosphere->make_render_pass);
@@ -826,10 +696,10 @@ make_atmosphere_data(VkDescriptorPool *pool
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         // ---- Set render pass dependencies data ----
         render_pass_dependency_t dependencies[2] = {};
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
-                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
         make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies});
     }
@@ -860,13 +730,13 @@ make_atmosphere_data(VkDescriptorPool *pool
         auto *cubemap_ptr = g_image_manager->get(cubemap_hdl);
 
         *cubemap_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, g_uniform_pool);
-        update_uniform_group(cubemap_group_ptr,
-                             update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+        update_uniform_group(cubemap_group_ptr, update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
     g_atmosphere->make_pipeline = g_pipeline_manager->add("pipeline.atmosphere_pipeline"_hash);
     auto *make_ppln = g_pipeline_manager->get(g_atmosphere->make_pipeline);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         VkExtent2D atmosphere_extent {atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H};
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/atmosphere.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/atmosphere.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
@@ -875,27 +745,32 @@ make_atmosphere_data(VkDescriptorPool *pool
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         shader_blend_states_t blending{false};
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(make_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
-                               false, 0.0f, dynamic, atmosphere_render_pass, 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
+                                    false, 0.0f, dynamic, atmosphere_render_pass, 0, info);
+        make_ppln->info = info;
+        make_graphics_pipeline(make_ppln);
     }
 
     g_atmosphere->render_pipeline = g_pipeline_manager->add("pipeline.render_atmosphere"_hash);
     auto *render_ppln = g_pipeline_manager->get(g_atmosphere->render_pipeline);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         resolution_t backbuffer_res = g_dfr_rendering->backbuffer_res;
         model_handle_t cube_hdl = g_model_manager->get_handle("model.cube_model"_hash);
         auto *model_ptr = g_model_manager->get(cube_hdl);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/render_atmosphere.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/render_atmosphere.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+                                 shader_module_info_t{"shaders/SPV/render_atmosphere.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         uniform_layout_handle_t camera_transforms_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, render_atmosphere_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(render_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 0, info);
+        render_ppln->info = info;
+        make_graphics_pipeline(render_ppln);
     }
 
     g_atmosphere->cube_handle = g_model_manager->get_handle("model.cube_model"_hash);
@@ -910,8 +785,7 @@ make_atmosphere_data(VkDescriptorPool *pool
     destroy_single_use_command_buffer(&cmdbuf, cmdpool);
 }
 
-internal_function void
-make_shadow_data(void)
+internal_function void make_shadow_data(void)
 {
     vector3_t light_pos_normalized = glm::normalize(g_lighting->ws_light_position);
     light_pos_normalized.x *= -1.0f;
@@ -964,28 +838,28 @@ make_shadow_data(void)
         auto *shadowmap_texture = g_image_manager->get(shadowmap_handle);
         
         *shadow_map_ptr = make_uniform_group(sampler2D_layout_ptr, g_uniform_pool);
-        update_uniform_group(shadow_map_ptr,
-                             update_binding_t{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+        update_uniform_group(shadow_map_ptr, update_binding_t{TEXTURE, shadowmap_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
     g_lighting->shadows.debug_frustum_ppln = g_pipeline_manager->add("pipeline.debug_frustum"_hash);
     auto *frustum_ppln = g_pipeline_manager->get(g_lighting->shadows.debug_frustum_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/debug_frustum.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/debug_frustum.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+                                 shader_module_info_t{"shaders/SPV/debug_frustum.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts (g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(frustum_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
-                               VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                                    VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blending, nullptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 0, info);
+        frustum_ppln->info = info;
+        make_graphics_pipeline(frustum_ppln);
     }
 }
 
-internal_function void
-calculate_ws_frustum_corners(vector4_t *corners
-			     , vector4_t *shadow_corners)
+internal_function void calculate_ws_frustum_corners(vector4_t *corners, vector4_t *shadow_corners)
 {
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
@@ -1010,18 +884,13 @@ calculate_ws_frustum_corners(vector4_t *corners
     shadow_corners[7] = shadow_data.inverse_light_view * camera->captured_shadow_corners[7];
 }
 
-internal_function void
-render_debug_frustum(gpu_command_queue_t *queue,
-                     VkDescriptorSet ubo,
-                     graphics_pipeline_t *graphics_pipeline)
+internal_function void render_debug_frustum(gpu_command_queue_t *queue, VkDescriptorSet ubo, graphics_pipeline_t *graphics_pipeline)
 {
     if (get_camera_bound_to_3d_output()->captured)
     {
-        command_buffer_bind_pipeline(graphics_pipeline, &queue->q);
+        command_buffer_bind_pipeline(&graphics_pipeline->pipeline, &queue->q);
 
-        command_buffer_bind_descriptor_sets(graphics_pipeline
-                                            , {1, &ubo}
-                                            , &queue->q);
+        command_buffer_bind_descriptor_sets(&graphics_pipeline->layout, {1, &ubo}, &queue->q);
 
         struct push_k_t
         {
@@ -1037,28 +906,14 @@ render_debug_frustum(gpu_command_queue_t *queue,
         push_k2.model_matrix = matrix4_t(1.0f);
         push_k2.color = vector4_t(0.0f, 0.0f, 1.0f, 1.0f);
     
-        command_buffer_push_constant(&push_k1
-                                     , sizeof(push_k1)
-                                     , 0
-                                     , VK_SHADER_STAGE_VERTEX_BIT
-                                     , graphics_pipeline
-                                     , &queue->q);
-    
+        command_buffer_push_constant(&push_k1, sizeof(push_k1), 0, VK_SHADER_STAGE_VERTEX_BIT, graphics_pipeline->layout, &queue->q);
         command_buffer_draw(&queue->q, 24, 1, 0, 0);
-
-        command_buffer_push_constant(&push_k2
-                                     , sizeof(push_k2)
-                                     , 0
-                                     , VK_SHADER_STAGE_VERTEX_BIT
-                                     , graphics_pipeline
-                                     , &queue->q);
-    
+        command_buffer_push_constant(&push_k2, sizeof(push_k2), 0, VK_SHADER_STAGE_VERTEX_BIT, graphics_pipeline->layout, &queue->q);
         command_buffer_draw(&queue->q, 24, 1, 0, 0);
     }
 }
 
-void
-render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline)
+void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline)
 {
     auto *camera_transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_ubos);
     render_debug_frustum(queue, *group, graphics_pipeline);
@@ -1068,11 +923,9 @@ void dbg_render_shadow_map_quad(gpu_command_queue_t *queue)
 {
     graphics_pipeline_t *graphics_pipeline = &g_lighting->shadows.dbg_shadow_tx_quad_ppln;
     
-    command_buffer_bind_pipeline(graphics_pipeline, &queue->q);
+    command_buffer_bind_pipeline(&graphics_pipeline->pipeline, &queue->q);
 
-    command_buffer_bind_descriptor_sets(graphics_pipeline
-                                        , {1, g_uniform_group_manager->get(g_lighting->shadows.set)}
-                                        , &queue->q);
+    command_buffer_bind_descriptor_sets(&graphics_pipeline->layout, {1, g_uniform_group_manager->get(g_lighting->shadows.set)}, &queue->q);
 
     struct push_k_t
     {
@@ -1086,18 +939,11 @@ void dbg_render_shadow_map_quad(gpu_command_queue_t *queue)
 
     get_backbuffer_resolution();
 
-    command_buffer_push_constant(&push_k
-                                 , sizeof(push_k)
-                                 , 0
-                                 , VK_SHADER_STAGE_VERTEX_BIT
-                                 , graphics_pipeline
-                                 , &queue->q);
-    
+    command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, graphics_pipeline->layout, &queue->q);
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
 }
 
-shadow_matrices_t
-get_shadow_matrices(void)
+shadow_matrices_t get_shadow_matrices(void)
 {
     shadow_matrices_t ret;
     ret.projection_matrix = g_lighting->shadows.projection_matrix;
@@ -1106,8 +952,7 @@ get_shadow_matrices(void)
     return(ret);
 }
 
-shadow_debug_t
-get_shadow_debug(void)
+shadow_debug_t get_shadow_debug(void)
 {
     shadow_debug_t ret;    
     for (uint32_t i = 0; i < 6; ++i)
@@ -1121,20 +966,14 @@ get_shadow_debug(void)
     return(ret);
 }
 
-shadow_display_t
-get_shadow_display(void)
+shadow_display_t get_shadow_display(void)
 {
     auto *texture = g_uniform_group_manager->get(g_lighting->shadows.set);
     shadow_display_t ret{lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, *texture};
     return(ret);
 }
 
-void
-update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
-               // Later to replace with a Camera structure
-               , const vector3_t &ws_p
-               , const vector3_t &ws_d
-               , const vector3_t &ws_up)
+void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up)
 {
     float32_t far_width, near_width, far_height, near_height;
     
@@ -1204,13 +1043,12 @@ update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
     z_min = z_min - (z_max - z_min);
 
     g_lighting->shadows.projection_matrix = glm::transpose(matrix4_t(2.0f / (x_max - x_min), 0.0f, 0.0f, -(x_max + x_min) / (x_max - x_min),
-                                                     0.0f, 2.0f / (y_max - y_min), 0.0f, -(y_max + y_min) / (y_max - y_min),
-                                                     0.0f, 0.0f, 2.0f / (z_max - z_min), -(z_max + z_min) / (z_max - z_min),
-                                                                    0.0f, 0.0f, 0.0f, 1.0f));
+                                                                     0.0f, 2.0f / (y_max - y_min), 0.0f, -(y_max + y_min) / (y_max - y_min),
+                                                                     0.0f, 0.0f, 2.0f / (z_max - z_min), -(z_max + z_min) / (z_max - z_min),
+                                                                     0.0f, 0.0f, 0.0f, 1.0f));
 }
 
-void
-make_dfr_rendering_data(void)
+void make_dfr_rendering_data(void)
 {
     // ---- Make deferred rendering render pass ----
     g_dfr_rendering->dfr_render_pass = g_render_pass_manager->add("render_pass.deferred_render_pass"_hash);
@@ -1340,56 +1178,50 @@ make_dfr_rendering_data(void)
     g_dfr_rendering->dfr_lighting_ppln = g_pipeline_manager->add("pipeline.deferred_pipeline"_hash);
     auto *deferred_ppln = g_pipeline_manager->get(g_dfr_rendering->dfr_lighting_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/deferred_lighting.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                               shader_module_info_t{"shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+                                 shader_module_info_t{"shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.deferred_layout"_hash));
         shader_pk_data_t push_k{ 160, 0, VK_SHADER_STAGE_FRAGMENT_BIT };
         shader_blend_states_t blend_states(false);
         dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(deferred_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blend_states, nullptr,
-                               false, 0.0f, dynamic_states, dfr_render_pass, 1);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blend_states, nullptr,
+                                    false, 0.0f, dynamic_states, dfr_render_pass, 1, info);
+        deferred_ppln->info = info;
+        make_graphics_pipeline(deferred_ppln);
     }
 }
 
-void
-begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height
-                       , gpu_command_queue_t *queue)
+void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue)
 {
-    queue->begin_render_pass(g_lighting->shadows.pass
-                             , g_lighting->shadows.fbo
-                             , VK_SUBPASS_CONTENTS_INLINE
-                             , init_clear_color_depth(1.0f, 0));
+    queue->begin_render_pass(g_lighting->shadows.pass, g_lighting->shadows.fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_depth(1.0f, 0));
     
     VkViewport viewport = {};
     init_viewport(0, 0, shadow_map_width, shadow_map_height, 0.0f, 1.0f, &viewport);
+    
     vkCmdSetViewport(queue->q, 0, 1, &viewport);
-
-    //vkCmdSetDepthBias(queue->q, 1.25f, 0.0f, 1.75f);
     vkCmdSetDepthBias(queue->q, 0.0f, 0.0f, 0.0f);
 
     // Render the world to the shadow map
 }
 
-void
-end_shadow_offscreen(gpu_command_queue_t *queue)
+void end_shadow_offscreen(gpu_command_queue_t *queue)
 {
     command_buffer_end_render_pass(&queue->q);
 }
 
-void
-begin_deferred_rendering(uint32_t image_index /* to_t remove in the future */
-                         , gpu_command_queue_t *queue)
+void begin_deferred_rendering(uint32_t image_index /* to_t remove in the future */, gpu_command_queue_t *queue)
 {
-    queue->begin_render_pass(g_dfr_rendering->dfr_render_pass
-                             , g_dfr_rendering->dfr_framebuffer
-                             , VK_SUBPASS_CONTENTS_INLINE
+    queue->begin_render_pass(g_dfr_rendering->dfr_render_pass,
+                             g_dfr_rendering->dfr_framebuffer,
+                             VK_SUBPASS_CONTENTS_INLINE,
                              // Clear values hre
-                             , init_clear_color_color(0, 0.4, 0.7, 0)
-                             , init_clear_color_color(0, 0.4, 0.7, 0)
-                             , init_clear_color_color(0, 0.4, 0.7, 0)
-                             , init_clear_color_color(0, 0.4, 0.7, 0)
-                             , init_clear_color_depth(1.0f, 0));
+                             init_clear_color_color(0, 0.4, 0.7, 0),
+                             init_clear_color_color(0, 0.4, 0.7, 0),
+                             init_clear_color_color(0, 0.4, 0.7, 0),
+                             init_clear_color_color(0, 0.4, 0.7, 0),
+                             init_clear_color_depth(1.0f, 0));
 
     command_buffer_set_viewport(g_dfr_rendering->backbuffer_res.width, g_dfr_rendering->backbuffer_res.height, 0.0f, 1.0f, &queue->q);
     command_buffer_set_line_width(2.0f, &queue->q);
@@ -1397,24 +1229,19 @@ begin_deferred_rendering(uint32_t image_index /* to_t remove in the future */
     // User renders what is needed ...
 }    
 
-void
-end_deferred_rendering(const matrix4_t &view_matrix // In future, change this to camera structure
-                       , gpu_command_queue_t *queue)
+void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue)
 {
     queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
 
     auto *dfr_lighting_ppln = g_pipeline_manager->get(g_dfr_rendering->dfr_lighting_ppln);
 
-    command_buffer_bind_pipeline(dfr_lighting_ppln
-					 , &queue->q);
+    command_buffer_bind_pipeline(&dfr_lighting_ppln->pipeline, &queue->q);
 
     auto *dfr_subpass_group = g_uniform_group_manager->get(g_dfr_rendering->dfr_subpass_group);
     
     VkDescriptorSet deferred_sets[] = {*dfr_subpass_group};
     
-    command_buffer_bind_descriptor_sets(dfr_lighting_ppln
-						, {1, deferred_sets}
-						, &queue->q);
+    command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, {1, deferred_sets}, &queue->q);
     
     struct deferred_lighting_push_k_t
     {
@@ -1425,21 +1252,12 @@ end_deferred_rendering(const matrix4_t &view_matrix // In future, change this to
     deferred_push_k.light_position = vector4_t(glm::normalize(-g_lighting->ws_light_position), 1.0f);
     deferred_push_k.view_matrix = view_matrix;
     
-    command_buffer_push_constant(&deferred_push_k
-					 , sizeof(deferred_push_k)
-					 , 0
-					 , VK_SHADER_STAGE_FRAGMENT_BIT
-					 , dfr_lighting_ppln
-					 , &queue->q);
-    
-    command_buffer_draw(&queue->q
-                                , 4, 1, 0, 0);
-
+    command_buffer_push_constant(&deferred_push_k, sizeof(deferred_push_k), 0, VK_SHADER_STAGE_FRAGMENT_BIT, dfr_lighting_ppln->layout, &queue->q);
+    command_buffer_draw(&queue->q, 4, 1, 0, 0);
     queue->end_render_pass();
 }
 
-internal_function float32_t
-float16_to_float32(uint16_t f)
+internal_function float32_t float16_to_float32(uint16_t f)
 {
     int f32i32 =  ((f & 0x8000) << 16);
     f32i32 |= ((f & 0x7fff) << 13) + 0x38000000;
@@ -1449,8 +1267,7 @@ float16_to_float32(uint16_t f)
     return ret;
 }
 
-internal_function vector4_t
-glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs)
+internal_function vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs)
 {
     uint32_t ui_x = (uint32_t)(uvs.x * (float32_t)sampler->resolution.width);
     uint32_t ui_y = (uint32_t)(uvs.y * (float32_t)sampler->resolution.height);
@@ -1466,8 +1283,7 @@ glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const v
     uint8_t *pixels = (uint8_t *)sampler->mapped.data;
 
     VkImageSubresource subresources {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
-    VkSubresourceLayout layout = get_image_subresource_layout(&sampler->blitted_linear_image.image,
-                                                              &subresources);
+    VkSubresourceLayout layout = get_image_subresource_layout(&sampler->blitted_linear_image.image, &subresources);
 
     pixels += layout.offset;
     pixels += ui_y * (layout.rowPitch);
@@ -1509,8 +1325,7 @@ glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const v
     return(final_color);
 }
 
-internal_function uint32_t
-get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution)
+internal_function uint32_t get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution)
 {
     uint32_t ui_x = (uint32_t)(x * (float32_t)resolution.width);
     uint32_t ui_y = (uint32_t)(y * (float32_t)resolution.height);
@@ -1526,8 +1341,7 @@ get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, floa
     uint8_t *pixels = (uint8_t *)memory->data;
 
     VkImageSubresource subresources { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
-    VkSubresourceLayout layout = get_image_subresource_layout(&image->image,
-                                                              &subresources);
+    VkSubresourceLayout layout = get_image_subresource_layout(&image->image, &subresources);
 
     pixels += layout.offset;
 
@@ -1546,11 +1360,9 @@ get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, floa
     return(final_color);
 }
 
-vector4_t
-invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera);
+vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera);
 
-void
-dbg_handle_input(input_state_t *input_state)
+void dbg_handle_input(input_state_t *input_state)
 {
     /*if (input_state->keyboard[keyboard_button_type_t::P].is_down)
     {
@@ -1607,47 +1419,29 @@ dbg_handle_input(input_state_t *input_state)
     }
 }
 
-internal_function void
-dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
+internal_function void dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
-    init_image(w,
-               h,
-               format,
-               VK_IMAGE_TILING_LINEAR,
-               VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-               1,
-               dst_img,
-               0);
     VkImageAspectFlags aspect_flags = aspect;
-    init_image_view(&dst_img->image,
-                    format,
-                    aspect_flags,
-                    &dst_img->image_view,
-                    VK_IMAGE_VIEW_TYPE_2D,
-                    1);
+    init_image(w, h, format, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1, dst_img, 0);
+    init_image_view(&dst_img->image, format, aspect_flags, &dst_img->image_view, VK_IMAGE_VIEW_TYPE_2D, 1);
 }
 
-internal_function void
-dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
+internal_function void dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
     make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
     dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-internal_function void
-dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
+internal_function void dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
 {
     uniform_layout_handle_t layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.pfx_single_tx_output"_hash);
     uniform_layout_t *layout_ptr = g_uniform_layout_manager->get(layout_hdl);
     
     capture->blitted_image_uniform = make_uniform_group(layout_ptr, g_uniform_pool);
-    update_uniform_group(&capture->blitted_image_uniform,
-                         update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    update_uniform_group(&capture->blitted_image_uniform, update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 }
 
-internal_function void
-dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture)
+internal_function void dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture)
 {
     capture->sampler_count = stage->input_count;
     framebuffer_t *stage_fbo = g_framebuffer_manager->get(stage->fbo);
@@ -1656,16 +1450,11 @@ dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *cap
         dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler = &capture->samplers[i];
         sampler->index = 0;
         sampler->original_image = stage->inputs[i];
-        dbg_make_frame_capture_blit_image(&sampler->blitted_linear_image,
-                                          stage_fbo->extent.width,
-                                          stage_fbo->extent.height,
-                                          sampler->format,
-                                          VK_IMAGE_ASPECT_COLOR_BIT);
+        dbg_make_frame_capture_blit_image(&sampler->blitted_linear_image, stage_fbo->extent.width, stage_fbo->extent.height, sampler->format, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 }
 
-internal_function void
-dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
+internal_function void dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
 {
     // Trying to debug the SSR stage
     pfx_stage_t *stage = &g_postfx->ssr_stage;
@@ -1697,11 +1486,7 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
                                              VK_FORMAT_B8G8R8A8_UNORM,
                                              VK_IMAGE_ASPECT_COLOR_BIT);
     
-    transition_image_layout(&frame_capture->blitted_image.image,
-                            VK_FORMAT_B8G8R8A8_UNORM,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            pool);
+    transition_image_layout(&frame_capture->blitted_image.image, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, pool);
     
     // Initialize the uniform group for the blitted image
     dbg_make_frame_capture_uniform_data(frame_capture);
@@ -1716,8 +1501,7 @@ dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
     dbg_make_frame_capture_samplers(stage, frame_capture);
 }
 
-void
-pfx_stage_t::introduce_to_managers(const constant_string_t &ppln_name,
+void pfx_stage_t::introduce_to_managers(const constant_string_t &ppln_name,
                                    const constant_string_t &fbo_name,
                                    const constant_string_t &group_name)
 {
@@ -1726,26 +1510,28 @@ pfx_stage_t::introduce_to_managers(const constant_string_t &ppln_name,
     output_group = g_uniform_group_manager->add(group_name);        
 }
 
-internal_function void
-make_pfx_stage(pfx_stage_t *dst_stage,
-               const shader_modules_t &shader_modules,
-               const shader_uniform_layouts_t &uniform_layouts,
-               const resolution_t &resolution,
-               image2d_t *stage_output,
-               uniform_layout_t *single_tx_layout_ptr,
-               render_pass_t *pfx_render_pass)
+internal_function void make_pfx_stage(pfx_stage_t *dst_stage,
+                                      const shader_modules_t &shader_modules,
+                                      const shader_uniform_layouts_t &uniform_layouts,
+                                      const resolution_t &resolution,
+                                      image2d_t *stage_output,
+                                      uniform_layout_t *single_tx_layout_ptr,
+                                      render_pass_t *pfx_render_pass)
 {
     auto *stage_pipeline = g_pipeline_manager->get(dst_stage->ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         resolution_t backbuffer_res = resolution;
         shader_modules_t modules = shader_modules;
         shader_uniform_layouts_t layouts = uniform_layouts;
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(stage_pipeline, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL
-                               , VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr
-                               , false, 0.0f, dynamic, pfx_render_pass, 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr,
+                                    false, 0.0f, dynamic, pfx_render_pass, 0, info);
+        stage_pipeline->info = info;
+        make_graphics_pipeline(stage_pipeline);
     }
 
     auto *stage_framebuffer = g_framebuffer_manager->get(dst_stage->fbo);
@@ -1759,13 +1545,11 @@ make_pfx_stage(pfx_stage_t *dst_stage,
     auto *output_group = g_uniform_group_manager->get(dst_stage->output_group);
     {
         *output_group = make_uniform_group(single_tx_layout_ptr, g_uniform_pool);
-        update_uniform_group(output_group,
-                             update_binding_t{TEXTURE, stage_output, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+        update_uniform_group(output_group, update_binding_t{TEXTURE, stage_output, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 }
 
-void
-make_postfx_data(gpu_command_queue_pool_t *pool)
+void make_postfx_data(gpu_command_queue_pool_t *pool)
 {
     g_postfx->pfx_single_tx_layout = g_uniform_layout_manager->add("uniform_layout.pfx_single_tx_output"_hash);
     auto *single_tx_layout_ptr = g_uniform_layout_manager->get(g_postfx->pfx_single_tx_layout);
@@ -1787,10 +1571,10 @@ make_postfx_data(gpu_command_queue_pool_t *pool)
         render_pass_subpass_t subpass;
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         render_pass_dependency_t dependencies[2];
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
-                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
     }
     
@@ -1802,10 +1586,10 @@ make_postfx_data(gpu_command_queue_pool_t *pool)
         render_pass_subpass_t subpass;
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         render_pass_dependency_t dependencies[2];
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
-                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         make_render_pass(pfx_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
     }
     // ---- make_t the framebuffer for the swapchain / screen ----
@@ -1828,15 +1612,18 @@ make_postfx_data(gpu_command_queue_pool_t *pool)
 
     g_postfx->final_stage.ppln = g_pipeline_manager->add("graphics_pipeline.pfx_final"_hash);
     auto *final_ppln = g_pipeline_manager->get(g_postfx->final_stage.ppln);
-    {        
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/pfx_final.vert.spv", VK_SHADER_STAGE_VERTEX_BIT}, shader_module_info_t{"shaders/SPV/pfx_final.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_postfx->pfx_single_tx_layout);
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
-        make_graphics_pipeline(final_ppln, modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_swapchain_extent(), blending, nullptr,
-                               false, 0.0f, dynamic, pfx_render_pass, 0);
+        fill_graphics_pipeline_info(modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_swapchain_extent(), blending, nullptr,
+                                    false, 0.0f, dynamic, pfx_render_pass, 0, info);
+        final_ppln->info = info;
+        make_graphics_pipeline(final_ppln);
     }
     
     shader_modules_t modules(shader_module_info_t{"shaders/SPV/pfx_ssr.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
@@ -1846,47 +1633,26 @@ make_postfx_data(gpu_command_queue_pool_t *pool)
                                      g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
     image_handle_t ssr_tx_hdl = g_image_manager->add("image2D.pfx_ssr_color"_hash);
     auto *ssr_tx_ptr = g_image_manager->get(ssr_tx_hdl);
-    g_postfx->ssr_stage.introduce_to_managers("graphics_pipeline.pfx_ssr"_hash,
-                                             "framebuffer.pfx_ssr"_hash,
-                                             "uniform_group.pfx_ssr_output"_hash);
-    make_pfx_stage(&g_postfx->ssr_stage,
-                   modules,
-                   layouts,
-                   get_backbuffer_resolution(),
-                   ssr_tx_ptr,
-                   single_tx_layout_ptr,
-                   pfx_render_pass);
+    g_postfx->ssr_stage.introduce_to_managers("graphics_pipeline.pfx_ssr"_hash, "framebuffer.pfx_ssr"_hash, "uniform_group.pfx_ssr_output"_hash);
+    make_pfx_stage(&g_postfx->ssr_stage, modules, layouts, get_backbuffer_resolution(), ssr_tx_ptr, single_tx_layout_ptr, pfx_render_pass);
 
     shader_modules_t pre_final_modules(shader_module_info_t{"shaders/SPV/pfx_final.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                        shader_module_info_t{"shaders/SPV/pfx_final.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
     shader_uniform_layouts_t pre_final_layouts(g_postfx->pfx_single_tx_layout);
     image_handle_t pre_final_tx_hdl = g_image_manager->add("image2D.pre_final_color"_hash);
     auto *pre_final_tx_ptr = g_image_manager->get(pre_final_tx_hdl);
-    g_postfx->pre_final_stage.introduce_to_managers("graphics_pipeline.pre_final"_hash,
-                                             "framebuffer.pre_final"_hash,
-                                             "uniform_group.pre_final_output"_hash);
-    make_pfx_stage(&g_postfx->pre_final_stage,
-                   pre_final_modules,
-                   pre_final_layouts,
-                   get_backbuffer_resolution(),
-                   pre_final_tx_ptr,
-                   single_tx_layout_ptr,
-                   pfx_render_pass);
+    g_postfx->pre_final_stage.introduce_to_managers("graphics_pipeline.pre_final"_hash, "framebuffer.pre_final"_hash, "uniform_group.pre_final_output"_hash);
+    make_pfx_stage(&g_postfx->pre_final_stage, pre_final_modules, pre_final_layouts, get_backbuffer_resolution(), pre_final_tx_ptr, single_tx_layout_ptr, pfx_render_pass);
 
     dbg_make_frame_capture_data(pool);
 }
 
-framebuffer_handle_t
-get_pfx_framebuffer_hdl(void)
+framebuffer_handle_t get_pfx_framebuffer_hdl(void)
 {
     return(g_postfx->pre_final_stage.fbo);
 }
 
-inline void
-apply_ssr(gpu_command_queue_t *queue
-          , uniform_group_t *transforms_group
-          , const matrix4_t &view_matrix
-          , const matrix4_t &projection_matrix)
+inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix)
 {
     queue->begin_render_pass(g_postfx->pfx_render_pass
                              , g_postfx->ssr_stage.fbo
@@ -1897,13 +1663,13 @@ apply_ssr(gpu_command_queue_t *queue
     command_buffer_set_viewport(&v, &queue->q);
     {
         auto *pfx_ssr_ppln = g_pipeline_manager->get(g_postfx->ssr_stage.ppln);
-        command_buffer_bind_pipeline(pfx_ssr_ppln, &queue->q);
+        command_buffer_bind_pipeline(&pfx_ssr_ppln->pipeline, &queue->q);
 
         auto *g_buffer_group = g_uniform_group_manager->get(g_dfr_rendering->dfr_g_buffer_group);
         auto *atmosphere_group = g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
         
         uniform_group_t groups[] = { *g_buffer_group, *atmosphere_group, *transforms_group };
-        command_buffer_bind_descriptor_sets(pfx_ssr_ppln, {3, groups}, &queue->q);
+        command_buffer_bind_descriptor_sets(&pfx_ssr_ppln->layout, {3, groups}, &queue->q);
 
         struct ssr_lighting_push_k_t
         {
@@ -1916,15 +1682,14 @@ apply_ssr(gpu_command_queue_t *queue
         ssr_pk.view = view_matrix;
         ssr_pk.proj = projection_matrix;
         ssr_pk.proj[1][1] *= -1.0f;
-        command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln, &queue->q);
-
+        
+        command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln->layout, &queue->q);
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
 }
 
-inline void
-render_to_pre_final(gpu_command_queue_t *queue)
+inline void render_to_pre_final(gpu_command_queue_t *queue)
 {
     if (g_postfx->dbg_requested_capture)
     {
@@ -1962,10 +1727,7 @@ render_to_pre_final(gpu_command_queue_t *queue)
         }
     }
     
-    queue->begin_render_pass(g_postfx->pfx_render_pass
-                             , g_postfx->pre_final_stage.fbo
-                             , VK_SUBPASS_CONTENTS_INLINE
-                             , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
+    queue->begin_render_pass(g_postfx->pfx_render_pass, g_postfx->pre_final_stage.fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
 
     uniform_group_t tx_to_render = {};
     
@@ -1984,12 +1746,12 @@ render_to_pre_final(gpu_command_queue_t *queue)
     command_buffer_set_viewport(&v, &queue->q);
     {
         auto *pfx_pre_final_ppln = g_pipeline_manager->get(g_postfx->pre_final_stage.ppln);
-        command_buffer_bind_pipeline(pfx_pre_final_ppln, &queue->q);
+        command_buffer_bind_pipeline(&pfx_pre_final_ppln->pipeline, &queue->q);
 
         auto *ssr_group = g_uniform_group_manager->get(g_postfx->ssr_stage.output_group);
         
         uniform_group_t groups[] = { tx_to_render };
-        command_buffer_bind_descriptor_sets(pfx_pre_final_ppln, {1, groups}, &queue->q);
+        command_buffer_bind_descriptor_sets(&pfx_pre_final_ppln->layout, {1, groups}, &queue->q);
 
         struct push_k
         {
@@ -2004,34 +1766,23 @@ render_to_pre_final(gpu_command_queue_t *queue)
         {
             pk.db = vector4_t(-10.0f);
         }
-        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_pre_final_ppln, &queue->q);
-
+        
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_pre_final_ppln->layout, &queue->q);
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
 
     queue->end_render_pass();
 }
 
-void
-apply_pfx_on_scene(gpu_command_queue_t *queue
-                   , uniform_group_t *transforms_group
-                   , const matrix4_t &view_matrix
-                   , const matrix4_t &projection_matrix)
+void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix)
 {
-    apply_ssr(queue, transforms_group,
-              view_matrix,
-              projection_matrix);
-
+    apply_ssr(queue, transforms_group, view_matrix, projection_matrix);
     render_to_pre_final(queue);
 }
 
-void
-render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
+void render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
 {
-    queue->begin_render_pass(g_postfx->final_render_pass
-                             , g_postfx->final_stage.fbo + image_index
-                             , VK_SUBPASS_CONTENTS_INLINE
-                             , init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
+    queue->begin_render_pass(g_postfx->final_render_pass, g_postfx->final_stage.fbo + image_index, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
 
     VkExtent2D swapchain_extent = get_swapchain_extent();
     
@@ -2061,14 +1812,14 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
     command_buffer_set_viewport(&v, &queue->q);
     {
         auto *pfx_final_ppln = g_pipeline_manager->get(g_postfx->final_stage.ppln);
-        command_buffer_bind_pipeline(pfx_final_ppln, &queue->q);
+        command_buffer_bind_pipeline(&pfx_final_ppln->pipeline, &queue->q);
 
         auto rect2D = make_rect2D(rect2Dx, rect2Dy, rect2D_width, rect2D_height);
         command_buffer_set_rect2D(&rect2D, &queue->q);
         g_postfx->render_rect2D = rect2D;
         
         uniform_group_t groups[] = { *g_uniform_group_manager->get(g_postfx->pre_final_stage.output_group) };
-        command_buffer_bind_descriptor_sets(pfx_final_ppln, {1, groups}, &queue->q);
+        command_buffer_bind_descriptor_sets(&pfx_final_ppln->layout, {1, groups}, &queue->q);
 
         struct ssr_lighting_push_k_t
         {
@@ -2076,15 +1827,14 @@ render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
         } pk;
 
         pk.debug = vector4_t(0.0f, 0.0f, 0.0f, -10.0f);
-        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln, &queue->q);
-
+        
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_final_ppln->layout, &queue->q);
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
     }
     queue->end_render_pass();
 }
 
-internal_function void
-make_cube_model(gpu_command_queue_pool_t *pool)
+internal_function void make_cube_model(gpu_command_queue_pool_t *pool)
 {
     model_handle_t cube_model_hdl = g_model_manager->add("model.cube_model"_hash);
     auto *cube_model_ptr = g_model_manager->get(cube_model_hdl);
@@ -2133,10 +1883,7 @@ make_cube_model(gpu_command_queue_pool_t *pool)
 	    
         memory_byte_buffer_t byte_buffer{sizeof(vertices), vertices};
 	
-        invoke_staging_buffer_for_device_local_buffer(byte_buffer
-                                                              , VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-                                                              , pool
-                                                              , vbo);
+        invoke_staging_buffer_for_device_local_buffer(byte_buffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, pool, vbo);
 
         main_binding->buffer = vbo->buffer;
         cube_model_ptr->create_vbo_list();
@@ -2172,23 +1919,16 @@ make_cube_model(gpu_command_queue_pool_t *pool)
 
 	memory_byte_buffer_t byte_buffer{sizeof(mesh_indices), mesh_indices};
 	    
-	invoke_staging_buffer_for_device_local_buffer(byte_buffer
-							      , VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-							      , pool
-							      , ibo);
+	invoke_staging_buffer_for_device_local_buffer(byte_buffer, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, pool, ibo);
 
 	cube_model_ptr->index_data.index_buffer = ibo->buffer;
     }
 }
 
-internal_function int32_t
-lua_begin_frame_capture(lua_State *state);
+internal_function int32_t lua_begin_frame_capture(lua_State *state);
+internal_function int32_t lua_end_frame_capture(lua_State *state);
 
-internal_function int32_t
-lua_end_frame_capture(lua_State *state);
-
-void
-initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
 {
     g_dfr_rendering->backbuffer_res = {1920, 1080};
     
@@ -2208,36 +1948,36 @@ initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
 // 2D Graphics
 
 
-void
-initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
+void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
 {
     make_postfx_data(pool);
 
     // TODO: URGENT: REMOVE THIS ONCE DONE WITH DEBUGGING SHADOWS
     auto *dbg_shadow_ppln = &g_lighting->shadows.dbg_shadow_tx_quad_ppln;
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/screen_quad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/screen_quad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_lighting->shadows.ulayout);
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
-        make_graphics_pipeline(dbg_shadow_ppln, modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+        fill_graphics_pipeline_info(modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               false, 0.0f, dynamic, g_render_pass_manager->get(g_postfx->pfx_render_pass), 0);
+                                    false, 0.0f, dynamic, g_render_pass_manager->get(g_postfx->pfx_render_pass), 0, info);
+        dbg_shadow_ppln->info = info;
+        make_graphics_pipeline(dbg_shadow_ppln);
     }
 
     clear_linear();
 }
 
-void
-destroy_graphics(void)
+void destroy_graphics(void)
 {
     //    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }
 
-internal_function int32_t
-lua_begin_frame_capture(lua_State *state)
+internal_function int32_t lua_begin_frame_capture(lua_State *state)
 {
     // Copy images into samplers blitted images
     g_postfx->dbg_requested_capture = true;
@@ -2249,8 +1989,7 @@ lua_begin_frame_capture(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_end_frame_capture(lua_State *state)
+internal_function int32_t lua_end_frame_capture(lua_State *state)
 {
     g_postfx->dbg_in_frame_capture_mode = false;
 
@@ -2301,8 +2040,7 @@ struct sampler2d_ptr_t
     dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler_data;
 };
 
-internal_function vec4
-glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs);
+internal_function vec4 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs);
 
 #define Push_K struct pk_t
 #define in
@@ -2322,8 +2060,7 @@ namespace glsl
 // ===============
 }
 
-internal_function vec4
-glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
+internal_function vec4 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 {
     vector4_t sampled = glsl_texture_function(sampler.sampler_data, vector2_t(uvs.x, uvs.y));
     return vec4(sampled.x, sampled.y, sampled.z, sampled.w);
@@ -2333,8 +2070,7 @@ glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 #define SET_UNIFORM(name, uni) glsl::##name = uni
 #define SET_VS_DATA(name, data) glsl::##name = data
 
-vector4_t
-invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera)
+vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera)
 {
     glsl::pk_t pk;
 
@@ -2442,7 +2178,9 @@ struct custom_mesh_header_t
 // First work on this
 mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
 {
-    file_contents_t mesh_data = read_file(path);
+    file_handle_t mesh_file_handle = create_file(path, file_type_t::BINARY);
+    file_contents_t mesh_data = read_file_tmp(mesh_file_handle);
+    remove_and_destroy_file(mesh_file_handle);
 
     mesh_t mesh = {};
 
@@ -2601,7 +2339,9 @@ joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton)
 
 skeleton_t load_skeleton(const char *path)
 {
-    file_contents_t skeleton_data = read_file(path);
+    file_handle_t skeleton_handle = create_file(path, file_type_t::BINARY);
+    file_contents_t skeleton_data = read_file_tmp(skeleton_handle);
+    remove_and_destroy_file(skeleton_handle);
 
     skeleton_t skeleton = {};
     skeleton.joint_count = *((uint32_t *)skeleton_data.content);
@@ -2637,7 +2377,9 @@ skeleton_t load_skeleton(const char *path)
 
 animation_cycles_t load_animations(const char *path)
 {
-    file_contents_t animation_data = read_file(path);
+    file_handle_t animation_handle = create_file(path, file_type_t::BINARY);
+    file_contents_t animation_data = read_file_tmp(animation_handle);
+    remove_and_destroy_file(animation_handle);
 
     byte_t *current_byte = animation_data.content;
     
@@ -2945,10 +2687,10 @@ void handle_window_resize(input_state_t *input_state)
         render_pass_subpass_t subpass;
         subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
         render_pass_dependency_t dependencies[2];
-        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT
-                                                      , 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                                                      , VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         make_render_pass(final_render_pass, {1, &attachment}, {1, &subpass}, {2, dependencies});
     }
     

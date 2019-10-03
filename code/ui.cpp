@@ -5,23 +5,20 @@
 #include "game.hpp"
 #include "ui.hpp"
 
-internal_function inline vector2_t
-convert_glsl_to_normalized(const vector2_t &position)
+#include "file_system.hpp"
+
+internal_function inline vector2_t convert_glsl_to_normalized(const vector2_t &position)
 {
     return(position * 2.0f - 1.0f);
 }
 
-internal_function inline ui_vector2_t
-glsl_to_pixel_coord(const ui_vector2_t &position,
-                    const resolution_t &resolution)
+internal_function inline ui_vector2_t glsl_to_pixel_coord(const ui_vector2_t &position, const resolution_t &resolution)
 {
     ui_vector2_t ret((int32_t)(position.fx * (float32_t)resolution.width), (int32_t)(position.fy * (float32_t)resolution.height));
     return(ret);
 }
 
-internal_function inline ui_vector2_t
-pixel_to_glsl_coord(const ui_vector2_t &position,
-                    const resolution_t &resolution)
+internal_function inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &position, const resolution_t &resolution)
 {
     ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width,
                      (float32_t)position.iy / (float32_t)resolution.height);
@@ -40,8 +37,7 @@ global_var constexpr vector2_t RELATIVE_TO_FACTORS[] { vector2_t(0.0f, 0.0f),
         vector2_t(-1.0f, 0.0f),
         vector2_t(-1.0f, -1.0f)};
 
-uint32_t
-vec4_color_to_ui32b(const vector4_t &color)
+uint32_t vec4_color_to_ui32b(const vector4_t &color)
 {
     float32_t xf = color.x * 255.0f;
     float32_t yf = color.y * 255.0f;
@@ -54,8 +50,7 @@ vec4_color_to_ui32b(const vector4_t &color)
     return (xui << 24) | (yui << 16) | (zui << 8) | wui;
 }
 
-internal_function void
-update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
+internal_function void update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
 {
     ui_vector2_t px_max_values;
     if (box->parent)
@@ -95,8 +90,7 @@ update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
     }
 }
 
-internal_function void
-update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
+internal_function void update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
 {
     vector2_t gls_size = box->gls_relative_size.to_fvec2();
     vector2_t gls_relative_position;
@@ -126,13 +120,12 @@ update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
     box->px_position = glsl_to_pixel_coord(box->gls_position, backbuffer_resolution);
 }
 
-internal_function ui_box_t
-make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
-            ui_vector2_t position /* coord_t space agnostic */,
-            ui_vector2_t gls_max_values /* max_t X and Y size */,
-            ui_box_t *parent,
-            const uint32_t &color,
-            resolution_t backbuffer_resolution = {})
+internal_function ui_box_t make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
+                                       ui_vector2_t position /* coord_t space agnostic */,
+                                       ui_vector2_t gls_max_values /* max_t X and Y size */,
+                                       ui_box_t *parent,
+                                       const uint32_t &color,
+                                       resolution_t backbuffer_resolution = {})
 {
     resolution_t dst_resolution = backbuffer_resolution;
     if (parent)
@@ -152,15 +145,14 @@ make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
     return(box);
 }
 
-internal_function void
-make_text(ui_box_t *box,
-          font_t *font,
-          ui_text_t::font_stream_box_relative_to_t relative_to,
-          float32_t px_x_start,
-          float32_t px_y_start,
-          uint32_t chars_per_line,
-          float32_t line_height,
-          ui_text_t *dst_text)
+internal_function void make_text(ui_box_t *box,
+                                 font_t *font,
+                                 ui_text_t::font_stream_box_relative_to_t relative_to,
+                                 float32_t px_x_start,
+                                 float32_t px_y_start,
+                                 uint32_t chars_per_line,
+                                 float32_t line_height,
+                                 ui_text_t *dst_text)
 {
     dst_text->dst_box = box;
     dst_text->font = font;
@@ -189,8 +181,7 @@ struct fnt_word_t
 };
 
 // Except new line
-internal_function char *
-fnt_skip_break_characters(char *pointer)
+internal_function char *fnt_skip_break_characters(char *pointer)
 {
     for(;;)
     {
@@ -203,8 +194,7 @@ fnt_skip_break_characters(char *pointer)
     return nullptr;
 }
 
-internal_function char *
-fnt_goto_next_break_character(char *pointer)
+internal_function char *fnt_goto_next_break_character(char *pointer)
 {
     for(;;)
     {
@@ -217,8 +207,7 @@ fnt_goto_next_break_character(char *pointer)
     return nullptr;
 }
 
-internal_function char *
-fnt_skip_line(char *pointer)
+internal_function char *fnt_skip_line(char *pointer)
 {
     for(;;)
     {
@@ -231,8 +220,7 @@ fnt_skip_line(char *pointer)
     return nullptr;
 }
 
-internal_function char *
-fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
+internal_function char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
 {
     char *new_pointer = fnt_goto_next_break_character(pointer);
     if (dst_word)
@@ -243,8 +231,7 @@ fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
     return(new_pointer);
 }
 
-internal_function char *
-fnt_skip_until_digit(char *pointer)
+internal_function char *fnt_skip_until_digit(char *pointer)
 {
     for(;;)
     {
@@ -264,8 +251,7 @@ struct fnt_string_number_t
     char characters[10];
 };
 
-internal_function int32_t
-fnt_atoi(fnt_word_t word)
+internal_function int32_t fnt_atoi(fnt_word_t word)
 {
     fnt_string_number_t number;
     memcpy(number.characters, word.pointer, sizeof(char) * word.size);
@@ -273,8 +259,7 @@ fnt_atoi(fnt_word_t word)
     return(atoi(number.characters));
 }
 
-internal_function char *
-fnt_get_char_count(char *pointer, int32_t *count)
+internal_function char *fnt_get_char_count(char *pointer, int32_t *count)
 {
     for(;;)
     {
@@ -293,8 +278,7 @@ fnt_get_char_count(char *pointer, int32_t *count)
     }
 }
 
-char *
-fnt_get_font_attribute_value(char *pointer, int32_t *value)
+char *fnt_get_font_attribute_value(char *pointer, int32_t *value)
 {
     pointer = fnt_skip_until_digit(pointer);
     fnt_word_t value_str;
@@ -303,22 +287,19 @@ fnt_get_font_attribute_value(char *pointer, int32_t *value)
     return(pointer);
 }
 
-font_handle_t
-add_font(const constant_string_t &font_name)
+font_handle_t add_font(const constant_string_t &font_name)
 {
     uint32_t current_count = g_fonts.font_count++;
     g_fonts.font_map.insert(font_name.hash, current_count);
     return(current_count);
 }
 
-font_t *
-get_font(font_handle_t handle)
+font_t *get_font(font_handle_t handle)
 {
     return(&g_fonts.fonts[handle]);
 }
 
-font_t *
-load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
+font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
 {
     // TODO : Make sure this is parameterised, not fixed!
     persist_var constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
@@ -326,7 +307,8 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
     font_handle_t hdl = add_font(font_name);
     font_t *font_ptr = get_font(hdl);
 
-    file_contents_t fnt = read_file(fnt_file, "r");
+    file_handle_t fnt_file_handle = create_file(fnt_file, file_type_t::TEXT);
+    file_contents_t fnt = read_file_tmp(fnt_file_handle);
     int32_t char_count = 0;
     char *current_char = fnt_get_char_count((char *)fnt.content, &char_count);
     // Ready to start parsing the file
@@ -378,18 +360,18 @@ load_font(const constant_string_t &font_name, const char *fnt_file, const char *
         current_char = fnt_skip_line(current_char);
     }
 
+    remove_and_destroy_file(fnt_file_handle);
+
     return(font_ptr);
 }
 
-internal_function void
-draw_char(ui_text_t *text, char character, uint32_t color)
+internal_function void draw_char(ui_text_t *text, char character, uint32_t color)
 {
     text->colors[text->char_count] = color;
     text->characters[text->char_count++] = character;
 }
 
-internal_function void
-draw_string(ui_text_t *text, const char *string, uint32_t color)
+internal_function void draw_string(ui_text_t *text, const char *string, uint32_t color)
 {
     uint32_t string_length = strlen(string);
     memcpy(text->characters + text->char_count, string, sizeof(char) * string_length);
@@ -410,8 +392,7 @@ internal_function void initialize_debug_ui_utils(void)
 
 global_var ui_state_t *g_ui;
 
-internal_function ivector2_t
-get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
+internal_function ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
 {
     uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
     uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
@@ -437,8 +418,7 @@ get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resol
     return(px_cursor_position);
 }
 
-internal_function void
-push_text(ui_text_t *text, const resolution_t &resolution)
+internal_function void push_text(ui_text_t *text, const resolution_t &resolution)
 {
     ui_box_t *box = text->dst_box;
 
@@ -521,8 +501,7 @@ push_text(ui_text_t *text, const resolution_t &resolution)
     }
 }
 
-internal_function void
-push_box_to_render(ui_box_t *box)
+internal_function void push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
@@ -534,8 +513,7 @@ push_box_to_render(ui_box_t *box)
     g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
 }
 
-internal_function void
-push_font_character_to_render(ui_box_t *box)
+internal_function void push_font_character_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
@@ -550,63 +528,45 @@ push_font_character_to_render(ui_box_t *box)
 global_var console_t *g_console;
 
 // Lua function declarations
-internal_function int32_t
-lua_console_out(lua_State *state);
+internal_function int32_t lua_console_out(lua_State *state);
+internal_function int32_t lua_console_clear(lua_State *state);
+internal_function int32_t lua_get_fps(lua_State *state);
+internal_function int32_t lua_print_fps(lua_State *state);
+internal_function int32_t lua_break(lua_State *state);
+internal_function int32_t lua_quit(lua_State *state);
 
-internal_function int32_t
-lua_console_clear(lua_State *state);
-
-internal_function int32_t
-lua_get_fps(lua_State *state);
-
-internal_function int32_t
-lua_print_fps(lua_State *state);
-
-internal_function int32_t
-lua_break(lua_State *state);
-
-internal_function int32_t
-lua_quit(lua_State *state);
-
-bool
-console_is_receiving_input(void)
+bool console_is_receiving_input(void)
 {
     return(g_console->receive_input);
 }
 
-internal_function void
-output_to_input_section(const char *string, uint32_t color)
+internal_function void output_to_input_section(const char *string, uint32_t color)
 {
     g_console->cursor_position += strlen(string);
     draw_string(&g_console->console_input, string, color);
 }
 
-internal_function void
-output_to_output_section(const char *string, uint32_t color)
+internal_function void output_to_output_section(const char *string, uint32_t color)
 {
     draw_string(&g_console->console_output, string, color);
 }
 
-void
-console_out(const char *string)
+void console_out(const char *string)
 {
     draw_string(&g_console->console_output, string, g_console->output_color);
 }
 
-void
-console_out_color_override(const char *string, uint32_t color)
+void console_out_color_override(const char *string, uint32_t color)
 {
     draw_string(&g_console->console_output, string, color);
 }
 
-internal_function void
-output_char_to_output_section(char character)
+internal_function void output_char_to_output_section(char character)
 {
     draw_char(&g_console->console_output, character, 0x00000000);
 }
 
-internal_function void
-clear_input_section(void)
+internal_function void clear_input_section(void)
 {
     g_console->input_character_count = 0;
     g_console->console_input.char_count = 0;
@@ -614,8 +574,7 @@ clear_input_section(void)
     output_to_input_section("> ", g_console->input_color);
 }
 
-internal_function void
-initialize_console(void)
+internal_function void initialize_console(void)
 {
     g_console->cursor_color = 0x00ee00ff;
     g_console->cursor_fade = 0xff;
@@ -706,8 +665,7 @@ internal_function void handle_console_input(input_state_t *input_state, element_
     }
 }
 
-internal_function void
-push_console_to_render(input_state_t *input_state)
+internal_function void push_console_to_render(input_state_t *input_state)
 {
     if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
     {
@@ -789,17 +747,15 @@ push_console_to_render(input_state_t *input_state)
     // Push output text
 }    
 
-internal_function void
-initialize_ui_elements(const resolution_t &backbuffer_resolution)
+internal_function void initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
     initialize_console();
 }
 
-void
-initialize_ui_rendering_state(VkFormat swapchain_format,
-                              uniform_pool_t *uniform_pool,
-                              const resolution_t &resolution,
-                              gpu_command_queue_pool_t *queue_pool)
+void initialize_ui_rendering_state(VkFormat swapchain_format,
+                                   uniform_pool_t *uniform_pool,
+                                   const resolution_t &resolution,
+                                   gpu_command_queue_pool_t *queue_pool)
 {
     g_ui->ui_quads_model = g_model_manager->add("model.ui_quads"_hash);
     auto *ui_quads_ptr = g_model_manager->get(g_ui->ui_quads_model);
@@ -883,6 +839,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
     g_ui->ui_pipeline = g_pipeline_manager->add("pipeline.uibox"_hash);
     auto *ui_pipeline = g_pipeline_manager->get(g_ui->ui_pipeline);
     {
+        graphics_pipeline_info_t *pipeline_info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/uiquad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/uiquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         // Later will be the UI texture uniform layout
@@ -890,22 +848,26 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
         shader_pk_data_t pk = {};
         shader_blend_states_t blending(true);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(ui_pipeline,
-                               modules,
-                               false,
-                               VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                               VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE,
-                               layouts,
-                               pk,
-                               resolution,
-                               blending,
-                               ui_quads_ptr,
-                               false,
-                               0.0f,
-                               dynamic,
-                               ui_render_pass,
-                               0);
+        fill_graphics_pipeline_info(modules,
+                                    false,
+                                    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                    VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE,
+                                    layouts,
+                                    pk,
+                                    resolution,
+                                    blending,
+                                    ui_quads_ptr,
+                                    false,
+                                    0.0f,
+                                    dynamic,
+                                    ui_render_pass,
+                                    0,
+                                    pipeline_info);
+
+        ui_pipeline->info = pipeline_info;
+        
+        make_graphics_pipeline(ui_pipeline);
     }
     
     uniform_layout_handle_t tx_layout_hdl = g_uniform_layout_manager->add("uniform_layout.tx_ui_quad"_hash);
@@ -918,7 +880,9 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
     image_handle_t tx_hdl = g_image_manager->add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager->get(tx_hdl);
     {
-        external_image_data_t image_data = read_image("font/fixedsys.png");
+        file_handle_t font_png_handle = create_file("font/fixedsys.png", file_type_t::IMAGE);
+        external_image_data_t image_data = read_image(font_png_handle);
+        
         make_texture(tx_ptr,
                      image_data.width,
                      image_data.height,
@@ -942,6 +906,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                 queue_pool);
+
+        free_external_image_data(&image_data);
     }
     g_ui->tx_group = g_uniform_group_manager->add("uniform_group.tx_ui_quad"_hash);
     auto *tx_group_ptr = g_uniform_group_manager->get(g_ui->tx_group);
@@ -954,6 +920,8 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
     g_ui->tx_pipeline = g_pipeline_manager->add("pipeline.txbox"_hash);
     auto *tx_pipeline = g_pipeline_manager->get(g_ui->tx_pipeline);
     {
+        graphics_pipeline_info_t *pipeline_info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/uifontquad.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/uifontquad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         // Later will be the UI texture uniform layout
@@ -961,30 +929,31 @@ initialize_ui_rendering_state(VkFormat swapchain_format,
         shader_pk_data_t pk = {};
         shader_blend_states_t blending(true);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(tx_pipeline,
-                               modules,
-                               false,
-                               VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                               VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE,
-                               layouts,
-                               pk,
-                               resolution,
-                               blending,
-                               tx_quads_ptr,
-                               false,
-                               0.0f,
-                               dynamic,
-                               ui_render_pass,
-                               0);
+        fill_graphics_pipeline_info(modules,
+                                    false,
+                                    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                    VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE,
+                                    layouts,
+                                    pk,
+                                    resolution,
+                                    blending,
+                                    tx_quads_ptr,
+                                    false,
+                                    0.0f,
+                                    dynamic,
+                                    ui_render_pass,
+                                    0,
+                                    pipeline_info);
+        tx_pipeline->info = pipeline_info;
+        make_graphics_pipeline(tx_pipeline);
     }
 
     g_ui->secondary_ui_q.submit_level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 }
 
 // will be rendered to backbuffer first
-void
-initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &resolution)
+void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &resolution)
 {
     g_ui->secondary_ui_q = make_command_queue(qpool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
@@ -992,8 +961,7 @@ initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool
     initialize_ui_elements(resolution);
 }
 
-void
-update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state, element_focus_t focus)
+void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state, element_focus_t focus)
 {
     handle_console_input(input_state, focus);
     
@@ -1011,7 +979,7 @@ update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_st
         command_buffer_set_viewport(dst_framebuffer->extent.width, dst_framebuffer->extent.height, 0.0f, 1.0f, &g_ui->secondary_ui_q.q);
         
         auto *ui_pipeline = g_pipeline_manager->get(g_ui->ui_pipeline);
-        command_buffer_bind_pipeline(ui_pipeline, &g_ui->secondary_ui_q.q);
+        command_buffer_bind_pipeline(&ui_pipeline->pipeline, &g_ui->secondary_ui_q.q);
         VkDeviceSize zero = 0;
         auto *quads_model = g_model_manager->get(g_ui->ui_quads_model);
         command_buffer_bind_vbos(quads_model->raw_cache_for_rendering,
@@ -1036,31 +1004,22 @@ update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_st
         }
 
         auto *font_pipeline = g_pipeline_manager->get(g_ui->tx_pipeline);
-        command_buffer_bind_pipeline(font_pipeline, &g_ui->secondary_ui_q.q);
+        command_buffer_bind_pipeline(&font_pipeline->pipeline, &g_ui->secondary_ui_q.q);
 
         auto *font_tx_group = g_uniform_group_manager->get(g_ui->tx_group);
-        command_buffer_bind_descriptor_sets(font_pipeline, {1, font_tx_group}, &g_ui->secondary_ui_q.q);
+        command_buffer_bind_descriptor_sets(&font_pipeline->layout, {1, font_tx_group}, &g_ui->secondary_ui_q.q);
         
         auto *tx_quads_model = g_model_manager->get(g_ui->tx_quads_model);
-        command_buffer_bind_vbos(tx_quads_model->raw_cache_for_rendering,
-                                 {1, &zero},
-                                 0,
-                                 tx_quads_model->binding_count,
-                                 &g_ui->secondary_ui_q.q);
+        command_buffer_bind_vbos(tx_quads_model->raw_cache_for_rendering, {1, &zero}, 0, tx_quads_model->binding_count, &g_ui->secondary_ui_q.q);
         if (g_ui->cpu_tx_vertex_count)
         {
-            command_buffer_draw(&g_ui->secondary_ui_q.q,
-                                g_ui->cpu_tx_vertex_count,
-                                1,
-                                0,
-                                0);
+            command_buffer_draw(&g_ui->secondary_ui_q.q, g_ui->cpu_tx_vertex_count, 1, 0, 0);
         }
     }
     end_command_queue(&g_ui->secondary_ui_q);
 }
 
-void
-render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue)
+void render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue)
 {
     // for_t the moment, this just executes one command buffer
     auto *vbo = g_gpu_buffer_manager->get(g_ui->ui_quads_vbo);
@@ -1096,8 +1055,7 @@ render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *qu
 }
 
 // All console-and-ui-linked commands (e.g. printing, ui stuff)
-internal_function int32_t
-lua_console_out(lua_State *state)
+internal_function int32_t lua_console_out(lua_State *state)
 {
     int32_t type = lua_type(state, -1);
     switch(type)
@@ -1121,23 +1079,20 @@ lua_console_out(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_console_clear(lua_State *state)
+internal_function int32_t lua_console_clear(lua_State *state)
 {
     g_console->console_output.char_count = 0;
     return(0);
 }
 
-internal_function int32_t
-lua_get_fps(lua_State *state)
+internal_function int32_t lua_get_fps(lua_State *state)
 {
     //    inpus_state_t *win = get_window_data();
     //    lua_pushnumber(state, 1.0f / win->dt);
     return(0);
 }
 
-internal_function int32_t
-lua_print_fps(lua_State *state)
+internal_function int32_t lua_print_fps(lua_State *state)
 {
     /*    float32_t fps = 1.0f / get_dt();
     uint32_t fps_ui = (uint32_t)fps;
@@ -1147,8 +1102,7 @@ lua_print_fps(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_break(lua_State *state)
+internal_function int32_t lua_break(lua_State *state)
 {
     __debugbreak();
     return(0);
@@ -1161,8 +1115,7 @@ void initialize_ui_translation_unit(struct game_memory_t *memory)
     dbg_ui_utils = &memory->user_interface_state.dbg_ui_utils;
 }
 
-internal_function int32_t
-lua_quit(lua_State *state)
+internal_function int32_t lua_quit(lua_State *state)
 {
     request_quit();
     return(0);

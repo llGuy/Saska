@@ -9,6 +9,8 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "file_system.hpp"
+
 enum invalid_t {INVALID_HANDLE = -1};
 
 // TODO: Possibly get rid of this system
@@ -19,8 +21,7 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
     T objects[ Max ];
     hash_table_inline_t<uint32_t, Max, 4, 4> object_name_map {""}; // To be used during initialization only
 
-    int32_t
-    add(const constant_string_t &name, uint32_t allocation_count = 1)
+    int32_t add(const constant_string_t &name, uint32_t allocation_count = 1)
     {
 	object_name_map.insert(name.hash, count);
 
@@ -30,27 +31,23 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
 	return(prev);
     }
 
-    inline int32_t
-    get_handle(const constant_string_t &name)
+    inline int32_t get_handle(const constant_string_t &name)
     {
 	return(*object_name_map.get(name.hash));
     }
     
-    inline T *
-    get(int32_t handle)
+    inline T *get(int32_t handle)
     {
 	return(&objects[handle]);
     }
 
     // To use for convenience, not for performance
-    inline T *
-    get(const constant_string_t &name)
+    inline T *get(const constant_string_t &name)
     {
 	return(&objects[ *object_name_map.get(name.hash) ]);
     }
 
-    inline void
-    clean_up(void)
+    inline void clean_up(void)
     {
 	for (uint32_t i = 0; i < count; ++i)
 	{
@@ -58,6 +55,127 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
 	}
     }
 };
+
+struct shader_module_info_t
+{
+    const char *file_path;
+    VkShaderStageFlagBits stage;
+
+    file_handle_t file_handle = -1;
+};
+
+struct shader_modules_t
+{
+    static constexpr uint32_t MAX_SHADERS = 5;
+    shader_module_info_t modules[MAX_SHADERS];
+    uint32_t count;
+    
+    template <typename ...T>
+    shader_modules_t(T ...modules_p)
+        : modules{modules_p...}, count(sizeof...(modules_p))
+    {
+    }
+};
+
+using uniform_layout_handle_t = int32_t;
+using uniform_group_handle_t = int32_t;
+
+struct shader_uniform_layouts_t
+{
+    static constexpr uint32_t MAX_LAYOUTS = 10;
+    uniform_layout_handle_t layouts[MAX_LAYOUTS];
+    uint32_t count;
+    
+    template <typename ...T>
+    shader_uniform_layouts_t(T ...layouts_p)
+        : layouts{layouts_p...}, count(sizeof...(layouts_p))
+    {
+    }
+};
+
+struct shader_pk_data_t
+{
+    uint32_t size;
+    uint32_t offset;
+    VkShaderStageFlags stages;
+};
+
+struct shader_blend_states_t
+{
+    static constexpr uint32_t MAX_BLEND_STATES = 10;
+    // For now, is just boolean
+    bool blend_states[MAX_BLEND_STATES];
+    uint32_t count;
+    
+    template <typename ...T>
+    shader_blend_states_t(T ...states)
+        : blend_states{states...}, count(sizeof...(states))
+    {
+    }
+};
+
+struct dynamic_states_t
+{
+    static constexpr uint32_t MAX_DYNAMIC_STATES = 10;
+    VkDynamicState dynamic_states[MAX_DYNAMIC_STATES];
+    uint32_t count;
+
+    template <typename ...T>
+    dynamic_states_t(T ...states)
+        : dynamic_states{states...}, count(sizeof...(states))
+    {
+    }
+};
+
+struct graphics_pipeline_info_t
+{
+    // Contains the paths to the shaders.
+    // Every frame, in development mode, will check if shaders have changed to hotreload them
+    shader_modules_t modules;
+
+    bool primitive_restart;
+    VkPrimitiveTopology topology;
+    VkPolygonMode polygon_mode;
+    VkCullModeFlags culling;
+    shader_uniform_layouts_t layouts;
+    shader_pk_data_t pk;
+    VkExtent2D viewport;
+    shader_blend_states_t blends;
+    model_t *model;
+    bool enable_depth;
+    float32_t depth_bias;
+    dynamic_states_t dynamic_states;
+    render_pass_t *compatible;
+    uint32_t subpass;
+};
+
+void fill_graphics_pipeline_info(const shader_modules_t &modules,
+                                 bool primitive_restart, VkPrimitiveTopology topology,
+                                 VkPolygonMode polygonmode, VkCullModeFlags culling,
+                                 shader_uniform_layouts_t &layouts,
+                                 const shader_pk_data_t &pk,
+                                 VkExtent2D viewport,
+                                 const shader_blend_states_t &blends,
+                                 model_t *model,
+                                 bool enable_depth,
+                                 float32_t depth_bias,
+                                 const dynamic_states_t &dynamic_states,
+                                 render_pass_t *compatible,
+                                 uint32_t subpass,
+                                 graphics_pipeline_info_t *info);
+
+struct graphics_pipeline_t
+{
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+
+    // Any kind of "info" structure is going to be used for hot reloading
+    graphics_pipeline_info_t *info;
+
+    void destroy(void);
+};
+
+void make_graphics_pipeline(graphics_pipeline_t *pipeline);
 
 typedef VkCommandPool gpu_command_queue_pool_t;
 typedef VkCommandBufferLevel submit_level_t;
@@ -100,8 +218,7 @@ struct gpu_command_queue_t
     framebuffer_handle_t fbo_handle{INVALID_HANDLE};
     submit_level_t submit_level = submit_level_t::VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
-    void
-    invalidate(void)
+    void invalidate(void)
     {
         subpass = -1;
         current_pass_handle = INVALID_HANDLE;
@@ -109,10 +226,7 @@ struct gpu_command_queue_t
     }
 
     template <typename ...Clears> void
-    begin_render_pass(render_pass_handle_t pass
-                      , framebuffer_handle_t fbo
-                      , VkSubpassContents contents
-                      , const Clears &...clear_values)
+    begin_render_pass(render_pass_handle_t pass, framebuffer_handle_t fbo, VkSubpassContents contents, const Clears &...clear_values)
     {
         subpass = 0;
 
@@ -122,34 +236,26 @@ struct gpu_command_queue_t
         VkClearValue clears[sizeof...(clear_values) + 1] = {clear_values..., VkClearValue{}};
 
         auto *fbo_object = g_framebuffer_manager->get(fbo);
-        command_buffer_begin_render_pass(g_render_pass_manager->get(pass), fbo_object
-                                                 , init_render_area({0, 0}, fbo_object->extent)
-                                                 , {sizeof...(clear_values), clears}
-                                                 , contents
-                                                 , &q);
+        command_buffer_begin_render_pass(g_render_pass_manager->get(pass), fbo_object, init_render_area({0, 0}, fbo_object->extent), {sizeof...(clear_values), clears}, contents, &q);
     }
 
-    inline void
-    next_subpass(VkSubpassContents contents)
+    inline void next_subpass(VkSubpassContents contents)
     {
         command_buffer_next_subpass(&q, contents);
 
         ++subpass;
     }
 
-    inline void
-    end_render_pass()
+    inline void end_render_pass()
     {
         command_buffer_end_render_pass(&q);
         invalidate();
     }
 };
 
-gpu_command_queue_t
-make_command_queue(VkCommandPool *pool, submit_level_t level);
+gpu_command_queue_t make_command_queue(VkCommandPool *pool, submit_level_t level);
 
-inline VkCommandBufferInheritanceInfo
-make_queue_inheritance_info(render_pass_t *pass, framebuffer_t *framebuffer)
+inline VkCommandBufferInheritanceInfo make_queue_inheritance_info(render_pass_t *pass, framebuffer_t *framebuffer)
 {
     VkCommandBufferInheritanceInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -159,21 +265,14 @@ make_queue_inheritance_info(render_pass_t *pass, framebuffer_t *framebuffer)
     return(info);
 }
 
-void
-begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance = nullptr);
-    
-void
-end_command_queue(gpu_command_queue_t *queue);
+void begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance = nullptr);
+void end_command_queue(gpu_command_queue_t *queue);
 
 // --------------------- Uniform stuff ---------------------
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
 using uniform_binding_t = VkDescriptorSetLayoutBinding;
 
-uniform_binding_t
-make_uniform_binding_s(uint32_t count
-		       , uint32_t binding
-		       , VkDescriptorType uniform_type
-		       , VkShaderStageFlags shader_flags);
+uniform_binding_t make_uniform_binding_s(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags);
 
 // Layout depends on uniform bindings --> almost like a prototype for making uniform groups
 // Separate Uniform_Layout_Info (list of binding structs) from Uniform_Layout (API struct) for optimisation reasons
@@ -183,27 +282,17 @@ struct uniform_layout_info_t // --> VkDescriptorSetLayout
     uniform_binding_t bindings_buffer[MAX_BINDINGS] = {};
     uint32_t binding_count = 0;
     
-    void
-    push(const uniform_binding_t &binding_info);
-
-    void
-    push(uint32_t count
-	 , uint32_t binding
-	 , VkDescriptorType uniform_type
-	 , VkShaderStageFlags shader_flags);
+    void push(const uniform_binding_t &binding_info);
+    void push(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags);
 };
 
 
 
-uniform_layout_t
-make_uniform_layout(uniform_layout_info_t *blueprint);
-
-
-
-uniform_group_t
-make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool);
+uniform_layout_t make_uniform_layout(uniform_layout_info_t *blueprint);
+uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool);
 
 enum binding_type_t { BUFFER, INPUT_ATTACHMENT, TEXTURE };
+
 struct update_binding_t
 {
     binding_type_t type;
@@ -262,9 +351,6 @@ update_uniform_group(uniform_group_t *group, const Update_Ts &...updates)
     update_descriptor_sets({sizeof...(updates), writes});
 }
 
-using uniform_layout_handle_t = int32_t;
-using uniform_group_handle_t = int32_t;
-
 // --------------------- Rendering stuff ---------------------
 // Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render
 struct material_t
@@ -289,48 +375,18 @@ struct gpu_material_submission_queue_t
     // for multi-threaded rendering in the future when needed
     int32_t cmdbuf_index{-1};
 
-    uint32_t
-    push_material(void *push_k_ptr, uint32_t push_k_size,
-                  mesh_t *mesh,
-                  uniform_group_t *ubo = nullptr);
-
-    gpu_command_queue_t *
-    get_command_buffer(gpu_command_queue_t *queue = nullptr);
-    
-    void
-    submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups
-			    , graphics_pipeline_t *graphics_pipeline
-			    , gpu_command_queue_t *main_queue
-			    , submit_level_t level);
-	
-    void
-    flush_queue(void);
-
-    void
-    submit_to_cmdbuf(gpu_command_queue_t *queue);
+    uint32_t push_material(void *push_k_ptr, uint32_t push_k_size, mesh_t *mesh, uniform_group_t *ubo = nullptr);
+    gpu_command_queue_t *get_command_buffer(gpu_command_queue_t *queue = nullptr);
+    void submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups, graphics_pipeline_t *graphics_pipeline, gpu_command_queue_t *main_queue, submit_level_t level);
+    void flush_queue(void);
+    void submit_to_cmdbuf(gpu_command_queue_t *queue);
 };
 
-gpu_material_submission_queue_t
-make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst // for rendering purposes (quite Vulkan specific)
-				   , submit_level_t level, gpu_command_queue_pool_t *pool);
-
-void
-submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue);
-
-void
-make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions);
-
-// Need to fill in this texture with data from a separate function
-void
-make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter);
-
-void
-make_framebuffer(framebuffer_t *fbo
-                 , uint32_t w, uint32_t h
-                 , uint32_t layer_count
-                 , render_pass_t *compatible
-                 , const memory_buffer_view_t<image2d_t> &colors
-                 , image2d_t *depth);
+gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst, submit_level_t level, gpu_command_queue_pool_t *pool);
+void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue);
+void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions);
+void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter);
+void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth);
 
 struct render_pass_attachment_t
 {
@@ -357,8 +413,7 @@ struct render_pass_subpass_t
     render_pass_attachment_reference_t input_attachments[MAX_COLOR_ATTACHMENTS];
     uint32_t input_attachment_count {0};
 
-    template <typename ...T> void
-    set_color_attachment_references(const T &...ts)
+    template <typename ...T> void set_color_attachment_references(const T &...ts)
     {
         render_pass_attachment_reference_t references[] { ts... };
         for (uint32_t i = 0; i < sizeof...(ts); ++i)
@@ -368,15 +423,13 @@ struct render_pass_subpass_t
         color_attachment_count = sizeof...(ts);
     }
 
-    void
-    set_depth(const render_pass_attachment_reference_t &reference)
+    void set_depth(const render_pass_attachment_reference_t &reference)
     {
         enable_depth = true;
         depth_attachment = reference;
     }
 
-    template <typename ...T> void
-    set_input_attachment_references(const T &...ts)
+    template <typename ...T> void set_input_attachment_references(const T &...ts)
     {
         render_pass_attachment_reference_t references[] { ts... };
         for (uint32_t i = 0; i < sizeof...(ts); ++i)
@@ -398,118 +451,15 @@ struct render_pass_dependency_t
     uint32_t dst_access;
 };
 
-render_pass_dependency_t
-make_render_pass_dependency(int32_t src_index,
-                            VkPipelineStageFlags src_stage,
-                            uint32_t src_access,
-                            int32_t dst_index,
-                            VkPipelineStageFlags dst_stage,
-                            uint32_t dst_access);
-
-void
-make_render_pass(render_pass_t *render_pass
-                 , const memory_buffer_view_t<render_pass_attachment_t> &attachments
-                 , const memory_buffer_view_t<render_pass_subpass_t> &subpasses
-                 , const memory_buffer_view_t<render_pass_dependency_t> &dependencies
-                 , bool clear_every_frame = true);
-
-struct shader_module_info_t
-{
-    const char *filename;
-    VkShaderStageFlagBits stage;
-};
-
-struct shader_modules_t
-{
-    static constexpr uint32_t MAX_SHADERS = 5;
-    shader_module_info_t modules[MAX_SHADERS];
-    uint32_t count;
-    
-    template <typename ...T>
-    shader_modules_t(T ...modules_p)
-        : modules{modules_p...}, count(sizeof...(modules_p))
-    {
-    }
-};
-
-struct shader_uniform_layouts_t
-{
-    static constexpr uint32_t MAX_LAYOUTS = 10;
-    uniform_layout_handle_t layouts[MAX_LAYOUTS];
-    uint32_t count;
-    
-    template <typename ...T>
-    shader_uniform_layouts_t(T ...layouts_p)
-        : layouts{layouts_p...}, count(sizeof...(layouts_p))
-    {
-    }
-};
-
-struct shader_pk_data_t
-{
-    uint32_t size;
-    uint32_t offset;
-    VkShaderStageFlags stages;
-};
-
-struct shader_blend_states_t
-{
-    static constexpr uint32_t MAX_BLEND_STATES = 10;
-    // For now, is just boolean
-    bool blend_states[MAX_BLEND_STATES];
-    uint32_t count;
-    
-    template <typename ...T>
-    shader_blend_states_t(T ...states)
-        : blend_states{states...}, count(sizeof...(states))
-    {
-    }
-};
-
-struct dynamic_states_t
-{
-    static constexpr uint32_t MAX_DYNAMIC_STATES = 10;
-    VkDynamicState dynamic_states[MAX_DYNAMIC_STATES];
-    uint32_t count;
-
-    template <typename ...T>
-    dynamic_states_t(T ...states)
-        : dynamic_states{states...}, count(sizeof...(states))
-    {
-    }
-};
+render_pass_dependency_t make_render_pass_dependency(int32_t src_index, VkPipelineStageFlags src_stage, uint32_t src_access, int32_t dst_index, VkPipelineStageFlags dst_stage, uint32_t dst_access);
+void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<render_pass_attachment_t> &attachments, const memory_buffer_view_t<render_pass_subpass_t> &subpasses, const memory_buffer_view_t<render_pass_dependency_t> &dependencies, bool clear_every_frame = true);
 
 enum gpu_buffer_usage_t { VERTEX_BUFFER = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                           INDEX_BUFFER = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                           UNIFORM_BUFFER = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                           INVALID_USAGE };
 
-void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer,
-                                uint32_t size,
-                                void *data,
-                                gpu_buffer_usage_t usage,
-                                gpu_command_queue_pool_t *pool);
-
-void
-make_graphics_pipeline(graphics_pipeline_t *ppln
-                       , const shader_modules_t &modules
-                       , bool primitive_restart, VkPrimitiveTopology topology
-                       , VkPolygonMode polygonmode, VkCullModeFlags culling
-                       , shader_uniform_layouts_t &layouts
-                       , const shader_pk_data_t &pk
-                       , VkExtent2D viewport
-                       , const shader_blend_states_t &blends
-                       , model_t *model
-                       , bool enable_depth
-                       , float32_t depth_bias
-                       , const dynamic_states_t &dynamic_states
-                       , render_pass_t *compatible
-                       , uint32_t subpass);
-
-void
-load_external_graphics_data(swapchain_t *swapchain
-                            , VkDescriptorPool *pool
-                            , VkCommandPool *cmdpool);
+void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool);
 
 // Rendering pipeline
 struct camera_t
@@ -531,8 +481,7 @@ struct camera_t
     matrix4_t p_m;
     matrix4_t v_m;
     
-    void
-    set_default(float32_t w, float32_t h, float32_t m_x, float32_t m_y)
+    void set_default(float32_t w, float32_t h, float32_t m_x, float32_t m_y)
     {
 	mp = vector2_t(m_x, m_y);
 	p = vector3_t(50.0f, 10.0f, 280.0f);
@@ -545,37 +494,22 @@ struct camera_t
 	f = 10000000.0f;
     }
     
-    void
-    compute_projection(void)
+    void compute_projection(void)
     {
 	p_m = glm::perspective(fov, asp, n, f);
     } 
 };
 
 using camera_handle_t = int32_t;
-
-camera_handle_t
-add_camera(input_state_t *input_state, resolution_t resolution);
-
-void
-make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far);
-
 enum { CAMERA_BOUND_TO_3D_OUTPUT = -1 };
 
-camera_t *
-get_camera(camera_handle_t handle);
-
-camera_t *
-get_camera_bound_to_3d_output(void);
-
-void
-bind_camera_to_3d_scene_output(camera_handle_t handle);
-
-memory_buffer_view_t<gpu_buffer_t>
-get_camera_transform_ubos(void);
-
-memory_buffer_view_t<uniform_group_t>
-get_camera_transform_uniform_groups(void);
+camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution);
+void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far);
+camera_t *get_camera(camera_handle_t handle);
+camera_t *get_camera_bound_to_3d_output(void);
+void bind_camera_to_3d_scene_output(camera_handle_t handle);
+memory_buffer_view_t<gpu_buffer_t> get_camera_transform_ubos(void);
+memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void);
 
 struct camera_transform_uniform_data_t
 {
@@ -587,17 +521,8 @@ struct camera_transform_uniform_data_t
     alignas(16) vector4_t debug_vector;
 };
 
-void
-make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
-                                   const matrix4_t &view_matrix,
-                                   const matrix4_t &projection_matrix,
-                                   const matrix4_t &shadow_view_matrix,
-                                   const matrix4_t &shadow_projection_matrix,
-                                   const vector4_t &debug_vector);
-
-void
-update_3d_output_camera_transforms(uint32_t image_index);
-
+void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data, const matrix4_t &view_matrix, const matrix4_t &projection_matrix, const matrix4_t &shadow_view_matrix, const matrix4_t &shadow_projection_matrix, const vector4_t &debug_vector);
+void update_3d_output_camera_transforms(uint32_t image_index);
 void clean_up_cameras(void);
 
 struct shadow_matrices_t
@@ -625,85 +550,36 @@ struct shadow_display_t
     uniform_group_t texture;
 };
 
-void
-render_3d_frustum_debug_information(uniform_group_t *group,
-                                    gpu_command_queue_t *queue,
-                                    uint32_t image_index,
-                                    graphics_pipeline_t *graphics_pipeline /* Llne renderer */);
+void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline /* Llne renderer */);
+shadow_matrices_t get_shadow_matrices(void);
+shadow_debug_t get_shadow_debug(void);
+shadow_display_t get_shadow_display(void);
+void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up);
 
-shadow_matrices_t
-get_shadow_matrices(void);
+void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue);
+void end_shadow_offscreen(gpu_command_queue_t *queue);
 
-shadow_debug_t
-get_shadow_debug(void);
+resolution_t get_backbuffer_resolution(void);
+void begin_deferred_rendering(uint32_t image_index /* to remove in the future */, gpu_command_queue_t *queue);
+void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue);
 
-shadow_display_t
-get_shadow_display(void);
+void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue);
+void update_atmosphere(gpu_command_queue_t *queue);
 
-void
-update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect
-               // later to replace with a Camera structure
-               , const vector3_t &ws_p
-               , const vector3_t &ws_d
-               , const vector3_t &ws_up);
+void make_postfx_data(swapchain_t *swapchain);
+framebuffer_handle_t get_pfx_framebuffer_hdl(void);
 
-void
-begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height
-                       , gpu_command_queue_t *queue);
-
-void
-end_shadow_offscreen(gpu_command_queue_t *queue);
-
-resolution_t
-get_backbuffer_resolution(void);
-
-void
-begin_deferred_rendering(uint32_t image_index /* to remove in the future */
-                         , gpu_command_queue_t *queue);
-
-void
-end_deferred_rendering(const matrix4_t &view_matrix
-                       , gpu_command_queue_t *queue);
-
-void
-render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets
-                  , const vector3_t &camera_position // to change to camera structure
-                  , gpu_command_queue_t *queue);
-
-void
-update_atmosphere(gpu_command_queue_t *queue);
-
-void
-make_postfx_data(swapchain_t *swapchain);
-
-framebuffer_handle_t
-get_pfx_framebuffer_hdl(void);
-
-// For debug purposes like capture frame
-void
-dbg_handle_input(input_state_t *input_state);
-
+void dbg_handle_input(input_state_t *input_state);
 void dbg_render_shadow_map_quad(gpu_command_queue_t *queue);
 
-void
-apply_pfx_on_scene(gpu_command_queue_t *queue
-                   , uniform_group_t *transforms_group
-                   , const matrix4_t &view_matrix
-                   , const matrix4_t &projection_matrix);
+void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix);
 
-void
-render_final_output(uint32_t image_index, gpu_command_queue_t *queue);
+void render_final_output(uint32_t image_index, gpu_command_queue_t *queue);
 
-void
-initialize_game_3d_graphics(gpu_command_queue_pool_t *pool);
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool);
+void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
 
-void
-initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
-
-void
-destroy_graphics(void);
-
-
+void destroy_graphics(void);
 
 // TODO: Organize model loading into some managers (like the gpu_buffer_manager) so that lua can load them
 // TODO: Possibly support more formats
@@ -796,9 +672,7 @@ struct animation_cycles_t
 };
 
 joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton);
-
 skeleton_t load_skeleton(const char *path);
-
 animation_cycles_t load_animations(const char *path);
 
 struct animated_instance_t
@@ -823,12 +697,9 @@ struct animated_instance_t
 };
 
 void destroy_animation_instance(animated_instance_t *instance);
-
 void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force = 0);
-
 animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles);
 void destroy_animated_instance(animated_instance_t *instance);
-
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);
 void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance);
 
@@ -933,10 +804,7 @@ struct pfx_stage_t
     framebuffer_handle_t fbo;
     uniform_group_handle_t output_group; // For next one
 
-    void
-    introduce_to_managers(const constant_string_t &ppln_name,
-                          const constant_string_t &fbo_name,
-                          const constant_string_t &group_name);
+    void introduce_to_managers(const constant_string_t &ppln_name, const constant_string_t &fbo_name, const constant_string_t &group_name);
 };
 
 // For debugging
@@ -974,8 +842,7 @@ struct dbg_pfx_frame_capture_t
     vector2_t window_cursor_position;
     vector2_t backbuffer_cursor_position;
 
-    inline void
-    prepare_memory_maps(void)
+    inline void prepare_memory_maps(void)
     {
         for (uint32_t i = 0; i < sampler_count; ++i)
         {
@@ -984,8 +851,7 @@ struct dbg_pfx_frame_capture_t
         }
     }
 
-    inline void
-    end_memory_maps(void)
+    inline void end_memory_maps(void)
     {
         for (uint32_t i = 0; i < sampler_count; ++i)
         {

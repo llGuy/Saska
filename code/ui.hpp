@@ -25,14 +25,12 @@ struct ui_vector2_t
     ui_vector2_t(int32_t x, int32_t y) : ix(x), iy(y), type(PIXEL) {}
     ui_vector2_t(const ivector2_t &iv) : ix(iv.x), iy(iv.y) {}
     
-    inline vector2_t
-    to_fvec2(void) const
+    inline vector2_t to_fvec2(void) const
     {
         return vector2_t(fx, fy);
     }
 
-    inline ivector2_t
-    to_ivec2(void) const
+    inline ivector2_t to_ivec2(void) const
     {
         return ivector2_t(ix, iy);
     }

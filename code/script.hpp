@@ -15,17 +15,11 @@ struct game_scripts_t
     struct lua_State *script_state;
 };
 
-void
-initialize_scripting(void);
+void initialize_scripting(void);
+void cleanup_lua_scripting(void);
 
-void
-cleanup_lua_scripting(void);
-
-void
-begin_file(const char *filename);
-
-void
-end_file(void);
+void begin_file(const char *filename);
+void end_file(void);
 
 enum script_primitive_type_t { NUMBER, STRING, FUNCTION, TABLE_INDEX, TABLE_HANDLE, TABLE_FIELD };
 enum stack_item_type_t { GLOBAL, FIELD, ARRAY_INDEX };
@@ -41,16 +35,13 @@ struct push_to_stack_info_t
     int32_t stack_index = {0};
 };
 
-void
-push_to_stack(const push_to_stack_info_t &info);
+void push_to_stack(const push_to_stack_info_t &info);
 
-void
-test_script(void);
+void test_script(void);
 
 using lua_function_t = int32_t (*)(lua_State *state);
 
-template <typename T> void
-add_global_to_lua(script_primitive_type_t type, const char *name, const T &data)
+template <typename T> void add_global_to_lua(script_primitive_type_t type, const char *name, const T &data)
 {
     const void *data_ptr = &data;
 
@@ -65,7 +56,6 @@ add_global_to_lua(script_primitive_type_t type, const char *name, const T &data)
     lua_setglobal(g_lua_state, name);
 }
 
-void
-execute_lua(const char *code);
+void execute_lua(const char *code);
 
 void initialize_script_translation_unit(struct game_memory_t *memory);

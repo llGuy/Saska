@@ -13,35 +13,30 @@ extern "C"
 
 global_var lua_State *g_lua_state = nullptr;
 
-void
-initialize_scripting(void)
+void initialize_scripting(void)
 {
     g_lua_state = luaL_newstate();
 
     luaL_openlibs(g_lua_state);
 }
 
-void
-cleanup_lua_scripting(void)
+void cleanup_lua_scripting(void)
 {
     lua_close(g_lua_state);
 }    
 
-void
-begin_file(const char *filename)
+void begin_file(const char *filename)
 {
     // Cleanup previous state that is on the stack from the previous file    
     luaL_dofile(g_lua_state, filename);
 }
 
-void
-end_file(void)
+void end_file(void)
 {
     lua_settop(g_lua_state, 0);
 }
 
-void
-push_to_stack(const char *name, stack_item_type_t type, int32_t stack_index = 0, int32_t array_index = 0)
+void push_to_stack(const char *name, stack_item_type_t type, int32_t stack_index = 0, int32_t array_index = 0)
 {
     switch(type)
     {
@@ -53,8 +48,7 @@ push_to_stack(const char *name, stack_item_type_t type, int32_t stack_index = 0,
 
 template <typename T> T *cast_ptr(void *ptr) {return((T *)ptr);}
 
-void
-get_from_stack(script_primitive_type_t type, int32_t stack_index, void *dst)
+void get_from_stack(script_primitive_type_t type, int32_t stack_index, void *dst)
 {
     switch(type)
     {
@@ -64,8 +58,7 @@ get_from_stack(script_primitive_type_t type, int32_t stack_index, void *dst)
     }
 }
 
-void
-test_script(void)
+void test_script(void)
 {
     begin_file("scripts/tests/tables_indexing_test.lua");
     {
@@ -79,8 +72,7 @@ test_script(void)
     }    
 }
 
-void
-execute_lua(const char *code)
+void execute_lua(const char *code)
 {
     int error = luaL_loadbuffer(g_lua_state, code, strlen(code), code) || lua_pcall(g_lua_state, 0, 0, 0);
 

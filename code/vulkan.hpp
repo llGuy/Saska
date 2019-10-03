@@ -15,8 +15,7 @@ struct queue_families_t
     int32_t graphics_family = -1;
     int32_t present_family = 1;
 
-    inline bool
-    complete(void)
+    inline bool complete(void)
     {
         return(graphics_family >= 0 && present_family >= 0);
     }
@@ -48,15 +47,11 @@ struct gpu_t
     swapchain_details_t swapchain_support;
     VkFormat supported_depth_format;
 
-    void
-    find_queue_families(VkSurfaceKHR *surface);
+    void find_queue_families(VkSurfaceKHR *surface);
 };
 
 // allocates memory for stuff like buffers and images
-void
-allocate_gpu_memory(VkMemoryPropertyFlags properties,
-                    VkMemoryRequirements memory_requirements,
-                    VkDeviceMemory *dest_memory);
+void allocate_gpu_memory(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements, VkDeviceMemory *dest_memory);
 
 struct mapped_gpu_memory_t
 {
@@ -66,11 +61,8 @@ struct mapped_gpu_memory_t
     void *data;
 
     void begin(void);
-
     void fill(memory_byte_buffer_t byte_buffer);
-
     void flush(uint32_t offset, uint32_t size);
-	
     void end(void);
 };
 
@@ -81,14 +73,12 @@ struct gpu_buffer_t
     VkDeviceMemory memory;
     VkDeviceSize size;
 
-    inline mapped_gpu_memory_t
-    construct_map(void)
+    inline mapped_gpu_memory_t construct_map(void)
     {
         return(mapped_gpu_memory_t{0, size, &memory});
     }
 
-    inline VkDescriptorBufferInfo
-    make_descriptor_info(uint32_t offset_into_buffer)
+    inline VkDescriptorBufferInfo make_descriptor_info(uint32_t offset_into_buffer)
     {
         VkDescriptorBufferInfo info = {};
         info.buffer = buffer;
@@ -100,14 +90,7 @@ struct gpu_buffer_t
     void destroy(void);
 };
 
-void
-update_gpu_buffer(gpu_buffer_t *dst,
-                  void *data,
-                  uint32_t size,
-                  uint32_t offset,
-                  VkPipelineStageFlags stage,
-                  VkAccessFlags access,
-                  VkCommandBuffer *queue);
+void update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue);
 
 struct draw_indexed_data_t
 {
@@ -118,9 +101,7 @@ struct draw_indexed_data_t
     uint32_t first_instance;
 };
 
-internal_function inline draw_indexed_data_t
-init_draw_indexed_data_default(uint32_t instance_count,
-                               uint32_t index_count)
+internal_function inline draw_indexed_data_t init_draw_indexed_data_default(uint32_t instance_count, uint32_t index_count)
 {
     draw_indexed_data_t index_data = {};
     index_data.index_count = index_count;
@@ -139,9 +120,7 @@ struct model_index_data_t
     uint32_t index_offset;
     VkIndexType index_type;
 
-    draw_indexed_data_t
-    init_draw_indexed_data(uint32_t first_index,
-                           uint32_t offset)
+    draw_indexed_data_t init_draw_indexed_data(uint32_t first_index, uint32_t offset)
     {
         draw_indexed_data_t data;
         data.index_count = index_count;
@@ -155,80 +134,29 @@ struct model_index_data_t
     }
 };
     
-internal_function inline void
-command_buffer_bind_ibo(const model_index_data_t &index_data,
-                        VkCommandBuffer *command_buffer)
+internal_function inline void command_buffer_bind_ibo(const model_index_data_t &index_data, VkCommandBuffer *command_buffer)
 {
-    vkCmdBindIndexBuffer(*command_buffer
-                         , index_data.index_buffer
-                         , index_data.index_offset
-                         , index_data.index_type);
+    vkCmdBindIndexBuffer(*command_buffer, index_data.index_buffer, index_data.index_offset, index_data.index_type);
 }
     
-internal_function inline void
-command_buffer_bind_vbos(const memory_buffer_view_t<VkBuffer> &buffers
-                         , const memory_buffer_view_t<VkDeviceSize> &offsets
-                         , uint32_t first_binding, uint32_t binding_count
-                         , VkCommandBuffer *command_buffer)
+internal_function inline void command_buffer_bind_vbos(const memory_buffer_view_t<VkBuffer> &buffers, const memory_buffer_view_t<VkDeviceSize> &offsets, uint32_t first_binding, uint32_t binding_count, VkCommandBuffer *command_buffer)
 {
-    vkCmdBindVertexBuffers(*command_buffer
-                           , first_binding
-                           , binding_count
-                           , buffers.buffer
-                           , offsets.buffer);
+    vkCmdBindVertexBuffers(*command_buffer, first_binding, binding_count, buffers.buffer, offsets.buffer);
 }
 
-internal_function inline void
-command_buffer_execute_commands(VkCommandBuffer *cmdbuf
-                                , const memory_buffer_view_t<VkCommandBuffer> &cmds)
+internal_function inline void command_buffer_execute_commands(VkCommandBuffer *cmdbuf, const memory_buffer_view_t<VkCommandBuffer> &cmds)
 {
-    vkCmdExecuteCommands(*cmdbuf
-                         , cmds.count
-                         , cmds.buffer);
+    vkCmdExecuteCommands(*cmdbuf, cmds.count, cmds.buffer);
 }
 
 void destroy_shader_module(VkShaderModule *module);
 
-struct graphics_pipeline_t
+internal_function inline void command_buffer_push_constant(void *data, uint32_t size, uint32_t offset, VkShaderStageFlags stage, VkPipelineLayout layout, VkCommandBuffer *command_buffer)
 {
-    enum shader_stages_bits_t : int32_t { VERTEX_SHADER_BIT = 1 << 0
-                                    , GEOMETRY_SHADER_BIT = 1 << 1
-                                    , TESSELATION_SHADER_BIT = 1 << 2
-                                    , FRAGMENT_SHADER_BIT = 1 << 3};
-
-    int32_t stages;
-
-    const char *base_dir_and_name;
-
-    VkPipelineLayout layout;
-
-    VkPipeline pipeline;
-
-    void destroy(void);
-};
-    
-internal_function inline void
-command_buffer_push_constant(void *data
-                             , uint32_t size
-                             , uint32_t offset
-                             , VkShaderStageFlags stage
-                             , graphics_pipeline_t *ppln
-                             , VkCommandBuffer *command_buffer)
-{
-    vkCmdPushConstants(*command_buffer
-                       , ppln->layout
-                       , stage
-                       , offset
-                       , size
-                       , data);
+    vkCmdPushConstants(*command_buffer, layout, stage, offset, size, data);
 }
 
-void
-init_buffer(VkDeviceSize buffer_size
-            , VkBufferUsageFlags usage
-            , VkSharingMode sharing_mode
-            , VkMemoryPropertyFlags memory_properties
-            , gpu_buffer_t *dest_buffer);
+void init_buffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage, VkSharingMode sharing_mode, VkMemoryPropertyFlags memory_properties, gpu_buffer_t *dest_buffer);
 
     
 struct image2d_t
@@ -242,8 +170,7 @@ struct image2d_t
 	
     VkMemoryRequirements get_memory_requirements(void);
 
-    inline VkDescriptorImageInfo
-    make_descriptor_info(VkImageLayout expected_layout)
+    inline VkDescriptorImageInfo make_descriptor_info(VkImageLayout expected_layout)
     {
         VkDescriptorImageInfo info = {};
         info.imageLayout = expected_layout;
@@ -257,44 +184,13 @@ struct image2d_t
     mapped_gpu_memory_t construct_map(void);
 }; 
     
-void
-init_image(uint32_t width
-           , uint32_t height
-           , VkFormat format
-           , VkImageTiling tiling
-           , VkImageUsageFlags usage
-           , VkMemoryPropertyFlags properties
-           , uint32_t layers
-           , image2d_t *dest_image
-           , VkImageCreateFlags flags = 0);
+void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, VkImageCreateFlags flags = 0);
+void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers);
+void init_image_sampler(VkFilter mag_filter, VkFilter min_filter, VkSamplerAddressMode u_sampler_address_mode, VkSamplerAddressMode v_sampler_address_mode, VkSamplerAddressMode w_sampler_address_mode,
+                        VkBool32 anisotropy_enable, uint32_t max_anisotropy, VkBorderColor clamp_border_color, VkBool32 compare_enable, VkCompareOp compare_op,
+                        VkSamplerMipmapMode mipmap_mode, float32_t mip_lod_bias, float32_t min_lod, float32_t max_lod, VkSampler *dest_sampler);
 
-void
-init_image_view(VkImage *image
-                , VkFormat format
-                , VkImageAspectFlags aspect_flags
-                , VkImageView *dest_image_view
-                , VkImageViewType type
-                , uint32_t layers);
-
-void
-init_image_sampler(VkFilter mag_filter
-                   , VkFilter min_filter
-                   , VkSamplerAddressMode u_sampler_address_mode
-                   , VkSamplerAddressMode v_sampler_address_mode
-                   , VkSamplerAddressMode w_sampler_address_mode
-                   , VkBool32 anisotropy_enable
-                   , uint32_t max_anisotropy
-                   , VkBorderColor clamp_border_color
-                   , VkBool32 compare_enable
-                   , VkCompareOp compare_op
-                   , VkSamplerMipmapMode mipmap_mode
-                   , float32_t mip_lod_bias
-                   , float32_t min_lod
-                   , float32_t max_lod
-                   , VkSampler *dest_sampler);
-
-VkSubresourceLayout get_image_subresource_layout(VkImage *image,
-                                                 VkImageSubresource *subresource);
+VkSubresourceLayout get_image_subresource_layout(VkImage *image, VkImageSubresource *subresource);
 
 VkFormat get_device_supported_depth_format(void);
 
@@ -317,12 +213,7 @@ struct render_pass_t
     void destroy(void);
 };
 
-internal_function inline VkAttachmentDescription
-init_attachment_description(VkFormat format
-                            , VkSampleCountFlagBits samples
-                            , VkAttachmentLoadOp load, VkAttachmentStoreOp store
-                            , VkAttachmentLoadOp stencil_load, VkAttachmentStoreOp stencil_store
-                            , VkImageLayout initial_layout, VkImageLayout final_layout)
+internal_function inline VkAttachmentDescription init_attachment_description(VkFormat format, VkSampleCountFlagBits samples, VkAttachmentLoadOp load, VkAttachmentStoreOp store, VkAttachmentLoadOp stencil_load, VkAttachmentStoreOp stencil_store, VkImageLayout initial_layout, VkImageLayout final_layout)
 {
     VkAttachmentDescription desc = {};
     desc.format		= format;
@@ -336,9 +227,7 @@ init_attachment_description(VkFormat format
     return(desc);
 }
 
-internal_function inline VkAttachmentReference
-init_attachment_reference(uint32_t attachment
-                          , VkImageLayout layout)
+internal_function inline VkAttachmentReference init_attachment_reference(uint32_t attachment, VkImageLayout layout)
 {
     VkAttachmentReference ref = {};
     ref.attachment = attachment;
@@ -346,10 +235,7 @@ init_attachment_reference(uint32_t attachment
     return(ref);
 }
 
-internal_function inline VkSubpassDescription
-init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &color_refs
-                         , VkAttachmentReference *depth
-                         , const memory_buffer_view_t<VkAttachmentReference> &input_refs)
+internal_function inline VkSubpassDescription init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &color_refs, VkAttachmentReference *depth, const memory_buffer_view_t<VkAttachmentReference> &input_refs)
 {
     VkSubpassDescription subpass	= {};
     subpass.pipelineBindPoint	= VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -361,14 +247,7 @@ init_subpass_description(const memory_buffer_view_t<VkAttachmentReference> &colo
     return(subpass);
 }
 
-internal_function inline VkSubpassDependency
-init_subpass_dependency(uint32_t src_subpass
-                        , uint32_t dst_subpass
-                        , VkPipelineStageFlags src_stage
-                        , uint32_t src_access_mask
-                        , VkPipelineStageFlags dst_stage
-                        , uint32_t dst_access_mask
-                        , VkDependencyFlagBits flags = (VkDependencyFlagBits)0)
+internal_function inline VkSubpassDependency init_subpass_dependency(uint32_t src_subpass, uint32_t dst_subpass, VkPipelineStageFlags src_stage, uint32_t src_access_mask, VkPipelineStageFlags dst_stage, uint32_t dst_access_mask, VkDependencyFlagBits flags = (VkDependencyFlagBits)0)
 {
     VkSubpassDependency dependency	= {};
     dependency.srcSubpass		= src_subpass;
@@ -385,24 +264,21 @@ init_subpass_dependency(uint32_t src_subpass
     return(dependency);
 }
 
-internal_function inline VkClearValue
-init_clear_color_color(float32_t r, float32_t g, float32_t b, float32_t a)
+internal_function inline VkClearValue init_clear_color_color(float32_t r, float32_t g, float32_t b, float32_t a)
 {
     VkClearValue value {};
     value.color = {r, g, b, a};
     return(value);
 }
 
-internal_function inline VkClearValue
-init_clear_color_depth(float32_t d, uint32_t s)
+internal_function inline VkClearValue init_clear_color_depth(float32_t d, uint32_t s)
 {
     VkClearValue value {};
     value.depthStencil = {d, s};
     return(value);
 }
 
-internal_function inline VkRect2D
-init_render_area(const VkOffset2D &offset, const VkExtent2D &extent)
+internal_function inline VkRect2D init_render_area(const VkOffset2D &offset, const VkExtent2D &extent)
 {
     VkRect2D render_area {};
     render_area.offset = offset;
@@ -410,34 +286,16 @@ init_render_area(const VkOffset2D &offset, const VkExtent2D &extent)
     return(render_area);
 }
     
-void
-command_buffer_begin_render_pass(render_pass_t *render_pass
-                                 , struct framebuffer_t *fbo
-                                 , VkRect2D render_area
-                                 , const memory_buffer_view_t<VkClearValue> &clear_colors
-                                 , VkSubpassContents subpass_contents
-                                 , VkCommandBuffer *command_buffer);
+void command_buffer_begin_render_pass(render_pass_t *render_pass, struct framebuffer_t *fbo, VkRect2D render_area, const memory_buffer_view_t<VkClearValue> &clear_colors, VkSubpassContents subpass_contents, VkCommandBuffer *command_buffer);
+void command_buffer_next_subpass(VkCommandBuffer *cmdbuf, VkSubpassContents contents);
 
-void
-command_buffer_next_subpass(VkCommandBuffer *cmdbuf
-                            , VkSubpassContents contents);
-
-internal_function inline void
-command_buffer_end_render_pass(VkCommandBuffer *command_buffer)
+internal_function inline void command_buffer_end_render_pass(VkCommandBuffer *command_buffer)
 {
     vkCmdEndRenderPass(*command_buffer);
 }
     
-void
-init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions
-                 , const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions
-                 , const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies
-                 , render_pass_t *dest_render_pass);
-void
-init_shader(VkShaderStageFlagBits stage_bits
-            , uint32_t content_size
-            , byte_t *file_contents
-            , VkShaderModule *dest_shader_module);
+void init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions, const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions, const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies, render_pass_t *dest_render_pass);
+void init_shader(VkShaderStageFlagBits stage_bits, uint32_t content_size, byte_t *file_contents, VkShaderModule *dest_shader_module);
 
 // describes the binding of a buffer to a model VAO
 struct model_binding_t
@@ -450,14 +308,12 @@ struct model_binding_t
     VkVertexInputAttributeDescription *attribute_list = nullptr;
     uint32_t stride = 0;
 	
-    void
-    begin_attributes_creation(VkVertexInputAttributeDescription *attribute_list)
+    void begin_attributes_creation(VkVertexInputAttributeDescription *attribute_list)
     {
         this->attribute_list = attribute_list;
     }
 	
-    void
-    push_attribute(uint32_t location, VkFormat format, uint32_t size)
+    void push_attribute(uint32_t location, VkFormat format, uint32_t size)
     {
         VkVertexInputAttributeDescription *attribute = &attribute_list[location];
 	    
@@ -469,8 +325,7 @@ struct model_binding_t
         stride += size;
     }
 
-    void
-    end_attributes_creation(void)
+    void end_attributes_creation(void)
     {
         attribute_list = nullptr;
     }
@@ -504,18 +359,14 @@ struct model_t
         }
     }
     
-    void
-    prepare_bindings(uint32_t binding_count)
+    void prepare_bindings(uint32_t binding_count)
     {
         
     }
 	
-    VkVertexInputBindingDescription *
-    create_binding_descriptions(void)
+    VkVertexInputBindingDescription *create_binding_descriptions(void)
     {
-        VkVertexInputBindingDescription *descriptions = (VkVertexInputBindingDescription *)allocate_stack(sizeof(VkVertexInputBindingDescription) * binding_count
-                                                                                                          , 1
-                                                                                                          , "binding_total_list_allocation");
+        VkVertexInputBindingDescription *descriptions = (VkVertexInputBindingDescription *)allocate_stack(sizeof(VkVertexInputBindingDescription) * binding_count, 1, "binding_total_list_allocation");
         for (uint32_t i = 0; i < binding_count; ++i)
         {
             descriptions[i].binding = bindings[i].binding;
@@ -525,8 +376,7 @@ struct model_t
         return(descriptions);
     }
 
-    void
-    create_vertex_input_state_info(VkPipelineVertexInputStateCreateInfo *info)
+    void create_vertex_input_state_info(VkPipelineVertexInputStateCreateInfo *info)
     {
         VkVertexInputBindingDescription *binding_descriptions = create_binding_descriptions();
 
@@ -538,8 +388,7 @@ struct model_t
         info->pVertexAttributeDescriptions = attributes_buffer;
     }
 
-    void
-    create_vbo_list(void)
+    void create_vbo_list(void)
     {
         allocate_memory_buffer(raw_cache_for_rendering, binding_count);
 	    
@@ -549,8 +398,7 @@ struct model_t
         }
     }
 
-    model_t
-    copy(void)
+    model_t copy(void)
     {
         model_t ret = {};
         ret.binding_count = this->binding_count;
@@ -564,46 +412,23 @@ struct model_t
     }
 };
     
-internal_function inline void
-command_buffer_draw_indexed(VkCommandBuffer *command_buffer
-                            , const draw_indexed_data_t &data)
+internal_function inline void command_buffer_draw_indexed(VkCommandBuffer *command_buffer, const draw_indexed_data_t &data)
 {
-    vkCmdDrawIndexed(*command_buffer
-                     , data.index_count
-                     , data.instance_count
-                     , data.first_index
-                     , (int32_t)data.vertex_offset
-                     , data.first_instance);
+    vkCmdDrawIndexed(*command_buffer, data.index_count, data.instance_count, data.first_index, (int32_t)data.vertex_offset, data.first_instance);
 }
 
-internal_function inline void
-command_buffer_draw(VkCommandBuffer *cmdbuf
-                    , uint32_t v_count
-                    , uint32_t i_count
-                    , uint32_t first_v
-                    , uint32_t first_i)
+internal_function inline void command_buffer_draw(VkCommandBuffer *cmdbuf, uint32_t v_count, uint32_t i_count, uint32_t first_v, uint32_t first_i)
 {
-    vkCmdDraw(*cmdbuf
-              , v_count
-              , i_count
-              , first_v
-              , first_i);
+    vkCmdDraw(*cmdbuf, v_count, i_count, first_v, first_i);
 }
 
-internal_function inline void
-command_buffer_bind_pipeline(graphics_pipeline_t *pipeline
-                             , VkCommandBuffer *command_buffer)
+internal_function inline void command_buffer_bind_pipeline(VkPipeline *pipeline, VkCommandBuffer *command_buffer)
 {
-    vkCmdBindPipeline(*command_buffer
-                      , VK_PIPELINE_BIND_POINT_GRAPHICS
-                      , pipeline->pipeline);
+    vkCmdBindPipeline(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *pipeline);
 }
 
 // creating pipelines takes a LOT of params
-internal_function inline void
-init_shader_pipeline_info(VkShaderModule *module
-                          , VkShaderStageFlagBits stage_bits
-                          , VkPipelineShaderStageCreateInfo *dest_info)
+internal_function inline void init_shader_pipeline_info(VkShaderModule *module, VkShaderStageFlagBits stage_bits, VkPipelineShaderStageCreateInfo *dest_info)
 {
     dest_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     dest_info->stage = stage_bits;
@@ -611,9 +436,7 @@ init_shader_pipeline_info(VkShaderModule *module
     dest_info->pName = "main";	
 }
     
-internal_function inline void
-init_pipeline_vertex_input_info(model_t *model /* model contains input information required */
-                                , VkPipelineVertexInputStateCreateInfo *info)
+internal_function inline void init_pipeline_vertex_input_info(model_t *model /* model contains input information required */, VkPipelineVertexInputStateCreateInfo *info)
 {
     if (model)
     {
@@ -625,11 +448,7 @@ init_pipeline_vertex_input_info(model_t *model /* model contains input informati
     }
 }
 
-internal_function inline VkVertexInputAttributeDescription
-init_attribute_description(uint32_t binding
-                           , uint32_t location
-                           , VkFormat format
-                           , uint32_t offset)
+internal_function inline VkVertexInputAttributeDescription init_attribute_description(uint32_t binding, uint32_t location, VkFormat format, uint32_t offset)
 {
     VkVertexInputAttributeDescription info = {};
 
@@ -641,10 +460,7 @@ init_attribute_description(uint32_t binding
     return(info);
 }
     
-internal_function inline VkVertexInputBindingDescription
-init_binding_description(uint32_t binding
-                         , uint32_t stride
-                         , VkVertexInputRate input_rate)
+internal_function inline VkVertexInputBindingDescription init_binding_description(uint32_t binding, uint32_t stride, VkVertexInputRate input_rate)
 {
     VkVertexInputBindingDescription info = {};
 
@@ -655,9 +471,7 @@ init_binding_description(uint32_t binding
     return(info);
 }
     
-internal_function inline VkPipelineVertexInputStateCreateInfo
-init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingDescription> &bindings
-                                , const memory_buffer_view_t<VkVertexInputAttributeDescription> & attributes)
+internal_function inline VkPipelineVertexInputStateCreateInfo init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingDescription> &bindings, const memory_buffer_view_t<VkVertexInputAttributeDescription> & attributes)
 {
     VkPipelineVertexInputStateCreateInfo info = {};
 
@@ -671,22 +485,14 @@ init_pipeline_vertex_input_info(const memory_buffer_view_t<VkVertexInputBindingD
     return(info);
 }
     
-internal_function inline void
-init_pipeline_input_assembly_info(VkPipelineInputAssemblyStateCreateFlags flags
-                                  , VkPrimitiveTopology topology
-                                  , VkBool32 primitive_restart
-                                  , VkPipelineInputAssemblyStateCreateInfo *info)
+internal_function inline void init_pipeline_input_assembly_info(VkPipelineInputAssemblyStateCreateFlags flags, VkPrimitiveTopology topology, VkBool32 primitive_restart, VkPipelineInputAssemblyStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     info->topology = topology;
     info->primitiveRestartEnable = primitive_restart;
 }
 
-internal_function inline VkRect2D
-make_rect2D(int32_t startx,
-            int32_t starty,
-            uint32_t width,
-            uint32_t height)
+internal_function inline VkRect2D make_rect2D(int32_t startx,int32_t starty,uint32_t width,uint32_t height)
 {
     VkRect2D dst = {};
     dst.offset = VkOffset2D{startx, starty};
@@ -694,13 +500,7 @@ make_rect2D(int32_t startx,
     return(dst);
 }
     
-internal_function inline void
-init_viewport(uint32_t x, uint32_t y
-              , uint32_t width
-              , uint32_t height
-              , float32_t min_depth
-              , float32_t max_depth
-              , VkViewport *viewport)
+internal_function inline void init_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height, float32_t min_depth, float32_t max_depth, VkViewport *viewport)
 {
     viewport->x = x;
     viewport->y = y;
@@ -710,20 +510,17 @@ init_viewport(uint32_t x, uint32_t y
     viewport->maxDepth = max_depth;
 }
 
-inline void
-command_buffer_set_rect2D(VkRect2D *rect, VkCommandBuffer *cmdbuf)
+inline void command_buffer_set_rect2D(VkRect2D *rect, VkCommandBuffer *cmdbuf)
 {
     vkCmdSetScissor(*cmdbuf, 0, 1, rect);
 }
 
-inline void
-command_buffer_set_viewport(VkViewport *viewport, VkCommandBuffer *cmdbuf)
+inline void command_buffer_set_viewport(VkViewport *viewport, VkCommandBuffer *cmdbuf)
 {
     vkCmdSetViewport(*cmdbuf, 0, 1, viewport);
 }
     
-inline void
-command_buffer_set_viewport(uint32_t width, uint32_t height, float32_t depth_min, float32_t depth_max, VkCommandBuffer *cmdbuf)
+inline void command_buffer_set_viewport(uint32_t width, uint32_t height, float32_t depth_min, float32_t depth_max, VkCommandBuffer *cmdbuf)
 {
     VkViewport viewport = {};
     init_viewport(0, 0, width, height, depth_min, depth_max, &viewport);
@@ -731,25 +528,18 @@ command_buffer_set_viewport(uint32_t width, uint32_t height, float32_t depth_min
     vkCmdSetViewport(*cmdbuf, 0, 1, &viewport);
 }
 
-inline void
-command_buffer_set_line_width(float32_t width, VkCommandBuffer *cmdbuf)
+inline void command_buffer_set_line_width(float32_t width, VkCommandBuffer *cmdbuf)
 {
     vkCmdSetLineWidth(*cmdbuf, width);
 }
 
-inline void
-init_rect2D(VkOffset2D offset
-            , VkExtent2D extent
-            , VkRect2D *rect)
+inline void init_rect2D(VkOffset2D offset, VkExtent2D extent, VkRect2D *rect)
 {
     rect->offset = offset;
     rect->extent = extent;
 }
 
-inline void
-init_pipeline_viewport_info(const memory_buffer_view_t<VkViewport> &viewports
-                            , const memory_buffer_view_t<VkRect2D> &scissors
-                            , VkPipelineViewportStateCreateInfo *info)
+inline void init_pipeline_viewport_info(const memory_buffer_view_t<VkViewport> &viewports, const memory_buffer_view_t<VkRect2D> &scissors, VkPipelineViewportStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     info->viewportCount = viewports.count;
@@ -758,10 +548,7 @@ init_pipeline_viewport_info(const memory_buffer_view_t<VkViewport> &viewports
     info->pScissors = scissors.buffer;;
 }
     
-inline void
-init_pipeline_viewport_info(memory_buffer_view_t<VkViewport> *viewports
-                            , memory_buffer_view_t<VkRect2D> *scissors
-                            , VkPipelineViewportStateCreateInfo *info)
+inline void init_pipeline_viewport_info(memory_buffer_view_t<VkViewport> *viewports, memory_buffer_view_t<VkRect2D> *scissors, VkPipelineViewportStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     info->viewportCount = viewports->count;
@@ -770,15 +557,7 @@ init_pipeline_viewport_info(memory_buffer_view_t<VkViewport> *viewports
     info->pScissors = scissors->buffer;;
 }
     
-internal_function inline void
-init_pipeline_rasterization_info(VkPolygonMode polygon_mode
-                                 , VkCullModeFlags cull_flags
-                                 , float32_t line_width
-                                 , VkPipelineRasterizationStateCreateFlags flags
-                                 , VkPipelineRasterizationStateCreateInfo *info
-                                 , VkBool32 enable_depth_bias = VK_FALSE
-                                 , float32_t bias_constant = 0.0f
-                                 , float32_t bias_slope = 0.0f)
+internal_function inline void init_pipeline_rasterization_info(VkPolygonMode polygon_mode, VkCullModeFlags cull_flags, float32_t line_width, VkPipelineRasterizationStateCreateFlags flags, VkPipelineRasterizationStateCreateInfo *info, VkBool32 enable_depth_bias = VK_FALSE, float32_t bias_constant = 0.0f, float32_t bias_slope = 0.0f)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     info->depthClampEnable = VK_FALSE;
@@ -794,10 +573,7 @@ init_pipeline_rasterization_info(VkPolygonMode polygon_mode
     info->flags = flags;
 }
     
-internal_function inline void
-init_pipeline_multisampling_info(VkSampleCountFlagBits rasterization_samples
-                                 , VkPipelineMultisampleStateCreateFlags flags
-                                 , VkPipelineMultisampleStateCreateInfo *info)
+internal_function inline void init_pipeline_multisampling_info(VkSampleCountFlagBits rasterization_samples, VkPipelineMultisampleStateCreateFlags flags, VkPipelineMultisampleStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     info->sampleShadingEnable = VK_FALSE;
@@ -809,16 +585,7 @@ init_pipeline_multisampling_info(VkSampleCountFlagBits rasterization_samples
     info->flags = flags;
 }
 
-internal_function inline void
-init_blend_state_attachment(VkColorComponentFlags color_write_flags
-                            , VkBool32 enable_blend
-                            , VkBlendFactor src_color
-                            , VkBlendFactor dst_color
-                            , VkBlendOp color_op
-                            , VkBlendFactor src_alpha
-                            , VkBlendFactor dst_alpha
-                            , VkBlendOp alpha_op
-                            , VkPipelineColorBlendAttachmentState *attachment)
+internal_function inline void init_blend_state_attachment(VkColorComponentFlags color_write_flags, VkBool32 enable_blend, VkBlendFactor src_color, VkBlendFactor dst_color, VkBlendOp color_op, VkBlendFactor src_alpha, VkBlendFactor dst_alpha, VkBlendOp alpha_op, VkPipelineColorBlendAttachmentState *attachment)
 {
 
     attachment->colorWriteMask = color_write_flags;
@@ -831,11 +598,7 @@ init_blend_state_attachment(VkColorComponentFlags color_write_flags
     attachment->alphaBlendOp = alpha_op;
 }
 
-internal_function inline void
-init_pipeline_blending_info(VkBool32 enable_logic_op
-                            , VkLogicOp logic_op
-                            , const memory_buffer_view_t<VkPipelineColorBlendAttachmentState> &states
-                            , VkPipelineColorBlendStateCreateInfo *info)
+internal_function inline void init_pipeline_blending_info(VkBool32 enable_logic_op, VkLogicOp logic_op, const memory_buffer_view_t<VkPipelineColorBlendAttachmentState> &states, VkPipelineColorBlendStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     info->logicOpEnable = enable_logic_op;
@@ -848,11 +611,7 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
     info->blendConstants[3] = 0.0f;
 }
     
-internal_function inline void
-init_pipeline_blending_info(VkBool32 enable_logic_op
-                            , VkLogicOp logic_op
-                            , memory_buffer_view_t<VkPipelineColorBlendAttachmentState> *states
-                            , VkPipelineColorBlendStateCreateInfo *info)
+internal_function inline void init_pipeline_blending_info(VkBool32 enable_logic_op, VkLogicOp logic_op, memory_buffer_view_t<VkPipelineColorBlendAttachmentState> *states, VkPipelineColorBlendStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     info->logicOpEnable = enable_logic_op;
@@ -865,43 +624,25 @@ init_pipeline_blending_info(VkBool32 enable_logic_op
     info->blendConstants[3] = 0.0f;
 }
 
-internal_function inline void
-init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicState> *dynamic_states
-                                  , VkPipelineDynamicStateCreateInfo *info)
+internal_function inline void init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicState> *dynamic_states, VkPipelineDynamicStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     info->dynamicStateCount = dynamic_states->count;
     info->pDynamicStates = dynamic_states->buffer;
 }
 
-void
-init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts
-                     , memory_buffer_view_t<VkPushConstantRange> *ranges
-                     , VkPipelineLayout *pipeline_layout);
+void init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts, memory_buffer_view_t<VkPushConstantRange> *ranges, VkPipelineLayout *pipeline_layout);
 
-void
-init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts
-                     , const memory_buffer_view_t<VkPushConstantRange> &ranges
-                     , VkPipelineLayout *pipeline_layout);
+void init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, const memory_buffer_view_t<VkPushConstantRange> &ranges, VkPipelineLayout *pipeline_layout);
 
-internal_function inline void
-init_push_constant_range(VkShaderStageFlags stage_flags
-                         , uint32_t size
-                         , uint32_t offset
-                         , VkPushConstantRange *rng)
+internal_function inline void init_push_constant_range(VkShaderStageFlags stage_flags, uint32_t size, uint32_t offset, VkPushConstantRange *rng)
 {
     rng->stageFlags = stage_flags;
     rng->offset = offset;
     rng->size = size;
 }
     
-internal_function inline void
-init_pipeline_depth_stencil_info(VkBool32 depth_test_enable
-                                 , VkBool32 depth_write_enable
-                                 , float32_t min_depth_bounds
-                                 , float32_t max_depth_bounds
-                                 , VkBool32 stencil_enable
-                                 , VkPipelineDepthStencilStateCreateInfo *info)
+internal_function inline void init_pipeline_depth_stencil_info(VkBool32 depth_test_enable, VkBool32 depth_write_enable, float32_t min_depth_bounds, float32_t max_depth_bounds, VkBool32 stencil_enable, VkPipelineDepthStencilStateCreateInfo *info)
 {
     info->sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     info->depthTestEnable = depth_test_enable;
@@ -915,108 +656,49 @@ init_pipeline_depth_stencil_info(VkBool32 depth_test_enable
     info->back = {};
 }
 
-void
-init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *shaders
-                       , VkPipelineVertexInputStateCreateInfo *vertex_input_info
-                       , VkPipelineInputAssemblyStateCreateInfo *input_assembly_info
-                       , VkPipelineViewportStateCreateInfo *viewport_info
-                       , VkPipelineRasterizationStateCreateInfo *rasterization_info
-                       , VkPipelineMultisampleStateCreateInfo *multisample_info
-                       , VkPipelineColorBlendStateCreateInfo *blend_info
-                       , VkPipelineDynamicStateCreateInfo *dynamic_state_info
-                       , VkPipelineDepthStencilStateCreateInfo *depth_stencil_info
-                       , VkPipelineLayout *layout
-                       , render_pass_t *render_pass
-                       , uint32_t subpass
-                       , VkPipeline *pipeline);
+void init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *shaders,
+                            VkPipelineVertexInputStateCreateInfo *vertex_input_info,
+                            VkPipelineInputAssemblyStateCreateInfo *input_assembly_info,
+                            VkPipelineViewportStateCreateInfo *viewport_info,
+                            VkPipelineRasterizationStateCreateInfo *rasterization_info,
+                            VkPipelineMultisampleStateCreateInfo *multisample_info,
+                            VkPipelineColorBlendStateCreateInfo *blend_info,
+                            VkPipelineDynamicStateCreateInfo *dynamic_state_info,
+                            VkPipelineDepthStencilStateCreateInfo *depth_stencil_info,
+                            VkPipelineLayout *layout,
+                            render_pass_t *render_pass,
+                            uint32_t subpass,
+                            VkPipeline *pipeline);
 
-void
-allocate_command_pool(uint32_t queue_family_index
-                      , VkCommandPool *command_pool);
+void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_pool);
 
-void
-allocate_command_buffers(VkCommandPool *command_pool_source
-                         , VkCommandBufferLevel level
-                         , const memory_buffer_view_t<VkCommandBuffer> &command_buffers);
+void allocate_command_buffers(VkCommandPool *command_pool_source, VkCommandBufferLevel level, const memory_buffer_view_t<VkCommandBuffer> &command_buffers);
 
-void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
-                         , VkCommandPool *pool);
+void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, VkCommandPool *pool);
     
-void
-begin_command_buffer(VkCommandBuffer *command_buffer
-                     , VkCommandBufferUsageFlags usage_flags
-                     , VkCommandBufferInheritanceInfo *inheritance);
+void begin_command_buffer(VkCommandBuffer *command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance);
 
-internal_function inline void
-end_command_buffer(VkCommandBuffer *command_buffer)
+internal_function inline void end_command_buffer(VkCommandBuffer *command_buffer)
 {
     vkEndCommandBuffer(*command_buffer);
 }
 
-void
-submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers
-       , const memory_buffer_view_t<VkSemaphore> &wait_semaphores
-       , const memory_buffer_view_t<VkSemaphore> &signal_semaphores
-       , const memory_buffer_view_t<VkPipelineStageFlags> &wait_stages
-       , VkFence *fence
-       , VkQueue *queue);
+void submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, const memory_buffer_view_t<VkSemaphore> &wait_semaphores, const memory_buffer_view_t<VkSemaphore> &signal_semaphores, const memory_buffer_view_t<VkPipelineStageFlags> &wait_stages, VkFence *fence, VkQueue *queue);
 
-void
-init_single_use_command_buffer(VkCommandPool *command_pool
-                               , VkCommandBuffer *dst);
-
-void
-destroy_single_use_command_buffer(VkCommandBuffer *command_buffer
-                                  , VkCommandPool *command_pool);
+void init_single_use_command_buffer(VkCommandPool *command_pool, VkCommandBuffer *dst);
+void destroy_single_use_command_buffer(VkCommandBuffer *command_buffer, VkCommandPool *command_pool);
     
-void
-transition_image_layout(VkImage *image
-                        , VkFormat format
-                        , VkImageLayout old_layout
-                        , VkImageLayout new_layout
-                        , VkCommandPool *graphics_command_pool);
+void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool);
 
-void
-copy_buffer_into_image(gpu_buffer_t *src_buffer
-                       , image2d_t *dst_image
-                       , uint32_t width
-                       , uint32_t height
-                       , VkCommandPool *command_pool);
+void copy_buffer_into_image(gpu_buffer_t *src_buffer, image2d_t *dst_image, uint32_t width, uint32_t height, VkCommandPool *command_pool);
+void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPool *command_pool);
 
-void
-copy_buffer(gpu_buffer_t *src_buffer
-            , gpu_buffer_t *dst_buffer
-            , VkCommandPool *command_pool);
+void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height,VkPipelineStageFlags flags_before,VkPipelineStageFlags flags_after,VkImageLayout layout_before,VkCommandBuffer *cmdbuf);
+void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before, VkCommandBuffer *cmdbuf);
 
-void
-copy_image(image2d_t *src_image,
-           image2d_t *dst_image,
-           uint32_t width, uint32_t height,
-           VkPipelineStageFlags flags_before,
-           VkPipelineStageFlags flags_after,
-           VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf);
+void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, VkBufferUsageFlags usage, VkCommandPool *transfer_command_pool, gpu_buffer_t *dst_buffer);
 
-void
-blit_image(image2d_t *src_image,
-           image2d_t *dst_image,
-           uint32_t width, uint32_t height,
-           VkPipelineStageFlags flags_before,
-           VkPipelineStageFlags flags_after,
-           VkImageLayout layout_before,
-           VkCommandBuffer *cmdbuf);
-
-void
-invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items
-                                              , VkBufferUsageFlags usage
-                                              , VkCommandPool *transfer_command_pool
-                                              , gpu_buffer_t *dst_buffer);
-
-void
-invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,
-                                             VkCommandPool *transfer_command_pool,
-                                             image2d_t *dst_image,
-                                             int32_t width, int32_t height);
+void invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items,VkCommandPool *transfer_command_pool,image2d_t *dst_image,int32_t width, int32_t height);
     
 struct framebuffer_t
 {
@@ -1031,29 +713,11 @@ struct framebuffer_t
     void destroy(void);
 };
 
-void
-init_framebuffer_attachment(uint32_t width
-                            , uint32_t height
-                            , VkFormat format
-                            , VkImageUsageFlags usage
-                            , image2d_t *attachment
-                            // for_t cubemap targets
-                            , uint32_t layers = 1
-                            , VkImageCreateFlags create_flags = 0
-                            , VkImageViewType image_view_type = VK_IMAGE_VIEW_TYPE_2D);
+void init_framebuffer_attachment(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, image2d_t *attachment, uint32_t layers = 1, VkImageCreateFlags create_flags = 0, VkImageViewType image_view_type = VK_IMAGE_VIEW_TYPE_2D);
     
-void
-init_framebuffer(render_pass_t *compatible_render_pass
-                 , uint32_t width
-                 , uint32_t height
-                 , uint32_t layers
-                 , framebuffer_t *framebuffer); // need to initialize the attachment handles
+void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uint32_t height, uint32_t layers, framebuffer_t *framebuffer); // need to initialize the attachment handles
 
-internal_function inline VkDescriptorSetLayoutBinding
-init_descriptor_set_layout_binding(VkDescriptorType type
-                                   , uint32_t binding
-                                   , uint32_t count
-                                   , VkShaderStageFlags stage)
+internal_function inline VkDescriptorSetLayoutBinding init_descriptor_set_layout_binding(VkDescriptorType type, uint32_t binding, uint32_t count, VkShaderStageFlags stage)
 {
     VkDescriptorSetLayoutBinding ubo_binding	= {};
     ubo_binding.binding				= binding;
@@ -1064,53 +728,27 @@ init_descriptor_set_layout_binding(VkDescriptorType type
     return(ubo_binding);
 }
 
-void
-init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings
-                           , VkDescriptorSetLayout *dst);
+void init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSetLayout *dst);
 
-internal_function inline void
-command_buffer_bind_descriptor_sets(graphics_pipeline_t *pipeline
-                                    , const memory_buffer_view_t<VkDescriptorSet> &sets
-                                    , VkCommandBuffer *command_buffer)
+internal_function inline void command_buffer_bind_descriptor_sets(VkPipelineLayout *layout, const memory_buffer_view_t<VkDescriptorSet> &sets, VkCommandBuffer *command_buffer)
 {
-    vkCmdBindDescriptorSets(*command_buffer
-                            , VK_PIPELINE_BIND_POINT_GRAPHICS
-                            , pipeline->layout
-                            , 0
-                            , sets.count
-                            , sets.buffer
-                            , 0
-                            , nullptr);
+    vkCmdBindDescriptorSets(*command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *layout, 0, sets.count, sets.buffer, 0, nullptr);
 }
     
-void
-allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets,
-                         const memory_buffer_view_t<VkDescriptorSetLayout> &layouts,
-                         VkDescriptorPool *descriptor_pool);
+void allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets,const memory_buffer_view_t<VkDescriptorSetLayout> &layouts,VkDescriptorPool *descriptor_pool);
 
 void destroy_descriptor_set(VkDescriptorSet *set);
 
-VkDescriptorSet
-allocate_descriptor_set(VkDescriptorSetLayout *layout
-                        , VkDescriptorPool *descriptor_pool);
+VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout *layout, VkDescriptorPool *descriptor_pool);
     
-internal_function void
-init_descriptor_set_buffer_info(gpu_buffer_t *buffer
-                                , uint32_t offset_in_ubo
-                                , VkDescriptorBufferInfo *buffer_info)
+internal_function void init_descriptor_set_buffer_info(gpu_buffer_t *buffer, uint32_t offset_in_ubo, VkDescriptorBufferInfo *buffer_info)
 {
     buffer_info->buffer = buffer->buffer;
     buffer_info->offset = offset_in_ubo;
     buffer_info->range = buffer->size;
 }
 
-internal_function void
-init_buffer_descriptor_set_write(VkDescriptorSet *set
-                                 , uint32_t binding
-                                 , uint32_t dst_array_element
-                                 , uint32_t count
-                                 , VkDescriptorBufferInfo *infos
-                                 , VkWriteDescriptorSet *write)
+internal_function void init_buffer_descriptor_set_write(VkDescriptorSet *set, uint32_t binding, uint32_t dst_array_element, uint32_t count, VkDescriptorBufferInfo *infos, VkWriteDescriptorSet *write)
 {
     write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write->dstSet = *set;
@@ -1121,13 +759,7 @@ init_buffer_descriptor_set_write(VkDescriptorSet *set
     write->pBufferInfo = infos;
 }
 
-internal_function void
-init_input_attachment_descriptor_set_write(VkDescriptorSet *set
-                                           , uint32_t binding
-                                           , uint32_t dst_array_element
-                                           , uint32_t count
-                                           , VkDescriptorImageInfo *infos
-                                           , VkWriteDescriptorSet *write)
+internal_function void init_input_attachment_descriptor_set_write(VkDescriptorSet *set, uint32_t binding, uint32_t dst_array_element, uint32_t count, VkDescriptorImageInfo *infos, VkWriteDescriptorSet *write)
 {
     write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write->dstSet = *set;
@@ -1138,13 +770,7 @@ init_input_attachment_descriptor_set_write(VkDescriptorSet *set
     write->pImageInfo = infos;
 }
     
-internal_function void
-init_image_descriptor_set_write(VkDescriptorSet *set
-                                , uint32_t binding
-                                , uint32_t dst_array_element
-                                , uint32_t count
-                                , VkDescriptorImageInfo *infos
-                                , VkWriteDescriptorSet *write)
+internal_function void init_image_descriptor_set_write(VkDescriptorSet *set, uint32_t binding, uint32_t dst_array_element, uint32_t count, VkDescriptorImageInfo *infos, VkWriteDescriptorSet *write)
 {
     write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     write->dstSet = *set;
@@ -1155,21 +781,14 @@ init_image_descriptor_set_write(VkDescriptorSet *set
     write->pImageInfo = infos;
 }
     
-internal_function void
-init_descriptor_set_image_info(VkSampler sampler
-                               , VkImageView image_view
-                               , VkImageLayout expected_layout
-                               , VkDescriptorImageInfo *image_info)
+internal_function void init_descriptor_set_image_info(VkSampler sampler, VkImageView image_view, VkImageLayout expected_layout, VkDescriptorImageInfo *image_info)
 {
     image_info->imageLayout = expected_layout;
     image_info->imageView = image_view;
     image_info->sampler = sampler;
 }
 
-internal_function void
-init_descriptor_pool_size(VkDescriptorType type
-                          , uint32_t count
-                          , VkDescriptorPoolSize *size)
+internal_function void init_descriptor_pool_size(VkDescriptorType type, uint32_t count, VkDescriptorPoolSize *size)
 {
     size->type = type;
     size->descriptorCount = count;
@@ -1180,36 +799,20 @@ struct descriptor_pool_t
     VkDescriptorPool pool;
 };
 
-void
-init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
-                     , uint32_t max_sets
-                     , VkDescriptorPool *pool);
+void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, VkDescriptorPool *pool);
     
-void
-init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes
-                     , uint32_t max_sets
-                     , descriptor_pool_t *pool);
+void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, descriptor_pool_t *pool);
     
     
-void
-update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes);
+void update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes);
 
 void init_semaphore(VkSemaphore *semaphore);
-
 void init_fence(VkFenceCreateFlags flags, VkFence *fence);
-
 void wait_fences(const memory_buffer_view_t<VkFence> &fences);
 
 struct next_image_return_t {VkResult result; uint32_t image_index;};
-
-next_image_return_t
-acquire_next_image(VkSemaphore *semaphore
-                   , VkFence *fence);
-
-VkResult
-present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores
-        , uint32_t *image_index
-        , VkQueue *present_queue);
+next_image_return_t acquire_next_image(VkSemaphore *semaphore , VkFence *fence);
+VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uint32_t *image_index, VkQueue *present_queue);
 
 void reset_fences(const memory_buffer_view_t<VkFence> &fences);
 

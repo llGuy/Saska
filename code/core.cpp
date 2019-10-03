@@ -83,8 +83,7 @@ global_var double g_game_time = 0.0f;
 global_var double g_dt = 0.0f;
 global_var GLFWwindow *g_window = nullptr;
 
-file_contents_t
-read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
+file_contents_t read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
 {
     FILE *file = fopen(filename, flags);
     if (file == nullptr)
@@ -109,8 +108,7 @@ read_file(const char *filename, const char *flags, linear_allocator_t *allocator
     return(contents);
 }
 
-external_image_data_t
-read_image(const char *filename)
+external_image_data_t read_image(const char *filename)
 {
     external_image_data_t external_image_data;
     external_image_data.pixels = stbi_load(filename,
@@ -121,15 +119,13 @@ read_image(const char *filename)
     return(external_image_data);
 }
 
-internal_function void
-open_debug_file(void)
+internal_function void open_debug_file(void)
 {
     output_file.fp = fopen(DEBUG_FILE, "w+");
     assert(output_file.fp >= NULL);
 }
 
-internal_function void
-close_debug_file(void)
+internal_function void close_debug_file(void)
 {
     fclose(output_file.fp);
 }
@@ -139,8 +135,7 @@ float32_t get_dt(void)
     return(g_dt);
 }
 
-float32_t
-barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
+float32_t barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos)
 {
     float32_t det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
     float32_t l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
@@ -235,8 +230,7 @@ internal_function void glfw_keyboard_input_proc(GLFWwindow *win, int32_t key, in
     }
 }
 
-internal_function void
-glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
+internal_function void glfw_mouse_position_proc(GLFWwindow *win, float64_t x, float64_t y)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
 
@@ -267,8 +261,7 @@ internal_function void set_mouse_button_state(input_state_t *input_state, mouse_
     }
 }
 
-internal_function void
-glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t mods)
+internal_function void glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t mods)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
     switch(button)
@@ -279,8 +272,7 @@ glfw_mouse_button_proc(GLFWwindow *win, int32_t button, int32_t action, int32_t 
     }
 }
 
-internal_function void
-glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
+internal_function void glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
 {
     input_state_t *input_state = (input_state_t *)glfwGetWindowUserPointer(win);
     if (input_state->char_count != MAX_CHARS)
@@ -291,8 +283,7 @@ glfw_char_input_proc(GLFWwindow *win, uint32_t code_point)
 
 #include <chrono>
 
-internal_function void
-init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
+internal_function void init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
 {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;

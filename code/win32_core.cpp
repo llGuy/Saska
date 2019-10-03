@@ -66,10 +66,7 @@ void request_quit(void)
     PostQuitMessage(0);
 }
 
-// TODO: Enable hot reloading of the game + hot loading of assets like shaders, scripts, with Win32 file changed functionality
-// TODO: Get rid of "static" globals in files to enable hot reloading of game code properly
-
-file_contents_t read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
+/*file_contents_t read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
 {
     FILE *file = fopen(filename, flags);
     if (file == nullptr)
@@ -103,17 +100,15 @@ external_image_data_t read_image(const char *filename)
                                            &external_image_data.channels,
                                            STBI_rgb_alpha);
     return(external_image_data);
-}
+    }*/
 
-internal_function void
-open_debug_file(void)
+internal_function void open_debug_file(void)
 {
     output_file.fp = fopen(DEBUG_FILE, "w+");
     assert(output_file.fp >= NULL);
 }
 
-internal_function void
-close_debug_file(void)
+internal_function void close_debug_file(void)
 {
     fclose(output_file.fp);
 }

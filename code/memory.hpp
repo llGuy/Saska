@@ -2,14 +2,12 @@
 
 #include "utils.hpp"
 
-inline constexpr uint64_t
-kilobytes(uint32_t kb)
+inline constexpr uint64_t kilobytes(uint32_t kb)
 {
     return(kb * 1024);
 }
 
-inline constexpr uint64_t
-megabytes(uint32_t mb)
+inline constexpr uint64_t megabytes(uint32_t mb)
 {
     return(kilobytes(mb * 1024));
 }
@@ -25,14 +23,8 @@ extern struct linear_allocator_t
     uint32_t capacity;
 } linear_allocator_global;
 
-void *
-allocate_linear(uint32_t alloc_size
-		, alignment_t alignment = 1
-		, const char *name = ""
-		, linear_allocator_t *allocator = &linear_allocator_global);
-
-void
-clear_linear(linear_allocator_t *allocator = &linear_allocator_global);
+void *allocate_linear(uint32_t alloc_size, alignment_t alignment = 1, const char *name = "", linear_allocator_t *allocator = &linear_allocator_global);
+void clear_linear(linear_allocator_t *allocator = &linear_allocator_global);
 
 struct stack_allocation_header_t
 {
@@ -53,20 +45,12 @@ extern struct stack_allocator_t
     uint32_t capacity;
 } stack_allocator_global;
 
-void *
-allocate_stack(uint32_t allocation_size
-	       , alignment_t alignment = 1
-	       , const char *name = ""
-	       , stack_allocator_t *allocator = &stack_allocator_global);
+void *allocate_stack(uint32_t allocation_size, alignment_t alignment = 1, const char *name = "", stack_allocator_t *allocator = &stack_allocator_global);
 
 // only applies to the allocation at the top of the stack
-void
-extend_stack_top(uint32_t extension_size
-		 , stack_allocator_t *allocator = &stack_allocator_global);
-
+void extend_stack_top(uint32_t extension_size, stack_allocator_t *allocator = &stack_allocator_global);
 // contents in the allocation must be destroyed by the user
-void
-pop_stack(stack_allocator_t *allocator = &stack_allocator_global);
+void pop_stack(stack_allocator_t *allocator = &stack_allocator_global);
 
 struct free_block_header_t
 {
@@ -92,24 +76,12 @@ extern struct free_list_allocator_t
     uint32_t allocation_count = 0;
 } free_list_allocator_global;
 
-void *
-allocate_free_list(uint32_t allocation_size
-		   , alignment_t alignment = 1
-		   , const char *name = ""
-		   , free_list_allocator_t *allocator = &free_list_allocator_global);
+void *allocate_free_list(uint32_t allocation_size, alignment_t alignment = 1, const char *name = "", free_list_allocator_t *allocator = &free_list_allocator_global);
+void deallocate_free_list(void *pointer, free_list_allocator_t *allocator = &free_list_allocator_global);
 
-void
-deallocate_free_list(void *pointer
-		     , free_list_allocator_t *allocator = &free_list_allocator_global);
-
-void
-init_manager(void);
-
-void
-decrease_shared_count(const constant_string_t &id);
-
-void
-increase_shared_count(const constant_string_t &id);    
+void init_manager(void);
+void decrease_shared_count(const constant_string_t &id);
+void increase_shared_count(const constant_string_t &id);    
 
 // CPU memory used for allocating vulkan / gpu objects (images, vbos, ...)
 struct registered_memory_base_t
@@ -127,28 +99,6 @@ struct registered_memory_base_t
 
     ~registered_memory_base_t(void) {if (p) {decrease_shared_count(id);}}
 };
-/*
-registered_memory_base_t
-register_memory(const constant_string_t &id
-		, uint32_t size);
-
-registered_memory_base_t
-register_existing_memory(void *ptr
-			 , const constant_string_t &id
-			 , uint32_t size);
-
-registered_memory_base_t
-get_memory(const constant_string_t &id);
-
-void
-move_memory(void *p, uint32_t size, const constant_string_t &id);
-
-void
-deregister_memory(const constant_string_t &id);
-
-void
-deregister_memory_and_deallocate(const constant_string_t &id);
-*/
 
 // basically just a pointer
 template <typename T> struct registered_memory_t
@@ -160,15 +110,12 @@ template <typename T> struct registered_memory_t
 
     uint32_t size;
 
-    FORCEINLINE void
-    destroy(void) {p = nullptr; decrease_shared_count(id);};
+    FORCEINLINE void destroy(void) {p = nullptr; decrease_shared_count(id);};
 
     // to use only if is array
-    FORCEINLINE My_Type
-    extract(uint32_t i) {return(My_Type(registered_memory_base_t(p + i, id, sizeof(T))));};
+    FORCEINLINE My_Type extract(uint32_t i) {return(My_Type(registered_memory_base_t(p + i, id, sizeof(T))));};
 
-    FORCEINLINE memory_buffer_view_t<My_Type>
-    separate(void)
+    FORCEINLINE memory_buffer_view_t<My_Type> separate(void)
     {
 	memory_buffer_view_t<My_Type> view;
 	allocate_memory_buffer(view, size);
@@ -178,8 +125,7 @@ template <typename T> struct registered_memory_t
 	return(view);
     }
 
-    FORCEINLINE T *
-    operator->(void) {return(p);}
+    FORCEINLINE T *operator->(void) {return(p);}
 	
     registered_memory_t(void) = default;
     registered_memory_t(void *p, const constant_string_t &id, uint32_t size) = delete;
@@ -191,8 +137,7 @@ template <typename T> struct registered_memory_t
 
     T &operator[](uint32_t i) {return(p[i]);};
 
-    FORCEINLINE memory_buffer_view_t<T>
-    to_memory_buffer_view(void)
+    FORCEINLINE memory_buffer_view_t<T> to_memory_buffer_view(void)
     {
 	return(memory_buffer_view_t<T>{size, p});
     }

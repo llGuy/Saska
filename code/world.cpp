@@ -66,21 +66,17 @@ internal_function terrain_base_info_t *get_terrain_base(int32_t index)
     return(&g_terrains->terrain_bases[index]);
 }
 
-internal_function vector3_t
-get_ws_terrain_vertex_position(uint32_t idx,
-                               morphable_terrain_t *terrain)
+internal_function vector3_t get_ws_terrain_vertex_position(uint32_t idx, morphable_terrain_t *terrain)
 {
     return(vector3_t());
 }
 
-internal_function morphable_terrain_t *
-add_terrain(void)
+internal_function morphable_terrain_t *add_terrain(void)
 {
     return(&g_terrains->terrains[g_terrains->terrain_count++]);
 }    
 
-internal_function void
-clean_up_terrain(void)
+internal_function void clean_up_terrain(void)
 {
     for (uint32_t i = 0; i < g_terrains->terrain_count; ++i)
     {
@@ -88,14 +84,12 @@ clean_up_terrain(void)
     }
 }
 
-inline uint32_t
-get_terrain_index(uint32_t x, uint32_t z, uint32_t width_x)
+inline uint32_t get_terrain_index(uint32_t x, uint32_t z, uint32_t width_x)
 {
     return(x + z * width_x);
 }
 
-inline int32_t
-get_terrain_index(int32_t x, int32_t z, int32_t width_x, int32_t depth_z)
+inline int32_t get_terrain_index(int32_t x, int32_t z, int32_t width_x, int32_t depth_z)
 {
     if (x >= 0 && x < width_x
         && z >= 0 && z < depth_z)
@@ -108,8 +102,7 @@ get_terrain_index(int32_t x, int32_t z, int32_t width_x, int32_t depth_z)
     }
 }
 
-inline ivector2_t
-get_ts_xz_coord_from_idx(uint32_t idx, morphable_terrain_t *t)
+inline ivector2_t get_ts_xz_coord_from_idx(uint32_t idx, morphable_terrain_t *t)
 {
     ivector2_t ret = {};
     ret.x = idx % t->xz_dim.x;
@@ -117,8 +110,7 @@ get_ts_xz_coord_from_idx(uint32_t idx, morphable_terrain_t *t)
     return(ret);
 }
 
-inline matrix4_t
-compute_ws_to_ts_matrix(morphable_terrain_t *t)
+inline matrix4_t compute_ws_to_ts_matrix(morphable_terrain_t *t)
 {
     matrix4_t inverse_translate = glm::translate(-(t->ws_p));
     matrix4_t inverse_rotate = glm::transpose(glm::mat4_cast(t->gs_r));
@@ -126,8 +118,7 @@ compute_ws_to_ts_matrix(morphable_terrain_t *t)
     return(inverse_scale * inverse_rotate * inverse_translate);
 }
 
-inline matrix4_t
-compute_ts_to_ws_matrix(morphable_terrain_t *t)
+inline matrix4_t compute_ts_to_ws_matrix(morphable_terrain_t *t)
 {
     matrix4_t translate = glm::translate(t->ws_p);
     matrix4_t rotate = glm::mat4_cast(t->gs_r);
@@ -135,19 +126,14 @@ compute_ts_to_ws_matrix(morphable_terrain_t *t)
     return(translate * rotate * scale);
 }
 
-inline vector3_t
-transform_from_ws_to_ts(const vector3_t &ws_v,
-                        morphable_terrain_t *t)
+inline vector3_t transform_from_ws_to_ts(const vector3_t &ws_v, morphable_terrain_t *t)
 {
     vector3_t ts_position = t->inverse_transform * vector4_t(ws_v, 1.0f);
 
     return(ts_position);
 }
 
-internal_function bool
-is_on_terrain(const vector3_t &ws_position,
-              morphable_terrain_t *t,
-              float32_t *distance)
+internal_function bool is_on_terrain(const vector3_t &ws_position,morphable_terrain_t *t,float32_t *distance)
 {
     float32_t max_x = (float32_t)(t->xz_dim.x);
     float32_t max_z = (float32_t)(t->xz_dim.y);
@@ -167,8 +153,7 @@ is_on_terrain(const vector3_t &ws_position,
     return(is_in_x_boundaries && is_in_z_boundaries && is_on_top);
 }
 
-template <typename T> internal_function float32_t
-distance_squared(const T &v)
+template <typename T> internal_function float32_t distance_squared(const T &v)
 {
     return(glm::dot(v, v));
 }
@@ -178,9 +163,7 @@ internal_function float32_t squared(float32_t a)
     return(a * a);
 }
 
-internal_function terrain_triangle_t
-get_triangle_from_pos(const vector3_t ts_p,
-                      morphable_terrain_t *t)
+internal_function terrain_triangle_t get_triangle_from_pos(const vector3_t ts_p, morphable_terrain_t *t)
 {
     vector2_t ts_p_xz = vector2_t(ts_p.x, ts_p.z);
 
@@ -342,32 +325,24 @@ get_triangle_from_pos(const vector3_t ts_p,
     return {false};
 }
 
-internal_function float32_t
-calculate_sphere_area(float32_t r)
+internal_function float32_t calculate_sphere_area(float32_t r)
 {
     return(4.0f * 3.1415f * r * r);
 }
 
-internal_function float32_t
-calculate_sphere_circumference(float32_t f)
+internal_function float32_t calculate_sphere_circumference(float32_t f)
 {
     return(2.0f * 3.1415f * f);
 }
 
-internal_function vector3_t
-get_sliding_down_direction(const vector3_t &ws_view_direction,
-                           const vector3_t &ws_up_vector,
-                           const vector3_t &ws_normal)
+internal_function vector3_t get_sliding_down_direction(const vector3_t &ws_view_direction, const vector3_t &ws_up_vector, const vector3_t &ws_normal)
 {
     vector3_t ws_right = glm::cross(ws_view_direction, ws_up_vector);
     vector3_t ws_down = glm::cross(ws_normal, ws_right);
     return(ws_down);
 }
 
-internal_function vector3_t
-get_sliding_down_direction_ts(const vector3_t &ts_view_direction,
-                              const vector3_t &ts_up_vector,
-                              const vector3_t &ts_normal)
+internal_function vector3_t get_sliding_down_direction_ts(const vector3_t &ts_view_direction, const vector3_t &ts_up_vector, const vector3_t &ts_normal)
 {
     vector3_t ts_right = glm::cross(ts_view_direction, ts_up_vector);
     vector3_t ts_down = glm::cross(ts_normal, ts_right);
@@ -397,8 +372,7 @@ struct sphere_triangle_collision_return_t
     bool32_t is_edge;
 };
 
-internal_function bool32_t
-is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
+internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
     vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
     vector3_t cross12 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
@@ -470,10 +444,7 @@ internal_function void make_triangle_collision_return(float32_t es_distance, con
     ret->es_sphere_contact_point = es_contact_point;
 }
 
-internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position,
-                                                   const vector3_t &es_vertex,
-                                                   const vector3_t &ts_surface_normal,
-                                                   sphere_triangle_collision_return_t *collision)
+internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &ts_surface_normal, sphere_triangle_collision_return_t *collision)
 {
     float32_t a = distance_squared(es_sphere_velocity);
     float32_t b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_vertex);
@@ -495,10 +466,7 @@ internal_function void check_collision_with_vertex(const vector3_t &es_sphere_ve
     }
 }
 
-internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position,
-                                                 const vector3_t &es_vertex_a, const vector3_t &es_vertex_b,
-                                                 const vector3_t &ts_surface_normal,
-                                                 sphere_triangle_collision_return_t *collision)
+internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &ts_surface_normal, sphere_triangle_collision_return_t *collision)
 {
     vector3_t es_edge_diff = es_vertex_b - es_vertex_a;
     vector3_t es_sphere_pos_to_vertex = es_vertex_a - es_sphere_position;
@@ -715,15 +683,14 @@ internal_function void adjust_if_sphere_was_under_terrain(sphere_triangle_collis
 }
 
 // Get all the triangles that the sphere might collide with
-internal_function collide_and_slide_collision_t
-detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
-                                                      vector3_t ts_sphere_position,
-                                                      const vector3_t &ts_sphere_size,
-                                                      vector3_t ts_sphere_velocity,
-                                                      float32_t dt,
-                                                      bool previous_was_edge,
-                                                      bool slide,
-                                                      uint32_t recurse_depth = 0)
+internal_function collide_and_slide_collision_t detect_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
+                                                                                                      vector3_t ts_sphere_position,
+                                                                                                      const vector3_t &ts_sphere_size,
+                                                                                                      vector3_t ts_sphere_velocity,
+                                                                                                      float32_t dt,
+                                                                                                      bool previous_was_edge,
+                                                                                                      bool slide,
+                                                                                                      uint32_t recurse_depth = 0)
 {
     if (terrain)
     {
@@ -909,20 +876,18 @@ struct detected_collision_return_t
 
 enum terrain_space_t { TERRAIN_SPACE, WORLD_SPACE };
 
-internal_function detected_collision_return_t
-detect_terrain_collision(hitbox_t *hitbox,
-                         const vector3_t &size,
-                         const vector3_t &ws_p,
-                         morphable_terrain_t *t,
-                         enum terrain_space_t terrain_space = terrain_space_t::WORLD_SPACE);
+internal_function detected_collision_return_t detect_terrain_collision(hitbox_t *hitbox,
+                                                                       const vector3_t &size,
+                                                                       const vector3_t &ws_p,
+                                                                       morphable_terrain_t *t,
+                                                                       enum terrain_space_t terrain_space = terrain_space_t::WORLD_SPACE);
 
-internal_function collide_and_slide_collision_t
-detect_and_stick_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
-                                                                vector3_t ts_sphere_position,
-                                                                const vector3_t &ts_sphere_size,
-                                                                vector3_t ts_sphere_velocity,
-                                                                float32_t dt,
-                                                                uint32_t recurse_depth = 0)
+internal_function collide_and_slide_collision_t detect_and_stick_collision_against_possible_colliding_triangles(morphable_terrain_t *terrain,
+                                                                                                                vector3_t ts_sphere_position,
+                                                                                                                const vector3_t &ts_sphere_size,
+                                                                                                                vector3_t ts_sphere_velocity,
+                                                                                                                float32_t dt,
+                                                                                                                uint32_t recurse_depth = 0)
 {
     if (terrain)
     {
@@ -1232,10 +1197,9 @@ void adjust_closest_distance_with_triangle(const vector3_t &ts_sphere_position,
     }
 }
 
-internal_function float32_t
-get_position_distance_from_terrain(morphable_terrain_t *terrain,
-                                   vector3_t ts_sphere_position,
-                                   const vector3_t &ts_sphere_size)
+internal_function float32_t get_position_distance_from_terrain(morphable_terrain_t *terrain,
+                                                               vector3_t ts_sphere_position,
+                                                               const vector3_t &ts_sphere_size)
 {
     if (terrain)
     {
@@ -1312,11 +1276,7 @@ get_position_distance_from_terrain(morphable_terrain_t *terrain,
     return 1000.0f;
 }
 
-internal_function terrain_triangle_t
-get_triangle_pointing_at(vector3_t ws_ray_p,
-                         const vector3_t &ws_ray_d,
-                         morphable_terrain_t *t,
-                         float32_t dt)
+internal_function terrain_triangle_t get_triangle_pointing_at(vector3_t ws_ray_p, const vector3_t &ws_ray_d, morphable_terrain_t *t, float32_t dt)
 {
     persist_var constexpr float32_t MAX_DISTANCE = 6.0f;
     persist_var constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -1350,11 +1310,7 @@ get_triangle_pointing_at(vector3_t ws_ray_p,
     return(terrain_triangle_t{false});
 }
 
-internal_function ivector2_t
-get_coord_pointing_at(vector3_t ws_ray_p,
-                      const vector3_t &ws_ray_d,
-                      morphable_terrain_t *t,
-                      float32_t dt)
+internal_function ivector2_t get_coord_pointing_at(vector3_t ws_ray_p, const vector3_t &ws_ray_d, morphable_terrain_t *t, float32_t dt)
 {
     persist_var constexpr float32_t MAX_DISTANCE = 6.0f;
     persist_var constexpr float32_t MAX_DISTANCE_SQUARED = MAX_DISTANCE * MAX_DISTANCE;
@@ -1394,12 +1350,7 @@ get_coord_pointing_at(vector3_t ws_ray_p,
     return(ts_position);
 }
 
-internal_function float32_t
-get_height_of_terrain_at_entity_feet(bool is_sphere,
-                                     hitbox_t *hitbox,
-                                     const vector3_t &size,
-                                     const vector3_t &ws_p,
-                                     morphable_terrain_t *t)
+internal_function float32_t get_height_of_terrain_at_entity_feet(bool is_sphere, hitbox_t *hitbox, const vector3_t &size, const vector3_t &ws_p, morphable_terrain_t *t)
 {
     vector3_t ts_p;
     vector3_t ts_entity_height_offset;
@@ -1557,12 +1508,7 @@ get_height_of_terrain_at_entity_feet(bool is_sphere,
     return ts_height;
 }
 
-internal_function detected_collision_return_t
-detect_terrain_collision(hitbox_t *hitbox,
-                         const vector3_t &size,
-                         const vector3_t &ws_p,
-                         morphable_terrain_t *t,
-                         enum terrain_space_t terrain_space)
+internal_function detected_collision_return_t detect_terrain_collision(hitbox_t *hitbox, const vector3_t &size, const vector3_t &ws_p, morphable_terrain_t *t, enum terrain_space_t terrain_space)
 {
     vector3_t ts_p;
     vector3_t ts_entity_height_offset;
@@ -1741,11 +1687,7 @@ detect_terrain_collision(hitbox_t *hitbox,
     return {false, ws_at, ts_at, ws_normal, normal, ts_height - ts_p.y};
 }
 
-internal_function void
-morph_terrain_at_triangle(terrain_triangle_t *triangle,
-                           morphable_terrain_t *t,
-                           float32_t morph_zone_radius,
-                           float32_t dt)
+internal_function void morph_terrain_at_triangle(terrain_triangle_t *triangle, morphable_terrain_t *t, float32_t morph_zone_radius, float32_t dt)
 {
     uint32_t morph_quotients_radius_count = (morph_zone_radius) * (morph_zone_radius);
 
@@ -1808,8 +1750,7 @@ morph_terrain_at_triangle(terrain_triangle_t *triangle,
     t->is_modified = true;
 }
 
-internal_function void
-morph_terrain_at(const ivector2_t &ts_position, morphable_terrain_t *t, float32_t morph_zone_radius, float32_t dt)
+internal_function void morph_terrain_at(const ivector2_t &ts_position, morphable_terrain_t *t, float32_t morph_zone_radius, float32_t dt)
 {
     uint32_t morph_quotients_outer_count = (morph_zone_radius - 1) * (morph_zone_radius - 1);
     uint32_t morph_quotients_inner_count = morph_zone_radius * 2 - 1;
@@ -1908,8 +1849,7 @@ morph_terrain_at(const ivector2_t &ts_position, morphable_terrain_t *t, float32_
     t->is_modified = true;
 }
 
-internal_function morphable_terrain_t *
-on_which_terrain(const vector3_t &ws_position)
+internal_function morphable_terrain_t *on_which_terrain(const vector3_t &ws_position)
 {
     struct distance_terrain_data_t { float32_t distance; morphable_terrain_t *terrain; };
     distance_terrain_data_t *distances = ALLOCA_T(distance_terrain_data_t, g_terrains->terrain_count);
@@ -1988,8 +1928,7 @@ internal_function void sync_gpu_with_terrains(gpu_command_queue_t *queue)
     }
 }
 
-internal_function float32_t
-terrain_noise()
+internal_function float32_t terrain_noise()
 {
     float32_t r = (float32_t)(rand() % 100);
     r /= 500.0f;
@@ -2016,15 +1955,14 @@ internal_function void submit_terrain_gpu_operation(terrain_gpu_operation_t::aff
     g_terrains->gpu_event_queue.events[g_terrains->gpu_event_queue.event_count++] = operation;
 }
 
-internal_function void
-make_3D_terrain_base(uint32_t width_x,
-		     uint32_t depth_z,
-		     float32_t random_displacement_factor,
-		     gpu_buffer_t *mesh_xz_values,
-		     gpu_buffer_t *idx_buffer,
-		     model_t *model_info,
-		     VkCommandPool *cmdpool,
-                     application_type_t app_type)
+internal_function void make_3D_terrain_base(uint32_t width_x,
+                                            uint32_t depth_z,
+                                            float32_t random_displacement_factor,
+                                            gpu_buffer_t *mesh_xz_values,
+                                            gpu_buffer_t *idx_buffer,
+                                            model_t *model_info,
+                                            VkCommandPool *cmdpool,
+                                            application_type_t app_type)
 {
     assert(width_x & 0X1 && depth_z & 0X1);
     
@@ -2103,12 +2041,11 @@ make_3D_terrain_base(uint32_t width_x,
     }
 }
 
-internal_function void
-make_3D_terrain_mesh_instance(uint32_t width_x,
-			      uint32_t depth_z,
-			      float32_t *&cpu_side_heights,
-			      gpu_buffer_t *gpu_side_heights,
-                              application_type_t app_type)
+internal_function void make_3D_terrain_mesh_instance(uint32_t width_x,
+                                                     uint32_t depth_z,
+                                                     float32_t *&cpu_side_heights,
+                                                     gpu_buffer_t *gpu_side_heights,
+                                                     application_type_t app_type)
 {
     // don_t't need in the future
     cpu_side_heights = (float32_t *)allocate_free_list(sizeof(float32_t) * width_x * depth_z);
@@ -2124,8 +2061,7 @@ make_3D_terrain_mesh_instance(uint32_t width_x,
     }
 }
 
-internal_function void
-make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, application_type_t app_type)
+internal_function void make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, application_type_t app_type)
 {
     make_3D_terrain_mesh_instance(w, d, terrain->heights, &terrain->heights_gpu_buffer, app_type);
     terrain->xz_dim = ivector2_t(w, d);
@@ -2133,10 +2069,9 @@ make_terrain_mesh_data(uint32_t w, uint32_t d, morphable_terrain_t *terrain, app
 
 
 // TODO: make this take roughness and metalness to push to pushconstant or whatever 
-internal_function void
-make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue,
-                            const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color,
-                            application_type_t app_type)
+internal_function void make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terrain, gpu_material_submission_queue_t *queue,
+                                                   const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color,
+                                                   application_type_t app_type)
 {
     terrain->terrain_base_id = base->base_id;
     
@@ -2169,8 +2104,7 @@ make_terrain_rendering_data(terrain_base_info_t *base, morphable_terrain_t *terr
 }
 
 
-internal_function void
-make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
+internal_function void make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
 {
     /*
     vector3_t grass_color = vector3_t(118.0f, 169.0f, 72.0f) / 255.0f;
@@ -2197,8 +2131,7 @@ make_terrain_instances(terrain_base_info_t *base, VkCommandPool *cmdpool)
     //make_planet(vector3_t(300.0f, 300.0f, 300.0f), grass_color, cmdpool);
 }
 
-internal_function void
-add_staged_creation_terrains(terrain_base_info_t *base)
+internal_function void add_staged_creation_terrains(terrain_base_info_t *base)
 {
     for (uint32_t i = 0; i < g_terrains->create_count; ++i)
     {
@@ -2215,13 +2148,13 @@ add_staged_creation_terrains(terrain_base_info_t *base)
     g_terrains->create_count = 0;
 }
 
-internal_function void
-make_terrain_pointer(void)
+internal_function void make_terrain_pointer(void)
 {
     //    g_terrains->terrain_pointer.ppln = g_pipeline_manager->get_handle("pipeline.terrain_mesh_pointer_pipeline"_hash);
     g_terrains->terrain_pointer.ppln = g_pipeline_manager->add("pipeline.terrain_mesh_pointer"_hash);
     auto *terrain_pointer_ppln = g_pipeline_manager->get(g_terrains->terrain_pointer.ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain_pointer.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain_pointer.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
@@ -2229,9 +2162,11 @@ make_terrain_pointer(void)
         shader_pk_data_t push_k = {200, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_pointer_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_LINE,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        terrain_pointer_ppln->info = info;
+        make_graphics_pipeline(terrain_pointer_ppln);
     }
 }
 
@@ -2264,13 +2199,7 @@ void add_and_initialize_terrain_base(uint32_t x, uint32_t z)
     auto *model_info = &base->model_info;
 
     // TODO: Defer this operation so that all GPU-related operations go into one function
-    make_3D_terrain_base(x, z,
-			 1.0f,
-			 &base->mesh_xz_values,
-			 &base->idx_buffer,
-			 model_info,
-			 get_global_command_pool(),
-                         get_app_type());
+    make_3D_terrain_base(x, z, 1.0f, &base->mesh_xz_values, &base->idx_buffer, model_info, get_global_command_pool(), get_app_type());
 }
 
 void reinitialize_terrain_graphics_data(void)
@@ -2294,9 +2223,10 @@ void reinitialize_terrain_graphics_data(void)
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, terrain_ppln->info);
+        make_graphics_pipeline(terrain_ppln);
     }
 
     {
@@ -2309,14 +2239,14 @@ void reinitialize_terrain_graphics_data(void)
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending = {};
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, terrain_shadow_ppln->info);
+        make_graphics_pipeline(terrain_shadow_ppln);
     }
 }
 
-internal_function void
-initialize_graphics_terrain_data(VkCommandPool *cmdpool)
+internal_function void initialize_graphics_terrain_data(VkCommandPool *cmdpool)
 {
     terrain_base_info_t *base = get_terrain_base(0);
     auto *model_info = &base->model_info;
@@ -2324,6 +2254,7 @@ initialize_graphics_terrain_data(VkCommandPool *cmdpool)
     g_terrains->terrain_ppln = g_pipeline_manager->add("pipeline.terrain_pipeline"_hash);
     auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/terrain.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/terrain.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
@@ -2333,14 +2264,17 @@ initialize_graphics_terrain_data(VkCommandPool *cmdpool)
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model_info,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        terrain_ppln->info = info;
+        make_graphics_pipeline(terrain_ppln);
     }
 
     g_terrains->terrain_shadow_ppln = g_pipeline_manager->add("pipeline.terrain_shadow"_hash);
     auto *terrain_shadow_ppln = g_pipeline_manager->get(g_terrains->terrain_shadow_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent = VkExtent2D{shadow_display.shadowmap_w, shadow_display.shadowmap_h};
         render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
@@ -2350,17 +2284,17 @@ initialize_graphics_terrain_data(VkCommandPool *cmdpool)
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending = {};
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(terrain_shadow_ppln, modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_TRUE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model_info,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+        terrain_shadow_ppln->info = info;
+        make_graphics_pipeline(terrain_shadow_ppln);
     }
     
     make_terrain_pointer();
 }
 
-internal_function void
-prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
-				   , VkDescriptorSet *ubo_set)
+internal_function void prepare_terrain_pointer_for_render(gpu_command_queue_t *queue, VkDescriptorSet *ubo_set)
 {
     // if the get_coord_pointing_at returns a coord with a negative - player is not pointing at the terrain
     //    if (g_terrains->terrain_pointer.ts_position.x >= 0)
@@ -2434,20 +2368,16 @@ prepare_terrain_pointer_for_render(gpu_command_queue_t *queue
 }
 
 // Is just a triangle
-internal_function void
-render_terrain_pointer(gpu_command_queue_t *queue,
-                       uniform_group_t *ubo_transforms_group)
+internal_function void render_terrain_pointer(gpu_command_queue_t *queue, uniform_group_t *ubo_transforms_group)
 {
     if (g_terrains->terrain_pointer.triangle.triangle_exists)
     {
         vkCmdSetLineWidth(queue->q, 4.0f);
         
         auto *ppln = g_pipeline_manager->get(g_terrains->terrain_pointer.ppln);
-        command_buffer_bind_pipeline(ppln, &queue->q);
+        command_buffer_bind_pipeline(&ppln->pipeline, &queue->q);
 
-	command_buffer_bind_descriptor_sets(ppln,
-                                            {1, ubo_transforms_group},
-                                            &queue->q);
+	command_buffer_bind_descriptor_sets(&ppln->layout, {1, ubo_transforms_group}, &queue->q);
 
 	struct
 	{
@@ -2466,26 +2396,15 @@ render_terrain_pointer(gpu_command_queue_t *queue,
         push_k.new_pointer_system[1] = vector4_t(g_terrains->terrain_pointer.triangle.ws_triangle_position[1], 1.0f);
         push_k.new_pointer_system[2] = vector4_t(g_terrains->terrain_pointer.triangle.ws_triangle_position[2], 1.0f);
     
-	command_buffer_push_constant(&push_k,
-                                     sizeof(push_k),
-                                     0,
-                                     VK_SHADER_STAGE_VERTEX_BIT,
-                                     ppln,
-                                     &queue->q);
-
-	command_buffer_draw(&queue->q,
-                            3,
-                            1,
-                            0,
-                            0);
+	command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, ppln->layout, &queue->q);
+	command_buffer_draw(&queue->q, 3, 1, 0, 0);
     }
 }
 
 // TODO: Possibly remove the component system and just stick all the entity data into one big block of memory
 
 
-internal_function entity_t *
-get_main_entity(void)
+internal_function entity_t *get_main_entity(void)
 {
     if (g_entities->main_entity == -1)
     {
@@ -2497,10 +2416,7 @@ get_main_entity(void)
     }
 }
 
-internal_function void
-push_entity_to_queue(entity_t *e_ptr, // Needs a rendering component attached
-                     mesh_t *mesh,
-                     gpu_material_submission_queue_t *queue)
+internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
 {
     rendering_component_t *component = &g_entities->rendering_components[ e_ptr->components.rendering_component ];
 
@@ -2535,12 +2451,7 @@ internal_function void push_entity_to_rolling_queue(entity_t *e)
                                                                   group);
 }
 
-entity_t
-construct_entity(const constant_string_t &name
-		 //		 , Entity::Is_Group is_group
-		 , vector3_t gs_p
-		 , vector3_t ws_d
-		 , quaternion_t gs_r)
+entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3_t ws_d, quaternion_t gs_r)
 {
     entity_t e;
     //    e.is_group = is_group;
@@ -2551,8 +2462,7 @@ construct_entity(const constant_string_t &name
     return(e);
 }
 
-internal_function entity_t *
-get_entity(const constant_string_t &name)
+internal_function entity_t *get_entity(const constant_string_t &name)
 {
     entity_handle_t v = *g_entities->name_map.get(name.hash);
     return(&g_entities->entity_list[v]);
@@ -2563,16 +2473,12 @@ entity_t *get_entity(entity_handle_t v)
     return(&g_entities->entity_list[v]);
 }
 
-void
-attach_camera_to_entity(entity_t *e
-                        , int32_t camera_index)
+void attach_camera_to_entity(entity_t *e, int32_t camera_index)
 {
     
 }
 
-internal_function struct camera_component_t *
-add_camera_component(entity_t *e
-                     , uint32_t camera_index)
+internal_function struct camera_component_t * add_camera_component(entity_t *e, uint32_t camera_index)
 {
     e->components.camera_component = g_entities->camera_component_count++;
     camera_component_t *component = &g_entities->camera_components[ e->components.camera_component ];
@@ -2582,8 +2488,7 @@ add_camera_component(entity_t *e
     return(component);
 }
 
-internal_function void
-update_camera_components(float32_t dt)
+internal_function void update_camera_components(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities->camera_component_count; ++i)
     {
@@ -2616,9 +2521,7 @@ update_camera_components(float32_t dt)
             }
         }
         
-        camera->v_m = glm::lookAt(camera_position
-                                  , e->ws_p + e->on_t->ws_n + e->ws_d
-                                  , up);
+        camera->v_m = glm::lookAt(camera_position, e->ws_p + e->on_t->ws_n + e->ws_d, up);
 
         // TODO: Don't need to calculate this every frame, just when parameters change
         camera->compute_projection();
@@ -2629,8 +2532,7 @@ update_camera_components(float32_t dt)
     }
 }
 
-internal_function struct rendering_component_t *
-add_rendering_component(entity_t *e)
+internal_function struct rendering_component_t *add_rendering_component(entity_t *e)
 {
     e->components.rendering_component = g_entities->rendering_component_count++;
     rendering_component_t *component = &g_entities->rendering_components[ e->components.rendering_component ];
@@ -2640,12 +2542,11 @@ add_rendering_component(entity_t *e)
     return(component);
 }
 
-internal_function struct animation_component_t *
-add_animation_component(entity_t *e,
-                        uniform_layout_t *ubo_layout,
-                        skeleton_t *skeleton,
-                        animation_cycles_t *cycles,
-                        gpu_command_queue_pool_t *cmdpool)
+internal_function struct animation_component_t *add_animation_component(entity_t *e,
+                                                                        uniform_layout_t *ubo_layout,
+                                                                        skeleton_t *skeleton,
+                                                                        animation_cycles_t *cycles,
+                                                                        gpu_command_queue_pool_t *cmdpool)
 {
     e->components.animation_component = g_entities->animation_component_count++;
     animation_component_t *component = &g_entities->animation_components[ e->components.animation_component ];
@@ -2717,8 +2618,7 @@ internal_function void update_animation_component(float32_t dt)
     }
 }
 
-internal_function void
-update_animation_gpu_data(gpu_command_queue_t *queue)
+internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 {
     for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
     {
@@ -2732,8 +2632,7 @@ update_animation_gpu_data(gpu_command_queue_t *queue)
 internal_function void push_entity_to_animated_queue(entity_t *e);
 internal_function void push_entity_to_rolling_queue(entity_t *e);
 
-internal_function void
-update_rendering_component(float32_t dt)
+internal_function void update_rendering_component(float32_t dt)
 {
     for (uint32_t i = 0; i < g_entities->rendering_component_count; ++i)
     {
@@ -3055,8 +2954,7 @@ internal_function void update_physics_components(float32_t dt)
     }
 }
 
-internal_function entity_handle_t
-add_entity(const entity_t &e)
+internal_function entity_handle_t add_entity(const entity_t &e)
 
 {
     entity_handle_t view;
@@ -3073,9 +2971,7 @@ add_entity(const entity_t &e)
     return(view);
 }
 
-internal_function void
-make_entity_instanced_renderable(model_handle_t model_handle
-				 , const constant_string_t &e_mtrl_name)
+internal_function void make_entity_instanced_renderable(model_handle_t model_handle, const constant_string_t &e_mtrl_name)
 {
     // TODO(luc) : first need to add support for instance rendering in material renderers.
 }
@@ -3168,8 +3064,7 @@ entity_handle_t spawn_entity(const char *entity_name, entity_color_t color)
     return(entity_handle);
 }
 
-internal_function void
-initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
+internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities->rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
     g_entities->rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_entity_mesh);
@@ -3190,6 +3085,7 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
     g_entities->entity_ppln = g_pipeline_manager->add("pipeline.model"_hash);
     auto *entity_ppln = g_pipeline_manager->get(g_entities->entity_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_animated.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                shader_module_info_t{"shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
@@ -3200,14 +3096,17 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->entity_model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        entity_ppln->info = info;
+        make_graphics_pipeline(entity_ppln);
     }
     // TODO: Rename all the pipelines correctly : animated / normal
     g_entities->rolling_entity_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
     auto *rolling_entity_ppln = g_pipeline_manager->get(g_entities->rolling_entity_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
@@ -3217,14 +3116,17 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(rolling_entity_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_entity_model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        rolling_entity_ppln->info = info;
+        make_graphics_pipeline(rolling_entity_ppln);
     }
 
     g_entities->dbg_hitbox_ppln = g_pipeline_manager->add("pipeline.hitboxes"_hash);
     auto *hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/hitbox_render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
@@ -3232,14 +3134,17 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        make_graphics_pipeline(hitbox_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
-                               VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        hitbox_ppln->info = info;
+        make_graphics_pipeline(hitbox_ppln);
     }
 
     g_entities->entity_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
     auto *entity_shadow_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
         render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
@@ -3250,14 +3155,17 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
+                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+        entity_shadow_ppln->info = info;
+        make_graphics_pipeline(entity_shadow_ppln);
     }
 
     g_entities->rolling_entity_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
     auto *rolling_entity_shadow_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
     {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
         render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
@@ -3267,14 +3175,15 @@ initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_s
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
-        make_graphics_pipeline(rolling_entity_shadow_ppln, modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_entity_model,
-                               true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_entity_model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+        rolling_entity_shadow_ppln->info = info;
+        make_graphics_pipeline(rolling_entity_shadow_ppln);
     }
 }
 
-internal_function void
-initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type)
+internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type)
 {
     entity_t r2 = construct_entity("main"_hash,
                                    matrix4_mul_vec3(g_terrains->terrains[0].push_k.transform, vector3_t(15.0f, 2.0f, 15.0f), WITH_TRANSLATION),
@@ -3321,11 +3230,9 @@ initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, app
 }
 
 // ---- rendering of the entire world happens here ----
-internal_function void
-prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, framebuffer_t *fbo);
+internal_function void prepare_terrain_pointer_for_render(VkCommandBuffer *cmdbuf, VkDescriptorSet *set, framebuffer_t *fbo);
 
-internal_function void
-dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_ubo, morphable_terrain_t *terrain, gpu_command_queue_t *queue)
+internal_function void dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_ubo, morphable_terrain_t *terrain, gpu_command_queue_t *queue)
 {
     /*if (g_terrains->dbg_is_rendering_sphere_collision_triangles)
     {
@@ -3382,15 +3289,14 @@ dbg_render_underlying_possible_colliding_triangles(uniform_group_t *transforms_u
     }*/
 }
 
-internal_function void
-dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
+internal_function void dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
     if (g_terrains->dbg_is_rendering_edge_collision_line && g_terrains->dbg_edge_data.edge_container)
     {
         auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
-        command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+        command_buffer_bind_pipeline(&dbg_hitbox_ppln->pipeline, &queue->q);
 
-        command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+        command_buffer_bind_descriptor_sets(&dbg_hitbox_ppln->layout, {1, transforms_ubo}, &queue->q);
 
         struct push_k_t
         {
@@ -3406,26 +3312,20 @@ dbg_render_collision_edge_line(uniform_group_t *transforms_ubo, gpu_command_queu
 
         pk.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
 
-        command_buffer_push_constant(&pk,
-                                     sizeof(pk),
-                                     0,
-                                     VK_SHADER_STAGE_VERTEX_BIT,
-                                     dbg_hitbox_ppln,
-                                     &queue->q);
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT, dbg_hitbox_ppln->layout, &queue->q);
 
         command_buffer_draw(&queue->q, 2, 1, 0, 0);
     }
 }
 
-internal_function void
-dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
+internal_function void dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
     if (g_entities->dbg.hit_box_display)
     {
         auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
-        command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+        command_buffer_bind_pipeline(&dbg_hitbox_ppln->pipeline, &queue->q);
 
-        command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+        command_buffer_bind_descriptor_sets(&dbg_hitbox_ppln->layout, {1, transforms_ubo}, &queue->q);
 
         for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
         {
@@ -3462,12 +3362,7 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 
                 pk.color = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
 
-                command_buffer_push_constant(&pk,
-                                             sizeof(pk),
-                                             0,
-                                             VK_SHADER_STAGE_VERTEX_BIT,
-                                             dbg_hitbox_ppln,
-                                             &queue->q);
+                command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT, dbg_hitbox_ppln->layout, &queue->q);
 
                 command_buffer_draw(&queue->q, 24, 1, 0, 0);
             }
@@ -3475,15 +3370,14 @@ dbg_render_hitboxes(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
     }
 }
 
-internal_function void
-dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
+internal_function void dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t *queue)
 {
     if (g_entities->dbg.render_sliding_vector_entity)
     {
         auto *dbg_hitbox_ppln = g_pipeline_manager->get(g_entities->dbg_hitbox_ppln);
-        command_buffer_bind_pipeline(dbg_hitbox_ppln, &queue->q);
+        command_buffer_bind_pipeline(&dbg_hitbox_ppln->pipeline, &queue->q);
 
-        command_buffer_bind_descriptor_sets(dbg_hitbox_ppln, {1, transforms_ubo}, &queue->q);
+        command_buffer_bind_descriptor_sets(&dbg_hitbox_ppln->layout, {1, transforms_ubo}, &queue->q);
 
         struct push_k_t
         {
@@ -3502,12 +3396,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
 
         pk.color = vector4_t(0.0f, 1.0f, 0.0f, 1.0f);
 
-        command_buffer_push_constant(&pk,
-                                     sizeof(pk),
-                                     0,
-                                     VK_SHADER_STAGE_VERTEX_BIT,
-                                     dbg_hitbox_ppln,
-                                     &queue->q);
+        command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT, dbg_hitbox_ppln->layout, &queue->q);
 
         command_buffer_draw(&queue->q, 2, 1, 0, 0);
 
@@ -3520,7 +3409,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
                                      sizeof(pk),
                                      0,
                                      VK_SHADER_STAGE_VERTEX_BIT,
-                                     dbg_hitbox_ppln,
+                                     dbg_hitbox_ppln->layout,
                                      &queue->q);
 
         command_buffer_draw(&queue->q, 2, 1, 0, 0);
@@ -3535,7 +3424,7 @@ dbg_render_sliding_vectors(uniform_group_t *transforms_ubo, gpu_command_queue_t 
                                      sizeof(pk),
                                      0,
                                      VK_SHADER_STAGE_VERTEX_BIT,
-                                     dbg_hitbox_ppln,
+                                     dbg_hitbox_ppln->layout,
                                      &queue->q);
 
         command_buffer_draw(&queue->q, 2, 1, 0, 0);
@@ -3557,21 +3446,15 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     {
         auto *model_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
 
-        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln
-                                                          , queue
-                                                          , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         auto *rolling_model_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
 
-        g_world_submission_queues[ROLLING_ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln
-                                                                                , queue
-                                                                                , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[ROLLING_ENTITY_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         auto *terrain_ppln = g_pipeline_manager->get(g_terrains->terrain_shadow_ppln);    
     
-        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln
-                                                           , queue
-                                                           , VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_world_submission_queues[TERRAIN_QUEUE].submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, terrain_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
     end_shadow_offscreen(queue);
 
@@ -3646,8 +3529,10 @@ internal_function void entry_point(void)
     
     // Load startup code
     const char *startup_script = "scripts/sandbox/startup.lua";
-    auto contents = read_file(startup_script);
+    file_handle_t handle = create_file(startup_script, file_type_t::TEXT);
+    auto contents = read_file_tmp(handle);
     execute_lua((const char *)contents.content);
+    remove_and_destroy_file(handle);
 
     // Execute startup code
     execute_lua("startup()");
@@ -4101,8 +3986,7 @@ void destroy_world(void)
     destroy_graphics();
 }
 
-internal_function int32_t
-lua_get_player_position(lua_State *state)
+internal_function int32_t lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
     entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
@@ -4112,8 +3996,7 @@ lua_get_player_position(lua_State *state)
     return(3);
 }
 
-internal_function int32_t
-lua_set_player_position(lua_State *state)
+internal_function int32_t lua_set_player_position(lua_State *state)
 {
     float32_t x = lua_tonumber(state, -3);
     float32_t y = lua_tonumber(state, -2);
@@ -4125,8 +4008,7 @@ lua_set_player_position(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_spawn_terrain(lua_State *state)
+internal_function int32_t lua_spawn_terrain(lua_State *state)
 {
     uint32_t dimensions = lua_tonumber(state, -2);
     float32_t size = lua_tonumber(state, -1);
@@ -4147,15 +4029,13 @@ lua_spawn_terrain(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_toggle_collision_box_render(lua_State *state)
+internal_function int32_t lua_toggle_collision_box_render(lua_State *state)
 {
     g_entities->dbg.hit_box_display ^= true;
     return(0);
 }
 
-internal_function int32_t
-lua_render_entity_direction_information(lua_State *state)
+internal_function int32_t lua_render_entity_direction_information(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4169,8 +4049,7 @@ lua_render_entity_direction_information(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_toggle_entity_model_display(lua_State *state)
+internal_function int32_t lua_toggle_entity_model_display(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4182,8 +4061,7 @@ lua_toggle_entity_model_display(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_set_veclocity_in_view_direction(lua_State *state)
+internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
 {
     const char *name = lua_tostring(state, -2);
     float32_t velocity = lua_tonumber(state, -1);
@@ -4193,8 +4071,7 @@ lua_set_veclocity_in_view_direction(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_get_player_ts_view_direction(lua_State *state)
+internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
     entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
@@ -4205,8 +4082,7 @@ lua_get_player_ts_view_direction(lua_State *state)
     return(3);
 }
 
-internal_function int32_t
-lua_start_simulation(lua_State *state)
+internal_function int32_t lua_start_simulation(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4222,8 +4098,7 @@ lua_start_simulation(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_move_entity(lua_State *state)
+internal_function int32_t lua_move_entity(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4239,8 +4114,7 @@ lua_move_entity(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_stop_simulation(lua_State *state)
+internal_function int32_t lua_stop_simulation(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4254,8 +4128,7 @@ lua_stop_simulation(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_print_player_terrain_position_info(lua_State *state)
+internal_function int32_t lua_print_player_terrain_position_info(lua_State *state)
 {
     struct entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
 
@@ -4387,8 +4260,7 @@ lua_print_player_terrain_position_info(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_print_player_terrain_position(lua_State *state)
+internal_function int32_t lua_print_player_terrain_position(lua_State *state)
 {
     entity_t *main = get_main_entity();
     vector3_t ws_position = main->ws_p;
@@ -4401,8 +4273,7 @@ lua_print_player_terrain_position(lua_State *state)
     return(0);
 }
 
-internal_function int32_t
-lua_toggle_sphere_collision_triangles_render(lua_State *state)
+internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state)
 {
     g_terrains->dbg_is_rendering_sphere_collision_triangles ^= 1;
     return(0);

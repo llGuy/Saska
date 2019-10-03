@@ -18,6 +18,11 @@ void initialize_file_handle(file_object_t *object)
     object->handle = CreateFileA(object->file_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 }
 
+void close_file(file_object_t *object)
+{
+    CloseHandle(object->handle);
+}
+
 FILETIME get_last_file_write(file_object_t *object)
 {
     FILETIME creation, last_access, last_write;
@@ -98,6 +103,8 @@ file_handle_t create_file(const char *file, file_type_t type)
 void remove_and_destroy_file(file_handle_t handle)
 {
     file_object_t *object = g_files.files.get(handle);
+
+    close_file(object);
     
     g_files.files.remove(handle);
 }

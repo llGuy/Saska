@@ -579,6 +579,8 @@ void render_final_output(uint32_t image_index, gpu_command_queue_t *queue);
 void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool);
 void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
 
+void hotreload_assets_if_changed(void);
+
 void destroy_graphics(void);
 
 // TODO: Organize model loading into some managers (like the gpu_buffer_manager) so that lua can load them

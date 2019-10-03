@@ -414,10 +414,12 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     
     for (uint32_t i = 0; i < modules.count; ++i)
     {
-        if (modules.modules[i].file_handle == -1)
+        if (modules.modules[i].file_handle >= 0)
         {
-            modules.modules[i].file_handle = create_file(modules.modules[i].file_path, file_type_t::BINARY);
+            remove_and_destroy_file(modules.modules[i].file_handle);
         }
+        
+        modules.modules[i].file_handle = create_file(modules.modules[i].file_path, file_type_t::BINARY);
 
         file_contents_t bytecode = read_file_tmp(modules.modules[i].file_handle);
         init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, &module_objects[i]);
@@ -1970,6 +1972,30 @@ void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
     }
 
     clear_linear();
+}
+
+void hotreload_assets_if_changed(void)
+{
+    bool hotreloading = false;
+    for (uint32_t i = 0; i < g_pipeline_manager->count; ++i)
+    {
+        graphics_pipeline_t *ppln = g_pipeline_manager->get(i);
+        for (uint32_t shader_module = 0; shader_module < ppln->info->modules.count; ++shader_module)
+        {
+            shader_module_info_t *info = &ppln->info->modules.modules[shader_module];
+            if (has_file_changed(info->file_handle))
+            {
+                if (!hotreloading)
+                {
+                    hotreloading = true;
+                    idle_gpu();
+
+                    ppln->destroy();
+                    make_graphics_pipeline(ppln);
+                }
+            }
+        }
+    }
 }
 
 void destroy_graphics(void)

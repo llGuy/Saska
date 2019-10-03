@@ -93,6 +93,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
         {
             handle_global_game_input(memory, input_state);
             update_network_state();
+            hotreload_assets_if_changed();
             
             // ---- begin recording instructions into the command buffers ----
             frame_rendering_data_t frame = begin_frame_rendering(input_state);

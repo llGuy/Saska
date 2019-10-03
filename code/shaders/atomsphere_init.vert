@@ -1,7 +1,6 @@
 #version 450
 
 // is going to be rendered with a point list
-
 void
 main(void)
 {

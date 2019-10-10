@@ -3761,6 +3761,7 @@ void spectate_terrain(uint32_t terrain_index)
     update_spectator_camera(glm::lookAt(center_of_terrain, center_of_terrain + direction, terrain->ws_n));
 }
 
+
 void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
 {
     if (input_state->cursor_moved)

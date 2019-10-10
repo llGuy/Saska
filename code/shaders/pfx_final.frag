@@ -14,8 +14,7 @@ layout(push_constant) uniform Push_K
 
 layout(binding = 0, set = 0) uniform sampler2D previous;
 
-void
-main(void)
+void main(void)
 {
     final_color = texture(previous, fs_in.uvs);
 }

@@ -122,6 +122,10 @@ file_contents_t read_file_tmp(file_handle_t handle)
     uint32_t size = get_file_size(object);
     byte_t *buffer = (byte_t *)allocate_linear(size);
     read_from_file(object, buffer, size);
+    if (object->file_type == file_type_t::TEXT)
+    {
+        buffer[size] = 0;
+    }
 
     return file_contents_t{ size, buffer };
 }

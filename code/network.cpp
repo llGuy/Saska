@@ -144,7 +144,7 @@ void join_server(const char *ip_address)
     const char *message = "saska\0";
     memcpy(packet_to_send.client_name, message, strlen(message));
 
-    network_address_t server_address { host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
+    network_address_t server_address { (uint16_t)host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
     send_to(&g_network_state->main_network_socket,
             server_address,
             (char *)&packet_to_send,

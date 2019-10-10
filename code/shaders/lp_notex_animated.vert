@@ -44,8 +44,7 @@ layout(location = 0) out VS_DATA
 
 #define MAX_WEIGHTS 3
 
-void
-main(void)
+void main(void)
 {
     mat4 identity = mat4(
                          1, 0, 0, 0,

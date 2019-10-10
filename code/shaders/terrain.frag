@@ -78,11 +78,10 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
 
     float light_factor = 1.0f - (total * dist);
 
-    return light_factor;
+    return light_factor * 1.5;
 }
 
-void
-main(void)
+void main(void)
 {
     float shadow_factor = get_shadow_light_factor(length(fs_in.vs_position), fs_in.shadow_coord);
 

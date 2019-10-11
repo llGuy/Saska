@@ -231,53 +231,6 @@ void update_as_server(void)
             {
             case packet_header_t::client_packet_type_t::CLIENT_JOIN:
                 {
-                    network_world_state_t *world_state = get_network_world_state();
-                    
-                    uint32_t sizeof_packet = sizeof(server_handshake_packet_t) + sizeof(server_terrain_base_state_t) * world_state->terrains.terrain_base_count + sizeof(server_terrain_state_t) * world_state->terrains.terrain_count;
-                    
-                    client_join_packet_t *join_packet = (client_join_packet_t *)header;
-                    const char *client_user_name = join_packet->client_name;
-
-                    char log_buffer[100] = {};
-                    sprintf(log_buffer, "Server> %s has joined the game\n\0", client_user_name);
-                    
-                    print_text_to_console(log_buffer);
-                    console_out(log_buffer);
-
-                    char *handshake_packet_bytes = (char *)allocate_linear(sizeof_packet);
-                    server_handshake_packet_t *handshake_packet = (server_handshake_packet_t *)handshake_packet_bytes;
-                    handshake_packet->header.packet_mode = packet_header_t::packet_mode_t::SERVER_MODE;
-                    handshake_packet->header.packet_type = packet_header_t::server_packet_type_t::SERVER_HANDSHAKE;
-                    handshake_packet->header.total_packet_size = sizeof(server_handshake_packet_t);
-
-                    entity_color_t color = (entity_color_t)(rand() % entity_color_t::INVALID_COLOR);
-                    // The handle is the same as the client ID
-                    entity_handle_t handle = spawn_entity(client_user_name, color); 
-                    make_entity_renderable(handle, color);
-                    
-                    uint32_t client_id = add_client(received_address, client_user_name, handle);
-
-                    handshake_packet->client_id = client_id;
-                    handshake_packet->color = (uint8_t)color;
-                    
-                    handshake_packet->terrain_base_count = world_state->terrains.terrain_base_count;
-                    handshake_packet->terrain_count = world_state->terrains.terrain_count;
-
-                    char *terrain_base_bytes = (char *)handshake_packet + sizeof(server_handshake_packet_t);
-                    for (uint32_t i = 0; i < handshake_packet->terrain_base_count; ++i)
-                    {
-                        memcpy(terrain_base_bytes, &world_state->terrains.terrain_bases[i], sizeof(server_terrain_base_state_t));
-                        terrain_base_bytes += sizeof(server_terrain_base_state_t);
-                    }
-
-                    char *terrain_bytes = terrain_base_bytes;
-                    for (uint32_t i = 0; i < handshake_packet->terrain_count; ++i)
-                    {
-                        memcpy(terrain_bytes, &world_state->terrains.terrains[i], sizeof(server_terrain_state_t));
-                        terrain_bytes += sizeof(server_terrain_state_t);
-                    }
-
-                    send_to(&g_network_state->main_network_socket, received_address, (char *)handshake_packet, sizeof_packet);
                 } break;
             }
         }
@@ -299,41 +252,7 @@ void update_as_client(void)
             {
             case packet_header_t::server_packet_type_t::SERVER_HANDSHAKE:
                 {
-                    server_handshake_packet_t *handshake_packet = (server_handshake_packet_t *)header;
-                    uint16_t client_id = handshake_packet->client_id;
-                    uint8_t color = handshake_packet->color;
-
-                    idle_gpu();
                     
-                    clean_up_world_data();
-
-                    char *current_bytes = (char *)handshake_packet + sizeof(server_handshake_packet_t);
-                    for (uint32_t base = 0; base < handshake_packet->terrain_base_count; ++base)
-                    {
-                        server_terrain_base_state_t *base_state = (server_terrain_base_state_t *)current_bytes;
-                        add_and_initialize_terrain_base(base_state->x, base_state->z);
-
-                        current_bytes += sizeof(server_terrain_base_state_t);
-                    }
-
-                    for (uint32_t terrain = 0; terrain < handshake_packet->terrain_count; ++terrain)
-                    {
-                        server_terrain_state_t *terrain_state = (server_terrain_state_t *)current_bytes;
-                        add_and_initialize_terrain(terrain_state->terrain_base_id,
-                                                   terrain_state->ws_position,
-                                                   terrain_state->quat,
-                                                   terrain_state->size,
-                                                   terrain_state->color);
-                        current_bytes += sizeof(server_terrain_state_t);
-                    }
-
-                    reinitialize_terrain_graphics_data();
-                    
-                    entity_handle_t client_entity_handle = spawn_entity("saska", (entity_color_t)color);
-                    make_entity_renderable(client_entity_handle, (entity_color_t)color);
-                    make_entity_main(client_entity_handle, get_input_state());
-
-                    console_out("handshake received\n");
                 } break;
             }
         }

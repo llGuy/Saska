@@ -39,7 +39,7 @@ void initialize_game(game_memory_t *memory, input_state_t *input_state, create_v
             initialize_game_3d_graphics(graphics.command_pool);
             initialize_game_2d_graphics(graphics.command_pool);
             initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
-            initialize_world(input_state, graphics.command_pool, app_type, app_mode);
+            hard_initialize_world(input_state, graphics.command_pool, app_type, app_mode);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {

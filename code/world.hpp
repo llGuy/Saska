@@ -8,139 +8,45 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-struct morphable_terrain_t
+#define VOXEL_CHUNK_EDGE_LENGTH 16
+#define MAX_VERTICES_PER_VOXEL_CHUNK 5 * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1)
+
+// Will always be allocated on the heap
+struct voxel_chunk_t
 {
-    uint32_t terrain_base_id;
-    
-    // TODO: Possible fix to hard setting position at collision whilst morphing
-    persist_var constexpr uint32_t MAX_MORPHED_POINTS = 20;
-    ivector2_t morphed_points[MAX_MORPHED_POINTS] = {};
-    uint32_t current_morphed_points_count = 0;
-    
-    // Gravity constant
-    float32_t k_g;
-    
-    bool is_modified = false;
-    
-    ivector2_t xz_dim;
-    // ---- up vector of the terrain ----
-    vector3_t ws_n;
-    float32_t *heights;
+    uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
 
-    vector3_t size;
-    vector3_t ws_p;
-    quaternion_t gs_r;
+    uint32_t vertex_count;
+    vector3_t mesh_vertices[MAX_VERTICES_PER_VOXEL_CHUNK];
 
-    uint32_t offset_into_heights_gpu_buffer;
-    // ---- later on this will be a pointer (index into g_gpu_buffer_manager)
-    gpu_buffer_t heights_gpu_buffer;
+    // Chunk rendering data
+    mesh_t gpu_mesh;
+    gpu_buffer_t chunk_mesh_gpu_buffer;
 
-    mesh_t mesh;
-    VkBuffer vbos[2];
-
-    matrix4_t inverse_transform;
-    matrix4_t inverse_rotation;
-    struct push_k_t
+    struct push_k // Rendering stuff
     {
-        matrix4_t transform;
-        vector3_t color;
+        matrix4_t model_matrix;
     } push_k;
 };
 
-struct terrain_create_staging_t
+void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
+void push_chunk_to_render_queue(voxel_chunk_t *chunk);
+voxel_chunk_t **get_voxel_chunk(uint32_t index);
+
+struct voxel_chunks_t
 {
-    uint32_t dimensions;
-    float32_t size;
-    vector3_t ws_p;
-    vector3_t rotation;
-    vector3_t color;
-};
+    uint32_t chunk_count;
+    uint32_t max_chunks;
+    // Will be an array of pointers to the actual chunk data
+    voxel_chunk_t **chunks;
 
-struct terrain_triangle_t
-{
-    bool triangle_exists;
-    float32_t ts_height;
-    vector3_t ws_exact_pointed_at;
-    vector3_t ws_triangle_position[3];
-    // Used for morphing function
-    ivector2_t offsets[4];
-    // Indices
-    uint32_t idx[4 /* if need the entire square */];
+    // Information that graphics pipelines need
+    model_t chunk_model;
 
-    // Extra information for sliding collision detection algorithm
-    vector3_t ts_collision_point;
-};
+    pipeline_handle_t chunk_pipeline;
+    pipeline_handle_t chunk_shadow_pipeline;
 
-struct terrain_base_info_t
-{
-    uint32_t width, depth;
-    gpu_buffer_t mesh_xz_values;
-    gpu_buffer_t idx_buffer;
-    model_t model_info;
-
-    uint32_t base_id;
-};
-
-// For terrain stuff (entity stuff will have this in the future when introducing hotreloading of assets)
-enum terrain_gpu_operation_type_t { CREATE_BASE_VERTEX_AND_INDEX_BUFFER, CREATE_MODEL_INFO, CREATE_HEIGHT_BUFFER, CREATE_MESH_STRUCTURE };
-
-struct terrain_gpu_operation_t
-{
-    enum affected_object_type_t { BASE, TERRAIN } affected_type;
-
-    union
-    {
-        uint32_t terrain_index;
-        uint32_t terrain_base_index;
-    };
-
-    terrain_gpu_operation_type_t operation_type;
-};
-
-struct terrain_gpu_operation_event_queue_t
-{
-    static constexpr uint32_t MAX_EVENTS = 20;
-    uint32_t event_count = {};
-    terrain_gpu_operation_t events[MAX_EVENTS] = {};
-};
-
-struct morphable_terrains_t
-{
-    // ---- X and Z values stored as vec2 (binding 0) ----
-    uint32_t base_count;
-    terrain_base_info_t terrain_bases[10];
-    hash_table_inline_t<int32_t, 10, 3, 3> terrain_base_table;
-
-    static constexpr uint32_t MAX_TERRAINS = 10;
-    morphable_terrain_t terrains[MAX_TERRAINS];
-    uint32_t terrain_count {0};
-
-    // For lua stuff when spawning terrains
-    terrain_create_staging_t create_stagings[10];
-    uint32_t create_count = 0;
-    
-    pipeline_handle_t terrain_ppln;
-    pipeline_handle_t terrain_shadow_ppln;
-
-    uint32_t spectating_terrain_index = 0;
-
-    terrain_gpu_operation_event_queue_t gpu_event_queue;
-    
-    struct
-    {
-        pipeline_handle_t ppln;
-        terrain_triangle_t triangle;
-        // will not be a pointer in the future
-        morphable_terrain_t *t;
-    } terrain_pointer;
-
-    bool dbg_is_rendering_sphere_collision_triangles = 1;
-    bool dbg_is_rendering_edge_collision_line = 1;
-    struct
-    {
-        morphable_terrain_t *edge_container;
-        vector3_t ts_a, ts_b;
-    } dbg_edge_data;
+    gpu_material_submission_queue_t gpu_queue;
 };
 
 using entity_handle_t = int32_t;
@@ -204,7 +110,6 @@ struct camera_component_t
 
     // Maybe some other variables to do with 3rd person / first person configs ...
 
-    // Variable allows for smooth animation between up vectors when switching terrains
     bool in_animation = false;
     quaternion_t current_rotation;
 
@@ -245,7 +150,7 @@ struct entity_body_t
 };
 
 // Action components can be modified over keyboard / mouse input, or on a network
-enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT };
+enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT };
 
 struct network_component_t
 {
@@ -265,24 +170,12 @@ struct entity_t
     quaternion_t ws_r{0.0f, 0.0f, 0.0f, 0.0f};
     vector3_t size{1.0f};
 
-    // For now is a pointer - is not a component because all entities will have one
-    // This is the last terrain that the player was on / is still on
-    // Is used for collision detection and also the camera view matrix (up vector...)
-    struct morphable_terrain_t *on_t = nullptr;
-    bool is_on_terrain = false;
     vector3_t surface_normal;
     vector3_t surface_position;
 
     // Has effect on animations
     bool is_in_air = 0;
     bool is_sliding_not_rolling_mode = 0;
-
-    static constexpr float32_t SWITCH_TERRAIN_ANIMATION_TIME = 0.6f;
-    bool switch_terrain_animation_mode = false;
-    quaternion_t previous_terrain_rot;
-    quaternion_t current_rot;
-    quaternion_t current_physical_rotation;
-    float32_t animation_time = 0.0f;
 
     bool toggled_rolling_previous_frame = 0;
     bool32_t rolling_mode;
@@ -364,66 +257,24 @@ struct entities_t
     // For now:
     int32_t main_entity = -1;
     // have some sort of stack of REMOVED entities
+
+    gpu_material_submission_queue_t entity_submission_queue;
+    gpu_material_submission_queue_t rolling_entity_submission_queue;
 };
 
 uint32_t add_network_component(void);
 struct network_component_t *get_network_component(uint32_t index);
 
-struct server_terrain_base_state_t
-{
-    // Dimensions
-    uint8_t x, z;
-};
-
-void add_and_initialize_terrain_base(uint32_t x, uint32_t z);
-void add_and_initialize_terrain(uint32_t base_id, const vector3_t &position, const quaternion_t &rotation, const vector3_t &size, const vector3_t &color);
-
-void reinitialize_terrain_graphics_data(void);
-
-struct server_terrain_state_t
-{
-    // Gravity constant
-    float32_t k_g;
-    vector3_t size;
-    vector3_t ws_position;
-    vector3_t color;
-    quaternion_t quat;
-    
-    // Float array
-    uint8_t terrain_base_id;
-    float32_t *heights = nullptr;
-};
-
-// Only to send at the beginning of game
-struct server_terrains_state_t
-{
-    uint8_t terrain_base_count;
-    server_terrain_base_state_t *terrain_bases = nullptr;
-    
-    uint8_t terrain_count;
-    // Terrain array
-    server_terrain_state_t *terrains = nullptr;
-};
-
-struct network_world_state_t
-{
-    server_terrains_state_t terrains;
-};
-
 struct world_t
 {
     struct entities_t entities;
-    struct morphable_terrains_t terrains;
-
-    static constexpr uint32_t MAX_MATERIALS = 10;
-    struct gpu_material_submission_queue_t material_submission_queues[MAX_MATERIALS];
-
-    network_world_state_t network_world_state;
+    struct voxel_chunks_t voxel_chunks;
 };
 
 enum entity_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, INVALID_COLOR };
 
 entity_t *get_entity(entity_handle_t entity_handle);
+voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
 // For now, take in the color
 entity_handle_t spawn_entity(const char *entity_name, entity_color_t color);
@@ -431,7 +282,6 @@ entity_handle_t spawn_entity_at(const char *entity_name, entity_color_t color, c
 void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color);
 void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state);
 
-network_world_state_t *get_network_world_state(void);
 void update_network_world_state(void);
 
 void clean_up_world_data(void);
@@ -441,7 +291,7 @@ void make_world_data(void);
 void set_focus_for_world(void);
 void remove_focus_for_world(void);
 
-// Initializes all of the rendering data, and stuff whereas make_world_data just initializes entities, terrains, etc..
+void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
 
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,

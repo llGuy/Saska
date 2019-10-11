@@ -175,11 +175,28 @@ void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffe
             groups[uniform_count] = *mtrl->ubo;
             ++uniform_count;
         }
+
+        bool32_t is_using_index_buffer = (mtrl->mesh->index_data.index_buffer != VK_NULL_HANDLE); 
+        
         command_buffer_bind_descriptor_sets(&graphics_pipeline->layout, { uniform_count, groups }, &dst_command_queue->q);
         command_buffer_bind_vbos(mtrl->mesh->raw_buffer_list, {mtrl->mesh->raw_buffer_list.count, zero}, 0, mtrl->mesh->raw_buffer_list.count, &dst_command_queue->q);
-        command_buffer_bind_ibo(mtrl->mesh->index_data, &dst_command_queue->q);
+        
+        if (is_using_index_buffer)
+        {
+            command_buffer_bind_ibo(mtrl->mesh->index_data, &dst_command_queue->q);
+        }
+        
         command_buffer_push_constant(mtrl->push_k_ptr, mtrl->push_k_size, 0, push_k_dst, graphics_pipeline->layout, &dst_command_queue->q);
-        command_buffer_draw_indexed(&dst_command_queue->q, mtrl->mesh->indexed_data);
+
+        if (is_using_index_buffer)
+        {
+            command_buffer_draw_indexed(&dst_command_queue->q, mtrl->mesh->indexed_data);
+        }
+        else
+        {
+            // All of the indexed data is now used as vertex data
+            command_buffer_draw(&dst_command_queue->q, mtrl->mesh->indexed_data.index_count, mtrl->mesh->indexed_data.instance_count, mtrl->mesh->indexed_data.first_index, mtrl->mesh->indexed_data.first_instance);
+        }
     }
 
     if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
@@ -212,7 +229,7 @@ gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_
     }
 
     // used for multi threading - gets submitted to secondary buffer then all the secondary buffers join into the main queue
-    else if (level = VK_COMMAND_BUFFER_LEVEL_SECONDARY)
+    else if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
 	gpu_command_queue_t command_queue = make_command_queue(pool, level);
 

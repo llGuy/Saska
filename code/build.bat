@@ -7,7 +7,8 @@ REM ---------------------------------------------------------------------------
 
 set CFLAGS=-Zi /EHsc /std:c++latest /DEBUG:FULL
 
-set DEF=/DGLM_ENABLE_EXPERIMENTAL /DUNITY_BUILD /DSTB_IMAGE_IMPLEMENTATION /D_MBCS
+REM REMOVE DEVELOPMENT MODE FOR RELEASE
+set DEF=/DGLM_ENABLE_EXPERIMENTAL /DUNITY_BUILD /DSTB_IMAGE_IMPLEMENTATION /D_MBCS /DDEVELOPMENT_MODE
 REM set GLFW_INC_DIR=/I C:/dependencies/glfw-3.2.1.bin.WIN64/include
 
 
@@ -43,7 +44,6 @@ If "%1" == "help" goto help
 
 :compile
 %CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
-%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%
 
 etags *.cpp *.hpp
 echo Built emacs tags

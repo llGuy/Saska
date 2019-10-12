@@ -579,8 +579,6 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
-
-            OutputDebugString("Too slow");
         }
         else
         {

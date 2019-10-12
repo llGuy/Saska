@@ -14,6 +14,7 @@
 // Will always be allocated on the heap
 struct voxel_chunk_t
 {
+    ivector3_t xs_bottom_corner;
     ivector3_t chunk_coord;
     
     uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
@@ -38,7 +39,7 @@ void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
-voxel_chunk_t **get_voxel_chunk(uint32_t index);
+voxel_chunk_t **get_voxel_chunk(int32_t index);
 
 struct voxel_chunks_t
 {

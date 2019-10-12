@@ -246,13 +246,13 @@ void main(void)
 	float placeholder;
 	// ray cast
         // Dont need the below
-	vec4 coords = ray_cast(ray_dir, view_position, ddepth, hit, placeholder);
+        /*vec4 coords = ray_cast(ray_dir, view_position, ddepth, hit, placeholder);
 
 	vec2 d_coords = smoothstep(0.2, 0.6, abs(vec2(0.5, 0.5) - coords.xy));
 	float factor = (d_coords.x + d_coords.y);
 	float edge_factor = clamp(1.0 - factor, 0.0, 1.0);
 
-	vec4 reflected_color = texture(g_final, coords.xy);
+	vec4 reflected_color = texture(g_final, coords.xy);*/
         // Dont need the aboe
 
         // Need to keep these below
@@ -263,7 +263,7 @@ void main(void)
 
 	//check if is skybox
         // Dont need to below
-	vec3 check_skybox = texture(g_normal, coords.xy).xyz;
+	/*vec3 check_skybox = texture(g_normal, coords.xy).xyz;
 	bool is_skybox = (check_skybox.x < -10.0 && check_skybox.y < -10.0 && check_skybox.z < -10.0);
 
 	if (hit && !is_skybox)
@@ -281,7 +281,7 @@ void main(void)
 	    if (dotted > 0.9999) final_color = mix(pixel_color, reflected_color * fresnel, edge_factor * 0.3);
 	    else final_color = pixel_color;
 	}
-	else final_color = pixel_color;
+	else final_color = pixel_color;*/
         // Dont need the above
     }
     else final_color = pixel_color;

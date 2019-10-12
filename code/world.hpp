@@ -14,6 +14,8 @@
 // Will always be allocated on the heap
 struct voxel_chunk_t
 {
+    ivector3_t chunk_coord;
+    
     uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
 
     uint32_t vertex_count;
@@ -26,15 +28,24 @@ struct voxel_chunk_t
     struct push_k // Rendering stuff
     {
         matrix4_t model_matrix;
+        vector4_t color;
     } push_k;
+
+    bool should_do_gpu_sync = 0;
 };
 
+void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
+void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
 voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
 struct voxel_chunks_t
 {
+    // How many chunks on the x, y and z axis
+    uint32_t grid_edge_size;
+    float32_t size;
+    
     uint32_t chunk_count;
     uint32_t max_chunks;
     // Will be an array of pointers to the actual chunk data
@@ -44,9 +55,15 @@ struct voxel_chunks_t
     model_t chunk_model;
 
     pipeline_handle_t chunk_pipeline;
-    pipeline_handle_t chunk_shadow_pipeline;
+
+    pipeline_handle_t chunk_mesh_pipeline;
+    pipeline_handle_t chunk_mesh_shadow_pipeline;
 
     gpu_material_submission_queue_t gpu_queue;
+
+
+    uint32_t to_sync_count = 0;
+    uint32_t chunks_to_gpu_sync[20];
 };
 
 using entity_handle_t = int32_t;
@@ -101,6 +118,15 @@ struct physics_component_t
     // other forces (friction...)
 };
 
+struct terraform_power_component_t
+{
+    uint32_t entity_index;
+    
+    // Some sort of limit or something
+    float32_t speed;
+    float32_t terraform_radius;
+};
+
 struct camera_component_t
 {
     uint32_t entity_index;
@@ -150,7 +176,7 @@ struct entity_body_t
 };
 
 // Action components can be modified over keyboard / mouse input, or on a network
-enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT };
+enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD };
 
 struct network_component_t
 {
@@ -198,6 +224,7 @@ struct entity_t
         int32_t rendering_component;
         int32_t animation_component;
         int32_t network_component;
+        int32_t terraform_power_component;
         
     } components;
     
@@ -234,6 +261,9 @@ struct entities_t
 
     int32_t network_component_count = {};
     struct network_component_t network_components[MAX_ENTITIES] = {};
+
+    int32_t terraform_power_component_count = {};
+    struct terraform_power_component_t terraform_power_components[MAX_ENTITIES] = {};
 
     struct hash_table_inline_t<entity_handle_t, 30, 5, 5> name_map{"map.entities"};
 

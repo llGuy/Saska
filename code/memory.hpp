@@ -74,6 +74,8 @@ extern struct free_list_allocator_t
     uint32_t available_bytes;
 
     uint32_t allocation_count = 0;
+
+    uint32_t used_memory = 0;
 } free_list_allocator_global;
 
 void *allocate_free_list(uint32_t allocation_size, alignment_t alignment = 1, const char *name = "", free_list_allocator_t *allocator = &free_list_allocator_global);

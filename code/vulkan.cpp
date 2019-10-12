@@ -289,11 +289,9 @@ internal_function void init_instance(VkApplicationInfo *app_info, instance_creat
 
 internal_function VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT *message_data, void *user_data)
 {
-    OutputDebugString("Vulkan > ");
+    /*OutputDebugString("Vulkan > ");
     OutputDebugString(message_data->pMessage);
-    OutputDebugString("\n");
-
-    //	OUTPUT_DEBUG_LOG_VALIDATION("validation_t layer_t > %s\n", message_data->pMessage);
+    OutputDebugString("\n");*/
 
     return(VK_FALSE);
 }

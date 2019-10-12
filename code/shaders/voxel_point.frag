@@ -14,6 +14,7 @@ void main(void)
 {
     out_final = fs_in.color;
     out_albedo = fs_in.color;
+
     out_position = vec4(-100.0);
     out_normal = vec4(-100.0);
 }

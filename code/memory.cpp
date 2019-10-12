@@ -97,6 +97,9 @@ void pop_stack(stack_allocator_t *allocator)
 void *allocate_free_list(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
 {
     uint32_t total_allocation_size = allocation_size + sizeof(free_list_allocation_header_t);
+
+    allocator->used_memory += total_allocation_size;
+    
     // find best fit free block
     // TODO(luc) : make free list allocator adjust the smallest free block according to the alignment as well
     free_block_header_t *previous_free_block = nullptr;

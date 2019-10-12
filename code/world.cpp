@@ -193,9 +193,11 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                     if (is_voxel_coord_within_chunk(cs_vcoord))
                     {
                         uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
-                    
+
+                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                        
                         int32_t current_voxel_value = (int32_t)*voxel;
-                        int32_t new_value = (int32_t)(coefficient * dt * 250.0f) + current_voxel_value;
+                        int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
 
                         if (new_value > 255)
                         {
@@ -217,9 +219,10 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                         cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
                         
                         uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
-                    
+
+                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
                         int32_t current_voxel_value = (int32_t)*voxel;
-                        int32_t new_value = (int32_t)(coefficient * dt * 250.0f) + current_voxel_value;
+                        int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
 
                         if (new_value > 255)
                         {
@@ -1434,7 +1437,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     }
 
     construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
-    construct_sphere(vector3_t(-80.0f, -30.0f, 0.0f), 60.0f);
+    construct_sphere(vector3_t(-80.0f, -30.0f, 0.0f), 90.0f);
 }
 
 internal_function void clean_up_entities(void)

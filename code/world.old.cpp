@@ -32,7 +32,7 @@ enum { TERRAIN_QUEUE, ENTITY_QUEUE, ROLLING_ENTITY_QUEUE };
 
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
 
-/*vector3_t matrix4_mul_vec3(const matrix4_t &matrix, const vector3_t &vector, matrix4_mul_vec3_with_translation_flag flag)
+vector3_t matrix4_mul_vec3(const matrix4_t &matrix, const vector3_t &vector, matrix4_mul_vec3_with_translation_flag flag)
 {
     switch(flag)
     {
@@ -884,7 +884,7 @@ void adjust_closest_distance_with_triangle(const vector3_t &ts_sphere_position,
             }
         }
     }
-}*/
+}
 
 void reinitialize_terrain_graphics_data(void)
 {

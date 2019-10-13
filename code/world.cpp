@@ -179,6 +179,12 @@ internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position)
     return(cs_voxel_coord);
 }
 
+internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position)
+{
+    ivector3_t cs_voxel_coord = ivector3_t(xs_position.x % VOXEL_CHUNK_EDGE_LENGTH, xs_position.y % (VOXEL_CHUNK_EDGE_LENGTH), xs_position.z % (VOXEL_CHUNK_EDGE_LENGTH));
+    return(cs_voxel_coord);
+}
+
 internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
@@ -411,27 +417,27 @@ internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chun
     chunk->gpu_mesh.indexed_data.index_count = chunk->vertex_count;
 }
 
+global_var constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, -0.5f, -0.5f),
+                                                               vector3_t(+0.5f, -0.5f, -0.5f),
+                                                               vector3_t(+0.5f, -0.5f, +0.5f),
+                                                               vector3_t(-0.5f, -0.5f, +0.5f),
+                                                               vector3_t(-0.5f, +0.5f, -0.5f),
+                                                               vector3_t(+0.5f, +0.5f, -0.5f),
+                                                               vector3_t(+0.5f, +0.5f, +0.5f),
+                                                               vector3_t(-0.5f, +0.5f, +0.5f) };
+
+global_var constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t(0, 0, 0),
+                                                                      ivector3_t(1, 0, 0),
+                                                                      ivector3_t(1, 0, 1),
+                                                                      ivector3_t(0, 0, 1),
+                                                                      ivector3_t(0, 1, 0),
+                                                                      ivector3_t(1, 1, 0),
+                                                                      ivector3_t(1, 1, 1),
+                                                                      ivector3_t(0, 1, 1) };
+
 // Voxel pair is like a cube: 8 voxels
 internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level)
-{
-    persist_var constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, -0.5f, -0.5f),
-                                                                    vector3_t(+0.5f, -0.5f, -0.5f),
-                                                                    vector3_t(+0.5f, -0.5f, +0.5f),
-                                                                    vector3_t(-0.5f, -0.5f, +0.5f),
-                                                                    vector3_t(-0.5f, +0.5f, -0.5f),
-                                                                    vector3_t(+0.5f, +0.5f, -0.5f),
-                                                                    vector3_t(+0.5f, +0.5f, +0.5f),
-                                                                    vector3_t(-0.5f, +0.5f, +0.5f) };
-
-    persist_var constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t(0, 0, 0),
-                                                                           ivector3_t(1, 0, 0),
-                                                                           ivector3_t(1, 0, 1),
-                                                                           ivector3_t(0, 0, 1),
-                                                                           ivector3_t(0, 1, 0),
-                                                                           ivector3_t(1, 1, 0),
-                                                                           ivector3_t(1, 1, 1),
-                                                                           ivector3_t(0, 1, 1) };
-    
+{    
     uint8_t bit_combination = 0;
     for (uint32_t i = 0; i < 8; ++i)
     {
@@ -484,44 +490,37 @@ internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel
 
 internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist)
 {
+    // Voxel coords
+    uint32_t chunk_coord_offset_x = 0, chunk_coord_offset_y = 0, chunk_coord_offset_z = 0;
+    uint32_t final_x = x, final_y = y, final_z = z;
+
+    if (x == VOXEL_CHUNK_EDGE_LENGTH)
+    {
+        final_x = 0;
+        chunk_coord_offset_x = 1;
+    }
+    if (y == VOXEL_CHUNK_EDGE_LENGTH)
+    {
+        final_y = 0;
+        chunk_coord_offset_y = 1;
+    }
+    if (z == VOXEL_CHUNK_EDGE_LENGTH)
+    {
+        final_z = 0;
+        chunk_coord_offset_z = 1;
+    }
+
+    voxel_chunk_t **chunk_ptr = get_voxel_chunk(convert_3d_to_1d_index(chunk->chunk_coord.x + chunk_coord_offset_x,
+                                                                       chunk->chunk_coord.y + chunk_coord_offset_y,
+                                                                       chunk->chunk_coord.z + chunk_coord_offset_z,
+                                                                       g_voxel_chunks->grid_edge_size));
+    *doesnt_exist = (bool)(*chunk_ptr == nullptr);
     if (*doesnt_exist)
     {
         return 0;
     }
-    else
-    {
-        // Voxel coords
-        uint32_t chunk_coord_offset_x = 0, chunk_coord_offset_y = 0, chunk_coord_offset_z = 0;
-        uint32_t final_x = x, final_y = y, final_z = z;
-
-        if (x == VOXEL_CHUNK_EDGE_LENGTH)
-        {
-            final_x = 0;
-            chunk_coord_offset_x = 1;
-        }
-        if (y == VOXEL_CHUNK_EDGE_LENGTH)
-        {
-            final_y = 0;
-            chunk_coord_offset_y = 1;
-        }
-        if (z == VOXEL_CHUNK_EDGE_LENGTH)
-        {
-            final_z = 0;
-            chunk_coord_offset_z = 1;
-        }
-
-        voxel_chunk_t **chunk_ptr = get_voxel_chunk(convert_3d_to_1d_index(chunk->chunk_coord.x + chunk_coord_offset_x,
-                                                                           chunk->chunk_coord.y + chunk_coord_offset_y,
-                                                                           chunk->chunk_coord.z + chunk_coord_offset_z,
-                                                                           g_voxel_chunks->grid_edge_size));
-        *doesnt_exist = (bool)(*chunk_ptr == nullptr);
-        if (*doesnt_exist)
-        {
-            return 0;
-        }
     
-        return (*chunk_ptr)->voxels[final_x][final_y][final_z];
-    }
+    return (*chunk_ptr)->voxels[final_x][final_y][final_z];
 }
 
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level)
@@ -756,6 +755,242 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
     }
 }
 
+struct collision_t
+{
+    bool detected;
+    
+    vector3_t ws_at;
+    vector3_t ws_normal;
+};
+
+internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0)
+{
+    ivector3_t xs_cube_range = ivector3_t(glm::ceil(ws_to_xs(ws_center + ws_size)));
+    ivector3_t xs_cube_min = ivector3_t(glm::floor(ws_to_xs(ws_center - ws_size)));
+    xs_cube_range = xs_cube_range - xs_cube_min;
+
+    bool is_between_chunks = 0;
+    ivector3_t min_voxel_coord = get_voxel_coord(xs_cube_min);
+    ivector3_t max_voxel_coord = get_voxel_coord(xs_cube_min + xs_cube_range);
+    // If this is true, then the player's collision box will be between chunks
+    if (max_voxel_coord.x < min_voxel_coord.x ||
+        max_voxel_coord.y < min_voxel_coord.y ||
+        max_voxel_coord.z < min_voxel_coord.z)
+    {
+        is_between_chunks = 1;
+    }
+    
+    for (int32_t z = xs_cube_min.z; z < xs_cube_range.z - 1; ++z)
+    {
+        for (int32_t y = xs_cube_min.y; y < xs_cube_range.y - 1; ++y)
+        {
+            for (int32_t x = xs_cube_min.x; x < xs_cube_range.x - 1; ++x)
+            {
+                ivector3_t voxel_pair_origin = ivector3_t(x, y, z);
+                voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_pair_origin);
+
+                bool doesnt_exist = 0;
+
+                uint8_t voxel_values[8] = {};
+                
+                if (is_between_chunks)
+                {
+                    voxel_values[0] = chunk->voxels[x]    [y][z];
+                    voxel_values[1] = chunk_edge_voxel_value(chunk, x + 1, y, z, &doesnt_exist);
+                    voxel_values[2] = chunk_edge_voxel_value(chunk, x + 1, y, z + 1, &doesnt_exist);
+                    voxel_values[3] = chunk_edge_voxel_value(chunk, x,     y, z + 1, &doesnt_exist);
+                    
+                    voxel_values[4] = chunk_edge_voxel_value(chunk, x, y + 1, z, &doesnt_exist);
+                    voxel_values[5] = chunk_edge_voxel_value(chunk, x + 1, y + 1, z, &doesnt_exist);
+                    voxel_values[6] = chunk_edge_voxel_value(chunk, x + 1, y + 1, z + 1, &doesnt_exist);
+                    voxel_values[7] = chunk_edge_voxel_value(chunk, x,     y + 1, z + 1, &doesnt_exist);
+                }
+                else
+                {
+                    voxel_values[0] = chunk->voxels[x]    [y][z];
+                    voxel_values[1] = chunk->voxels[x + 1][y][z];
+                    voxel_values[2] = chunk->voxels[x + 1][y][z + 1];
+                    voxel_values[3] = chunk->voxels[x]    [y][z + 1];
+                    
+                    voxel_values[4] = chunk->voxels[x][y + 1][z];
+                    voxel_values[5] = chunk->voxels[x + 1][y + 1][z];
+                    voxel_values[6] = chunk->voxels[x + 1][y + 1][z + 1];
+                    voxel_values[7] = chunk->voxels[x]    [y + 1][z + 1];
+                }
+
+                
+            }
+        }
+    }
+    
+    return {};
+
+    
+    /*vector3_t ts_ceil_size = glm::ceil(ts_sphere_size);
+
+    float32_t x_max = ts_sphere_position.x + ts_ceil_size.x;
+    float32_t x_min = ts_sphere_position.x - ts_ceil_size.x;
+    float32_t z_max = ts_sphere_position.z + ts_ceil_size.z;
+    float32_t z_min = ts_sphere_position.z - ts_ceil_size.z;
+
+    // Index of the vertices (not faces)
+    int32_t max_x_idx = (int32_t)(glm::ceil(x_max));
+    if (max_x_idx >= terrain->xz_dim.x) max_x_idx = terrain->xz_dim.x - 1;
+    if (max_x_idx < 0) max_x_idx = 0;
+    int32_t min_x_idx = (int32_t)(glm::floor(x_min));
+    if (min_x_idx >= terrain->xz_dim.x) min_x_idx = terrain->xz_dim.x - 1;
+    if (min_x_idx < 0) min_x_idx = 0;
+    int32_t max_z_idx = (int32_t)(glm::ceil(z_max));
+    if (max_z_idx >= terrain->xz_dim.y) max_z_idx = terrain->xz_dim.y - 1;
+    if (max_z_idx < 0) max_z_idx = 0;
+    int32_t min_z_idx = (int32_t)(glm::floor(z_min));
+    if (min_z_idx >= terrain->xz_dim.y) min_z_idx = terrain->xz_dim.y - 1;
+    if (min_z_idx < 0) min_z_idx = 0;
+
+    int32_t x_diff = max_x_idx - min_x_idx;
+    int32_t z_diff = max_z_idx - min_z_idx;
+
+    uint32_t maximum_collisions = 5;
+
+    sphere_triangle_collision_return_t closest_collision = {};
+    closest_collision.es_distance = 1000.0f;
+        
+    //uint32_t collision_count = 0;
+    //sphere_triangle_collision_return_t *collisions = (sphere_triangle_collision_return_t *)allocate_linear(sizeof(sphere_triangle_collision_return_t) * maximum_collisions);
+        
+    memory_buffer_view_t<terrain_triangle_t> triangles;
+    triangles.count = x_diff * z_diff * 2;
+    triangles.buffer = ALLOCA_T(terrain_triangle_t, x_diff * z_diff * 2);
+    // TODO: Fix linear allocator
+    // triangles.buffer = (terrain_triangle_t *)allocate_linear(sizeof(terrain_triangle_t) * x_diff * z_diff * 2);
+
+    uint32_t triangle_counter = 0;
+    for (int32_t x = min_x_idx; x < max_x_idx; ++x)
+    {
+        for (int32_t z = min_z_idx; z < max_z_idx; ++z)
+        {
+            if (x % 2 == 0)
+            {
+                if (z % 2 == 0)
+                {
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                }
+                else
+                {
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                }
+            }
+            else
+            {
+                if (z % 2 == 0)
+                {
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                }
+                else
+                {
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision, slide);
+                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
+                }
+            }
+        }
+    }
+
+    const float32_t es_very_close_distance_from_terrain = 0.01f;
+        
+    if (closest_collision.collision_happened)
+    {
+        if (!slide)
+        {
+            collide_and_slide_collision_t collision = {};
+            collision.is_edge = 0;
+            collision.collided = closest_collision.collision_happened;
+            collision.ts_normal = closest_collision.ts_surface_normal_at_collision_point;
+            return collision;
+        }
+            
+        uint32_t max_recursion_depth = 5;
+
+        // TODO: Do not calculate the ellipsoid space of these values again, just do it once at the beginning of the function
+        vector3_t es_sphere_position = ts_sphere_position / ts_sphere_size;
+        vector3_t es_sphere_velocity = ts_sphere_velocity / ts_sphere_size;
+
+        vector3_t es_new_sphere_position = es_sphere_position;
+        vector3_t es_sphere_destination_point = es_sphere_position + es_sphere_velocity;
+            
+        if (closest_collision.es_distance >= es_very_close_distance_from_terrain)
+        {
+            vector3_t es_normalized_velocity = glm::normalize(es_sphere_velocity);
+            vector3_t es_scaled_velocity = es_normalized_velocity * (closest_collision.es_distance - es_very_close_distance_from_terrain);
+            es_new_sphere_position = es_sphere_position + es_scaled_velocity;
+
+            closest_collision.es_sphere_contact_point -= es_very_close_distance_from_terrain * es_normalized_velocity;
+        }
+
+        // Get slide plane information
+        vector3_t es_slide_plane_point = closest_collision.es_sphere_contact_point;
+        vector3_t es_slide_plane_normal = glm::normalize(es_new_sphere_position - closest_collision.es_sphere_contact_point);
+
+        float32_t plane_constant = get_plane_constant(es_slide_plane_point, es_slide_plane_normal);
+        float32_t dest_point_dist_from_plane = glm::dot(es_sphere_destination_point, es_slide_plane_normal) + plane_constant;
+
+        vector3_t es_new_sphere_destination_point = es_sphere_destination_point - dest_point_dist_from_plane * es_slide_plane_normal;
+        vector3_t es_new_velocity = es_new_sphere_destination_point - closest_collision.es_sphere_contact_point;
+
+        float32_t new_velocity_distance_squared = distance_squared(es_new_velocity);
+        float32_t very_close_distance_squared = squared(es_very_close_distance_from_terrain);
+
+        if (new_velocity_distance_squared < very_close_distance_squared)
+        {
+            collide_and_slide_collision_t ret = {};
+            ret.collided = 1;
+            ret.ts_position = es_new_sphere_position * ts_sphere_size;
+            ret.ts_velocity = es_new_velocity * ts_sphere_size;
+            ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
+            return(ret);
+        }
+        // There was a collision, must recurse
+        else if (recurse_depth < max_recursion_depth && slide)
+        {
+            return detect_collision_against_possible_colliding_triangles(terrain,
+                                                                         es_new_sphere_position * ts_sphere_size,
+                                                                         ts_sphere_size,
+                                                                         es_new_velocity * ts_sphere_size,
+                                                                         dt,
+                                                                         0,
+                                                                         1,
+                                                                         recurse_depth + 1);
+        }
+        else
+        {
+            collide_and_slide_collision_t ret = {};
+            ret.collided = 1;
+            ret.ts_position = es_new_sphere_position * ts_sphere_size;
+            ret.ts_velocity = es_new_velocity * ts_sphere_size;
+            ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
+            return(ret);
+        }
+    }
+    else
+    {
+        collide_and_slide_collision_t ret = {};
+        ret.collided = 0;
+        ret.ts_position = ts_sphere_position + ts_sphere_velocity;
+        ret.ts_velocity = ts_sphere_velocity;
+        return(ret);
+    }
+    }*/
+}
 
 
 // ********************* Entity code ***************************
@@ -854,11 +1089,11 @@ internal_function void update_camera_components(float32_t dt)
 
         vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
         
-        vector3_t camera_position = e->ws_p + vector3_t(0.0f, 1.0f, 0.0f);
+        vector3_t camera_position = e->ws_p + vector3_t(0.0f, e->size.x, 0.0f);
         if (component->is_third_person)
         {
             vector3_t right = glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f));
-            camera_position += right * 5.0f + -component->distance_from_player * e->ws_d;
+            camera_position += right * e->size.x + -component->distance_from_player * e->ws_d;
         }
         
         camera->v_m = glm::lookAt(camera_position, e->ws_p + vector3_t(0.0f, 1.0f, 0.0f) + e->ws_d, up);
@@ -1069,6 +1304,7 @@ internal_function void update_standing_entity_physics(struct physics_component_t
 
 internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
+    collide(e->ws_p, e->size, e->ws_v, dt);
 }
 
 internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
@@ -1085,7 +1321,7 @@ internal_function void update_not_physically_affected_entity(struct physics_comp
     if (*action_flags & (1 << action_flags_t::ACTION_UP)) result_force += vector3_t(0.0f, 1.0f, 0.0f);
     if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= vector3_t(0.0f, 1.0f, 0.0f);
 
-    result_force *= 100.0f;
+    result_force *= 20.0f * e->size.x;
 
     e->ws_p += result_force * dt;
 }
@@ -1098,6 +1334,8 @@ internal_function void update_physics_components(float32_t dt)
         entity_t *e = &g_entities->entity_list[ component->entity_index ];
         uint32_t *action_flags = &e->action_flags;
 
+        update_not_physically_affected_entity(component, e, action_flags, dt);
+        
         if (component->enabled)
         {
             if (e->rolling_mode)
@@ -1112,13 +1350,12 @@ internal_function void update_physics_components(float32_t dt)
         // Flying, not falling down towards earth
         else
         {
-            update_not_physically_affected_entity(component, e, action_flags, dt);
+            //update_not_physically_affected_entity(component, e, action_flags, dt);
         }
     }
 }
 
 internal_function entity_handle_t add_entity(const entity_t &e)
-
 {
     entity_handle_t view;
     view = g_entities->entity_count;
@@ -1320,7 +1557,7 @@ internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_st
                                    vector3_t(1.0f, 0.0f, 1.0f),
                                    quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    r2.size = vector3_t(5.0f);
+    r2.size = vector3_t(2.0f);
     //r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
     entity_handle_t rv2 = add_entity(r2);
     g_entities->main_entity = rv2;
@@ -1335,18 +1572,19 @@ internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_st
                                                                       &g_entities->entity_mesh_cycles,
                                                                       cmdpool);
 
-        r2_ptr_rendering->push_k.color = vector4_t(0.7f, 0.7f, 0.7f, 1.0f);
-        r2_ptr_rendering->push_k.roughness = 0.8f;
-        r2_ptr_rendering->push_k.metalness = 0.6f;
+        r2_ptr_rendering->push_k.color = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
+        r2_ptr_rendering->push_k.roughness = 0.3f;
+        r2_ptr_rendering->push_k.metalness = 0.8f;
 
         auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
         camera_component_ptr->is_third_person = true;
+        camera_component_ptr->distance_from_player = 8.0f * r2_ptr->size.x;
         
         bind_camera_to_3d_scene_output(camera_component_ptr->camera);
     }
 
     physics_component_t *physics = add_physics_component(r2_ptr, false);
-    physics->enabled = false;
+    physics->enabled = true;
     physics->hitbox.x_min = -1.001f;
     physics->hitbox.x_max = 1.001f;
     physics->hitbox.y_min = -1.001f;

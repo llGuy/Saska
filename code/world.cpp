@@ -105,6 +105,24 @@ internal_function void hard_initialize_chunks(void)
         make_graphics_pipeline(voxel_mesh_shadow_pipeline);
     }
 
+    g_voxel_chunks->dbg_chunk_edge_pipeline = g_pipeline_manager->add("pipeline.dbg_chunk_edge"_hash);
+    auto *dbg_chunk_edge_pipeline = g_pipeline_manager->get(g_voxel_chunks->dbg_chunk_edge_pipeline);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/hitbox_render.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
+        shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(false, false, false, false);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+        dbg_chunk_edge_pipeline->info = info;
+        make_graphics_pipeline(dbg_chunk_edge_pipeline);
+    }
+
     g_voxel_chunks->gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 }
 
@@ -214,27 +232,32 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                     }
                     else
                     {
-                        chunk = get_chunk_encompassing_point(ivector3_t(v_f));
-                        ready_chunk_for_gpu_sync(chunk);
-                        cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+                        voxel_chunk_t *new_chunk = get_chunk_encompassing_point(ivector3_t(v_f));
                         
-                        uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
+                        if (new_chunk)
+                        {
+                            chunk = new_chunk;
+                            ready_chunk_for_gpu_sync(chunk);
+                            cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+                        
+                            uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
 
-                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
-                        int32_t current_voxel_value = (int32_t)*voxel;
-                        int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
+                            float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                            int32_t current_voxel_value = (int32_t)*voxel;
+                            int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
 
-                        if (new_value > 255)
-                        {
-                            *voxel = 255;
-                        }
-                        else if (new_value < 0)
-                        {
-                            *voxel = 0;
-                        }
-                        else
-                        {
-                            *voxel = (uint8_t)new_value;
+                            if (new_value > 255)
+                            {
+                                *voxel = 255;
+                            }
+                            else if (new_value < 0)
+                            {
+                                *voxel = 0;
+                            }
+                            else
+                            {
+                                *voxel = (uint8_t)new_value;
+                            }
                         }
                     }
                 }
@@ -310,12 +333,15 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
     {
         voxel_chunk_t *chunk = get_chunk_encompassing_point(current_ray_position);
 
-        ivector3_t voxel_coord = get_voxel_coord(current_ray_position);
-
-        if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
+        if (chunk)
         {
-            terraform(ivector3_t(current_ray_position), 2, destructive, dt);
-            break;
+            ivector3_t voxel_coord = get_voxel_coord(current_ray_position);
+
+            if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
+            {
+                terraform(ivector3_t(current_ray_position), 2, destructive, dt);
+                break;
+            }
         }
     }
 }
@@ -684,6 +710,50 @@ voxel_chunk_t **get_voxel_chunk(int32_t index)
     persist_var voxel_chunk_t *nul = nullptr;
     if (index == -1) return(&nul);
     return(&g_voxel_chunks->chunks[index]);
+}
+
+internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo)
+{
+    graphics_pipeline_t *dbg_chunk_render_ppln = g_pipeline_manager->get(g_voxel_chunks->dbg_chunk_edge_pipeline);
+    command_buffer_bind_pipeline(&dbg_chunk_render_ppln->pipeline, &queue->q);
+
+    command_buffer_bind_descriptor_sets(&dbg_chunk_render_ppln->layout, {1, transforms_ubo}, &queue->q);
+
+    for (uint32_t z = 0; z < g_voxel_chunks->grid_edge_size; ++z)
+    {
+        for (uint32_t y = 0; y < g_voxel_chunks->grid_edge_size; ++y)
+        {
+            for (uint32_t x = 0; x < g_voxel_chunks->grid_edge_size; ++x)
+            {
+                voxel_chunk_t *chunk = *get_voxel_chunk(convert_3d_to_1d_index(x, y, z, g_voxel_chunks->grid_edge_size));
+                
+                struct push_k_t
+                {
+                    alignas(16) matrix4_t model_matrix;
+                    alignas(16) vector4_t positions[8];
+                    alignas(16) vector4_t color;
+                } pk;
+
+                pk.model_matrix = chunk->push_k.model_matrix;
+
+                pk.positions[0] = vector4_t(0, 0, 0, 1.0f);
+                pk.positions[1] = vector4_t(0, 16, 0, 1.0f);
+                pk.positions[2] = vector4_t(0, 16, 16, 1.0f);
+                pk.positions[3] = vector4_t(0, 0, 16, 1.0f);
+
+                pk.positions[4] = vector4_t(16, 0, 0, 1.0f);
+                pk.positions[5] = vector4_t(16, 16, 0, 1.0f);
+                pk.positions[6] = vector4_t(16, 16, 16, 1.0f);
+                pk.positions[7] = vector4_t(16, 0, 16, 1.0f);
+
+                pk.color = vector4_t(0.0f, 0.0f, 1.0f, 1.0f);
+
+                command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT, dbg_chunk_render_ppln->layout, &queue->q);
+
+                command_buffer_draw(&queue->q, 24, 1, 0, 0);
+            }
+        }
+    }
 }
 
 
@@ -1325,7 +1395,8 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_entity_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        
+        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
+
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
     }

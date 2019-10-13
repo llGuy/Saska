@@ -56,6 +56,7 @@ struct voxel_chunks_t
     model_t chunk_model;
 
     pipeline_handle_t chunk_pipeline;
+    pipeline_handle_t dbg_chunk_edge_pipeline;
 
     pipeline_handle_t chunk_mesh_pipeline;
     pipeline_handle_t chunk_mesh_shadow_pipeline;

@@ -763,8 +763,96 @@ struct collision_t
     vector3_t ws_normal;
 };
 
+internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
+{
+    float32_t surface_level_f = (float32_t)surface_level;
+    float32_t voxel_value0 = (float32_t)voxel_values[v0];
+    float32_t voxel_value1 = (float32_t)voxel_values[v1];
+
+    if (voxel_value0 > voxel_value1)
+    {
+        float32_t tmp = voxel_value0;
+        voxel_value0 = voxel_value1;
+        voxel_value1 = tmp;
+
+        uint8_t tmp_v = v0;
+        v0 = v1;
+        v1 = tmp_v;
+    }
+
+    float32_t interpolated_voxel_values = lerp(voxel_value0, voxel_value1, surface_level_f);
+    
+    vector3_t vertex = interpolate(vertices[v0], vertices[v1], interpolated_voxel_values);
+    
+    dst_array[(*count)++] = vertex;
+}
+
+internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max)
+{
+    uint8_t bit_combination = 0;
+    for (uint32_t i = 0; i < 8; ++i)
+    {
+        bool is_over_surface = (voxel_values[i] > surface_level);
+        bit_combination |= is_over_surface << i;
+    }
+
+    const int8_t *triangle_entry = &TRIANGLE_TABLE[bit_combination][0];
+
+    uint32_t edge = 0;
+
+    int8_t edge_pair[3] = {};
+                
+    while(triangle_entry[edge] != -1)
+    {
+        if (*count + 3 >= max)
+        {
+            break;
+        }
+        
+        int8_t edge_index = triangle_entry[edge];
+        edge_pair[edge % 3] = edge_index;
+
+        if (edge % 3 == 2)
+        {
+            vector3_t vertices[8] = {};
+            for (uint32_t i = 0; i < 8; ++i)
+            {
+                vertices[i] = NORMALIZED_CUBE_VERTICES[i] + vector3_t(0.5f) + vector3_t((float32_t)x, (float32_t)y, (float32_t)z);
+            }
+
+            for (uint32_t i = 0; i < 3; ++i)
+            {
+                switch(edge_pair[i])
+                {
+                case 0: { push_collision_vertex(0, 1, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 1: { push_collision_vertex(1, 2, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 2: { push_collision_vertex(2, 3, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 3: { push_collision_vertex(3, 0, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 4: { push_collision_vertex(4, 5, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 5: { push_collision_vertex(5, 6, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 6: { push_collision_vertex(6, 7, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 7: { push_collision_vertex(7, 4, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 8: { push_collision_vertex(0, 4, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 9: { push_collision_vertex(1, 5, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 10: { push_collision_vertex(2, 6, vertices, voxel_values, surface_level, dst_array, count); } break;
+                case 11: { push_collision_vertex(3, 7, vertices, voxel_values, surface_level, dst_array, count); } break;
+                }
+            }
+        }
+
+        ++edge;
+    }
+}
+
+internal_function void collide_with_triangle(vector3_t *triangle_vertices)
+{
+}
+
 internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0)
 {
+    vector3_t es_center = ws_center / ws_size;
+    vector3_t es_velocity = ws_velocity / ws_size;
+    
     ivector3_t xs_cube_range = ivector3_t(glm::ceil(ws_to_xs(ws_center + ws_size)));
     ivector3_t xs_cube_min = ivector3_t(glm::floor(ws_to_xs(ws_center - ws_size)));
     xs_cube_range = xs_cube_range - xs_cube_min;
@@ -775,16 +863,23 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
     // If this is true, then the player's collision box will be between chunks
     if (max_voxel_coord.x < min_voxel_coord.x ||
         max_voxel_coord.y < min_voxel_coord.y ||
-        max_voxel_coord.z < min_voxel_coord.z)
+        max_voxel_coord.z < min_voxel_coord.z ||
+        max_voxel_coord.x == 15 ||
+        max_voxel_coord.y == 15 ||
+        max_voxel_coord.z == 15)
     {
         is_between_chunks = 1;
     }
+
+    uint32_t collision_vertex_count = 0;
+    uint32_t max_vertices = 3 * 5 * glm::dot(vector3_t(xs_cube_range), vector3_t(xs_cube_range)) / 2;
+    vector3_t *triangle_vertices = (vector3_t *)allocate_linear(sizeof(vector3_t) * max_vertices);
     
-    for (int32_t z = xs_cube_min.z; z < xs_cube_range.z - 1; ++z)
+    for (int32_t z = xs_cube_min.z; z < xs_cube_min.z + xs_cube_range.z; ++z)
     {
-        for (int32_t y = xs_cube_min.y; y < xs_cube_range.y - 1; ++y)
+        for (int32_t y = xs_cube_min.y; y < xs_cube_min.y + xs_cube_range.y; ++y)
         {
-            for (int32_t x = xs_cube_min.x; x < xs_cube_range.x - 1; ++x)
+            for (int32_t x = xs_cube_min.x; x < xs_cube_min.x + xs_cube_range.x; ++x)
             {
                 ivector3_t voxel_pair_origin = ivector3_t(x, y, z);
                 voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_pair_origin);
@@ -792,35 +887,53 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
                 bool doesnt_exist = 0;
 
                 uint8_t voxel_values[8] = {};
+
+                ivector3_t cs_coord = get_voxel_coord(ivector3_t(x, y, z));
                 
                 if (is_between_chunks)
                 {
-                    voxel_values[0] = chunk->voxels[x]    [y][z];
-                    voxel_values[1] = chunk_edge_voxel_value(chunk, x + 1, y, z, &doesnt_exist);
-                    voxel_values[2] = chunk_edge_voxel_value(chunk, x + 1, y, z + 1, &doesnt_exist);
-                    voxel_values[3] = chunk_edge_voxel_value(chunk, x,     y, z + 1, &doesnt_exist);
+                    voxel_values[0] = chunk->voxels[cs_coord.x]    [cs_coord.y][cs_coord.z];
+                    voxel_values[1] = chunk_edge_voxel_value(chunk, cs_coord.x + 1, cs_coord.y, cs_coord.z, &doesnt_exist);
+                    voxel_values[2] = chunk_edge_voxel_value(chunk, cs_coord.x + 1, cs_coord.y, cs_coord.z + 1, &doesnt_exist);
+                    voxel_values[3] = chunk_edge_voxel_value(chunk, cs_coord.x,     cs_coord.y, cs_coord.z + 1, &doesnt_exist);
                     
-                    voxel_values[4] = chunk_edge_voxel_value(chunk, x, y + 1, z, &doesnt_exist);
-                    voxel_values[5] = chunk_edge_voxel_value(chunk, x + 1, y + 1, z, &doesnt_exist);
-                    voxel_values[6] = chunk_edge_voxel_value(chunk, x + 1, y + 1, z + 1, &doesnt_exist);
-                    voxel_values[7] = chunk_edge_voxel_value(chunk, x,     y + 1, z + 1, &doesnt_exist);
+                    voxel_values[4] = chunk_edge_voxel_value(chunk, cs_coord.x,     cs_coord.y + 1, cs_coord.z, &doesnt_exist);
+                    voxel_values[5] = chunk_edge_voxel_value(chunk, cs_coord.x + 1, cs_coord.y + 1, cs_coord.z, &doesnt_exist);
+                    voxel_values[6] = chunk_edge_voxel_value(chunk, cs_coord.x + 1, cs_coord.y + 1, cs_coord.z + 1, &doesnt_exist);
+                    voxel_values[7] = chunk_edge_voxel_value(chunk, cs_coord.x,     cs_coord.y + 1, cs_coord.z + 1, &doesnt_exist);
                 }
                 else
                 {
-                    voxel_values[0] = chunk->voxels[x]    [y][z];
-                    voxel_values[1] = chunk->voxels[x + 1][y][z];
-                    voxel_values[2] = chunk->voxels[x + 1][y][z + 1];
-                    voxel_values[3] = chunk->voxels[x]    [y][z + 1];
+                    voxel_values[0] = chunk->voxels[cs_coord.x]    [cs_coord.y][cs_coord.z];
+                    voxel_values[1] = chunk->voxels[cs_coord.x + 1][cs_coord.y][cs_coord.z];
+                    voxel_values[2] = chunk->voxels[cs_coord.x + 1][cs_coord.y][cs_coord.z + 1];
+                    voxel_values[3] = chunk->voxels[cs_coord.x]    [cs_coord.y][cs_coord.z + 1];
                     
-                    voxel_values[4] = chunk->voxels[x][y + 1][z];
-                    voxel_values[5] = chunk->voxels[x + 1][y + 1][z];
-                    voxel_values[6] = chunk->voxels[x + 1][y + 1][z + 1];
-                    voxel_values[7] = chunk->voxels[x]    [y + 1][z + 1];
+                    voxel_values[4] = chunk->voxels[cs_coord.x]    [cs_coord.y + 1][cs_coord.z];
+                    voxel_values[5] = chunk->voxels[cs_coord.x + 1][cs_coord.y + 1][cs_coord.z];
+                    voxel_values[6] = chunk->voxels[cs_coord.x + 1][cs_coord.y + 1][cs_coord.z + 1];
+                    voxel_values[7] = chunk->voxels[cs_coord.x]    [cs_coord.y + 1][cs_coord.z + 1];
                 }
 
-                
+                push_collision_triangles_vertices(voxel_values, x, y, z, 60, triangle_vertices, &collision_vertex_count, max_vertices);
             }
         }
+    }
+
+    for (uint32_t triangle = 0; triangle < collision_vertex_count / 3; ++triangle)
+    {
+        vector3_t *triangle_ptr = &triangle_vertices[triangle * 3];
+
+        // Convert from xs to es (ellipsoid space)
+        for (uint32_t i = 0; i < 3; ++i)
+        {
+            // Converts to world space
+            triangle_ptr[i] = triangle_ptr[i] - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH);
+            // Converts to ellipsoid space
+            triangle_ptr[i] /= ws_size;
+        }
+
+        collide_with_triangle(triangle_ptr);
     }
     
     return {};

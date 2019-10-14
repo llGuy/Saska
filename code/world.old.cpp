@@ -190,7 +190,7 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
                                                        const vector3_t &ts_sphere_radius,
                                                        bool slide)
 {
-        bool found_collision = 0;
+    bool found_collision = 0;
     float32_t first_resting_instance;
 
 
@@ -320,7 +320,7 @@ internal_function void check_sphere_triangle_collision(sphere_triangle_collision
         check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fa, es_fb, ts_surface_normal, collision);
         check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fb, es_fc, ts_surface_normal, collision);
         check_collision_with_edge(es_sphere_velocity, es_sphere_position, es_fc, es_fa, ts_surface_normal, collision);
-        }
+    }
 }
 
 internal_function void push_collision(const sphere_triangle_collision_return_t &collision, sphere_triangle_collision_return_t *stack, uint32_t &counter, uint32_t max)

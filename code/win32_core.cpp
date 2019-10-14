@@ -6,12 +6,6 @@
 
 #define VK_USE_PLATFORM_WIN32_KHR
 
-
-/*#include "core.hpp"
-#include "utils.hpp"
-
-#include "game.hpp"*/
-
 #if defined(UNITY_BUILD)
 #include "network.cpp"
 #include <vulkan/vulkan.h>
@@ -63,42 +57,6 @@ void request_quit(void)
     g_running = 0;
     PostQuitMessage(0);
 }
-
-/*file_contents_t read_file(const char *filename, const char *flags, linear_allocator_t *allocator)
-{
-    FILE *file = fopen(filename, flags);
-    if (file == nullptr)
-    {
-	OUTPUT_DEBUG_LOG("error - couldnt load file \"%s\"\n", filename);
-	assert(false);
-    }
-    fseek(file, 0, SEEK_END);
-    uint32_t size = ftell(file);
-    rewind(file);
-
-    byte_t *buffer = (byte_t *)allocate_linear(size + 1);
-    
-    fread(buffer, 1, size, file);
-
-    buffer[size] = '\0';
-    
-    fclose(file);
-
-    file_contents_t contents { size, buffer };
-    
-    return(contents);
-}
-
-external_image_data_t read_image(const char *filename)
-{
-    external_image_data_t external_image_data;
-    external_image_data.pixels = stbi_load(filename,
-                                           &external_image_data.width,
-                                           &external_image_data.height,
-                                           &external_image_data.channels,
-                                           STBI_rgb_alpha);
-    return(external_image_data);
-    }*/
 
 internal_function void open_debug_file(void)
 {

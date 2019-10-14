@@ -317,7 +317,6 @@ void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state)
 void update_network_world_state(void);
 
 void clean_up_world_data(void);
-
 void make_world_data(void);
 
 void set_focus_for_world(void);
@@ -325,14 +324,8 @@ void remove_focus_for_world(void);
 
 void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
-
-void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index,
-                  uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
-
+void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
 void handle_world_input(input_state_t *input_state, float32_t dt);
-
 void handle_input_debug(input_state_t *input_state, float32_t dt);
-
 void destroy_world(void);
-
 void initialize_world_translation_unit(struct game_memory_t *memory);

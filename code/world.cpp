@@ -1,4 +1,4 @@
-/* world.cpp */
+/* world */
 // TODO: DEFER ALL GPU RELATED OPERATIONS!!!
 // TODO: Get rid of most of the glm::length calls in the physics calculations (terrain collision stuff)
 // TODO: Have a startup script so that you can reload the game
@@ -272,6 +272,47 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
     }
 
     ready_chunk_for_gpu_sync(chunk);
+}
+
+internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
+{
+    vector3_t xs_plane_origin = ws_to_xs(ws_plane_origin);
+
+    voxel_chunk_t *chunk = get_chunk_encompassing_point(xs_plane_origin);
+    ready_chunk_for_gpu_sync(chunk);
+    
+    ivector3_t plane_origin = ivector3_t(xs_plane_origin);
+
+    radius /= g_voxel_chunks->size;
+    radius = glm::round(radius);
+    
+    ivector3_t bottom_corner = plane_origin - ivector3_t((uint32_t)radius, 0, (uint32_t)radius);
+
+    uint32_t diameter = (uint32_t)radius * 2 + 1;
+
+    uint32_t y = 0;
+    for (uint32_t z = 0; z < diameter; ++z)
+    {
+        for (uint32_t x = 0; x < diameter; ++x)
+        {
+            vector3_t v_f = vector3_t(x, y, z) + vector3_t(bottom_corner);
+
+            ivector3_t cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+
+            if (is_voxel_coord_within_chunk(cs_vcoord))
+            {
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = 255;
+            }
+            else
+            {
+                chunk = get_chunk_encompassing_point(ivector3_t(v_f));
+                ready_chunk_for_gpu_sync(chunk);
+                cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = 255;
+            }
+        }
+    }
 }
 
 internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
@@ -755,12 +796,20 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
     }
 }
 
+enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
+
 struct collision_t
 {
-    bool detected;
+    collision_primitive_type_t primitive_type;
     
-    vector3_t ws_at;
-    vector3_t ws_normal;
+    bool detected;
+    bool under_terrain;
+
+    vector3_t es_velocity;
+    vector3_t es_contact_point;
+    vector3_t es_at;
+    vector3_t es_normal;
+    float32_t es_distance;
 };
 
 internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
@@ -844,8 +893,246 @@ internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, 
     }
 }
 
-internal_function void collide_with_triangle(vector3_t *triangle_vertices)
+internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
+    vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
+    vector3_t cross12 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
+    float32_t d1 = glm::dot(cross11, cross12);
+    if(d1 >= 0)
+    {
+        vector3_t cross21 = glm::cross((tri_point_c - tri_point_a), (point - tri_point_a));
+        vector3_t cross22 = glm::cross((tri_point_c - tri_point_a), (tri_point_b - tri_point_a));
+        float32_t d2 = glm::dot(cross21, cross22);
+        if(d2 >= 0)
+        {
+            vector3_t cross31 = glm::cross((tri_point_b - tri_point_a), (point - tri_point_a));
+            vector3_t cross32 = glm::cross((tri_point_b - tri_point_a), (tri_point_c - tri_point_a));
+            float32_t d3 = glm::dot(cross31, cross32);
+            if(d3 >= 0)
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// This function solves the quadratic eqation "At^2 + Bt + C = 0" and is found in Kasper Fauerby's paper on collision detection and response
+internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root) 
+{
+    // Check if a solution exists
+    float determinant = b * b - 4.0f * a *c;
+    // If determinant is negative it means no solutions.
+    if (determinant < 0.0f) return false;
+    // calculate the two roots: (if determinant == 0 then
+    // x1==x2 but lets disregard that slight optimization)
+    float sqrt_d = sqrt(determinant);
+    float r1 = (-b - sqrt_d) / (2 * a);
+    float r2 = (-b + sqrt_d) / (2 * a);
+    // Sort so x1 <= x2
+    if (r1 > r2)
+    {
+        float32_t temp = r2;
+        r2 = r1;
+        r1 = temp;
+    }
+    // Get lowest root:
+    if (r1 > 0 && r1 < max_r)
+    {
+        *root = r1;
+        return true;
+    }
+    // It is possible that we want x2 - this can happen
+    // if x1 < 0
+    if (r2 > 0 && r2 < max_r)
+    {
+        *root = r2;
+        return true;
+    }
+
+    // No (valid) solutions
+    return false;
+}
+
+internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal)
+{
+    return -( (plane_point.x * plane_normal.x) + (plane_point.y * plane_normal.y) + (plane_point.z * plane_normal.z) );
+}
+
+internal_function float32_t squared(float32_t f)
+{
+    return(f * f);
+}
+
+internal_function float32_t distance_squared(const vector3_t &dir)
+{
+    return glm::dot(dir, dir);
+}
+
+internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision)
+{
+    float32_t a = distance_squared(es_sphere_velocity);
+    float32_t b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_vertex);
+    float32_t c = distance_squared(es_vertex - es_sphere_position) - 1.0f;
+            
+    float32_t new_resting_instance;
+    if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
+    {
+        // TODO: Make sure that we are not using glm::length
+        float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
+                
+        if (es_distance < collision->es_distance)
+        {
+            collision->detected = 1;
+            collision->primitive_type = collision_primitive_type_t::CPT_VERTEX;
+            collision->es_distance = es_distance;
+            collision->es_contact_point = es_vertex;
+            collision->es_normal = es_surface_normal;
+        }
+    }
+}
+
+internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision)
+{
+    vector3_t es_edge_diff = es_vertex_b - es_vertex_a;
+    vector3_t es_sphere_pos_to_vertex = es_vertex_a - es_sphere_position;
+        
+    float32_t a = distance_squared(es_edge_diff) * -distance_squared(es_sphere_velocity) + squared(glm::dot(es_edge_diff, es_sphere_velocity));
+    float32_t b = distance_squared(es_edge_diff) * 2.0f * glm::dot(es_sphere_velocity, es_sphere_pos_to_vertex) - 2.0f * (glm::dot(es_edge_diff, es_sphere_velocity) * glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
+    float32_t c = distance_squared(es_edge_diff) * (1.0f - distance_squared(es_sphere_pos_to_vertex)) + squared(glm::dot(es_edge_diff, es_sphere_pos_to_vertex));
+
+    float32_t new_resting_instance;
+    if (get_smallest_root(a, b, c, 1.0f, &new_resting_instance))
+    {
+        float32_t in_edge_proportion = (glm::dot(es_edge_diff, es_sphere_velocity) * new_resting_instance - glm::dot(es_edge_diff, es_sphere_pos_to_vertex)) / distance_squared(es_edge_diff);
+            
+        if (in_edge_proportion >= 0.0f && in_edge_proportion <= 1.0f)
+        {
+            vector3_t es_sphere_contact_point = es_vertex_a + in_edge_proportion * es_edge_diff;
+            // TODO: Get rid of glm::length
+            float32_t es_distance = glm::length(new_resting_instance * es_sphere_velocity);
+            
+            if (es_distance < collision->es_distance)
+            {
+                collision->detected = 1;
+                collision->primitive_type = collision_primitive_type_t::CPT_EDGE;
+                collision->es_distance = es_distance;
+                collision->es_contact_point = es_sphere_contact_point;
+                collision->es_normal = es_surface_normal;
+            }
+        }
+    }
+}
+
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, float32_t dt, collision_t *closest)
+{
+    bool found_collision = 0;
+    float32_t first_resting_instance;
+    
+    vector3_t es_fa = triangle_vertices[0];
+    vector3_t es_fb = triangle_vertices[1];
+    vector3_t es_fc = triangle_vertices[2];
+
+    vector3_t es_up_normal_of_triangle = glm::normalize(glm::cross(es_fb - es_fa, es_fc - es_fa));
+    /*if (!slide)
+    {
+        const float32_t es_very_close_distance_from_terrain = 0.02f;
+        //es_center -= es_up_normal_of_triangle * es_very_close_distance_from_terrain;
+        es_velocity = -es_up_normal_of_triangle * es_very_close_distance_from_terrain;
+        }*/
+    
+    float32_t velocity_dot_normal = glm::dot(glm::normalize(es_velocity), es_up_normal_of_triangle);
+    
+    if (velocity_dot_normal > 0.0f)
+    {
+        return;
+    }
+
+    float32_t plane_constant = -( (es_fa.x * es_up_normal_of_triangle.x) + (es_fa.y * es_up_normal_of_triangle.y) + (es_fa.z * es_up_normal_of_triangle.z) );
+
+    bool32_t must_check_only_for_edges_and_vertices = 0;
+    float32_t normal_dot_velocity = glm::dot(es_velocity, es_up_normal_of_triangle);
+    float32_t sphere_plane_distance = glm::dot(es_center, es_up_normal_of_triangle) + plane_constant;
+    
+    if (normal_dot_velocity == 0.0f)
+    {
+        if (glm::abs(sphere_plane_distance) >= 1.0f)
+        {
+            return;
+        }
+        else
+        {
+            must_check_only_for_edges_and_vertices = 1;
+        }
+    }
+
+    const float32_t very_close_distance = 0.01f;
+    
+    if (!must_check_only_for_edges_and_vertices)
+    {
+        // Check collision with triangle face
+        first_resting_instance = (1.0f - sphere_plane_distance) / normal_dot_velocity;
+        float32_t second_resting_instance = (-1.0f - sphere_plane_distance) / normal_dot_velocity;
+
+        if (first_resting_instance > second_resting_instance)
+        {
+            float32_t f = first_resting_instance;
+            first_resting_instance = second_resting_instance;
+            second_resting_instance = f;
+        }
+        if (first_resting_instance > 1.0f || second_resting_instance < 0.0f)
+        {
+            return;
+        }
+        if (first_resting_instance < 0.0f) first_resting_instance = 0.0f;
+        if (second_resting_instance < 1.0f) second_resting_instance = 1.0f;
+
+        vector3_t es_contact_point = es_center + (first_resting_instance * es_velocity) - es_up_normal_of_triangle;
+
+        if (is_point_in_triangle(es_contact_point, es_fa, es_fb, es_fc))
+        {
+            // TODO: Get rid of glm::length
+            float32_t es_distance = glm::length(es_velocity * first_resting_instance);
+            if (es_distance < closest->es_distance)
+            {
+                float32_t sphere_point_plane_distance = glm::dot(es_center - es_up_normal_of_triangle, es_up_normal_of_triangle) + plane_constant;
+                if (sphere_point_plane_distance < 0.0f && !closest->under_terrain)
+                {
+                    // Adjust the sphere position, and call the function
+                    vector3_t es_new_sphere_position = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
+                    es_new_sphere_position += very_close_distance * es_up_normal_of_triangle;
+                    
+                    closest->under_terrain = 1;
+                    closest->es_at = es_new_sphere_position;
+                    closest->es_normal = es_up_normal_of_triangle;
+
+                    collide_with_triangle(triangle_vertices, es_new_sphere_position, es_velocity, dt, closest);
+                    
+                    return;
+                }
+                
+                found_collision = 1;
+                closest->detected = 1;
+                closest->primitive_type = collision_primitive_type_t::CPT_FACE;
+                closest->es_distance = es_distance;
+                closest->es_contact_point = es_contact_point;
+                closest->es_normal = es_up_normal_of_triangle;
+            }
+        }
+    }
+    
+    if (!found_collision)
+    {
+        // Check collision with vertices
+        check_collision_with_vertex(es_velocity, es_center, es_fa, es_up_normal_of_triangle, closest);
+        check_collision_with_vertex(es_velocity, es_center, es_fb, es_up_normal_of_triangle, closest);
+        check_collision_with_vertex(es_velocity, es_center, es_fc, es_up_normal_of_triangle, closest);
+
+        // Check collision with edges
+        check_collision_with_edge(es_velocity, es_center, es_fa, es_fb, es_up_normal_of_triangle, closest);
+        check_collision_with_edge(es_velocity, es_center, es_fb, es_fc, es_up_normal_of_triangle, closest);
+        check_collision_with_edge(es_velocity, es_center, es_fc, es_fa, es_up_normal_of_triangle, closest);
+    }
 }
 
 internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0)
@@ -920,6 +1207,9 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
         }
     }
 
+    collision_t closest_collision = {};
+    closest_collision.es_distance = 1000.0f;
+    
     for (uint32_t triangle = 0; triangle < collision_vertex_count / 3; ++triangle)
     {
         vector3_t *triangle_ptr = &triangle_vertices[triangle * 3];
@@ -928,12 +1218,114 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
         for (uint32_t i = 0; i < 3; ++i)
         {
             // Converts to world space
-            triangle_ptr[i] = triangle_ptr[i] - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH);
+            triangle_ptr[i] = triangle_ptr[i] - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2.0f) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH);
+            triangle_ptr[i] *= g_voxel_chunks->size;
             // Converts to ellipsoid space
             triangle_ptr[i] /= ws_size;
         }
 
-        collide_with_triangle(triangle_ptr);
+        collide_with_triangle(triangle_ptr, es_center, es_velocity, dt, &closest_collision);
+    }
+
+    const float32_t es_very_close_distance_from_terrain = 0.01f;
+    
+    if (closest_collision.detected)
+    {
+        persist_var uint32_t collision_count = 0;
+        collision_count++;
+
+        char buffer[10];
+
+        sprintf(buffer, "%d ", collision_count);
+        OutputDebugString(buffer);
+        OutputDebugString("Collision detected: ");
+        switch (closest_collision.primitive_type)
+        {
+        case collision_primitive_type_t::CPT_FACE:
+            {
+                OutputDebugString("FACE\n");
+            } break;
+        case collision_primitive_type_t::CPT_EDGE:
+            {
+                OutputDebugString("EDGE\n");
+            } break;
+        case collision_primitive_type_t::CPT_VERTEX:
+            {
+                OutputDebugString("VERTEX\n");
+            } break;
+        }
+        
+        /*if (!slide)
+        {
+            collide_and_slide_collision_t collision = {};
+            collision.is_edge = 0;
+            collision.collided = closest_collision.collision_happened;
+            collision.ts_normal = closest_collision.ts_surface_normal_at_collision_point;
+            return collision;
+            }*/
+            
+        uint32_t max_recursion_depth = 5;
+
+        // TODO: Do not calculate the ellipsoid space of these values again, just do it once at the beginning of the function
+        vector3_t es_sphere_position = es_center;
+        vector3_t es_sphere_velocity = es_velocity;
+
+        vector3_t es_new_sphere_position = es_sphere_position;
+        vector3_t es_sphere_destination_point = es_sphere_position + es_sphere_velocity;
+            
+        if (closest_collision.es_distance >= es_very_close_distance_from_terrain)
+        {
+            vector3_t es_normalized_velocity = glm::normalize(es_sphere_velocity);
+            vector3_t es_scaled_velocity = es_normalized_velocity * (closest_collision.es_distance - es_very_close_distance_from_terrain);
+            es_new_sphere_position = es_sphere_position + es_scaled_velocity;
+
+            closest_collision.es_contact_point -= es_very_close_distance_from_terrain * es_normalized_velocity;
+        }
+
+        // Get slide plane information
+        vector3_t es_slide_plane_point = closest_collision.es_contact_point;
+        vector3_t es_slide_plane_normal = glm::normalize(es_new_sphere_position - closest_collision.es_contact_point);
+
+        float32_t plane_constant = get_plane_constant(es_slide_plane_point, es_slide_plane_normal);
+        float32_t dest_point_dist_from_plane = glm::dot(es_sphere_destination_point, es_slide_plane_normal) + plane_constant;
+
+        vector3_t es_new_sphere_destination_point = es_sphere_destination_point - dest_point_dist_from_plane * es_slide_plane_normal;
+        vector3_t es_new_velocity = es_new_sphere_destination_point - closest_collision.es_contact_point;
+
+        float32_t new_velocity_distance_squared = distance_squared(es_new_velocity);
+        float32_t very_close_distance_squared = squared(es_very_close_distance_from_terrain);
+
+        if (new_velocity_distance_squared < very_close_distance_squared)
+        {
+            collision_t ret = {};
+            ret.detected = 1;
+            ret.es_at = es_new_sphere_position;
+            ret.es_velocity = es_new_velocity;
+            ret.es_normal = es_slide_plane_normal;
+            return(ret);
+        }
+        // There was a collision, must recurse
+        else if (recurse_depth < max_recursion_depth/* && slide*/)
+        {
+            return collide(es_new_sphere_position * ws_size, ws_size, es_new_velocity * ws_size, dt, recurse_depth + 1);
+        }
+        else
+        {
+            collision_t ret = {};
+            ret.detected = 1;
+            ret.es_at = es_new_sphere_position;
+            ret.es_velocity = es_new_velocity;
+            ret.es_normal = es_slide_plane_normal;
+            return(ret);
+        }
+    }
+    else
+    {
+        collision_t ret = {};
+        ret.detected = 0;
+        ret.es_at = (ws_center + ws_velocity) / ws_size;
+        ret.es_velocity = ws_velocity / ws_size;
+        return(ret);
     }
     
     return {};
@@ -1413,15 +1805,6 @@ internal_function struct physics_component_t *add_physics_component(entity_t *e,
 
 internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
-}
-
-internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
-{
-    collide(e->ws_p, e->size, e->ws_v, dt);
-}
-
-internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
-{
     vector3_t result_force = vector3_t(0.0f);
 
     vector3_t right = glm::normalize(glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f)));
@@ -1437,6 +1820,34 @@ internal_function void update_not_physically_affected_entity(struct physics_comp
     result_force *= 20.0f * e->size.x;
 
     e->ws_p += result_force * dt;
+}
+
+internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
+{
+    vector3_t result_force = vector3_t(0.0f);
+
+    vector3_t right = glm::normalize(glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f)));
+    vector3_t forward = glm::normalize(glm::cross(vector3_t(0.0f, 1.0f, 0.0f), right));
+
+    if (*action_flags & (1 << action_flags_t::ACTION_FORWARD)) result_force += forward;
+    if (*action_flags & (1 << action_flags_t::ACTION_BACK)) result_force -= forward;
+    if (*action_flags & (1 << action_flags_t::ACTION_RIGHT)) result_force += right;
+    if (*action_flags & (1 << action_flags_t::ACTION_LEFT)) result_force -= right;
+    if (*action_flags & (1 << action_flags_t::ACTION_UP)) result_force += vector3_t(0.0f, 1.0f, 0.0f);
+    if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= vector3_t(0.0f, 1.0f, 0.0f);
+
+    result_force *= 20.0f * e->size.x;
+
+    /*e->ws_p += result_force * dt;
+      e->ws_v = result_force;*/
+    
+    collision_t collision = collide(e->ws_p, e->size, result_force * dt, dt);
+    e->ws_p = collision.es_at * e->size;
+}
+
+internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
+{
+    
 }
 
 internal_function void update_physics_components(float32_t dt)
@@ -1746,7 +2157,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_entity_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -1831,7 +2242,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     g_voxel_chunks->size = 12.0f;
-    g_voxel_chunks->grid_edge_size = 5;
+    g_voxel_chunks->grid_edge_size = 1;
     
     initialize_entities_data(cmdpool, input_state, app_type);
     
@@ -1858,8 +2269,9 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
-    construct_sphere(vector3_t(-80.0f, -30.0f, 0.0f), 90.0f);
+    //construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
+    //construct_sphere(vector3_t(-80.0f, -30.0f, 0.0f), 90.0f);
+    construct_plane(vector3_t(0.0f), 60.0f);
 }
 
 internal_function void clean_up_entities(void)

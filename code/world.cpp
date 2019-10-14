@@ -2157,7 +2157,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_entity_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2242,7 +2242,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     g_voxel_chunks->size = 12.0f;
-    g_voxel_chunks->grid_edge_size = 1;
+    g_voxel_chunks->grid_edge_size = 5;
     
     initialize_entities_data(cmdpool, input_state, app_type);
     
@@ -2269,9 +2269,9 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    //construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
-    //construct_sphere(vector3_t(-80.0f, -30.0f, 0.0f), 90.0f);
-    construct_plane(vector3_t(0.0f), 60.0f);
+    construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
+    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
+    //construct_plane(vector3_t(0.0f), 60.0f);
 }
 
 internal_function void clean_up_entities(void)

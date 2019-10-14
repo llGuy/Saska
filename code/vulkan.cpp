@@ -683,7 +683,35 @@ void destroy_single_use_command_buffer(VkCommandBuffer *command_buffer, VkComman
 
     free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{1, command_buffer}, command_pool);
 }
-    
+
+void initialize_image_memory_barrier(VkImageLayout layout_before, VkImageLayout layout_after, image2d_t *image, VkImageAspectFlags image_aspect, uint32_t layer_count, image_memory_barrier_t *dst)
+{
+    dst->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    dst->oldLayout = layout_before;
+    dst->newLayout = layout_after;
+    dst->image = image->image;
+    dst->subresourceRange.aspectMask = image_aspect;
+    dst->subresourceRange.baseMipLevel = 0;
+    dst->subresourceRange.levelCount = 1;
+    dst->subresourceRange.baseArrayLayer = 0;
+    dst->subresourceRange.layerCount = layer_count;
+}
+
+void initialize_buffer_memory_barrier(gpu_buffer_t *buffer, uint32_t offset, uint32_t size, VkAccessFlagBits access_before, VkAccessFlags access_after, buffer_memory_barrier_t *dst)
+{
+    dst->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    dst->srcAccessMask = access_before;
+    dst->dstAccessMask = access_after;
+    dst->buffer = buffer->buffer;
+    dst->offset = offset;
+    dst->size = size;
+}
+
+void issue_pipeline_barrier(VkPipelineStageFlags stage_before, VkPipelineStageFlags stage_after, const memory_buffer_view_t<buffer_memory_barrier_t> &buffer_barriers, const memory_buffer_view_t<image_memory_barrier_t> &image_barriers, VkCommandBuffer *cmdbuf)
+{
+    vkCmdPipelineBarrier(*cmdbuf, stage_after, stage_before, 0, 0, 0, buffer_barriers.count, buffer_barriers.buffer, image_barriers.count, image_barriers.buffer);
+}
+
 void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool)
 {
     VkCommandBuffer single_use;

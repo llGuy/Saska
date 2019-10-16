@@ -26,8 +26,155 @@ constexpr float32_t PI = 3.14159265359f;
 global_var struct entities_t *g_entities;
 global_var struct voxel_chunks_t *g_voxel_chunks;
 
-
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
+
+// Initialization
+internal_function void hard_initialize_chunks(void);
+void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord);
+
+// Vector space operations
+internal_function vector3_t get_voxel_world_origin(void);
+internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length = VOXEL_CHUNK_EDGE_LENGTH);
+internal_function vector3_t ws_to_xs(const vector3_t &ws_position);
+internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
+
+// Voxel coordinate fetching / system
+voxel_chunk_t **get_voxel_chunk(int32_t index);
+internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position);
+internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position);
+internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position);
+
+// Modifications
+internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
+internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
+internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive);
+
+// Rendering / Mesh / GPU operations
+internal_function void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level);
+internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist);
+internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk);
+internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level);
+void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
+void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
+void push_chunk_to_render_queue(voxel_chunk_t *chunk);
+internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue);
+internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo);
+
+// Math
+internal_function float32_t lerp(float32_t a, float32_t b, float32_t x);
+internal_function vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x);
+internal_function float32_t squared(float32_t f);
+internal_function float32_t distance_squared(const vector3_t &dir);
+
+// Collision
+enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
+struct collision_t
+{
+    collision_primitive_type_t primitive_type;
+    
+    bool detected;
+    bool under_terrain;
+
+    vector3_t es_velocity;
+    vector3_t es_contact_point;
+    vector3_t es_at;
+    vector3_t es_normal;
+    float32_t es_distance;
+};
+internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count);
+internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max);
+internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c);
+internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root);
+internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal);
+internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision);
+internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision);
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, float32_t dt, collision_t *closest);
+internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0);
+
+// Entities
+internal_function entity_t *get_main_entity(void);
+internal_function entity_t *get_entity(const constant_string_t &name);
+entity_t *get_entity(entity_handle_t v);
+
+// Rendering
+internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
+internal_function void push_entity_to_animated_queue(entity_t *e);
+internal_function void push_entity_to_rolling_queue(entity_t *e);
+
+entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3_t ws_d, quaternion_t gs_r);
+void attach_camera_to_entity(entity_t *e, int32_t camera_index);
+internal_function struct camera_component_t * add_camera_component(entity_t *e, uint32_t camera_index);
+internal_function void update_camera_components(float32_t dt);
+internal_function struct rendering_component_t *add_rendering_component(entity_t *e);
+internal_function struct animation_component_t *add_animation_component(entity_t *e, uniform_layout_t *ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles, gpu_command_queue_pool_t *cmdpool);
+internal_function void update_animation_component(float32_t dt);
+internal_function void update_animation_gpu_data(gpu_command_queue_t *queue);
+internal_function void push_entity_to_animated_queue(entity_t *e);
+internal_function void push_entity_to_rolling_queue(entity_t *e);
+internal_function void update_rendering_component(float32_t dt);
+internal_function uint32_t add_terraform_power_component(entity_t *e);
+internal_function struct terraform_power_component_t *get_terraform_power_component(uint32_t index);
+internal_function void update_terraform_power_components(float32_t dt);
+uint32_t add_network_component(void);
+struct network_component_t *get_network_component(uint32_t index);
+internal_function struct physics_component_t *add_physics_component(entity_t *e, bool enabled);
+internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_physics_components(float32_t dt);
+internal_function entity_handle_t add_entity(const entity_t &e);
+internal_function void make_entity_instanced_renderable(model_handle_t model_handle, const constant_string_t &e_mtrl_name);
+internal_function void update_entities(float32_t dt, application_type_t app_type);
+void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state);
+void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color);
+internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
+internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type);
+internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
+
+internal_function int32_t lua_get_player_position(lua_State *state);
+internal_function int32_t lua_set_player_position(lua_State *state);
+internal_function int32_t lua_toggle_collision_box_render(lua_State *state);
+internal_function int32_t lua_toggle_collision_edge_render(lua_State *state);
+internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
+internal_function int32_t lua_render_entity_direction_information(lua_State *state);
+internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
+internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
+internal_function int32_t lua_stop_simulation(lua_State *state);
+internal_function int32_t lua_load_mesh(lua_State *state);
+internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
+internal_function int32_t lua_load_skeleton(lua_State *state);
+internal_function int32_t lua_load_animations(lua_State *state);
+internal_function int32_t lua_initialize_entity(lua_State *state);
+internal_function int32_t lua_attach_rendering_component(lua_State *state);
+internal_function int32_t lua_attach_animation_component(lua_State *state);
+internal_function int32_t lua_attach_physics_component(lua_State *state);
+internal_function int32_t lua_attach_camera_component(lua_State *state);
+internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
+internal_function int32_t lua_go_down(lua_State *state);
+internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
+internal_function int32_t lua_reinitialize(lua_State *state);
+
+internal_function void entry_point(void);
+void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
+void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
+internal_function void clean_up_entities(void);
+void clean_up_world_data(void);
+void make_world_data(void /* Some kind of state */);
+void update_network_world_state(void);
+void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t image_index);
+void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
+void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
+void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
+void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
+void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
+void handle_main_entity_action(input_state_t *input_state, float32_t dt);
+void handle_world_input(input_state_t *input_state, float32_t dt);
+void handle_input_debug(input_state_t *input_state, float32_t dt);
+void destroy_world(void);
+
+
+
 
 // ******************************** Voxel code ********************************
 
@@ -126,17 +273,20 @@ internal_function void hard_initialize_chunks(void)
     g_voxel_chunks->gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 }
 
+
 internal_function vector3_t get_voxel_world_origin(void)
 {
     return -vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2.0f) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) * g_voxel_chunks->size;
 }
 
-internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length = VOXEL_CHUNK_EDGE_LENGTH)
+
+internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length)
 {
     return(coord.x >= 0 && coord.x < edge_length &&
            coord.y >= 0 && coord.y < edge_length &&
            coord.z >= 0 && coord.z < edge_length);
 }
+
 
 // XS = voxel space (VS is view space)
 internal_function vector3_t ws_to_xs(const vector3_t &ws_position)
@@ -147,6 +297,7 @@ internal_function vector3_t ws_to_xs(const vector3_t &ws_position)
 
     return xs_sized;
 }
+
 
 internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length)
 {
@@ -160,6 +311,7 @@ internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_
     }
 }
 
+
 // CS = chunk space
 internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position)
 {
@@ -172,6 +324,7 @@ internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &x
     ivector3_t cs_voxel_coord = ivector3_t(rounded.x % VOXEL_CHUNK_EDGE_LENGTH, rounded.y % (VOXEL_CHUNK_EDGE_LENGTH), rounded.z % (VOXEL_CHUNK_EDGE_LENGTH));
 }
 
+
 internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position)
 {
     ivector3_t rounded = ivector3_t(glm::round(xs_position));
@@ -179,11 +332,13 @@ internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position)
     return(cs_voxel_coord);
 }
 
+
 internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position)
 {
     ivector3_t cs_voxel_coord = ivector3_t(xs_position.x % VOXEL_CHUNK_EDGE_LENGTH, xs_position.y % (VOXEL_CHUNK_EDGE_LENGTH), xs_position.z % (VOXEL_CHUNK_EDGE_LENGTH));
     return(cs_voxel_coord);
 }
+
 
 internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt)
 {
@@ -274,6 +429,7 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
     ready_chunk_for_gpu_sync(chunk);
 }
 
+
 internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
 {
     vector3_t xs_plane_origin = ws_to_xs(ws_plane_origin);
@@ -314,6 +470,7 @@ internal_function void construct_plane(const vector3_t &ws_plane_origin, float32
         }
     }
 }
+
 
 internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
 {
@@ -367,6 +524,7 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
     }
 }
 
+
 internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive)
 {
     vector3_t ray_start_position = ws_to_xs(ws_position);
@@ -393,41 +551,27 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
     }
 }
 
+
 void push_chunk_to_render_queue(voxel_chunk_t *chunk)
 {
     g_voxel_chunks->gpu_queue.push_material(&chunk->push_k, sizeof(chunk->push_k), &chunk->gpu_mesh);
 }
 
-internal_function void initialize_chunk_vertices(voxel_chunk_t *chunk)
-{
-    uint32_t i = 0;
-    constexpr uint32_t MAX_VERTS = MAX_VERTICES_PER_VOXEL_CHUNK;
-    
-    for (uint32_t z = 0; z < VOXEL_CHUNK_EDGE_LENGTH; ++z)
-    {
-        for (uint32_t y = 0; y < VOXEL_CHUNK_EDGE_LENGTH; ++y)
-        {
-            for (uint32_t x = 0; x < VOXEL_CHUNK_EDGE_LENGTH; ++x)
-            {
-                chunk->mesh_vertices[i++] = vector3_t(x, y, z);
-            }
-        }
-    }
-
-    chunk->vertex_count = i;
-}
 
 #include "ttable.inc"
+
 
 internal_function inline float32_t lerp(float32_t a, float32_t b, float32_t x)
 {
     return((x - a) / (b - a));
 }
 
+
 internal_function inline vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x)
 {
     return(a + x * (b - a));
 }
+
 
 internal_function inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level)
 {
@@ -453,10 +597,12 @@ internal_function inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t 
     chunk->mesh_vertices[chunk->vertex_count++] = vertex;
 }
 
+
 internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk)
 {
     chunk->gpu_mesh.indexed_data.index_count = chunk->vertex_count;
 }
+
 
 global_var constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, -0.5f, -0.5f),
                                                                vector3_t(+0.5f, -0.5f, -0.5f),
@@ -475,6 +621,7 @@ global_var constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t
                                                                       ivector3_t(1, 1, 0),
                                                                       ivector3_t(1, 1, 1),
                                                                       ivector3_t(0, 1, 1) };
+
 
 // Voxel pair is like a cube: 8 voxels
 internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level)
@@ -529,6 +676,7 @@ internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel
     }
 }
 
+
 internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist)
 {
     // Voxel coords
@@ -563,6 +711,7 @@ internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t 
     
     return (*chunk_ptr)->voxels[final_x][final_y][final_z];
 }
+
 
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level)
 {
@@ -690,6 +839,7 @@ void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level)
     ready_chunk_for_gpu_sync(chunk);
 }
 
+
 void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk)
 {
     // If it is already scheduled for GPU sync, don't push to the update stack
@@ -699,6 +849,7 @@ void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk)
         chunk->should_do_gpu_sync = 1;
     }
 }
+
 
 internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 {
@@ -723,6 +874,7 @@ internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
     g_voxel_chunks->to_sync_count = 0;
 }
 
+
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord)
 {
     chunk->xs_bottom_corner = chunk_coord * VOXEL_CHUNK_EDGE_LENGTH;
@@ -745,12 +897,14 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     chunk->push_k.color = vector4_t(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0, 1.0f);
 }
 
+
 voxel_chunk_t **get_voxel_chunk(int32_t index)
 {
     persist_var voxel_chunk_t *nul = nullptr;
     if (index == -1) return(&nul);
     return(&g_voxel_chunks->chunks[index]);
 }
+
 
 internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo)
 {
@@ -796,21 +950,6 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
     }
 }
 
-enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
-
-struct collision_t
-{
-    collision_primitive_type_t primitive_type;
-    
-    bool detected;
-    bool under_terrain;
-
-    vector3_t es_velocity;
-    vector3_t es_contact_point;
-    vector3_t es_at;
-    vector3_t es_normal;
-    float32_t es_distance;
-};
 
 internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
 {
@@ -835,6 +974,7 @@ internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *
     
     dst_array[(*count)++] = vertex;
 }
+
 
 internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max)
 {
@@ -893,6 +1033,7 @@ internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, 
     }
 }
 
+
 internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
     vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
@@ -916,6 +1057,7 @@ internal_function bool32_t is_point_in_triangle(const vector3_t &point, const ve
     }
     return 0;
 }
+
 
 // This function solves the quadratic eqation "At^2 + Bt + C = 0" and is found in Kasper Fauerby's paper on collision detection and response
 internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root) 
@@ -954,20 +1096,24 @@ internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, 
     return false;
 }
 
+
 internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal)
 {
     return -( (plane_point.x * plane_normal.x) + (plane_point.y * plane_normal.y) + (plane_point.z * plane_normal.z) );
 }
+
 
 internal_function float32_t squared(float32_t f)
 {
     return(f * f);
 }
 
+
 internal_function float32_t distance_squared(const vector3_t &dir)
 {
     return glm::dot(dir, dir);
 }
+
 
 internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision)
 {
@@ -991,6 +1137,7 @@ internal_function void check_collision_with_vertex(const vector3_t &es_sphere_ve
         }
     }
 }
+
 
 internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision)
 {
@@ -1023,6 +1170,7 @@ internal_function void check_collision_with_edge(const vector3_t &es_sphere_velo
         }
     }
 }
+
 
 internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, float32_t dt, collision_t *closest)
 {
@@ -1135,7 +1283,8 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
     }
 }
 
-internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0)
+
+internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth)
 {
     vector3_t es_center = ws_center / ws_size;
     vector3_t es_velocity = ws_velocity / ws_size;
@@ -1231,39 +1380,6 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
     
     if (closest_collision.detected)
     {
-        persist_var uint32_t collision_count = 0;
-        collision_count++;
-
-        char buffer[10];
-
-        sprintf(buffer, "%d ", collision_count);
-        OutputDebugString(buffer);
-        OutputDebugString("Collision detected: ");
-        switch (closest_collision.primitive_type)
-        {
-        case collision_primitive_type_t::CPT_FACE:
-            {
-                OutputDebugString("FACE\n");
-            } break;
-        case collision_primitive_type_t::CPT_EDGE:
-            {
-                OutputDebugString("EDGE\n");
-            } break;
-        case collision_primitive_type_t::CPT_VERTEX:
-            {
-                OutputDebugString("VERTEX\n");
-            } break;
-        }
-        
-        /*if (!slide)
-        {
-            collide_and_slide_collision_t collision = {};
-            collision.is_edge = 0;
-            collision.collided = closest_collision.collision_happened;
-            collision.ts_normal = closest_collision.ts_surface_normal_at_collision_point;
-            return collision;
-            }*/
-            
         uint32_t max_recursion_depth = 5;
 
         // TODO: Do not calculate the ellipsoid space of these values again, just do it once at the beginning of the function
@@ -1329,172 +1445,6 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
     }
     
     return {};
-
-    
-    /*vector3_t ts_ceil_size = glm::ceil(ts_sphere_size);
-
-    float32_t x_max = ts_sphere_position.x + ts_ceil_size.x;
-    float32_t x_min = ts_sphere_position.x - ts_ceil_size.x;
-    float32_t z_max = ts_sphere_position.z + ts_ceil_size.z;
-    float32_t z_min = ts_sphere_position.z - ts_ceil_size.z;
-
-    // Index of the vertices (not faces)
-    int32_t max_x_idx = (int32_t)(glm::ceil(x_max));
-    if (max_x_idx >= terrain->xz_dim.x) max_x_idx = terrain->xz_dim.x - 1;
-    if (max_x_idx < 0) max_x_idx = 0;
-    int32_t min_x_idx = (int32_t)(glm::floor(x_min));
-    if (min_x_idx >= terrain->xz_dim.x) min_x_idx = terrain->xz_dim.x - 1;
-    if (min_x_idx < 0) min_x_idx = 0;
-    int32_t max_z_idx = (int32_t)(glm::ceil(z_max));
-    if (max_z_idx >= terrain->xz_dim.y) max_z_idx = terrain->xz_dim.y - 1;
-    if (max_z_idx < 0) max_z_idx = 0;
-    int32_t min_z_idx = (int32_t)(glm::floor(z_min));
-    if (min_z_idx >= terrain->xz_dim.y) min_z_idx = terrain->xz_dim.y - 1;
-    if (min_z_idx < 0) min_z_idx = 0;
-
-    int32_t x_diff = max_x_idx - min_x_idx;
-    int32_t z_diff = max_z_idx - min_z_idx;
-
-    uint32_t maximum_collisions = 5;
-
-    sphere_triangle_collision_return_t closest_collision = {};
-    closest_collision.es_distance = 1000.0f;
-        
-    //uint32_t collision_count = 0;
-    //sphere_triangle_collision_return_t *collisions = (sphere_triangle_collision_return_t *)allocate_linear(sizeof(sphere_triangle_collision_return_t) * maximum_collisions);
-        
-    memory_buffer_view_t<terrain_triangle_t> triangles;
-    triangles.count = x_diff * z_diff * 2;
-    triangles.buffer = ALLOCA_T(terrain_triangle_t, x_diff * z_diff * 2);
-    // TODO: Fix linear allocator
-    // triangles.buffer = (terrain_triangle_t *)allocate_linear(sizeof(terrain_triangle_t) * x_diff * z_diff * 2);
-
-    uint32_t triangle_counter = 0;
-    for (int32_t x = min_x_idx; x < max_x_idx; ++x)
-    {
-        for (int32_t z = min_z_idx; z < max_z_idx; ++z)
-        {
-            if (x % 2 == 0)
-            {
-                if (z % 2 == 0)
-                {
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                }
-                else
-                {
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                }
-            }
-            else
-            {
-                if (z % 2 == 0)
-                {
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 0, 0, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 1, 1, 1, 1, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                }
-                else
-                {
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 0, 1, 1, 1, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                    collide_with_triangle(ts_sphere_position, ts_sphere_velocity, ts_sphere_size, dt, &triangles[triangle_counter++], x, z, 0, 0, 1, 1, 1, 0, terrain, &closest_collision, slide);
-                    adjust_if_sphere_was_under_terrain(&closest_collision, ts_sphere_position);
-                }
-            }
-        }
-    }
-
-    const float32_t es_very_close_distance_from_terrain = 0.01f;
-        
-    if (closest_collision.collision_happened)
-    {
-        if (!slide)
-        {
-            collide_and_slide_collision_t collision = {};
-            collision.is_edge = 0;
-            collision.collided = closest_collision.collision_happened;
-            collision.ts_normal = closest_collision.ts_surface_normal_at_collision_point;
-            return collision;
-        }
-            
-        uint32_t max_recursion_depth = 5;
-
-        // TODO: Do not calculate the ellipsoid space of these values again, just do it once at the beginning of the function
-        vector3_t es_sphere_position = ts_sphere_position / ts_sphere_size;
-        vector3_t es_sphere_velocity = ts_sphere_velocity / ts_sphere_size;
-
-        vector3_t es_new_sphere_position = es_sphere_position;
-        vector3_t es_sphere_destination_point = es_sphere_position + es_sphere_velocity;
-            
-        if (closest_collision.es_distance >= es_very_close_distance_from_terrain)
-        {
-            vector3_t es_normalized_velocity = glm::normalize(es_sphere_velocity);
-            vector3_t es_scaled_velocity = es_normalized_velocity * (closest_collision.es_distance - es_very_close_distance_from_terrain);
-            es_new_sphere_position = es_sphere_position + es_scaled_velocity;
-
-            closest_collision.es_sphere_contact_point -= es_very_close_distance_from_terrain * es_normalized_velocity;
-        }
-
-        // Get slide plane information
-        vector3_t es_slide_plane_point = closest_collision.es_sphere_contact_point;
-        vector3_t es_slide_plane_normal = glm::normalize(es_new_sphere_position - closest_collision.es_sphere_contact_point);
-
-        float32_t plane_constant = get_plane_constant(es_slide_plane_point, es_slide_plane_normal);
-        float32_t dest_point_dist_from_plane = glm::dot(es_sphere_destination_point, es_slide_plane_normal) + plane_constant;
-
-        vector3_t es_new_sphere_destination_point = es_sphere_destination_point - dest_point_dist_from_plane * es_slide_plane_normal;
-        vector3_t es_new_velocity = es_new_sphere_destination_point - closest_collision.es_sphere_contact_point;
-
-        float32_t new_velocity_distance_squared = distance_squared(es_new_velocity);
-        float32_t very_close_distance_squared = squared(es_very_close_distance_from_terrain);
-
-        if (new_velocity_distance_squared < very_close_distance_squared)
-        {
-            collide_and_slide_collision_t ret = {};
-            ret.collided = 1;
-            ret.ts_position = es_new_sphere_position * ts_sphere_size;
-            ret.ts_velocity = es_new_velocity * ts_sphere_size;
-            ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
-            return(ret);
-        }
-        // There was a collision, must recurse
-        else if (recurse_depth < max_recursion_depth && slide)
-        {
-            return detect_collision_against_possible_colliding_triangles(terrain,
-                                                                         es_new_sphere_position * ts_sphere_size,
-                                                                         ts_sphere_size,
-                                                                         es_new_velocity * ts_sphere_size,
-                                                                         dt,
-                                                                         0,
-                                                                         1,
-                                                                         recurse_depth + 1);
-        }
-        else
-        {
-            collide_and_slide_collision_t ret = {};
-            ret.collided = 1;
-            ret.ts_position = es_new_sphere_position * ts_sphere_size;
-            ret.ts_velocity = es_new_velocity * ts_sphere_size;
-            ret.ts_normal = es_slide_plane_normal * ts_sphere_size;
-            return(ret);
-        }
-    }
-    else
-    {
-        collide_and_slide_collision_t ret = {};
-        ret.collided = 0;
-        ret.ts_position = ts_sphere_position + ts_sphere_velocity;
-        ret.ts_velocity = ts_sphere_velocity;
-        return(ret);
-    }
-    }*/
 }
 
 
@@ -1511,6 +1461,7 @@ internal_function entity_t *get_main_entity(void)
         return &g_entities->entity_list[g_entities->main_entity];
     }
 }
+
 
 internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
 {
@@ -1530,10 +1481,12 @@ internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_m
                          group);
 }
 
+
 internal_function void push_entity_to_animated_queue(entity_t *e)
 {
     push_entity_to_queue(e, &g_entities->entity_mesh, &g_entities->entity_submission_queue);
 }
+
 
 internal_function void push_entity_to_rolling_queue(entity_t *e)
 {
@@ -1547,6 +1500,7 @@ internal_function void push_entity_to_rolling_queue(entity_t *e)
                                                                   group);
 }
 
+
 entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3_t ws_d, quaternion_t gs_r)
 {
     entity_t e;
@@ -1558,21 +1512,25 @@ entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3
     return(e);
 }
 
+
 internal_function entity_t *get_entity(const constant_string_t &name)
 {
     entity_handle_t v = *g_entities->name_map.get(name.hash);
     return(&g_entities->entity_list[v]);
 }
 
+
 entity_t *get_entity(entity_handle_t v)
 {
     return(&g_entities->entity_list[v]);
 }
 
+
 void attach_camera_to_entity(entity_t *e, int32_t camera_index)
 {
     
 }
+
 
 internal_function struct camera_component_t * add_camera_component(entity_t *e, uint32_t camera_index)
 {
@@ -1583,6 +1541,7 @@ internal_function struct camera_component_t * add_camera_component(entity_t *e, 
 
     return(component);
 }
+
 
 internal_function void update_camera_components(float32_t dt)
 {
@@ -1612,6 +1571,7 @@ internal_function void update_camera_components(float32_t dt)
     }
 }
 
+
 internal_function struct rendering_component_t *add_rendering_component(entity_t *e)
 {
     e->components.rendering_component = g_entities->rendering_component_count++;
@@ -1622,11 +1582,8 @@ internal_function struct rendering_component_t *add_rendering_component(entity_t
     return(component);
 }
 
-internal_function struct animation_component_t *add_animation_component(entity_t *e,
-                                                                        uniform_layout_t *ubo_layout,
-                                                                        skeleton_t *skeleton,
-                                                                        animation_cycles_t *cycles,
-                                                                        gpu_command_queue_pool_t *cmdpool)
+
+internal_function struct animation_component_t *add_animation_component(entity_t *e, uniform_layout_t *ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles, gpu_command_queue_pool_t *cmdpool)
 {
     e->components.animation_component = g_entities->animation_component_count++;
     animation_component_t *component = &g_entities->animation_components[ e->components.animation_component ];
@@ -1640,6 +1597,7 @@ internal_function struct animation_component_t *add_animation_component(entity_t
 
     return(component);
 }
+
 
 internal_function void update_animation_component(float32_t dt)
 {
@@ -1698,6 +1656,7 @@ internal_function void update_animation_component(float32_t dt)
     }
 }
 
+
 internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 {
     for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
@@ -1709,8 +1668,6 @@ internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
     }
 }
 
-internal_function void push_entity_to_animated_queue(entity_t *e);
-internal_function void push_entity_to_rolling_queue(entity_t *e);
 
 internal_function void update_rendering_component(float32_t dt)
 {
@@ -1748,6 +1705,7 @@ internal_function void update_rendering_component(float32_t dt)
     }
 }
 
+
 internal_function uint32_t add_terraform_power_component(entity_t *e)
 {
     e->components.terraform_power_component = g_entities->terraform_power_component_count++;
@@ -1757,10 +1715,12 @@ internal_function uint32_t add_terraform_power_component(entity_t *e)
     return(e->components.terraform_power_component);
 }
 
+
 internal_function struct terraform_power_component_t *get_terraform_power_component(uint32_t index)
 {
     return(&g_entities->terraform_power_components[index]);
 }
+
 
 internal_function void update_terraform_power_components(float32_t dt)
 {
@@ -1782,16 +1742,19 @@ internal_function void update_terraform_power_components(float32_t dt)
     }
 }
 
+
 uint32_t add_network_component(void)
 {
     uint32_t component_index = g_entities->network_component_count++;
     return(component_index);
 }
 
+
 struct network_component_t *get_network_component(uint32_t index)
 {
     return(&g_entities->network_components[index]);
 }
+
 
 internal_function struct physics_component_t *add_physics_component(entity_t *e, bool enabled)
 {
@@ -1802,6 +1765,7 @@ internal_function struct physics_component_t *add_physics_component(entity_t *e,
 
     return(component);
 }
+
 
 internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
@@ -1821,6 +1785,7 @@ internal_function void update_standing_entity_physics(struct physics_component_t
 
     e->ws_p += result_force * dt;
 }
+
 
 internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
@@ -1845,10 +1810,12 @@ internal_function void update_rolling_entity_physics(struct physics_component_t 
     e->ws_p = collision.es_at * e->size;
 }
 
+
 internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
     
 }
+
 
 internal_function void update_physics_components(float32_t dt)
 {
@@ -1879,6 +1846,7 @@ internal_function void update_physics_components(float32_t dt)
     }
 }
 
+
 internal_function entity_handle_t add_entity(const entity_t &e)
 {
     entity_handle_t view;
@@ -1895,10 +1863,12 @@ internal_function entity_handle_t add_entity(const entity_t &e)
     return(view);
 }
 
+
 internal_function void make_entity_instanced_renderable(model_handle_t model_handle, const constant_string_t &e_mtrl_name)
 {
     // TODO(luc) : first need to add support for instance rendering in material renderers.
 }
+
 
 internal_function void update_entities(float32_t dt, application_type_t app_type)
 {
@@ -1921,6 +1891,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
     }
 }
 
+
 void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state)
 {
     entity_t *entity = get_entity(entity_handle);
@@ -1932,6 +1903,7 @@ void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state)
 
     g_entities->main_entity = entity_handle;
 }
+
 
 void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color)
 {
@@ -1954,6 +1926,7 @@ void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color)
     entity_ptr_rendering->push_k.roughness = 0.8f;
     entity_ptr_rendering->push_k.metalness = 0.6f;
 }
+
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
@@ -2074,6 +2047,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
     }
 }
 
+
 internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type)
 {
     entity_t r2 = construct_entity("main"_hash,
@@ -2118,6 +2092,7 @@ internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_st
 
     uint32_t terraform_power = add_terraform_power_component(r2_ptr);
 }
+
 
 internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue)
 {
@@ -2167,28 +2142,6 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
 }
 
-internal_function int32_t lua_get_player_position(lua_State *state);
-internal_function int32_t lua_set_player_position(lua_State *state);
-internal_function int32_t lua_toggle_collision_box_render(lua_State *state);
-internal_function int32_t lua_toggle_collision_edge_render(lua_State *state);
-internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
-internal_function int32_t lua_render_entity_direction_information(lua_State *state);
-internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
-internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
-internal_function int32_t lua_stop_simulation(lua_State *state);
-internal_function int32_t lua_load_mesh(lua_State *state);
-internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
-internal_function int32_t lua_load_skeleton(lua_State *state);
-internal_function int32_t lua_load_animations(lua_State *state);
-internal_function int32_t lua_initialize_entity(lua_State *state);
-internal_function int32_t lua_attach_rendering_component(lua_State *state);
-internal_function int32_t lua_attach_animation_component(lua_State *state);
-internal_function int32_t lua_attach_physics_component(lua_State *state);
-internal_function int32_t lua_attach_camera_component(lua_State *state);
-internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
-internal_function int32_t lua_go_down(lua_State *state);
-internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
-internal_function int32_t lua_reinitialize(lua_State *state);
 
 internal_function void entry_point(void)
 {
@@ -2205,6 +2158,7 @@ internal_function void entry_point(void)
     // Execute startup code
     execute_lua("startup()");
 }
+
 
 void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
@@ -2238,6 +2192,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     
     clear_linear();
 }
+
 
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
@@ -2274,6 +2229,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     //construct_plane(vector3_t(0.0f), 60.0f);
 }
 
+
 internal_function void clean_up_entities(void)
 {
     // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
@@ -2295,18 +2251,22 @@ internal_function void clean_up_entities(void)
     g_entities->rolling_entity_submission_queue.mtrl_count = 0;
 }
 
+
 void clean_up_world_data(void)
 {
     clean_up_entities();
 }
 
+
 void make_world_data(void /* Some kind of state */)
 {
 }
 
+
 void update_network_world_state(void)
 {
 }
+
 
 void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t image_index)
 {
@@ -2315,6 +2275,7 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
 
     sync_gpu_with_chunk_state(cmdbuf);
 }
+
 
 void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus)
 {
@@ -2325,6 +2286,7 @@ void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t 
         handle_input_debug(input_state, dt);
     }
 }
+
 
 void update_world(input_state_t *input_state,
                   float32_t dt,
@@ -2355,6 +2317,7 @@ void update_world(input_state_t *input_state,
 
 
 #include <glm/gtx/string_cast.hpp>
+
 
 void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
 {
@@ -2396,6 +2359,7 @@ void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, inpu
     }
 }
 
+
 void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
 {
     if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_RIGHT].is_down)
@@ -2408,6 +2372,7 @@ void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, 
         *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
     }
 }
+
 
 void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt)
 {
@@ -2470,6 +2435,7 @@ void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, phys
     }
 }
 
+
 void handle_main_entity_action(input_state_t *input_state, float32_t dt)
 {
     entity_t *main_entity = get_main_entity();
@@ -2484,10 +2450,12 @@ void handle_main_entity_action(input_state_t *input_state, float32_t dt)
     }
 }
 
+
 void handle_world_input(input_state_t *input_state, float32_t dt)
 {
     handle_main_entity_action(input_state, dt);
 }
+
 
 // Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
 void handle_input_debug(input_state_t *input_state, float32_t dt)
@@ -2526,7 +2494,6 @@ void handle_input_debug(input_state_t *input_state, float32_t dt)
 }
 
 
-
 void destroy_world(void)
 {
     g_render_pass_manager->clean_up();
@@ -2538,6 +2505,7 @@ void destroy_world(void)
     destroy_graphics();
 }
 
+
 internal_function int32_t lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
@@ -2547,6 +2515,7 @@ internal_function int32_t lua_get_player_position(lua_State *state)
     lua_pushnumber(state, main_entity->ws_p.z);
     return(3);
 }
+
 
 internal_function int32_t lua_set_player_position(lua_State *state)
 {
@@ -2560,11 +2529,13 @@ internal_function int32_t lua_set_player_position(lua_State *state)
     return(0);
 }
 
+
 internal_function int32_t lua_toggle_collision_box_render(lua_State *state)
 {
     g_entities->dbg.hit_box_display ^= true;
     return(0);
 }
+
 
 internal_function int32_t lua_render_entity_direction_information(lua_State *state)
 {
@@ -2580,6 +2551,7 @@ internal_function int32_t lua_render_entity_direction_information(lua_State *sta
     return(0);
 }
 
+
 internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
 {
     const char *name = lua_tostring(state, -2);
@@ -2589,6 +2561,7 @@ internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
     entity->ws_v += entity->ws_d * velocity;
     return(0);
 }
+
 
 internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
 {
@@ -2600,6 +2573,7 @@ internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
     lua_pushnumber(state, main_entity->ws_d.z);
     return(3);
 }
+
 
 internal_function int32_t lua_stop_simulation(lua_State *state)
 {
@@ -2615,6 +2589,7 @@ internal_function int32_t lua_stop_simulation(lua_State *state)
     return(0);
 }
 
+
 internal_function int32_t lua_go_down(lua_State *state)
 {
     entity_t *main = get_main_entity();
@@ -2624,11 +2599,13 @@ internal_function int32_t lua_go_down(lua_State *state)
     return(0);
 }
 
+
 void initialize_world_translation_unit(struct game_memory_t *memory)
 {
     g_entities = &memory->world_state.entities;
     g_voxel_chunks = &memory->world_state.voxel_chunks;
 }
+
 
 internal_function int32_t lua_reinitialize(lua_State *state)
 {

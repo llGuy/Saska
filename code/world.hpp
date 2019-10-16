@@ -233,6 +233,47 @@ struct entity_t
     entity_handle_t index;
 };
 
+struct player_t
+{
+    constant_string_t id {""_hash};
+    // position, direction, velocity
+    // in above entity group space
+    vector3_t ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
+    vector3_t ws_acceleration {0.0f};
+    quaternion_t ws_r{0.0f, 0.0f, 0.0f, 0.0f};
+    vector3_t size{1.0f};
+
+    vector3_t surface_normal;
+    vector3_t surface_position;
+
+    // Has effect on animations
+    bool is_in_air = 0;
+    bool is_sliding_not_rolling_mode = 0;
+
+    bool toggled_rolling_previous_frame = 0;
+    bool32_t rolling_mode;
+    float32_t rolling_rotation_angle = 0.0f;
+    matrix4_t rolling_rotation = matrix4_t(1.0f);
+
+    bool is_sitting = 0;
+
+    uint32_t action_flags = 0;
+    
+    // For animated rendering component
+    enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, SITTING, JUMP } animated_state = animated_state_t::IDLE;
+    
+    entity_handle_t index;
+
+    camera_component_t camera;
+    physics_component_t physics;
+    rendering_component_t rendering;
+    animation_component_t animation;
+    network_component_t network;
+    terraform_power_component_t terraform_power;
+};
+
+
+
 struct dbg_entities_t
 {
     bool hit_box_display = false;

@@ -71,8 +71,8 @@ calculate_atmosphere_depth_at_dir(vec3 ws_camera_position, vec3 ws_camera_view_d
 }
 
 const float SURFACE_HEIGHT = 0.8;
-const uint SAMPLE_COUNT = 10;
-const vec3 AIR_COLOR = vec3(0.18867780, 0.49784429, 0.4616065);
+const uint SAMPLE_COUNT = 14;
+const vec3 AIR_COLOR = vec3(0.18867780, 0.4616065, 0.49784429);
 
 vec3
 absorb_light_from_sun_at_ray_position(float ray_distance,
@@ -116,26 +116,26 @@ main(void)
     
     for (uint i = 0; i < SAMPLE_COUNT; ++i)
     {
-	float distance = (float(i) * step_distance) * 0.5f;
+	float distance = (float(i) * step_distance) * 0.54f;
 	vec3 ws_ray_position = distance * ws_view_dir;
 	float ray_atmosphere_depth = calculate_atmosphere_depth_at_dir(ws_ray_position
 								       , push_k.ws_light_direction.xyz);
 	vec3 light_amount = absorb_light_from_sun_at_ray_position(ray_atmosphere_depth
-								  , vec3(7)
-								  , 0.6);
+								  , vec3(4)
+								  , 0.7);
 	
 	total_rayleigh += absorb_light_from_sun_at_ray_position(distance
 								, AIR_COLOR * light_amount
-								, 1);
+								, 1.0);
 	total_mie += absorb_light_from_sun_at_ray_position(distance
 							   , light_amount
-							   , 0.01);
+							   , 0.02);
     }
 
     total_rayleigh = (total_rayleigh * pow(atmosphere_depth_at_dir, 0.5)) / float(SAMPLE_COUNT);
-    total_mie = (total_mie * pow(atmosphere_depth_at_dir, 2.4)) / float(SAMPLE_COUNT);
+    total_mie = (total_mie * pow(atmosphere_depth_at_dir, 2.7)) / float(SAMPLE_COUNT);
 
-    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.2;
+    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.1;
 
     float gray_out_bottom = 0.0;
     float p_dot_d = dot(ws_view_dir, -ws_camera_position);
@@ -152,7 +152,7 @@ main(void)
 
     float test = 1 - clamp(dot(normalize(-ws_camera_position), normalize(ws_view_dir)), 0, 1);
     
-    out_color = (vec4(total_mie.xyzz) * spotlight * 0.6 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.7 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor) * test;
+    out_color = (vec4(total_mie.xyzz) * spotlight * 0.8 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.75 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor) * test;
 
     out_color = pow(out_color, vec4(1.0 / 2.2));
 }

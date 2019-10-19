@@ -100,7 +100,7 @@ struct network_state_t
     uint16_t client_id_stack[MAX_CLIENTS] = {};
 };
 
-uint32_t add_client(network_address_t network_address, const char *client_name, entity_handle_t entity_handle);
+uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
 void update_network_state(void);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);

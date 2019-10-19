@@ -204,7 +204,7 @@ vec4 apply_cube_map_reflection(in vec3 vs_eye_vector, in vec3 vs_normal, inout v
 
     vec4 envi_color = texture(atmosphere_cubemap, reflect_dir);
 
-    pixel_color = pixel_color + (envi_color * 0.15);
+    pixel_color = pixel_color + (envi_color * 0.03);
 
     return pixel_color;
 }
@@ -259,6 +259,7 @@ void main(void)
         pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt), view_normal, pixel_color, fresnel);
 
         final_color = pixel_color;
+        
         // Need to keep these above
 
 	//check if is skybox

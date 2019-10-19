@@ -1417,7 +1417,7 @@ internal_function void update_standing_entity_physics(struct physics_component_t
 
 internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
 {
-    /*    bool hardcode_position = 0;
+    bool hardcode_position = 0;
 
     if (component->is_resting == physics_component_t::is_resting_t::RESTING)
     {                    
@@ -1517,7 +1517,7 @@ internal_function void update_rolling_entity_physics(struct physics_component_t 
         component->is_resting = physics_component_t::is_resting_t::NOT_RESTING;
     }
 
-    e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);*/
+    e->ws_p = matrix4_mul_vec3(e->on_t->push_k.transform, gravity_collision.ts_position, WITH_TRANSLATION);
 }
 
 internal_function void update_physics_components(float32_t dt)

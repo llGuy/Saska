@@ -532,13 +532,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        if (dt > TICK_TIME)
+        /*if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
         }
-        else
+        else*/
         {
             // Set game tick period by sleeping
             while (dt < TICK_TIME)

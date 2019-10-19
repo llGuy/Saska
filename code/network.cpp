@@ -193,9 +193,9 @@ void initialize_network_translation_unit(struct game_memory_t *memory)
 }
 
 // Adds a client to the network_component_t array in entities_t
-uint32_t add_client(network_address_t network_address, const char *client_name, entity_handle_t entity_handle)
+uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle)
 {
-    uint16_t client_id = g_network_state->client_count++;
+    /*uint16_t client_id = g_network_state->client_count++;
     g_network_state->clients[client_id].client_id = client_id;
     g_network_state->clients[client_id].network_address = network_address;
     memcpy(g_network_state->clients[client_id].client_name, client_name, strlen(client_name) + 1);
@@ -208,9 +208,9 @@ uint32_t add_client(network_address_t network_address, const char *client_name, 
     component_ptr->client_state_index = client_id;
 
     entity_t *entity = get_entity(entity_handle);
-    entity->components.network_component = component_index;
+    entity->components.network_component = component_index;*/
 
-    return(client_id);
+    return(0);
 }
 
 global_var char message_buffer[1000] = {};

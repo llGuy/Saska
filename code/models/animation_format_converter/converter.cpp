@@ -8,6 +8,7 @@
 #include <string>
 #include <stdint.h>
 #include <rapidxml.hpp>
+#include <string_view>
 #include <glm/gtx/quaternion.hpp>
 
 //#define DEBUG
@@ -71,17 +72,17 @@ std::vector<uint32_t> organize_vertices(std::string const & raw_list,
     while (std::getline(stream, current_int, ' '))
     {
         /* push index */
-        if (counter % 2 == 0)
+        if (counter % 4 == 0)
         {
             current_vertex = std::stoi(current_int);
             indices.push_back(current_vertex);
         }
         /* set normal at appropriate location */
-        else if (counter % 2 == 1)
+        else if (counter % 4 == 1)
             if (normals_raw.size())
                 normals_result[current_vertex] = normals_raw[std::stoi(current_int)];
         /* set uv coordinates at appropriate location */
-        /*        else if (counter % 2 == 2)
+        /*        else if (counter % 3 == 2)
             if(uvs_raw.size())
             uvs_result[current_vertex] = uvs_raw[std::stoi(current_int)];*/
 
@@ -468,7 +469,7 @@ auto load_hierarchy(rapidxml::xml_node<> * current,
 {
     using namespace rapidxml;
 
-    const std::string REMOVE = "Armature_";
+    const std::string REMOVE = "Armature_000_";
 
     std::string raw_current_name = current->first_attribute()->value();
     std::string current_name = raw_current_name.substr(REMOVE.length());
@@ -589,11 +590,11 @@ std::pair<joint *, std::unordered_map<std::string, joint *>> load_skeleton(xml_d
     std::unordered_map<std::string, joint *> joint_map;
     std::vector<joint *> index_joint_map;
     load_joint_map(joint_map, index_joint_map, joint_names_source);
-
-    /* load joint hierarchy */
+ 
+   /* load joint hierarchy */
     xml_node<> * library_visual_scenes = doc->last_node("COLLADA")->last_node("library_visual_scenes");
     xml_node<> * visual_scene = library_visual_scenes->first_node();
-    xml_node<> * armature = visual_scene->first_node()->next_sibling();
+    xml_node<> * armature = visual_scene->first_node();
     xml_node<> * head = armature->first_node("node");
 
     joint * root = load_hierarchy(head, joint_map, nullptr);
@@ -659,15 +660,20 @@ std::vector<key_frame> get_key_frames(rapidxml::xml_node<char> * animations_node
 
 void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame> & frames, joint * root)
 {
-    for (xml_node<> * a_node = animation; a_node; a_node = a_node->next_sibling())
+    for (xml_node<> * a_node = animation->first_node(); a_node; a_node = a_node->next_sibling())
     {
+        const std::string REMOVE = "Armature_000_Armature_000Action_001_";
+        
         /* get to the matrix output */
         xml_node<> * src = a_node->first_node()->next_sibling();
 
         /* load key frame data */
         /* get name of joint */
         std::string joint_name;
-        std::string whole_id = src->first_attribute()->value();
+
+        std::string raw_current_name = src->first_attribute()->value();
+        std::string whole_id = raw_current_name.substr(REMOVE.length());
+        
         /* get the joint name */
         std::istringstream stream(whole_id);
         std::string current_word;
@@ -679,7 +685,7 @@ void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame>
                 joint_name.pop_back();
                 break;
             }
-            else if (count++ >= 1)
+            else if (count++ >= 0)
             {
                 joint_name += current_word + '_';
             }
@@ -688,6 +694,7 @@ void load_key_frame(rapidxml::xml_node<char> * animation, std::vector<key_frame>
         /* get float array */
         xml_node<> * float_array = src->first_node();
 
+        std::string f = float_array->value();
         std::istringstream stream_floats(float_array->value());
         std::string current_float;
         uint32_t float_count = 0;
@@ -854,7 +861,7 @@ int32_t main(int32_t argc, char *argv[])
 #endif
 
 #if defined (DEBUG)
-    const char *argvs[] = { "Converter.exe\0", "../spaceman\0", "../spaceman_walk.dae\0", "../spaceman_idle.dae\0", "../spaceman_run.dae\0", "../spaceman_hover.dae\0", "../spaceman_sliding.dae\0", "../spaceman_sitting.dae\0" };
+    const char *argvs[] = { "Converter.exe\0", "../player/player\0", "../player/intermediate/animation_walking.dae\0", "../player/intermediate/animation_idle.dae\0", "../player/intermediate/animation_running.dae\0" };
     int32_t arg_count = sizeof(argvs) / sizeof(argvs[0]);
 #else
     int32_t arg_count = argc;
@@ -880,9 +887,8 @@ int32_t main(int32_t argc, char *argv[])
 
     auto dst_animations_file_name_path_split = split(dst_string, '/');
     // TODO: Fix the hardcoded ../
-    
-    std::string dst_animations_file_name = "../" + dst_animations_file_name_path_split.back() + ".animations_custom";
-    
+    std::string dst_animations_file_name = dst_string + ".animations_custom";
+
     std::cout << "Starting session" << std::endl;
 
     std::vector<std::string> contents;

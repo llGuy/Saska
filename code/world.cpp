@@ -1,8 +1,3 @@
-/* world */
-// TODO: DEFER ALL GPU RELATED OPERATIONS!!!
-// TODO: Get rid of most of the glm::length calls in the physics calculations (terrain collision stuff)
-// TODO: Have a startup script so that you can reload the game
-
 #include "ui.hpp"
 #include "script.hpp"
 #include "world.hpp"
@@ -68,13 +63,22 @@ internal_function float32_t squared(float32_t f);
 internal_function float32_t distance_squared(const vector3_t &dir);
 
 // Collision
+struct movement_axes_t
+{
+    vector3_t right;
+    vector3_t up;
+    vector3_t forward;
+};
+internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up);
 enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
 struct collision_t
 {
     collision_primitive_type_t primitive_type;
-    
-    bool detected;
-    bool under_terrain;
+
+    uint8_t detected: 1;
+    // Detected a collision but now "slid" into the air
+    uint8_t is_currently_in_air: 1;
+    uint8_t under_terrain: 1;
 
     vector3_t es_velocity;
     vector3_t es_contact_point;
@@ -89,47 +93,35 @@ internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, 
 internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal);
 internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision);
 internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision);
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, float32_t dt, collision_t *closest);
-internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth = 0);
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest);
+internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision);
 
 // Entities
-internal_function entity_t *get_main_entity(void);
-internal_function entity_t *get_entity(const constant_string_t &name);
-entity_t *get_entity(entity_handle_t v);
+internal_function player_t *get_main_player(void);
+internal_function player_t *get_player(const constant_string_t &name);
+player_t *get_player(player_handle_t v);
 
-// Rendering
-internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
-internal_function void push_entity_to_animated_queue(entity_t *e);
-internal_function void push_entity_to_rolling_queue(entity_t *e);
-
-entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3_t ws_d, quaternion_t gs_r);
-void attach_camera_to_entity(entity_t *e, int32_t camera_index);
-internal_function struct camera_component_t * add_camera_component(entity_t *e, uint32_t camera_index);
-internal_function void update_camera_components(float32_t dt);
-internal_function struct rendering_component_t *add_rendering_component(entity_t *e);
-internal_function struct animation_component_t *add_animation_component(entity_t *e, uniform_layout_t *ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles, gpu_command_queue_pool_t *cmdpool);
-internal_function void update_animation_component(float32_t dt);
+internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
+internal_function void push_player_to_animated_queue(player_t *player);
+internal_function void push_player_to_rolling_queue(player_t *player);
 internal_function void update_animation_gpu_data(gpu_command_queue_t *queue);
-internal_function void push_entity_to_animated_queue(entity_t *e);
-internal_function void push_entity_to_rolling_queue(entity_t *e);
-internal_function void update_rendering_component(float32_t dt);
-internal_function uint32_t add_terraform_power_component(entity_t *e);
-internal_function struct terraform_power_component_t *get_terraform_power_component(uint32_t index);
-internal_function void update_terraform_power_components(float32_t dt);
-uint32_t add_network_component(void);
-struct network_component_t *get_network_component(uint32_t index);
-internal_function struct physics_component_t *add_physics_component(entity_t *e, bool enabled);
-internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_physics_components(float32_t dt);
-internal_function entity_handle_t add_entity(const entity_t &e);
-internal_function void make_entity_instanced_renderable(model_handle_t model_handle, const constant_string_t &e_mtrl_name);
+
+player_t construct_player(player_create_info_t *info);
+internal_function player_handle_t add_player(const player_t &e);
+internal_function void make_player_main(player_handle_t player_handle);
+
+internal_function void update_camera_component(camera_component_t *camera, player_t *player, float32_t dt);
+internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt);
+internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt);
+internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt);
+internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_entities(float32_t dt, application_type_t app_type);
-void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state);
-void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color);
+
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
-internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type);
+internal_function void initialize_players(input_state_t *input_state, application_type_t app_type);
 internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
 
 internal_function int32_t lua_get_player_position(lua_State *state);
@@ -137,7 +129,7 @@ internal_function int32_t lua_set_player_position(lua_State *state);
 internal_function int32_t lua_toggle_collision_box_render(lua_State *state);
 internal_function int32_t lua_toggle_collision_edge_render(lua_State *state);
 internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
-internal_function int32_t lua_render_entity_direction_information(lua_State *state);
+internal_function int32_t lua_render_player_direction_information(lua_State *state);
 internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
 internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
 internal_function int32_t lua_stop_simulation(lua_State *state);
@@ -145,12 +137,12 @@ internal_function int32_t lua_load_mesh(lua_State *state);
 internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
 internal_function int32_t lua_load_skeleton(lua_State *state);
 internal_function int32_t lua_load_animations(lua_State *state);
-internal_function int32_t lua_initialize_entity(lua_State *state);
+internal_function int32_t lua_initialize_player(lua_State *state);
 internal_function int32_t lua_attach_rendering_component(lua_State *state);
 internal_function int32_t lua_attach_animation_component(lua_State *state);
 internal_function int32_t lua_attach_physics_component(lua_State *state);
 internal_function int32_t lua_attach_camera_component(lua_State *state);
-internal_function int32_t lua_bind_entity_to_3d_output(lua_State *state);
+internal_function int32_t lua_bind_player_to_3d_output(lua_State *state);
 internal_function int32_t lua_go_down(lua_State *state);
 internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
 internal_function int32_t lua_reinitialize(lua_State *state);
@@ -165,10 +157,10 @@ void update_network_world_state(void);
 void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t image_index);
 void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
-void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
-void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
-void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
-void handle_main_entity_action(input_state_t *input_state, float32_t dt);
+void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
+void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
+void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
+void handle_main_player_action(input_state_t *input_state, float32_t dt);
 void handle_world_input(input_state_t *input_state, float32_t dt);
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 void destroy_world(void);
@@ -951,6 +943,15 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
 }
 
 
+internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up)
+{
+    vector3_t right = glm::cross(view_direction, up);
+    vector3_t forward = glm::cross(up, right);
+    movement_axes_t axes = {right, up, forward};
+    return(axes);
+}
+
+
 internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
 {
     float32_t surface_level_f = (float32_t)surface_level;
@@ -1172,7 +1173,7 @@ internal_function void check_collision_with_edge(const vector3_t &es_sphere_velo
 }
 
 
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, float32_t dt, collision_t *closest)
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest)
 {
     bool found_collision = 0;
     float32_t first_resting_instance;
@@ -1254,7 +1255,7 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                     closest->es_at = es_new_sphere_position;
                     closest->es_normal = es_up_normal_of_triangle;
 
-                    collide_with_triangle(triangle_vertices, es_new_sphere_position, es_velocity, dt, closest);
+                    collide_with_triangle(triangle_vertices, es_new_sphere_position, es_velocity, closest);
                     
                     return;
                 }
@@ -1284,7 +1285,7 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
 }
 
 
-internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, float32_t dt, uint32_t recurse_depth)
+internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision)
 {
     vector3_t es_center = ws_center / ws_size;
     vector3_t es_velocity = ws_velocity / ws_size;
@@ -1373,7 +1374,7 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
             triangle_ptr[i] /= ws_size;
         }
 
-        collide_with_triangle(triangle_ptr, es_center, es_velocity, dt, &closest_collision);
+        collide_with_triangle(triangle_ptr, es_center, es_velocity, &closest_collision);
     }
 
     const float32_t es_very_close_distance_from_terrain = 0.01f;
@@ -1423,7 +1424,13 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
         // There was a collision, must recurse
         else if (recurse_depth < max_recursion_depth/* && slide*/)
         {
-            return collide(es_new_sphere_position * ws_size, ws_size, es_new_velocity * ws_size, dt, recurse_depth + 1);
+            collision_t current_collision = {};
+            current_collision.detected = 1;
+            current_collision.es_at = es_new_sphere_position;
+            current_collision.es_velocity = es_new_velocity;
+            current_collision.es_normal = es_slide_plane_normal;
+
+            return collide(es_new_sphere_position * ws_size, ws_size, es_new_velocity * ws_size, recurse_depth + 1, current_collision);
         }
         else
         {
@@ -1438,9 +1445,19 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
     else
     {
         collision_t ret = {};
-        ret.detected = 0;
+        if (recurse_depth > 0)
+        {
+            ret.detected = 1;
+            ret.is_currently_in_air = 1;
+        }
+        else
+        {
+            ret.detected = 0;
+            ret.is_currently_in_air = 1;
+        }
         ret.es_at = (ws_center + ws_velocity) / ws_size;
         ret.es_velocity = ws_velocity / ws_size;
+        ret.es_normal = previous_collision.es_normal;
         return(ret);
     }
     
@@ -1448,326 +1465,274 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
 }
 
 
-// ********************* Entity code ***************************
+// ********************* Player code ***************************
 
-internal_function entity_t *get_main_entity(void)
+internal_function player_t *get_main_player(void)
 {
-    if (g_entities->main_entity == -1)
+    if (g_entities->main_player == -1)
     {
         return nullptr;
     }
     else
     {
-        return &g_entities->entity_list[g_entities->main_entity];
+        return &g_entities->player_list[g_entities->main_player];
     }
 }
 
 
-internal_function void push_entity_to_queue(entity_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
+internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
 {
-    rendering_component_t *component = &g_entities->rendering_components[ e_ptr->components.rendering_component ];
+    rendering_component_t *rendering = &e_ptr->rendering;
+    animation_component_t *animation = &e_ptr->animation;
 
-    uniform_group_t *group = nullptr;
+    uniform_group_t *group = group = &animation->animation_instance.group;
     
-    if (e_ptr->components.animation_component >= 0)
-    {
-        struct animation_component_t *component = &g_entities->animation_components[ e_ptr->components.animation_component ];
-        group = &component->animation_instance.group;
-    }
-    
-    queue->push_material(&component->push_k,
-			 sizeof(component->push_k),
+    queue->push_material(&rendering->push_k,
+			 sizeof(rendering->push_k),
                          mesh,
                          group);
 }
 
 
-internal_function void push_entity_to_animated_queue(entity_t *e)
+internal_function void push_player_to_animated_queue(player_t *e)
 {
-    push_entity_to_queue(e, &g_entities->entity_mesh, &g_entities->entity_submission_queue);
+    push_player_to_queue(e, &g_entities->player_mesh, &g_entities->player_submission_queue);
 }
 
 
-internal_function void push_entity_to_rolling_queue(entity_t *e)
+internal_function void push_player_to_rolling_queue(player_t *e)
 {
-    rendering_component_t *component = &g_entities->rendering_components[ e->components.rendering_component ];
+    rendering_component_t *component = &e->rendering;
 
     uniform_group_t *group = nullptr;
     
-    g_entities->rolling_entity_submission_queue.push_material(&component->push_k,
+    g_entities->rolling_player_submission_queue.push_material(&component->push_k,
                                                                   sizeof(component->push_k),
-                                                                  &g_entities->rolling_entity_mesh,
+                                                                  &g_entities->rolling_player_mesh,
                                                                   group);
 }
 
 
-entity_t construct_entity(const constant_string_t &name, vector3_t gs_p, vector3_t ws_d, quaternion_t gs_r)
+internal_function player_t *get_player(const constant_string_t &name)
 {
-    entity_t e;
-    //    e.is_group = is_group;
-    e.ws_p = gs_p;
-    e.ws_d = ws_d;
-    e.ws_r = gs_r;
-    e.id = name;
-    return(e);
+    player_handle_t v = *g_entities->name_map.get(name.hash);
+    return(&g_entities->player_list[v]);
 }
 
 
-internal_function entity_t *get_entity(const constant_string_t &name)
+player_t *get_player(player_handle_t v)
 {
-    entity_handle_t v = *g_entities->name_map.get(name.hash);
-    return(&g_entities->entity_list[v]);
+    return(&g_entities->player_list[v]);
 }
 
 
-entity_t *get_entity(entity_handle_t v)
+// TODO: Implement camera orientation interpolation when changing surface normals
+internal_function void update_camera_component(camera_component_t *camera_component, player_t *player, float32_t dt)
 {
-    return(&g_entities->entity_list[v]);
-}
+    camera_t *camera = get_camera(camera_component->camera);
 
-
-void attach_camera_to_entity(entity_t *e, int32_t camera_index)
-{
-    
-}
-
-
-internal_function struct camera_component_t * add_camera_component(entity_t *e, uint32_t camera_index)
-{
-    e->components.camera_component = g_entities->camera_component_count++;
-    camera_component_t *component = &g_entities->camera_components[ e->components.camera_component ];
-    component->entity_index = e->index;
-    component->camera = camera_index;
-
-    return(component);
-}
-
-
-internal_function void update_camera_components(float32_t dt)
-{
-    for (uint32_t i = 0; i < g_entities->camera_component_count; ++i)
+    vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
+        
+    vector3_t camera_position = player->ws_p + vector3_t(0.0f, player->size.x, 0.0f);
+    if (camera_component->is_third_person)
     {
-        struct camera_component_t *component = &g_entities->camera_components[ i ];
-        struct camera_t *camera = get_camera(component->camera);
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
-
-        vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
-        
-        vector3_t camera_position = e->ws_p + vector3_t(0.0f, e->size.x, 0.0f);
-        if (component->is_third_person)
-        {
-            vector3_t right = glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f));
-            camera_position += right * e->size.x + -component->distance_from_player * e->ws_d;
-        }
-        
-        camera->v_m = glm::lookAt(camera_position, e->ws_p + vector3_t(0.0f, 1.0f, 0.0f) + e->ws_d, up);
-
-        // TODO: Don't need to calculate this every frame, just when parameters change
-        camera->compute_projection();
-
-        camera->p = camera_position;
-        camera->d = e->ws_d;
-        camera->u = up;
+        vector3_t right = glm::cross(player->ws_d, vector3_t(0.0f, 1.0f, 0.0f));
+        camera_position += right * player->size.x + -camera_component->distance_from_player * player->ws_d;
     }
+        
+    camera->v_m = glm::lookAt(camera_position, player->ws_p + vector3_t(0.0f, 1.0f, 0.0f) + player->ws_d, up);
+
+    // TODO: Don't need to calculate this every frame, just when parameters change
+    camera->compute_projection();
+
+    camera->p = camera_position;
+    camera->d = player->ws_d;
+    camera->u = up;
 }
 
 
-internal_function struct rendering_component_t *add_rendering_component(entity_t *e)
+internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt)
 {
-    e->components.rendering_component = g_entities->rendering_component_count++;
-    rendering_component_t *component = &g_entities->rendering_components[ e->components.rendering_component ];
-    component->entity_index = e->index;
-    component->push_k = {};
-
-    return(component);
-}
-
-
-internal_function struct animation_component_t *add_animation_component(entity_t *e, uniform_layout_t *ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles, gpu_command_queue_pool_t *cmdpool)
-{
-    e->components.animation_component = g_entities->animation_component_count++;
-    animation_component_t *component = &g_entities->animation_components[ e->components.animation_component ];
-    component->entity_index = e->index;
-    component->cycles = cycles;
-    component->animation_instance = initialize_animated_instance(cmdpool,
-                                                                 ubo_layout,
-                                                                 skeleton,
-                                                                 cycles);
-    switch_to_cycle(&component->animation_instance, entity_t::animated_state_t::IDLE, 1);
-
-    return(component);
-}
-
-
-internal_function void update_animation_component(float32_t dt)
-{
-    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
+    player_t::animated_state_t previous_state = player->animated_state;
+    player_t::animated_state_t new_state;
+        
+    uint32_t moving = 0;
+        
+    if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
     {
-        struct animation_component_t *component = &g_entities->animation_components[ i ];
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
-
-        entity_t::animated_state_t previous_state = e->animated_state;
-        entity_t::animated_state_t new_state;
-        
-        uint32_t moving = 0;
-        
-        if (e->action_flags & (1 << action_flags_t::ACTION_FORWARD))
+        if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
         {
-            if (e->action_flags & (1 << action_flags_t::ACTION_RUN))
-            {
-                new_state = entity_t::animated_state_t::RUN; moving = 1;
-            }
-            else
-            {
-                new_state = entity_t::animated_state_t::WALK; moving = 1;
-            }
+            new_state = player_t::animated_state_t::RUN; moving = 1;
         }
-        if (e->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
-        if (e->action_flags & (1 << action_flags_t::ACTION_DOWN));
-        if (e->action_flags & (1 << action_flags_t::ACTION_RIGHT));
-        
-        if (!moving)
+        else
         {
-            new_state = entity_t::animated_state_t::IDLE;
+            new_state = player_t::animated_state_t::WALK; moving = 1;
         }
-
-        if (e->is_sitting)
-        {
-            new_state = entity_t::animated_state_t::SITTING;
-        }
-
-        if (e->is_in_air)
-        {
-            new_state = entity_t::animated_state_t::HOVER;
-        }
-
-        if (e->is_sliding_not_rolling_mode)
-        {
-            new_state = entity_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
-        }
-
-        if (new_state != previous_state)
-        {
-            e->animated_state = new_state;
-            switch_to_cycle(&component->animation_instance, new_state);
-        }
-        
-        interpolate_skeleton_joints_into_instance(dt, &component->animation_instance);
     }
+    if (player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
+    if (player->action_flags & (1 << action_flags_t::ACTION_DOWN));
+    if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
+        
+    if (!moving)
+    {
+        new_state = player_t::animated_state_t::IDLE;
+    }
+
+    if (player->is_sitting)
+    {
+        new_state = player_t::animated_state_t::SITTING;
+    }
+
+    if (player->is_in_air)
+    {
+        new_state = player_t::animated_state_t::HOVER;
+    }
+
+    if (player->is_sliding_not_rolling_mode)
+    {
+        new_state = player_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
+    }
+
+    if (new_state != previous_state)
+    {
+        player->animated_state = new_state;
+        switch_to_cycle(&animation->animation_instance, new_state);
+    }
+        
+    interpolate_skeleton_joints_into_instance(dt, &animation->animation_instance);
 }
 
 
 internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 {
-    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
+    for (uint32_t i = 0; i < g_entities->player_count; ++i)
     {
-        struct animation_component_t *component = &g_entities->animation_components[ i ];
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
+        player_t *player = &g_entities->player_list[i];
+        struct animation_component_t *animation = &player->animation;
 
-        update_animated_instance_ubo(queue, &component->animation_instance);
+        update_animated_instance_ubo(queue, &animation->animation_instance);
     }
 }
 
 
-internal_function void update_rendering_component(float32_t dt)
+internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt)
 {
-    for (uint32_t i = 0; i < g_entities->rendering_component_count; ++i)
-    {
-        struct rendering_component_t *component = &g_entities->rendering_components[ i ];
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
+    persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(90.0f), vector3_t(0.0f, 1.0f, 0.0f));
 
-        persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(90.0f), vector3_t(0.0f, 1.0f, 0.0f));
+    vector3_t view_dir = glm::normalize(player->ws_d);
+    float32_t dir_x = view_dir.x;
+    float32_t dir_z = view_dir.z;
+    float32_t rotation_angle = atan2(dir_z, dir_x);
 
-        vector3_t view_dir = glm::normalize(e->ws_d);
-        float32_t dir_x = view_dir.x;
-        float32_t dir_z = view_dir.z;
-        float32_t rotation_angle = atan2(dir_z, dir_x);
-
-        matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0.0f, 1.0f, 0.0f));
+    matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0.0f, 1.0f, 0.0f));
         
-        if (component->enabled)
-        {
-            component->push_k.ws_t = glm::translate(e->ws_p) * CORRECTION_90 * rot_matrix * e->rolling_rotation * glm::scale(e->size);
-        }
-        else
-        {
-            component->push_k.ws_t = matrix4_t(0.0f);
-        }
-
-        if (e->rolling_mode)
-        {
-            push_entity_to_rolling_queue(e);
-        }
-        else
-        {
-            push_entity_to_animated_queue(e);
-        }
-    }
-}
-
-
-internal_function uint32_t add_terraform_power_component(entity_t *e)
-{
-    e->components.terraform_power_component = g_entities->terraform_power_component_count++;
-    struct terraform_power_component_t *component = &g_entities->terraform_power_components[ e->components.terraform_power_component ];
-    component->entity_index = e->index;
-    
-    return(e->components.terraform_power_component);
-}
-
-
-internal_function struct terraform_power_component_t *get_terraform_power_component(uint32_t index)
-{
-    return(&g_entities->terraform_power_components[index]);
-}
-
-
-internal_function void update_terraform_power_components(float32_t dt)
-{
-    for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
+    if (rendering->enabled)
     {
-        struct terraform_power_component_t *component = &g_entities->terraform_power_components[ i ];
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
-        uint32_t *action_flags = &e->action_flags;
+        rendering->push_k.ws_t = glm::translate(player->ws_p) * CORRECTION_90 * rot_matrix * player->rolling_rotation * glm::scale(player->size);
+    }
+    else
+    {
+        rendering->push_k.ws_t = matrix4_t(0.0f);
+    }
 
-        if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_DESTROY))
-        {
-            ray_cast_terraform(e->ws_p, e->ws_d, 70.0f, dt, 60, 1);
-        }
-
-        if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_ADD))
-        {
-            ray_cast_terraform(e->ws_p, e->ws_d, 70.0f, dt, 60, 0);
-        }
+    if (player->rolling_mode)
+    {
+        push_player_to_rolling_queue(player);
+    }
+    else
+    {
+        push_player_to_animated_queue(player);
     }
 }
 
 
-uint32_t add_network_component(void)
+internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt)
 {
-    uint32_t component_index = g_entities->network_component_count++;
-    return(component_index);
+    uint32_t *action_flags = &player->action_flags;
+
+    if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_DESTROY))
+    {
+        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 1);
+    }
+
+    if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_ADD))
+    {
+        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 0);
+    }
 }
 
 
-struct network_component_t *get_network_component(uint32_t index)
+internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt)
 {
-    return(&g_entities->network_components[index]);
+}
+
+internal_function void update_rolling_player_physics(struct physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
+{
+    // Only happens at the beginning of the game
+    if (player->is_entering)
+    {
+        player->entering_acceleration += dt * 2.0f;
+        // Go in the direction that the player is facing
+        player->ws_v = player->entering_acceleration * player->ws_d;
+    }
+    else
+    {
+        if (component->state == entity_physics_state_t::IN_AIR)
+        {
+            player->ws_v += -player->ws_up * 9.81f * dt;
+        }
+        else if (component->state == entity_physics_state_t::ON_GROUND)
+        {
+            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+
+            if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
+            {
+                component->axes.z += dt * component->acceleration;
+            }
+            if (player->action_flags & (1 << action_flags_t::ACTION_LEFT))
+            {
+                component->axes.x -= dt * component->acceleration;
+            }
+            if (player->action_flags & (1 << action_flags_t::ACTION_BACK))
+            {
+                component->axes.z -= dt *component->acceleration;
+            }
+            if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT))
+            {
+                component->axes.x += dt * component->acceleration;
+            }
+
+            vector3_t result_acceleration_vector = component->axes.x * axes.right + component->axes.y * axes.up + component->axes.z * axes.forward;
+        }
+    }
+
+    collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+    if (collision.detected)
+    {
+        player->is_entering = 0;
+
+        // If there "was" a collision (may not be on the ground right now as might have "slid" off) player's gravity pull direction changed
+        player->ws_up = glm::normalize((collision.es_normal * player->size));
+    }
+    else
+    {
+        // If there was no collision, update position (velocity should be the same)
+        player->ws_p = collision.es_at * player->size;
+        player->ws_v = (collision.es_velocity * player->size) / dt;
+    }
+
+    if (collision.is_currently_in_air)
+    {
+        component->state = entity_physics_state_t::IN_AIR;
+    }
+    else
+    {
+        component->state = entity_physics_state_t::ON_GROUND;
+    }
 }
 
 
-internal_function struct physics_component_t *add_physics_component(entity_t *e, bool enabled)
-{
-    e->components.physics_component = g_entities->physics_component_count++;
-    struct physics_component_t *component = &g_entities->physics_components[ e->components.physics_component ];
-    component->entity_index = e->index;
-    component->enabled = enabled;
-
-    return(component);
-}
-
-
-internal_function void update_standing_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
+internal_function void update_not_physically_affected_player(struct physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt)
 {
     vector3_t result_force = vector3_t(0.0f);
 
@@ -1782,163 +1747,92 @@ internal_function void update_standing_entity_physics(struct physics_component_t
     if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= vector3_t(0.0f, 1.0f, 0.0f);
 
     result_force *= 20.0f * e->size.x;
-
-    e->ws_p += result_force * dt;
-}
-
-
-internal_function void update_rolling_entity_physics(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
-{
-    vector3_t result_force = vector3_t(0.0f);
-
-    vector3_t right = glm::normalize(glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f)));
-    vector3_t forward = glm::normalize(glm::cross(vector3_t(0.0f, 1.0f, 0.0f), right));
-
-    if (*action_flags & (1 << action_flags_t::ACTION_FORWARD)) result_force += forward;
-    if (*action_flags & (1 << action_flags_t::ACTION_BACK)) result_force -= forward;
-    if (*action_flags & (1 << action_flags_t::ACTION_RIGHT)) result_force += right;
-    if (*action_flags & (1 << action_flags_t::ACTION_LEFT)) result_force -= right;
-    if (*action_flags & (1 << action_flags_t::ACTION_UP)) result_force += vector3_t(0.0f, 1.0f, 0.0f);
-    if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= vector3_t(0.0f, 1.0f, 0.0f);
-
-    result_force *= 20.0f * e->size.x;
-
-    /*e->ws_p += result_force * dt;
-      e->ws_v = result_force;*/
     
-    collision_t collision = collide(e->ws_p, e->size, result_force * dt, dt);
+    collision_t collision = collide(e->ws_p, e->size, result_force * dt, 0, {});
     e->ws_p = collision.es_at * e->size;
 }
 
 
-internal_function void update_not_physically_affected_entity(struct physics_component_t *component, entity_t *e, uint32_t *action_flags, float32_t dt)
+internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt)
 {
-    
-}
-
-
-internal_function void update_physics_components(float32_t dt)
-{
-    for (uint32_t i = 0; i < g_entities->physics_component_count; ++i)
-    {
-        struct physics_component_t *component = &g_entities->physics_components[ i ];
-        entity_t *e = &g_entities->entity_list[ component->entity_index ];
-        uint32_t *action_flags = &e->action_flags;
-
-        update_not_physically_affected_entity(component, e, action_flags, dt);
+    uint32_t *action_flags = &player->action_flags;
         
-        if (component->enabled)
+    if (physics->enabled)
+    {
+        if (player->rolling_mode)
         {
-            if (e->rolling_mode)
-            {
-                update_rolling_entity_physics(component, e, action_flags, dt);
-            }
-            else
-            {
-                update_standing_entity_physics(component, e, action_flags, dt);
-            }
+            update_rolling_player_physics(physics, player, action_flags, dt);
         }
-        // Flying, not falling down towards earth
         else
         {
-            //update_not_physically_affected_entity(component, e, action_flags, dt);
+            update_standing_player_physics(physics, player, action_flags, dt);
         }
+    }
+    else
+    {
+        update_not_physically_affected_player(physics, player, action_flags, dt);
     }
 }
 
 
-internal_function entity_handle_t add_entity(const entity_t &e)
+internal_function player_handle_t add_player(const player_t &e)
 {
-    entity_handle_t view;
-    view = g_entities->entity_count;
+    player_handle_t view;
+    view = g_entities->player_count;
 
     g_entities->name_map.insert(e.id.hash, view);
     
-    g_entities->entity_list[g_entities->entity_count++] = e;
+    g_entities->player_list[g_entities->player_count++] = e;
 
-    auto e_ptr = get_entity(view);
-    e_ptr->rolling_mode = 0;
+    auto e_ptr = get_player(view);
     e_ptr->index = view;
 
     return(view);
 }
 
 
-internal_function void make_entity_instanced_renderable(model_handle_t model_handle, const constant_string_t &e_mtrl_name)
-{
-    // TODO(luc) : first need to add support for instance rendering in material renderers.
-}
-
-
 internal_function void update_entities(float32_t dt, application_type_t app_type)
 {
-    switch (app_type)
+    for (uint32_t player_index = 0; player_index < g_entities->player_count; ++player_index)
     {
-    case application_type_t::WINDOW_APPLICATION_MODE:
+        player_t *player = &g_entities->player_list[player_index];
+        
+        switch (app_type)
         {
-        update_physics_components(dt);
-        update_camera_components(dt);
-
-        update_rendering_component(dt);
-        update_animation_component(dt);
-
-        update_terraform_power_components(dt);
-        } break;
-    case application_type_t::CONSOLE_APPLICATION_MODE:
-        {
-            update_physics_components(dt);
-        } break;
-    }
+        case application_type_t::WINDOW_APPLICATION_MODE:
+            {
+                update_physics_component(&player->physics, player, dt);
+                update_camera_component(&player->camera, player, dt);
+                update_rendering_component(&player->rendering, player, dt);
+                update_animation_component(&player->animation, player, dt);
+                update_terraform_power_component(&player->terraform_power, player, dt);
+            } break;
+        case application_type_t::CONSOLE_APPLICATION_MODE:
+            {
+                update_physics_component(&player->physics, player, dt);
+            } break;
+        }
+    }    
 }
 
 
-void make_entity_main(entity_handle_t entity_handle, input_state_t *input_state)
+void make_player_main(player_handle_t player_handle)
 {
-    entity_t *entity = get_entity(entity_handle);
-
-    camera_component_t *camera_component_ptr = add_camera_component(entity, add_camera(input_state, get_backbuffer_resolution()));
-    camera_component_ptr->is_third_person = true;
-        
-    bind_camera_to_3d_scene_output(camera_component_ptr->camera);
-
-    g_entities->main_entity = entity_handle;
-}
-
-
-void make_entity_renderable(entity_handle_t entity_handle, entity_color_t color)
-{
-    entity_t *entity_ptr = get_entity(entity_handle);
-    
-    rendering_component_t *entity_ptr_rendering = add_rendering_component(entity_ptr);
-    animation_component_t *entity_animation = add_animation_component(entity_ptr,
-                                                                      g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash)),
-                                                                      &g_entities->entity_mesh_skeleton,
-                                                                      &g_entities->entity_mesh_cycles,
-                                                                      get_global_command_pool());
-
-    persist_var vector4_t colors[entity_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
-                                                                    vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
-                                                                    vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
-                                                                    vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
-                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f) };
-        
-    entity_ptr_rendering->push_k.color = colors[color];
-    entity_ptr_rendering->push_k.roughness = 0.8f;
-    entity_ptr_rendering->push_k.metalness = 0.6f;
+    g_entities->main_player = player_handle;
 }
 
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
-    g_entities->rolling_entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
-    g_entities->rolling_entity_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_entity_mesh);
-    g_entities->rolling_entity_model.index_data = g_entities->rolling_entity_mesh.index_data;
+    g_entities->rolling_player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
+    g_entities->rolling_player_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_player_mesh);
+    g_entities->rolling_player_model.index_data = g_entities->rolling_player_mesh.index_data;
     
-    g_entities->entity_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
-    g_entities->entity_model = make_mesh_attribute_and_binding_information(&g_entities->entity_mesh);
-    g_entities->entity_model.index_data = g_entities->entity_mesh.index_data;
-    g_entities->entity_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
-    g_entities->entity_mesh_cycles = load_animations("models/spaceman.animations_custom");
+    g_entities->player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
+    g_entities->player_model = make_mesh_attribute_and_binding_information(&g_entities->player_mesh);
+    g_entities->player_model.index_data = g_entities->player_mesh.index_data;
+    g_entities->player_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
+    g_entities->player_mesh_cycles = load_animations("models/spaceman.animations_custom");
 
     uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager->add("uniform_layout.joint_ubo"_hash);
     uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager->get(animation_layout_hdl);
@@ -1946,8 +1840,8 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
     animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
     *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
     
-    g_entities->entity_ppln = g_pipeline_manager->add("pipeline.model"_hash);
-    auto *entity_ppln = g_pipeline_manager->get(g_entities->entity_ppln);
+    g_entities->player_ppln = g_pipeline_manager->add("pipeline.model"_hash);
+    auto *player_ppln = g_pipeline_manager->get(g_entities->player_ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
@@ -1961,14 +1855,14 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->entity_model,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->player_model,
                                     true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
-        entity_ppln->info = info;
-        make_graphics_pipeline(entity_ppln);
+        player_ppln->info = info;
+        make_graphics_pipeline(player_ppln);
     }
     // TODO: Rename all the pipelines correctly : animated / normal
-    g_entities->rolling_entity_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
-    auto *rolling_entity_ppln = g_pipeline_manager->get(g_entities->rolling_entity_ppln);
+    g_entities->rolling_player_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
+    auto *rolling_player_ppln = g_pipeline_manager->get(g_entities->rolling_player_ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
@@ -1981,10 +1875,10 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_blend_states_t blending(false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_entity_model,
+                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_player_model,
                                     true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
-        rolling_entity_ppln->info = info;
-        make_graphics_pipeline(rolling_entity_ppln);
+        rolling_player_ppln->info = info;
+        make_graphics_pipeline(rolling_player_ppln);
     }
 
     g_entities->dbg_hitbox_ppln = g_pipeline_manager->add("pipeline.hitboxes"_hash);
@@ -2005,8 +1899,8 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         make_graphics_pipeline(hitbox_ppln);
     }
 
-    g_entities->entity_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
-    auto *entity_shadow_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
+    g_entities->player_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
+    auto *player_shadow_ppln = g_pipeline_manager->get(g_entities->player_shadow_ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         auto shadow_display = get_shadow_display();
@@ -2020,14 +1914,14 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->entity_model,
+                               VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->player_model,
                                true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
-        entity_shadow_ppln->info = info;
-        make_graphics_pipeline(entity_shadow_ppln);
+        player_shadow_ppln->info = info;
+        make_graphics_pipeline(player_shadow_ppln);
     }
 
-    g_entities->rolling_entity_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
-    auto *rolling_entity_shadow_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
+    g_entities->rolling_player_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
+    auto *rolling_player_shadow_ppln = g_pipeline_manager->get(g_entities->rolling_player_shadow_ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         auto shadow_display = get_shadow_display();
@@ -2040,57 +1934,73 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_blend_states_t blending(false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_entity_model,
+                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_player_model,
                                     true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
-        rolling_entity_shadow_ppln->info = info;
-        make_graphics_pipeline(rolling_entity_shadow_ppln);
+        rolling_player_shadow_ppln->info = info;
+        make_graphics_pipeline(rolling_player_shadow_ppln);
     }
 }
 
 
-internal_function void initialize_entities_data(VkCommandPool *cmdpool, input_state_t *input_state, application_type_t app_type)
+internal_function void construct_player(player_t *player, player_create_info_t *info)
 {
-    entity_t r2 = construct_entity("main"_hash,
-                                   vector3_t(0.0f),
-                                   vector3_t(1.0f, 0.0f, 1.0f),
-                                   quaternion_t(glm::radians(45.0f), vector3_t(0.0f, 1.0f, 0.0f)));
+    persist_var vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
+                                                                    vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
+                                                                    vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
+                                                                    vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
+                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f) };
+    
+    player->id = info->name;
+    player->ws_p = info->ws_position;
+    player->ws_d = info->ws_direction;
+    player->entering_acceleration = info->starting_velocity;
+    player->size = info->ws_size;
+    player->ws_r = info->ws_rotation;
+    player->is_entering = 1;
+    player->rolling_mode = 1;
+    player->camera.camera = info->camera_info.camera_index;
+    player->camera.is_third_person = info->camera_info.is_third_person;
+    player->camera.distance_from_player = info->camera_info.distance_from_player;
+    player->physics.enabled = info->physics_info.enabled;
+    player->animation.cycles = info->animation_info.cycles;
+    player->animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
+    switch_to_cycle(&player->animation.animation_instance, player_t::animated_state_t::IDLE, 1);
+    player->rendering.push_k.color = colors[info->color];
+    player->rendering.push_k.roughness = 0.8f;
+    player->rendering.push_k.metalness = 0.6f;
+}
 
-    r2.size = vector3_t(2.0f);
-    //r2.ws_v = vector3_t(0.0f, 0.0f, -20.0f);
-    entity_handle_t rv2 = add_entity(r2);
-    g_entities->main_entity = rv2;
-    auto *r2_ptr = get_entity(rv2);
 
-    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
-    {
-        rendering_component_t *r2_ptr_rendering = add_rendering_component(r2_ptr);
-        animation_component_t *r2_animation = add_animation_component(r2_ptr,
-                                                                      g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash)),
-                                                                      &g_entities->entity_mesh_skeleton,
-                                                                      &g_entities->entity_mesh_cycles,
-                                                                      cmdpool);
+internal_function void initialize_players(input_state_t *input_state, application_type_t app_type)
+{
+    // This makes the this player the "main" player of the game, that the user is going to control with mouse and keyboard
+    camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
+    bind_camera_to_3d_scene_output(main_camera);
+    // -
 
-        r2_ptr_rendering->push_k.color = vector4_t(0.0f, 0.0f, 0.0f, 1.0f);
-        r2_ptr_rendering->push_k.roughness = 0.3f;
-        r2_ptr_rendering->push_k.metalness = 0.8f;
+    player_create_info_t main_player_create_info = {};
+    main_player_create_info.name = "main"_hash;
+    main_player_create_info.ws_position = vector3_t(-140, 140, -140);
+    main_player_create_info.ws_direction = -glm::normalize(main_player_create_info.ws_position);
+    main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+    main_player_create_info.ws_size = vector3_t(2);
+    main_player_create_info.starting_velocity = 5.0f;
+    main_player_create_info.color = player_color_t::DARK_GRAY;
+    main_player_create_info.physics_info.enabled = 1;
+    main_player_create_info.terraform_power_info.speed = 700.0f;
+    main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
+    main_player_create_info.camera_info.camera_index = main_camera;
+    main_player_create_info.camera_info.is_third_person = 1;
+    main_player_create_info.camera_info.distance_from_player = 15.0f;
+    main_player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    main_player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
+    main_player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
 
-        auto *camera_component_ptr = add_camera_component(r2_ptr, add_camera(input_state, get_backbuffer_resolution()));
-        camera_component_ptr->is_third_person = true;
-        camera_component_ptr->distance_from_player = 8.0f * r2_ptr->size.x;
-        
-        bind_camera_to_3d_scene_output(camera_component_ptr->camera);
-    }
+    player_t user;
+    construct_player(&user, &main_player_create_info);
 
-    physics_component_t *physics = add_physics_component(r2_ptr, false);
-    physics->enabled = true;
-    physics->hitbox.x_min = -1.001f;
-    physics->hitbox.x_max = 1.001f;
-    physics->hitbox.y_min = -1.001f;
-    physics->hitbox.y_max = 1.001f;
-    physics->hitbox.z_min = -1.001f;
-    physics->hitbox.z_max = 1.001f;
-
-    uint32_t terraform_power = add_terraform_power_component(r2_ptr);
+    player_handle_t user_handle = add_player(user);
+    make_player_main(user_handle);
 }
 
 
@@ -2103,15 +2013,15 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     uniform_group_t uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
 
     camera_t *camera = get_camera_bound_to_3d_output();
-    
+
     // Rendering to the shadow map
     begin_shadow_offscreen(4000, 4000, queue);
     {
-        auto *model_ppln = g_pipeline_manager->get(g_entities->entity_shadow_ppln);
-        g_entities->entity_submission_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        auto *model_ppln = g_pipeline_manager->get(g_entities->player_shadow_ppln);
+        g_entities->player_submission_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        auto *rolling_model_ppln = g_pipeline_manager->get(g_entities->rolling_entity_shadow_ppln);
-        g_entities->rolling_entity_submission_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        auto *rolling_model_ppln = g_pipeline_manager->get(g_entities->rolling_player_shadow_ppln);
+        g_entities->rolling_player_submission_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, rolling_model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         g_voxel_chunks->gpu_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, g_pipeline_manager->get(g_voxel_chunks->chunk_mesh_shadow_pipeline), queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     }
@@ -2120,19 +2030,19 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     // Rendering the scene with lighting and everything
     begin_deferred_rendering(image_index, queue);
     {
-        auto *entity_ppln = g_pipeline_manager->get(g_entities->entity_ppln);
-        auto *rolling_entity_ppln = g_pipeline_manager->get(g_entities->rolling_entity_ppln);
+        auto *player_ppln = g_pipeline_manager->get(g_entities->player_ppln);
+        auto *rolling_player_ppln = g_pipeline_manager->get(g_entities->rolling_player_ppln);
     
-        g_entities->entity_submission_queue.submit_queued_materials({2, uniform_groups}, entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-        g_entities->rolling_entity_submission_queue.submit_queued_materials({2, uniform_groups}, rolling_entity_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_entities->player_submission_queue.submit_queued_materials({2, uniform_groups}, player_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        g_entities->rolling_player_submission_queue.submit_queued_materials({2, uniform_groups}, rolling_player_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         g_voxel_chunks->gpu_queue.submit_queued_materials({2, uniform_groups}, g_pipeline_manager->get(g_voxel_chunks->chunk_mesh_pipeline), queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-        g_entities->entity_submission_queue.flush_queue();
-        g_entities->rolling_entity_submission_queue.flush_queue();
+        g_entities->player_submission_queue.flush_queue();
+        g_entities->rolling_player_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2165,7 +2075,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_entity_direction_information);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_player_direction_information);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_ts_view_dir", &lua_get_player_ts_view_direction);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "go_down", &lua_go_down);
@@ -2177,8 +2087,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
     {
-        g_entities->rolling_entity_submission_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-        g_entities->entity_submission_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+        g_entities->rolling_player_submission_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+        g_entities->player_submission_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
     }
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
@@ -2196,10 +2106,10 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
-    g_voxel_chunks->size = 12.0f;
+    g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
     
-    initialize_entities_data(cmdpool, input_state, app_type);
+    initialize_players(input_state, app_type);
     
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -2233,22 +2143,18 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
 internal_function void clean_up_entities(void)
 {
     // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
-    g_entities->entity_count = 0;
-    g_entities->physics_component_count = 0;
-    g_entities->camera_component_count = 0;
-    g_entities->rendering_component_count = 0;
-
-    for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
+    g_entities->player_count = 0;
+    
+    /*for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
     {
         destroy_animated_instance(&g_entities->animation_components[i].animation_instance);
-    }
-    g_entities->animation_component_count = 0;
+    }*/
     
-    g_entities->main_entity = -1;
+    g_entities->main_player = -1;
 
     g_entities->name_map.clean_up();
 
-    g_entities->rolling_entity_submission_queue.mtrl_count = 0;
+    g_entities->rolling_player_submission_queue.mtrl_count = 0;
 }
 
 
@@ -2319,7 +2225,7 @@ void update_world(input_state_t *input_state,
 #include <glm/gtx/string_cast.hpp>
 
 
-void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
+void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
 {
     if (input_state->cursor_moved)
     {
@@ -2360,7 +2266,7 @@ void handle_main_entity_mouse_movement(entity_t *e, uint32_t *action_flags, inpu
 }
 
 
-void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
+void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
 {
     if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_RIGHT].is_down)
     {
@@ -2374,7 +2280,7 @@ void handle_main_entity_mouse_button_input(entity_t *e, uint32_t *action_flags, 
 }
 
 
-void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt)
+void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt)
 {
     vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
     
@@ -2436,33 +2342,33 @@ void handle_main_entity_keyboard_input(entity_t *e, uint32_t *action_flags, phys
 }
 
 
-void handle_main_entity_action(input_state_t *input_state, float32_t dt)
+void handle_main_player_action(input_state_t *input_state, float32_t dt)
 {
-    entity_t *main_entity = get_main_entity();
-    if (main_entity)
+    player_t *main_player = get_main_player();
+    if (main_player)
     {
-        entity_t *e = main_entity;
-        physics_component_t *e_physics = &g_entities->physics_components[e->components.physics_component];
+        player_t *e = main_player;
+        physics_component_t *e_physics = &e->physics;
 
-        handle_main_entity_keyboard_input(e, &e->action_flags, e_physics, input_state, dt);
-        handle_main_entity_mouse_movement(e, &e->action_flags, input_state, dt);
-        handle_main_entity_mouse_button_input(e, &e->action_flags, input_state, dt);
+        handle_main_player_keyboard_input(e, &e->action_flags, e_physics, input_state, dt);
+        handle_main_player_mouse_movement(e, &e->action_flags, input_state, dt);
+        handle_main_player_mouse_button_input(e, &e->action_flags, input_state, dt);
     }
 }
 
 
 void handle_world_input(input_state_t *input_state, float32_t dt)
 {
-    handle_main_entity_action(input_state, dt);
+    handle_main_player_action(input_state, dt);
 }
 
 
-// Not to do with moving the entity, just debug stuff : will be used later for stuff like opening menus
+// Not to do with moving the player, just debug stuff : will be used later for stuff like opening menus
 void handle_input_debug(input_state_t *input_state, float32_t dt)
 {
-    // ---- get bound entity ----
-    // TODO make sure to check if main_entity < 0
-    /*entity_t *e_ptr = &g_entities->entity_list[g_entities->main_entity];
+    // ---- get bound player ----
+    // TODO make sure to check if main_player < 0
+    /*player_t *e_ptr = &g_entities->player_list[g_entities->main_player];
       camera_component_t *e_camera_component = &g_entities->camera_components[e_ptr->components.camera_component];
       physics_component_t *e_physics = &g_entities->physics_components[e_ptr->components.physics_component];
       camera_t *e_camera = get_camera(e_camera_component->camera);
@@ -2509,10 +2415,10 @@ void destroy_world(void)
 internal_function int32_t lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
-    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
-    lua_pushnumber(state, main_entity->ws_p.x);
-    lua_pushnumber(state, main_entity->ws_p.y);
-    lua_pushnumber(state, main_entity->ws_p.z);
+    player_t *main_player = &g_entities->player_list[g_entities->main_player];
+    lua_pushnumber(state, main_player->ws_p.x);
+    lua_pushnumber(state, main_player->ws_p.y);
+    lua_pushnumber(state, main_player->ws_p.z);
     return(3);
 }
 
@@ -2522,10 +2428,10 @@ internal_function int32_t lua_set_player_position(lua_State *state)
     float32_t x = lua_tonumber(state, -3);
     float32_t y = lua_tonumber(state, -2);
     float32_t z = lua_tonumber(state, -1);
-    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
-    main_entity->ws_p.x = x;
-    main_entity->ws_p.y = y;
-    main_entity->ws_p.z = z;
+    player_t *main_player = &g_entities->player_list[g_entities->main_player];
+    main_player->ws_p.x = x;
+    main_player->ws_p.y = y;
+    main_player->ws_p.z = z;
     return(0);
 }
 
@@ -2537,15 +2443,15 @@ internal_function int32_t lua_toggle_collision_box_render(lua_State *state)
 }
 
 
-internal_function int32_t lua_render_entity_direction_information(lua_State *state)
+internal_function int32_t lua_render_player_direction_information(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
 
-    g_entities->dbg.render_sliding_vector_entity = get_entity(kname);
+    g_entities->dbg.render_sliding_vector_player = get_player(kname);
 
     persist_var char buffer[50];
-    sprintf(buffer, "rendering for entity: %s", name);
+    sprintf(buffer, "rendering for player: %s", name);
     console_out(buffer);
     
     return(0);
@@ -2557,8 +2463,8 @@ internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
     const char *name = lua_tostring(state, -2);
     float32_t velocity = lua_tonumber(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
-    entity_t *entity = get_entity(kname);
-    entity->ws_v += entity->ws_d * velocity;
+    player_t *player = get_player(kname);
+    player->ws_v += player->ws_d * velocity;
     return(0);
 }
 
@@ -2566,11 +2472,11 @@ internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
 internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
-    entity_t *main_entity = &g_entities->entity_list[g_entities->main_entity];
-    //    vector4_t dir = glm::scale(main_entity->on_t->size) * main_entity->on_t->inverse_transform * vector4_t(main_entity->ws_d, 0.0f);
-    lua_pushnumber(state, main_entity->ws_d.x);
-    lua_pushnumber(state, main_entity->ws_d.y);
-    lua_pushnumber(state, main_entity->ws_d.z);
+    player_t *main_player = &g_entities->player_list[g_entities->main_player];
+    //    vector4_t dir = glm::scale(main_player->on_t->size) * main_player->on_t->inverse_transform * vector4_t(main_player->ws_d, 0.0f);
+    lua_pushnumber(state, main_player->ws_d.x);
+    lua_pushnumber(state, main_player->ws_d.y);
+    lua_pushnumber(state, main_player->ws_d.z);
     return(3);
 }
 
@@ -2580,11 +2486,11 @@ internal_function int32_t lua_stop_simulation(lua_State *state)
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
 
-    entity_t *entity = get_entity(kname);
+    player_t *player = get_player(kname);
 
-    physics_component_t *component = &g_entities->physics_components[ entity->components.physics_component ];
+    physics_component_t *component = &player->physics;
     component->enabled = false;
-    component->ws_velocity = vector3_t(0.0f);
+    //component->ws_velocity = vector3_t(0.0f);
     
     return(0);
 }
@@ -2592,7 +2498,7 @@ internal_function int32_t lua_stop_simulation(lua_State *state)
 
 internal_function int32_t lua_go_down(lua_State *state)
 {
-    entity_t *main = get_main_entity();
+    player_t *main = get_main_player();
     auto *istate = get_input_state();
     istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down = is_down_t::REPEAT;
     istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].down_amount += 1.0f / 60.0f;

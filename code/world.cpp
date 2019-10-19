@@ -1706,6 +1706,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         }
     }
 
+    
     collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
     if (collision.detected)
     {

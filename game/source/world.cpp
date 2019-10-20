@@ -886,7 +886,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     chunk->gpu_mesh = initialize_mesh(buffers, &indexed_data, &g_voxel_chunks->chunk_model.index_data);
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
-    chunk->push_k.color = vector4_t(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0, 1.0f);
+    chunk->push_k.color = vector4_t(118.0 / 255.0, 230.0 / 255.0, 72.0 / 255.0, 1.0f);
 }
 
 
@@ -1183,12 +1183,6 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
     vector3_t es_fc = triangle_vertices[2];
 
     vector3_t es_up_normal_of_triangle = glm::normalize(glm::cross(es_fb - es_fa, es_fc - es_fa));
-    /*if (!slide)
-    {
-        const float32_t es_very_close_distance_from_terrain = 0.02f;
-        //es_center -= es_up_normal_of_triangle * es_very_close_distance_from_terrain;
-        es_velocity = -es_up_normal_of_triangle * es_very_close_distance_from_terrain;
-        }*/
     
     float32_t velocity_dot_normal = glm::dot(glm::normalize(es_velocity), es_up_normal_of_triangle);
     
@@ -1215,8 +1209,6 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
         }
     }
 
-    const float32_t very_close_distance = 0.01f;
-    
     if (!must_check_only_for_edges_and_vertices)
     {
         // Check collision with triangle face
@@ -1249,7 +1241,6 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                 {
                     // Adjust the sphere position, and call the function
                     vector3_t es_new_sphere_position = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
-                    es_new_sphere_position += very_close_distance * es_up_normal_of_triangle;
                     
                     closest->under_terrain = 1;
                     closest->es_at = es_new_sphere_position;
@@ -1377,7 +1368,7 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
         collide_with_triangle(triangle_ptr, es_center, es_velocity, &closest_collision);
     }
 
-    const float32_t es_very_close_distance_from_terrain = 0.01f;
+    const float32_t es_very_close_distance_from_terrain = .0f;
     
     if (closest_collision.detected)
     {
@@ -1531,7 +1522,7 @@ internal_function void update_camera_component(camera_component_t *camera_compon
 {
     camera_t *camera = get_camera(camera_component->camera);
 
-    vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
+    vector3_t up = vector3_t(0, 1, 0);
         
     vector3_t camera_position = player->ws_p + vector3_t(0.0f, player->size.x, 0.0f);
     if (camera_component->is_third_person)
@@ -1685,51 +1676,75 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         {
             movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
 
+            component->axes = vector3_t(0);
             if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
             {
-                component->axes.z += dt * component->acceleration;
+                component->axes.z += component->acceleration;
             }
             if (player->action_flags & (1 << action_flags_t::ACTION_LEFT))
             {
-                component->axes.x -= dt * component->acceleration;
+                component->axes.x -= component->acceleration;
             }
             if (player->action_flags & (1 << action_flags_t::ACTION_BACK))
             {
-                component->axes.z -= dt *component->acceleration;
+                component->axes.z -= component->acceleration;
             }
             if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT))
             {
-                component->axes.x += dt * component->acceleration;
+                component->axes.x += component->acceleration;
             }
 
             vector3_t result_acceleration_vector = component->axes.x * axes.right + component->axes.y * axes.up + component->axes.z * axes.forward;
+
+            player->ws_v += result_acceleration_vector * dt * 10.0f;
+            player->ws_v -= player->ws_up * 9.81f * dt;
+
+            // Friction
+            persist_var constexpr float32_t TERRAIN_ROUGHNESS = .5f;
+            float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
+            vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
+            player->ws_v += friction * dt;
         }
     }
 
-    
     collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
     if (collision.detected)
     {
-        player->is_entering = 0;
+        if (player->is_entering)
+        {
+            player->is_entering = 0;
+        }
 
+        if (component->state == entity_physics_state_t::IN_AIR)
+        {
+            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+            player->ws_v = glm::normalize(glm::proj(player->ws_v, axes.forward));
+        }
+
+        player->ws_p = collision.es_at * player->size;
+        
         // If there "was" a collision (may not be on the ground right now as might have "slid" off) player's gravity pull direction changed
         player->ws_up = glm::normalize((collision.es_normal * player->size));
+
+        component->state = entity_physics_state_t::ON_GROUND;
     }
     else
     {
         // If there was no collision, update position (velocity should be the same)
         player->ws_p = collision.es_at * player->size;
         player->ws_v = (collision.es_velocity * player->size) / dt;
+
+        component->state = entity_physics_state_t::IN_AIR;
     }
 
-    if (collision.is_currently_in_air)
+    /*if (collision.is_currently_in_air)
     {
         component->state = entity_physics_state_t::IN_AIR;
     }
     else
     {
         component->state = entity_physics_state_t::ON_GROUND;
-    }
+        }*/
 }
 
 
@@ -2043,7 +2058,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_player_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2061,7 +2076,7 @@ internal_function void entry_point(void)
     
     // Load startup code
     const char *startup_script = "scripts/sandbox/startup.lua";
-    file_handle_t handle = create_file(startup_script, file_type_t::TEXT);
+    file_handle_t handle = create_file(startup_script, file_type_flags_t::TEXT | file_type_flags_t::ASSET);
     auto contents = read_file_tmp(handle);
     execute_lua((const char *)contents.content);
     remove_and_destroy_file(handle);

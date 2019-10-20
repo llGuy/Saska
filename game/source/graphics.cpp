@@ -436,7 +436,7 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
             remove_and_destroy_file(modules.modules[i].file_handle);
         }
         
-        modules.modules[i].file_handle = create_file(modules.modules[i].file_path, file_type_t::BINARY);
+        modules.modules[i].file_handle = create_file(modules.modules[i].file_path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
 
         file_contents_t bytecode = read_file_tmp(modules.modules[i].file_handle);
         init_shader(modules.modules[i].stage, bytecode.size, bytecode.content, &module_objects[i]);
@@ -1947,9 +1947,9 @@ internal_function void make_cube_model(gpu_command_queue_pool_t *pool)
 internal_function int32_t lua_begin_frame_capture(lua_State *state);
 internal_function int32_t lua_end_frame_capture(lua_State *state);
 
-void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool)
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *input_state)
 {
-    g_dfr_rendering->backbuffer_res = {1920, 1080};
+    g_dfr_rendering->backbuffer_res = {(uint32_t)input_state->window_width, (uint32_t)input_state->window_height};
     
     make_uniform_pool();
     make_dfr_rendering_data();
@@ -2099,7 +2099,7 @@ using sampler2D = sampler2d_ptr_t;
 namespace glsl
 {
 // =============== INCLUDE GLSL CODE HERE =================
-#include "shaders/pfx_ssr_c.hpp"
+#include "../assets/shaders/pfx_ssr_c.hpp"
 // ===============
 }
 
@@ -2221,7 +2221,7 @@ struct custom_mesh_header_t
 // First work on this
 mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
 {
-    file_handle_t mesh_file_handle = create_file(path, file_type_t::BINARY);
+    file_handle_t mesh_file_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t mesh_data = read_file_tmp(mesh_file_handle);
     remove_and_destroy_file(mesh_file_handle);
 
@@ -2382,7 +2382,7 @@ joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton)
 
 skeleton_t load_skeleton(const char *path)
 {
-    file_handle_t skeleton_handle = create_file(path, file_type_t::BINARY);
+    file_handle_t skeleton_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t skeleton_data = read_file_tmp(skeleton_handle);
     remove_and_destroy_file(skeleton_handle);
 
@@ -2420,7 +2420,7 @@ skeleton_t load_skeleton(const char *path)
 
 animation_cycles_t load_animations(const char *path)
 {
-    file_handle_t animation_handle = create_file(path, file_type_t::BINARY);
+    file_handle_t animation_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t animation_data = read_file_tmp(animation_handle);
     remove_and_destroy_file(animation_handle);
 

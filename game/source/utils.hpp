@@ -33,16 +33,6 @@ typedef double float64_t;
 typedef uint8_t byte_t;
 typedef uint32_t bool32_t;
 
-extern struct debug_output_t
-{
-    FILE *fp;
-} output_file; // defined in core.cpp but going to move in the future to a more suitable place
-
-#define OUTPUT_DEBUG_LOG_VALIDATION(str, ...)					\
-    fprintf(output_file.fp, "[%s:%d] log: ", __FILE__, __LINE__);	\
-    fprintf(output_file.fp, str, __VA_ARGS__);				\
-    fflush(output_file.fp);
-
 #define OUTPUT_DEBUG_LOG(str, ...)
 
 struct constant_string_t

@@ -307,7 +307,7 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
     font_handle_t hdl = add_font(font_name);
     font_t *font_ptr = get_font(hdl);
 
-    file_handle_t fnt_file_handle = create_file(fnt_file, file_type_t::TEXT);
+    file_handle_t fnt_file_handle = create_file(fnt_file, file_type_flags_t::TEXT | file_type_flags_t::ASSET);
     file_contents_t fnt = read_file_tmp(fnt_file_handle);
     int32_t char_count = 0;
     char *current_char = fnt_get_char_count((char *)fnt.content, &char_count);
@@ -586,7 +586,7 @@ internal_function void initialize_console(void)
                                      0x16161636,
                                      get_backbuffer_resolution());
 
-    font_t *font_ptr = load_font("console_font"_hash, "font/fixedsys.fnt", "");
+    font_t *font_ptr = load_font("console_font"_hash, "fonts/consolas.fnt", "");
     make_text(&g_console->back_box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::BOTTOM,
@@ -880,7 +880,7 @@ void initialize_ui_rendering_state(VkFormat swapchain_format,
     image_handle_t tx_hdl = g_image_manager->add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager->get(tx_hdl);
     {
-        file_handle_t font_png_handle = create_file("font/fixedsys.png", file_type_t::IMAGE);
+        file_handle_t font_png_handle = create_file("fonts/consolas.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
         external_image_data_t image_data = read_image(font_png_handle);
         
         make_texture(tx_ptr,

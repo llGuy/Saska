@@ -86,14 +86,38 @@ global_var struct file_manager_t
 
 } g_files;
 
+internal_function const char *create_asset_path(const char *file)
+{
+    const char *asset_base_path = "../assets/";
+        
+    uint32_t asset_base_path_length = strlen(asset_base_path);
+    uint32_t file_path_length = strlen(file);
+    uint32_t full_path_length = asset_base_path_length + file_path_length;
+        
+    char *full_path_buffer = (char *)allocate_free_list(full_path_length + 1);
+    memcpy(full_path_buffer, asset_base_path, strlen(asset_base_path));
+    memcpy(full_path_buffer + asset_base_path_length, file, file_path_length);
+    full_path_buffer[full_path_length] = 0;
+
+    return(full_path_buffer);
+}
+
 file_handle_t create_file(const char *file, file_type_t type)
 {
     file_handle_t new_file = g_files.files.add();
     file_object_t *object = g_files.files.get(new_file);
 
-    object->file_type = type;
-    object->file_path = file;
+    if (type & file_type_flags_t::ASSET)
+    {
+        object->file_path = create_asset_path(file);
+    }
+    else
+    {
+        object->file_path = file;
+    }
 
+    object->file_type = type;
+    
     initialize_file_handle(object);
     initialize_filetime(object);
 
@@ -122,7 +146,7 @@ file_contents_t read_file_tmp(file_handle_t handle)
     uint32_t size = get_file_size(object);
     byte_t *buffer = (byte_t *)allocate_linear(size);
     read_from_file(object, buffer, size);
-    if (object->file_type == file_type_t::TEXT)
+    if (object->file_type & file_type_flags_t::TEXT)
     {
         buffer[size] = 0;
     }

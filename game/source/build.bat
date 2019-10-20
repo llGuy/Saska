@@ -29,12 +29,14 @@ set CLIENT_BIN=Saska.exe
 set SERVER_BIN=Server.exe
 set DLL_NAME=Saska.dll
 
-set SRC=win32_core.cpp
+set SRC=../source/win32_core.cpp
 set DLL_SRC=game.cpp
 
 REM Don't need GLFW for now: C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib
 REM If link errors appear, maybe add these libs into the list: Shell32.lib kernel32.lib msvcmrt.lib 
 set LIBS=ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/Lua/lib/lua5.1.lib
+
+pushd ..\binaries
 
 If "%1" == "compile" goto compile
 If "%1" == "debug" goto debug
@@ -44,9 +46,7 @@ If "%1" == "help" goto help
 
 :compile
 %CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
-
-etags *.cpp *.hpp
-echo Built emacs tags
+popd
 
 goto :eof
 
@@ -56,12 +56,12 @@ goto :eof
 
 :clean
 rm *.exe *.obj *.ilk *.pdb TAGS
+popd
 goto :eof
 
 :run
 %CLIENT_BIN%
 goto :eof
-
 
 :help
 echo To build application, enter into command line: build.bat compile

@@ -7,7 +7,8 @@ typedef int32_t file_handle_t;
 
 enum { INVALID_FILE_HANDLE = -1 };
 
-enum file_type_t { TEXT, BINARY, IMAGE };
+enum file_type_flags_t : uint32_t { TEXT, BINARY = 1 << 1, IMAGE = 1 << 2, ASSET = 1 << 3 };
+typedef uint32_t file_type_t;
 file_handle_t create_file(const char *file, file_type_t type);
 void remove_and_destroy_file(file_handle_t handle);
 

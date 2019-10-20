@@ -1168,7 +1168,7 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
 
-    VK_CHECK (vkCreateGraphicsPipelines(g_context->gpu.logical_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, pipeline) != VK_SUCCESS);
+    VK_CHECK (vkCreateGraphicsPipelines(g_context->gpu.logical_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, pipeline) );
 }
 
 void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_pool)

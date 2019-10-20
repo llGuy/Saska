@@ -21,12 +21,7 @@
 #define ALLOCA_T(t, c) (t *)alloca(sizeof(t) * c)
 #define ALLOCA_B(s) alloca(s)
 
-#define VK_CHECK(f, ...) \
-        if (f != VK_SUCCESS)			\
-    { \
-	fprintf(output_file.fp, "[%s:%d] error : %s - ", __FILE__, __LINE__, #f); \
-     assert(false);	  \
-     } 
+#define VK_CHECK(f, ...) f
 
 enum platform_t { AGNOSTIC, WINDOWS, LINUX, INVALID };
 extern const platform_t PLATFORM = INVALID;

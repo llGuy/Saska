@@ -207,7 +207,7 @@ struct player_t
     constant_string_t id {""_hash};
     // position, direction, velocity
     // in above entity group space
-    vector3_t ws_up;
+    vector3_t ws_up = vector3_t(0, 1, 0);
     vector3_t ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
     vector3_t ws_acceleration {0.0f};
     quaternion_t ws_r{0.0f, 0.0f, 0.0f, 0.0f};

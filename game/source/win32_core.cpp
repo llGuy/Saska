@@ -35,10 +35,6 @@
 #include <Windows.h>
 #include <Windowsx.h>
 
-#define DEBUG_FILE ".debug"
-
-debug_output_t output_file;
-
 global_var bool g_running;
 global_var bool g_hasfocus;
 global_var double g_game_time = 0.0f;
@@ -56,17 +52,6 @@ void request_quit(void)
 {
     g_running = 0;
     PostQuitMessage(0);
-}
-
-internal_function void open_debug_file(void)
-{
-    output_file.fp = fopen(DEBUG_FILE, "w+");
-    assert(output_file.fp >= NULL);
-}
-
-internal_function void close_debug_file(void)
-{
-    fclose(output_file.fp);
 }
 
 void ouptut_debug_string(const char *string)
@@ -532,13 +517,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        /*if (dt > TICK_TIME)
+        if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
         }
-        else*/
+        else
         {
             // Set game tick period by sleeping
             while (dt < TICK_TIME)

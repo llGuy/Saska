@@ -576,7 +576,7 @@ void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_
 
 void render_final_output(uint32_t image_index, gpu_command_queue_t *queue);
 
-void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool);
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *input_state);
 void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
 
 void hotreload_assets_if_changed(void);

@@ -36,7 +36,7 @@ void initialize_game(game_memory_t *memory, input_state_t *input_state, create_v
             initialize_scripting();
             initialize_network_state(memory, app_mode);
             graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, input_state);
-            initialize_game_3d_graphics(graphics.command_pool);
+            initialize_game_3d_graphics(graphics.command_pool, input_state);
             initialize_game_2d_graphics(graphics.command_pool);
             initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
             hard_initialize_world(input_state, graphics.command_pool, app_type, app_mode);

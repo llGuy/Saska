@@ -1368,7 +1368,7 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
         collide_with_triangle(triangle_ptr, es_center, es_velocity, &closest_collision);
     }
 
-    const float32_t es_very_close_distance_from_terrain = .0f;
+    const float32_t es_very_close_distance_from_terrain = .01f;
     
     if (closest_collision.detected)
     {

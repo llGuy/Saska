@@ -61,6 +61,8 @@ goto :eof
 
 :run
 %CLIENT_BIN%
+
+popd
 goto :eof
 
 :help

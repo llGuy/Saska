@@ -864,6 +864,7 @@ struct dbg_pfx_frame_capture_t
 
 struct post_processing_t
 {
+    // Testing godrays effect
     pfx_stage_t ssr_stage;
     pfx_stage_t pre_final_stage;
     pfx_stage_t final_stage;

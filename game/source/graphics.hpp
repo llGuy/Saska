@@ -100,11 +100,13 @@ struct shader_pk_data_t
     VkShaderStageFlags stages;
 };
 
+enum blend_type_t { NO_BLENDING, ONE_MINUS_SRC_ALPHA, ADDITIVE_BLENDING };
+
 struct shader_blend_states_t
 {
     static constexpr uint32_t MAX_BLEND_STATES = 10;
     // For now, is just boolean
-    bool blend_states[MAX_BLEND_STATES];
+    blend_type_t blend_states[MAX_BLEND_STATES];
     uint32_t count;
     
     template <typename ...T>
@@ -566,6 +568,8 @@ void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *q
 void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue);
 void update_atmosphere(gpu_command_queue_t *queue);
 
+void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue);
+
 void make_postfx_data(swapchain_t *swapchain);
 framebuffer_handle_t get_pfx_framebuffer_hdl(void);
 
@@ -746,7 +750,6 @@ struct lighting_t
     // Default value
     vector3_t ws_light_position {10.0000001f, 10.0000000001f, 10.00000001f};
 
-
     // Later, need to add PSSM
     struct shadows_t
     {
@@ -774,6 +777,13 @@ struct lighting_t
             float32_t corner_values[6];
         };
     } shadows;
+
+    struct sun_t
+    {
+        pipeline_handle_t sun_ppln;
+        image2d_t sun_texture;
+        uniform_group_t sun_group;
+    } sun;
 };
 
 struct atmosphere_t

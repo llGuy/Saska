@@ -199,7 +199,7 @@ internal_function void hard_initialize_chunks(void)
                                  shader_module_info_t{"shaders/SPV/voxel_point.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_POINT,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_voxel_chunks->chunk_model,
@@ -219,7 +219,7 @@ internal_function void hard_initialize_chunks(void)
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT };
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_voxel_chunks->chunk_model,
@@ -239,7 +239,7 @@ internal_function void hard_initialize_chunks(void)
                                  shader_module_info_t{"shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_voxel_chunks->chunk_model,
@@ -257,7 +257,7 @@ internal_function void hard_initialize_chunks(void)
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
@@ -1905,7 +1905,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
                                          animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->player_model,
@@ -1925,7 +1925,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_player_model,
@@ -1943,7 +1943,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
@@ -1964,7 +1964,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->player_model,
@@ -1984,7 +1984,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
                                  shader_module_info_t{"shaders/SPV/model_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &g_entities->rolling_player_model,
@@ -2099,6 +2099,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
+        render_sun(uniform_groups, queue);
     }
     end_deferred_rendering(camera->v_m, queue);
 

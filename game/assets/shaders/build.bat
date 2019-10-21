@@ -60,3 +60,6 @@ REM C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/hitbox_render.ve
 REM C:/VulkanSDK/1.1.108.0/Bin32/glslangValidator.exe -V -o SPV/hitbox_render.frag.spv hitbox_render.frag
 
 make
+
+popd
+echo build shader

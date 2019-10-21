@@ -771,7 +771,7 @@ internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPoo
                                shader_module_info_t{"shaders/SPV/atmosphere.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts = {};
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-        shader_blend_states_t blending{false};
+        shader_blend_states_t blending{blend_type_t::NO_BLENDING};
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
@@ -792,7 +792,7 @@ internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPoo
         uniform_layout_handle_t camera_transforms_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, render_atmosphere_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
@@ -811,6 +811,63 @@ internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPoo
     update_atmosphere(&queue);
     
     destroy_single_use_command_buffer(&cmdbuf, cmdpool);
+}
+
+internal_function void make_sun_data(void)
+{
+    g_lighting->sun.sun_ppln = g_pipeline_manager->add("pipeline.sun"_hash);
+    auto *sun_ppln = g_pipeline_manager->get(g_lighting->sun.sun_ppln);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        resolution_t backbuffer_res = g_dfr_rendering->backbuffer_res;
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/sun.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/sun.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        uniform_layout_handle_t camera_transforms_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
+        uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
+        shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, single_tx_layout_hdl);
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::ADDITIVE_BLENDING);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 0, info);
+        sun_ppln->info = info;
+        make_graphics_pipeline(sun_ppln);
+    }
+
+    // Make sun texture
+    {
+        file_handle_t sun_png_handle = create_file("textures/sun/sun.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+        external_image_data_t image_data = read_image(sun_png_handle);
+
+        make_texture(&g_lighting->sun.sun_texture, image_data.width, image_data.height,
+                     VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                     VK_FILTER_LINEAR);
+        transition_image_layout(&g_lighting->sun.sun_texture.image, VK_FORMAT_R8G8B8A8_UNORM,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                get_global_command_pool());
+        invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                     get_global_command_pool(),
+                                                     &g_lighting->sun.sun_texture,
+                                                     (uint32_t)image_data.width,
+                                                     (uint32_t)image_data.height);
+        transition_image_layout(&g_lighting->sun.sun_texture.image,
+                                VK_FORMAT_R8G8B8A8_UNORM,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                get_global_command_pool());
+
+        free_external_image_data(&image_data);
+    }
+
+    // Make sun uniform group
+    uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
+    g_lighting->sun.sun_group = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
+    {
+        update_uniform_group(&g_lighting->sun.sun_group,
+                             update_binding_t{ TEXTURE, &g_lighting->sun.sun_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+    }
 }
 
 internal_function void make_shadow_data(void)
@@ -877,7 +934,7 @@ internal_function void make_shadow_data(void)
                                  shader_module_info_t{"shaders/SPV/debug_frustum.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts (g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false, false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blending, nullptr,
@@ -1076,6 +1133,27 @@ void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspe
                                                                      0.0f, 0.0f, 0.0f, 1.0f));
 }
 
+void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
+{
+    auto *sun_pipeline = g_pipeline_manager->get(g_lighting->sun.sun_ppln);
+    command_buffer_bind_pipeline(&sun_pipeline->pipeline, &queue->q);
+
+    uniform_group_t groups[2] = {*camera_transforms, g_lighting->sun.sun_group};
+    
+    command_buffer_bind_descriptor_sets(&sun_pipeline->layout, {2, groups}, &queue->q);
+
+    struct sun_push_constant_t
+    {
+	matrix4_t model_matrix;
+    } push_k;
+
+    push_k.model_matrix = glm::translate(vector3_t(-140, 140, -140));
+
+    command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, sun_pipeline->layout, &queue->q);
+
+    command_buffer_draw(&queue->q, 4, 1, 0, 0);
+}
+
 void make_dfr_rendering_data(void)
 {
     // ---- Make deferred rendering render pass ----
@@ -1218,7 +1296,7 @@ void make_dfr_rendering_data(void)
                              update_binding_t{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             update_binding_t{INPUT_ATTACHMENT, sun_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+                             update_binding_t{INPUT_ATTACHMENT, sun_tx, 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
     g_dfr_rendering->dfr_lighting_ppln = g_pipeline_manager->add("pipeline.deferred_pipeline"_hash);
@@ -1229,7 +1307,7 @@ void make_dfr_rendering_data(void)
                                  shader_module_info_t{"shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.deferred_layout"_hash));
         shader_pk_data_t push_k{ 160, 0, VK_SHADER_STAGE_FRAGMENT_BIT };
-        shader_blend_states_t blend_states(false);
+        shader_blend_states_t blend_states(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blend_states, nullptr,
@@ -1572,7 +1650,7 @@ internal_function void make_pfx_stage(pfx_stage_t *dst_stage,
         shader_modules_t modules = shader_modules;
         shader_uniform_layouts_t layouts = uniform_layouts;
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, nullptr,
@@ -1664,7 +1742,7 @@ void make_postfx_data(gpu_command_queue_pool_t *pool)
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/pfx_final.vert.spv", VK_SHADER_STAGE_VERTEX_BIT}, shader_module_info_t{"shaders/SPV/pfx_final.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_postfx->pfx_single_tx_layout);
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
         fill_graphics_pipeline_info(modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_swapchain_extent(), blending, nullptr,
@@ -1983,6 +2061,7 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *
     make_dfr_rendering_data();
     make_camera_data(g_uniform_pool);
     make_shadow_data();
+    make_sun_data();
     make_cube_model(pool);
     make_atmosphere_data(g_uniform_pool, pool);
 
@@ -2007,7 +2086,7 @@ void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
                                  shader_module_info_t{"shaders/SPV/screen_quad.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_lighting->shadows.ulayout);
         shader_pk_data_t push_k {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false);
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic (VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR);
         fill_graphics_pipeline_info(modules, false, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,

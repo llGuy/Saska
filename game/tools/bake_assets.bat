@@ -1,3 +1,5 @@
+@echo off
+
 REM Compile Shaders
 pushd ..\assets\shaders
 

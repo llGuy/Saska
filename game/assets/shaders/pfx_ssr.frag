@@ -290,6 +290,4 @@ void main(void)
 
     final_color.a = 1.0;
 
-    final_color = texture(g_sun, fs_in.uvs);
-    
 }

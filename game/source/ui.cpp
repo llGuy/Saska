@@ -846,7 +846,7 @@ void initialize_ui_rendering_state(VkFormat swapchain_format,
         // Later will be the UI texture uniform layout
         shader_uniform_layouts_t layouts = {};
         shader_pk_data_t pk = {};
-        shader_blend_states_t blending(true);
+        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules,
                                     false,
@@ -927,7 +927,7 @@ void initialize_ui_rendering_state(VkFormat swapchain_format,
         // Later will be the UI texture uniform layout
         shader_uniform_layouts_t layouts(tx_layout_hdl);
         shader_pk_data_t pk = {};
-        shader_blend_states_t blending(true);
+        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules,
                                     false,

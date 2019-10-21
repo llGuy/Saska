@@ -89,7 +89,7 @@ void main(void)
     out_albedo = vec4(fs_in.color, shadow_factor);
     out_position = vec4(fs_in.ws_position, 1.0);
     out_normal = vec4(fs_in.ws_normal, 1.0);
-    out_sun = vec4(1, 1, 1, 1);
+    out_sun = vec4(0, 0, 0, 1);
 
     set_roughness(0.6);
     set_metalness(0.3);

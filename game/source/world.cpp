@@ -46,6 +46,9 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
 internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive);
 
 // Rendering / Mesh / GPU operations
+internal_function void clear_chunk_render_queue(void);
+internal_function void push_chunks_with_active_vertices(void);
+// TODO: Function that only pushes chunks that are in player sight
 internal_function void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level);
 internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist);
 internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk);
@@ -132,7 +135,8 @@ internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State
 internal_function int32_t lua_render_player_direction_information(lua_State *state);
 internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
 internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
-internal_function int32_t lua_stop_simulation(lua_State *state);
+internal_function int32_t lua_enable_physics(lua_State *state);
+internal_function int32_t lua_disable_physics(lua_State *state);
 internal_function int32_t lua_load_mesh(lua_State *state);
 internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
 internal_function int32_t lua_load_skeleton(lua_State *state);
@@ -195,7 +199,7 @@ internal_function void hard_initialize_chunks(void)
                                  shader_module_info_t{"shaders/SPV/voxel_point.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_POLYGON_MODE_POINT,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_voxel_chunks->chunk_model,
@@ -215,7 +219,7 @@ internal_function void hard_initialize_chunks(void)
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT };
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_voxel_chunks->chunk_model,
@@ -253,7 +257,7 @@ internal_function void hard_initialize_chunks(void)
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
@@ -565,6 +569,31 @@ internal_function inline vector3_t interpolate(const vector3_t &a, const vector3
 }
 
 
+internal_function void clear_chunk_render_queue(void)
+{
+    g_voxel_chunks->gpu_queue.flush_queue();
+}
+
+
+internal_function void push_chunks_with_active_vertices(void)
+{
+    for (uint32_t z = 0; z < g_voxel_chunks->grid_edge_size; ++z)
+    {
+        for (uint32_t y = 0; y < g_voxel_chunks->grid_edge_size; ++y)
+        {
+            for (uint32_t x = 0; x < g_voxel_chunks->grid_edge_size; ++x)
+            {
+                voxel_chunk_t *chunk = *get_voxel_chunk(convert_3d_to_1d_index(x, y, z, g_voxel_chunks->grid_edge_size));
+                if (chunk->vertex_count)
+                {
+                    push_chunk_to_render_queue(chunk);
+                }
+            }
+        }
+    }
+}
+
+
 internal_function inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level)
 {
     float32_t surface_level_f = (float32_t)surface_level;
@@ -851,7 +880,8 @@ internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 
         update_chunk_mesh(chunk, 60);
         update_chunk_mesh_struct_vertex_count(chunk);
-        
+
+        // Apparently the access flag doesn't match the stage
         update_gpu_buffer(&chunk->chunk_mesh_gpu_buffer,
                           chunk->mesh_vertices,
                           sizeof(vector3_t) * chunk->vertex_count,
@@ -1615,7 +1645,7 @@ internal_function void update_rendering_component(rendering_component_t *renderi
     float32_t dir_z = view_dir.z;
     float32_t rotation_angle = atan2(dir_z, dir_x);
 
-    matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0.0f, 1.0f, 0.0f));
+    matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0, 1, 0));
         
     if (rendering->enabled)
     {
@@ -1724,7 +1754,14 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         player->ws_p = collision.es_at * player->size;
         
         // If there "was" a collision (may not be on the ground right now as might have "slid" off) player's gravity pull direction changed
-        player->ws_up = glm::normalize((collision.es_normal * player->size));
+        vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
+
+        if (glm::dot(ws_normal, player->ws_up) < .99999f)
+        {
+            
+        }
+        
+        player->ws_up = ws_normal;
 
         component->state = entity_physics_state_t::ON_GROUND;
     }
@@ -1868,7 +1905,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
                                          animation_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->player_model,
@@ -1888,7 +1925,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_entities->rolling_player_model,
@@ -1906,7 +1943,7 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
                                  shader_module_info_t{"shaders/SPV/hitbox_render.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, nullptr,
@@ -2093,7 +2130,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_hit_box_display", &lua_toggle_collision_box_render);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "render_direction_info", &lua_render_player_direction_information);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_ts_view_dir", &lua_get_player_ts_view_direction);
-    add_global_to_lua(script_primitive_type_t::FUNCTION, "stop_simulation", &lua_stop_simulation);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "enable_physics", &lua_enable_physics);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "disable_physics", &lua_disable_physics);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "go_down", &lua_go_down);
 
     if (app_type == application_type_t::CONSOLE_APPLICATION_MODE)
@@ -2143,7 +2181,6 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
                 *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
     
                 initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z));
-                push_chunk_to_render_queue(*chunk_ptr);
 
                 ++i;
             }    
@@ -2223,8 +2260,12 @@ void update_world(input_state_t *input_state,
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             handle_all_input(input_state, dt, focus);
-            
-            update_entities(dt, app_type);
+
+            clear_chunk_render_queue();
+            {
+                update_entities(dt, app_type);
+            }
+            push_chunks_with_active_vertices();
 
             sync_gpu_memory_with_world_state(cmdbuf, image_index);
     
@@ -2245,7 +2286,7 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
 {
     if (input_state->cursor_moved)
     {
-        vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
+        vector3_t up = e->ws_up;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
         persist_var constexpr uint32_t SENSITIVITY = 15.0f;
@@ -2497,7 +2538,20 @@ internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
 }
 
 
-internal_function int32_t lua_stop_simulation(lua_State *state)
+internal_function int32_t lua_enable_physics(lua_State *state)
+{
+    const char *name = lua_tostring(state, -1);
+    constant_string_t kname = make_constant_string(name, strlen(name));
+
+    player_t *player = get_player(kname);
+
+    player->physics.enabled = 0;
+
+    return(0);
+}
+
+
+internal_function int32_t lua_disable_physics(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -2506,7 +2560,6 @@ internal_function int32_t lua_stop_simulation(lua_State *state)
 
     physics_component_t *component = &player->physics;
     component->enabled = false;
-    //component->ws_velocity = vector3_t(0.0f);
     
     return(0);
 }

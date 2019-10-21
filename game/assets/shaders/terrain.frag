@@ -14,6 +14,7 @@ layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
 layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_normal;
+layout(location = 4) out vec4 out_sun;
 
 layout(set = 1, binding = 0) uniform sampler2D shadow_map;
 
@@ -89,6 +90,7 @@ void main(void)
     out_albedo = vec4(fs_in.color, shadow_factor);
     out_position = vec4(fs_in.ws_position, 1.0);
     out_normal = vec4(fs_in.ws_normal, 1.0);
+    out_sun = vec4(0, 0, 0, 1);
 
     set_roughness(0.6);
     set_metalness(0.3);

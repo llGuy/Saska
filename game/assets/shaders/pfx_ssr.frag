@@ -17,6 +17,7 @@ layout(push_constant) uniform Push_K
 layout(binding = 0, set = 0) uniform sampler2D g_final;
 layout(binding = 1, set = 0) uniform sampler2D g_position;
 layout(binding = 2, set = 0) uniform sampler2D g_normal;
+layout(binding = 3, set = 0) uniform sampler2D g_sun;
 
 layout(binding = 0, set = 1) uniform samplerCube atmosphere_cubemap;
 
@@ -288,4 +289,7 @@ void main(void)
     else final_color = pixel_color;
 
     final_color.a = 1.0;
+
+    final_color = texture(g_sun, fs_in.uvs);
+    
 }

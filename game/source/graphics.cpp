@@ -488,7 +488,16 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     {
         real_layouts[i] = *g_uniform_layout_manager->get(layouts.layouts[i]);
     }
-    init_pipeline_layout({layouts.count, real_layouts}, {1, &pk_range}, &ppln->layout);
+    memory_buffer_view_t<VkPushConstantRange> pk_range_mb;
+    if (pk_range.size)
+    {
+        pk_range_mb = memory_buffer_view_t<VkPushConstantRange>{1, &pk_range};
+    }
+    else
+    {
+        pk_range_mb = memory_buffer_view_t<VkPushConstantRange>{0, nullptr};
+    }
+    init_pipeline_layout({layouts.count, real_layouts}, pk_range_mb, &ppln->layout);
     memory_buffer_view_t<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
     init_graphics_pipeline(&shaders_mb, &v_input, &assembly, &view_info, &raster, &multi, &blending_info, &dynamic_info, &depth, &ppln->layout, compatible, subpass, &ppln->pipeline);
 
@@ -783,7 +792,7 @@ internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPoo
         uniform_layout_handle_t camera_transforms_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, render_atmosphere_layout_hdl);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
                                     VK_CULL_MODE_NONE, layouts, push_k, backbuffer_res, blending, model_ptr,
@@ -868,7 +877,7 @@ internal_function void make_shadow_data(void)
                                  shader_module_info_t{"shaders/SPV/debug_frustum.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts (g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(false, false, false, false);
+        shader_blend_states_t blending(false, false, false, false, false);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_POLYGON_MODE_LINE,
                                     VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blending, nullptr,
@@ -1077,20 +1086,23 @@ void make_dfr_rendering_data(void)
                                                    render_pass_attachment_t{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                    render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                    render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+                                                   render_pass_attachment_t{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                    render_pass_attachment_t{get_device_supported_depth_format(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} };
         render_pass_subpass_t subpasses[2] = {};
         subpasses[0].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
-                                                     render_pass_attachment_reference_t{ 3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+                                                     render_pass_attachment_reference_t{ 3, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+                                                     render_pass_attachment_reference_t{ 4, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
         subpasses[0].enable_depth = 1;
-        subpasses[0].depth_attachment = render_pass_attachment_reference_t{ 4, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+        subpasses[0].depth_attachment = render_pass_attachment_reference_t{ 5, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
         
         subpasses[1].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
         
         subpasses[1].set_input_attachment_references(render_pass_attachment_reference_t{ 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
-                                                     render_pass_attachment_reference_t{ 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+                                                     render_pass_attachment_reference_t{ 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
+                                                     render_pass_attachment_reference_t{ 4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
         render_pass_dependency_t dependencies[3] = {};
         dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
                                                       0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
@@ -1099,7 +1111,7 @@ void make_dfr_rendering_data(void)
         dependencies[2] = make_render_pass_dependency(1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                                       VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(dfr_render_pass, {5, attachments}, {2, subpasses}, {3, dependencies});
+        make_render_pass(dfr_render_pass, {6, attachments}, {2, subpasses}, {3, dependencies});
     }
 
     // ---- Make deferred rendering framebuffer ----
@@ -1107,7 +1119,8 @@ void make_dfr_rendering_data(void)
     auto *dfr_framebuffer = g_framebuffer_manager->get(g_dfr_rendering->dfr_framebuffer);
     {
         uint32_t w = g_dfr_rendering->backbuffer_res.width, h = g_dfr_rendering->backbuffer_res.height;
-        
+
+        // May have more attachments (for example for bloom...) : ALL post processing effects which need rendering to a separate image (and are cheap), will be part of the "initialization" subpass of the deferred render pass
         image_handle_t final_tx_hdl = g_image_manager->add("image2D.fbo_final"_hash);
         auto *final_tx = g_image_manager->get(final_tx_hdl);
         image_handle_t albedo_tx_hdl = g_image_manager->add("image2D.fbo_albedo"_hash);
@@ -1116,6 +1129,8 @@ void make_dfr_rendering_data(void)
         auto *position_tx = g_image_manager->get(position_tx_hdl);
         image_handle_t normal_tx_hdl = g_image_manager->add("image2D.fbo_normal"_hash);
         auto *normal_tx = g_image_manager->get(normal_tx_hdl);
+        image_handle_t sun_tx_hdl = g_image_manager->add("image2D.fbo_sun"_hash);
+        auto *sun_tx = g_image_manager->get(sun_tx_hdl);
         image_handle_t depth_tx_hdl = g_image_manager->add("image2D.fbo_depth"_hash);
         auto *depth_tx = g_image_manager->get(depth_tx_hdl);
 
@@ -1123,16 +1138,18 @@ void make_dfr_rendering_data(void)
         make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
         make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
         make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(sun_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
         make_framebuffer_attachment(depth_tx, w, h, get_device_supported_depth_format(), 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
 
-        image2d_t color_attachments[4] = {};
+        image2d_t color_attachments[5] = {};
         color_attachments[0] = *final_tx;
         color_attachments[1] = *albedo_tx;
         color_attachments[2] = *position_tx;
         color_attachments[3] = *normal_tx;
+        color_attachments[4] = *sun_tx;
         
         // Can put final_tx as the pointer to the array because, the other 3 textures will be stored contiguously just after it in memory
-        make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {4, color_attachments}, depth_tx);
+        make_framebuffer(dfr_framebuffer, w, h, 1, dfr_render_pass, {5, color_attachments}, depth_tx);
     }
 
     uniform_layout_handle_t gbuffer_layout_hdl = g_uniform_layout_manager->add("descriptor_set_layout.g_buffer_layout"_hash);
@@ -1142,6 +1159,7 @@ void make_dfr_rendering_data(void)
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         *gbuffer_layout_ptr = make_uniform_layout(&layout_info);
     }
 
@@ -1152,6 +1170,7 @@ void make_dfr_rendering_data(void)
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 1, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
         layout_info.push(1, 2, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+        layout_info.push(1, 3, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
         *gbuffer_input_layout_ptr = make_uniform_layout(&layout_info);
     }
 
@@ -1168,11 +1187,15 @@ void make_dfr_rendering_data(void)
         
         image_handle_t normal_tx_hdl = g_image_manager->get_handle("image2D.fbo_normal"_hash);
         image2d_t *normal_tx = g_image_manager->get(normal_tx_hdl);
+
+        image_handle_t sun_tx_hdl = g_image_manager->get_handle("image2D.fbo_sun"_hash);
+        image2d_t *sun_tx = g_image_manager->get(sun_tx_hdl);
         
         update_uniform_group(gbuffer_group_ptr,
                              update_binding_t{TEXTURE, final_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{TEXTURE, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             update_binding_t{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+                             update_binding_t{TEXTURE, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             update_binding_t{TEXTURE, sun_tx, 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
     g_dfr_rendering->dfr_subpass_group = g_uniform_group_manager->add("descriptor_set.deferred_descriptor_sets"_hash);
@@ -1187,11 +1210,15 @@ void make_dfr_rendering_data(void)
         image_handle_t normal_tx_hdl = g_image_manager->get_handle("image2D.fbo_normal"_hash);
         auto *normal_tx = g_image_manager->get(normal_tx_hdl);
 
+        image_handle_t sun_tx_hdl = g_image_manager->get_handle("image2D.fbo_sun"_hash);
+        image2d_t *sun_tx = g_image_manager->get(sun_tx_hdl);
+
         *gbuffer_input_group_ptr = make_uniform_group(gbuffer_input_layout_ptr, g_uniform_pool);
         update_uniform_group(gbuffer_input_group_ptr,
                              update_binding_t{INPUT_ATTACHMENT, albedo_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, position_tx, 1, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                             update_binding_t{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+                             update_binding_t{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                             update_binding_t{INPUT_ATTACHMENT, sun_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
     g_dfr_rendering->dfr_lighting_ppln = g_pipeline_manager->add("pipeline.deferred_pipeline"_hash);
@@ -1240,6 +1267,7 @@ void begin_deferred_rendering(uint32_t image_index /* to_t remove in the future 
                              init_clear_color_color(0, 0.4, 0.7, 0),
                              init_clear_color_color(0, 0.4, 0.7, 0),
                              init_clear_color_color(0, 0.4, 0.7, 0),
+                             init_clear_color_color(0, 0.0, 0.0, 1),
                              init_clear_color_depth(1.0f, 0));
 
     command_buffer_set_viewport(g_dfr_rendering->backbuffer_res.width, g_dfr_rendering->backbuffer_res.height, 0.0f, 1.0f, &queue->q);
@@ -2621,7 +2649,7 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
                       instance->interpolated_transforms,
                       sizeof(matrix4_t) * instance->skeleton->joint_count,
                       0,
-                      VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                      VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
                       VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
                       &queue->q);
 }

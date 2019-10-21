@@ -15,6 +15,7 @@ layout(location = 0) out vec4 out_final;
 layout(location = 1) out vec4 out_albedo;
 layout(location = 2) out vec4 out_position;
 layout(location = 3) out vec4 out_normal;
+layout(location = 4) out vec4 out_sun;
 
 layout(push_constant) uniform Push_Constants
 {
@@ -91,6 +92,8 @@ void main(void)
     out_position = vec4(fs_in.position, 1.0);
 
     out_normal = vec4(fs_in.normal, 1.0);
+
+    out_sun = vec4(1, 1, 1, 1);
 
     set_roughness(push_k.roughness);
     set_metalness(push_k.metalness);

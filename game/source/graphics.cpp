@@ -1147,11 +1147,40 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
 	matrix4_t model_matrix;
     } push_k;
 
-    push_k.model_matrix = glm::translate(vector3_t(-140, 140, -140));
+    vector3_t light_pos = vector3_t(g_lighting->ws_light_position * 1000.0f);
+    light_pos.x *= -1.0f;
+    light_pos.z *= -1.0f;
+    push_k.model_matrix = glm::translate(light_pos) * glm::scale(vector3_t(20.0f));
 
     command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, sun_pipeline->layout, &queue->q);
 
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
+
+    matrix4_t model_matrix_transpose_rotation = push_k.model_matrix;
+
+    camera_t *camera = get_camera_bound_to_3d_output();
+
+    matrix4_t view_matrix_no_translation = camera->v_m;
+    matrix3_t rotation_part = matrix3_t(view_matrix_no_translation);
+    rotation_part = glm::transpose(rotation_part);
+
+    for (int i = 0; i < 3; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            model_matrix_transpose_rotation[i][j] = rotation_part[i][j];
+        }
+    }
+
+    view_matrix_no_translation[3][0] = 0;
+    view_matrix_no_translation[3][1] = 0;
+    view_matrix_no_translation[3][2] = 0;
+
+    vector4_t sun_ndc = camera->p_m * view_matrix_no_translation * push_k.model_matrix * vector4_t(vector3_t(0, 0, 0), 1.0);
+
+    sun_ndc /= sun_ndc.w;
+    g_lighting->sun.ss_light_pos = (vector2_t(sun_ndc) + vector2_t(1.0f)) / 2.0f;
+    g_lighting->sun.ss_light_pos.y = 1.0f - g_lighting->sun.ss_light_pos.y;
 }
 
 void make_dfr_rendering_data(void)
@@ -1801,12 +1830,14 @@ inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_gr
             vector4_t ws_light_position;
             matrix4_t view;
             matrix4_t proj;
+            vector2_t ss_light_position;
         } ssr_pk;
 
         ssr_pk.ws_light_position = view_matrix * vector4_t(glm::normalize(-g_lighting->ws_light_position), 0.0f);
         ssr_pk.view = view_matrix;
         ssr_pk.proj = projection_matrix;
         ssr_pk.proj[1][1] *= -1.0f;
+        ssr_pk.ss_light_position = g_lighting->sun.ss_light_pos;
         
         command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln->layout, &queue->q);
         command_buffer_draw(&queue->q, 4, 1, 0, 0);

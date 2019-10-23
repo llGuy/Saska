@@ -780,6 +780,8 @@ struct lighting_t
 
     struct sun_t
     {
+        // Screen space
+        vector2_t ss_light_pos;
         pipeline_handle_t sun_ppln;
         image2d_t sun_texture;
         uniform_group_t sun_group;

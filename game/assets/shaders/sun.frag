@@ -15,9 +15,5 @@ layout(set = 1, binding = 0) uniform sampler2D sun_texture;
 
 void main(void)
 {
-    out_albedo = texture(sun_texture, fs_in.uvs);
     out_sun = texture(sun_texture, fs_in.uvs);
-
-    out_position = vec4(-100.0);
-    out_normal = vec4(-100.0);
 }

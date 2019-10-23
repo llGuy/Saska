@@ -12,6 +12,8 @@ layout(push_constant) uniform Push_K
     vec4 ws_light_direction;
     mat4 view;
     mat4 proj;
+    // Screen space
+    vec2 ss_light_position;
 } light_info_pk;
 
 layout(binding = 0, set = 0) uniform sampler2D g_final;
@@ -289,5 +291,28 @@ void main(void)
     else final_color = pixel_color;
 
     final_color.a = 1.0;
+
+    const int SAMPLES = 50;
+    const float DENSITY = 1.0;
+    const float DECAY = 0.9;
+    const float WEIGHT = 0.9;
+
+    vec2 blur_vector = (light_info_pk.ss_light_position - fs_in.uvs) * (1.0 / float(SAMPLES));
+    vec2 current_uvs = fs_in.uvs;
+
+    float illumination_decay = 1.0;
+
+    for (int i = 0; i < SAMPLES; ++i)
+    {
+        current_uvs += blur_vector;
+
+        vec4 current_color = texture(g_sun, current_uvs);
+
+        current_color *= illumination_decay * WEIGHT;
+
+        final_color += current_color;
+
+        illumination_decay *= DECAY;
+    }
 
 }

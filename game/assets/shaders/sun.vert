@@ -34,12 +34,12 @@ void main(void)
 {
     vec3 vertex_position = QUAD_POSITIONS[gl_VertexIndex];
     vec2 uvs = QUAD_UVS[gl_VertexIndex];
-    
-    mat4 scale;
+
+    mat4 scale = mat4(0);
     scale[0][0] = push_k.model[0][0];
     scale[1][1] = push_k.model[1][1];
     scale[2][2] = push_k.model[2][2];
-    scale[3][3] = push_k.model[3][3];    
+    scale[3][3] = push_k.model[3][3];
 
     mat4 view_matrix_no_translation = camera_transforms.view;
     mat4 model_transpose_rotation = push_k.model;
@@ -59,7 +59,7 @@ void main(void)
     view_matrix_no_translation[3][1] = 0;
     view_matrix_no_translation[3][2] = 0;
 
-    gl_Position = camera_transforms.proj * view_matrix_no_translation * model_transpose_rotation * scale * vec4(vertex_position, 1.0);
+    gl_Position = camera_transforms.proj * view_matrix_no_translation * model_transpose_rotation * scale * vec4(vertex_position * 100, 1.0);
 
     vs_out.uvs = uvs;
 }

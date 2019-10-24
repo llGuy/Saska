@@ -1,3 +1,5 @@
+// TODO: Make player rotate depending on surface normal.
+
 #include "ui.hpp"
 #include "script.hpp"
 #include "world.hpp"

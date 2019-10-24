@@ -487,10 +487,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 
                 client_rect.left = top_left.x;
                 client_rect.top = top_left.y;
-                client_rect.right = bottom_right.x;
-                client_rect.bottom = bottom_right.y;
+                client_rect.right = bottom_right.x - 2;
+                client_rect.bottom = bottom_right.y - 2;
 
-                if (g_hasfocus) ClipCursor(&client_rect);
+                if (g_hasfocus)
+                {
+                    ClipCursor(&client_rect);
+                }
         
                 // Render
                 game_tick(&g_game, &g_input_state, g_dt);
@@ -517,13 +520,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        /*if (dt > TICK_TIME)
+        if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
         }
-        else*/
+        else
         {
             // Set game tick period by sleeping
             while (dt < TICK_TIME)

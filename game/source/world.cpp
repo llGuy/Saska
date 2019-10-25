@@ -1554,16 +1554,16 @@ internal_function void update_camera_component(camera_component_t *camera_compon
 {
     camera_t *camera = get_camera(camera_component->camera);
 
-    vector3_t up = vector3_t(0, 1, 0);
+    vector3_t up = player->ws_up;
         
-    vector3_t camera_position = player->ws_p + vector3_t(0.0f, player->size.x, 0.0f);
+    vector3_t camera_position = player->ws_p + player->size.x * up;
     if (camera_component->is_third_person)
     {
-        vector3_t right = glm::cross(player->ws_d, vector3_t(0.0f, 1.0f, 0.0f));
+        vector3_t right = glm::cross(player->ws_d, up);
         camera_position += right * player->size.x + -camera_component->distance_from_player * player->ws_d;
     }
         
-    camera->v_m = glm::lookAt(camera_position, player->ws_p + vector3_t(0.0f, 1.0f, 0.0f) + player->ws_d, up);
+    camera->v_m = glm::lookAt(camera_position, player->ws_p + up + player->ws_d, up);
 
     // TODO: Don't need to calculate this every frame, just when parameters change
     camera->compute_projection();
@@ -1796,15 +1796,15 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 {
     vector3_t result_force = vector3_t(0.0f);
 
-    vector3_t right = glm::normalize(glm::cross(e->ws_d, vector3_t(0.0f, 1.0f, 0.0f)));
+    vector3_t right = glm::normalize(glm::cross(e->ws_d, e->ws_up));
     vector3_t forward = glm::normalize(glm::cross(vector3_t(0.0f, 1.0f, 0.0f), right));
 
     if (*action_flags & (1 << action_flags_t::ACTION_FORWARD)) result_force += forward;
     if (*action_flags & (1 << action_flags_t::ACTION_BACK)) result_force -= forward;
     if (*action_flags & (1 << action_flags_t::ACTION_RIGHT)) result_force += right;
     if (*action_flags & (1 << action_flags_t::ACTION_LEFT)) result_force -= right;
-    if (*action_flags & (1 << action_flags_t::ACTION_UP)) result_force += vector3_t(0.0f, 1.0f, 0.0f);
-    if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= vector3_t(0.0f, 1.0f, 0.0f);
+    if (*action_flags & (1 << action_flags_t::ACTION_UP)) result_force += e->ws_up;
+    if (*action_flags & (1 << action_flags_t::ACTION_DOWN)) result_force -= e->ws_up;
 
     result_force *= 20.0f * e->size.x;
     
@@ -2347,7 +2347,7 @@ void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, 
 
 void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt)
 {
-    vector3_t up = vector3_t(0.0f, 1.0f, 0.0f);
+    vector3_t up = e->ws_up;
     
     uint32_t movements = 0;
     float32_t accelerate = 1.0f;

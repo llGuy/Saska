@@ -1640,18 +1640,23 @@ internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 
 internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt)
 {
-    persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(90.0f), vector3_t(0.0f, 1.0f, 0.0f));
+    persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(180.0f), vector3_t(0.0f, 1.0f, 0.0f));
 
+    movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+    matrix3_t normal_rotation_matrix3 = (matrix3_t(glm::normalize(axes.right), glm::normalize(axes.up), glm::normalize(-axes.forward)));
+    matrix4_t normal_rotation_matrix4 = matrix4_t(normal_rotation_matrix3);
+    normal_rotation_matrix4[3][3] = 1;
+    
     vector3_t view_dir = glm::normalize(player->ws_d);
     float32_t dir_x = view_dir.x;
     float32_t dir_z = view_dir.z;
     float32_t rotation_angle = atan2(dir_z, dir_x);
 
     matrix4_t rot_matrix = glm::rotate(-rotation_angle, vector3_t(0, 1, 0));
-        
+
     if (rendering->enabled)
     {
-        rendering->push_k.ws_t = glm::translate(player->ws_p) * CORRECTION_90 * rot_matrix * player->rolling_rotation * glm::scale(player->size);
+        rendering->push_k.ws_t = glm::translate(player->ws_p) * normal_rotation_matrix4 * CORRECTION_90 * /*rot_matrix * */player->rolling_rotation * glm::scale(player->size);
     }
     else
     {

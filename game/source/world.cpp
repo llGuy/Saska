@@ -1842,25 +1842,11 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             player->ws_v += friction * dt;
 
 
-            // Update rolling rotation speed
-            {
-                movement_axes_t velocity_axes = compute_movement_axes(player->ws_v, player->ws_up);
-                player->rolling_rotation_axis = velocity_axes.right;
-                player->current_rotation_speed = ((glm::length(player->ws_v)) / calculate_sphere_circumference(player->size.x)) * 360.0f;
-            }
+           
         }
     }
 
-    // Update actual rolling rotation
-    {
-        player->current_rolling_rotation_angle += player->current_rotation_speed * dt;
-        if (player->current_rolling_rotation_angle > 360.0f)
-        {
-            player->current_rolling_rotation_angle = player->current_rolling_rotation_angle - 360.0f;
-        }
-
-        player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
-    }
+    vector3_t previous_position = player->ws_p;
     
     collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
     if (collision.detected)
@@ -1885,6 +1871,13 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         player->camera.ws_next_vector = ws_normal;
 
         component->state = entity_physics_state_t::ON_GROUND;
+
+        // Update rolling rotation speed
+        {
+            movement_axes_t velocity_axes = compute_movement_axes(player->ws_v, player->ws_up);
+            player->rolling_rotation_axis = velocity_axes.right;
+            player->current_rotation_speed = ((glm::length(player->ws_p - previous_position)) / calculate_sphere_circumference(player->size.x)) * 360.0f;
+        }
     }
     else
     {
@@ -1893,6 +1886,17 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         player->ws_v = (collision.es_velocity * player->size) / dt;
 
         component->state = entity_physics_state_t::IN_AIR;
+    }
+
+    // Update actual rolling rotation
+    {
+        player->current_rolling_rotation_angle += player->current_rotation_speed;
+        if (player->current_rolling_rotation_angle > 360.0f)
+        {
+            player->current_rolling_rotation_angle = player->current_rolling_rotation_angle - 360.0f;
+        }
+
+        player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
     }
 
     /*if (collision.is_currently_in_air)

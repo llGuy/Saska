@@ -123,10 +123,12 @@ struct camera_component_t
     // Can be set to -1, in that case, there is no camera bound
     camera_handle_t camera{-1};
 
+    static constexpr float32_t MAX_ANIMATION_TIME = 0.3f;
+    bool changed_basis_vectors = false;
     float32_t animation_time = 0.0f;
-    quaternion_t pervious_rotation;
-    quaternion_t next_rotation;
-    vector3_t ws_current_up_vector;
+    float32_t interpolation = 0.0f;
+    vector3_t ws_next_vector = vector3_t(0, 1, 0);
+    vector3_t ws_current_up_vector = vector3_t(0, 1, 0);
     
     // When for example, the layer is standing somewhere with different surface normal (when in rolling mode only)
     uint8_t is_in_rotation_animation: 1;

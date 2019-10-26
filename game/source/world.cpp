@@ -1554,7 +1554,14 @@ internal_function void update_camera_component(camera_component_t *camera_compon
 {
     camera_t *camera = get_camera(camera_component->camera);
 
-    vector3_t up = player->ws_up;
+    vector3_t up = player->camera.ws_current_up_vector;
+
+    vector3_t diff_vector = player->camera.ws_next_vector - player->camera.ws_current_up_vector;
+    if (glm::dot(diff_vector, diff_vector) > 0.0001f)
+    {
+        up = glm::normalize(player->camera.ws_current_up_vector + diff_vector * dt * 3.0f);
+        player->camera.ws_current_up_vector = up;
+    }
         
     vector3_t camera_position = player->ws_p + player->size.x * up;
     if (camera_component->is_third_person)
@@ -1767,8 +1774,9 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         {
             
         }
-        
+
         player->ws_up = ws_normal;
+        player->camera.ws_next_vector = ws_normal;
 
         component->state = entity_physics_state_t::ON_GROUND;
     }

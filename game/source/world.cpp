@@ -339,7 +339,7 @@ internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position)
 }
 
 
-internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt)
+internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
@@ -375,7 +375,7 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                         float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
                         
                         int32_t current_voxel_value = (int32_t)*voxel;
-                        int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
+                        int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
                         if (new_value > 255)
                         {
@@ -404,7 +404,7 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
 
                             float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
                             int32_t current_voxel_value = (int32_t)*voxel;
-                            int32_t new_value = (int32_t)(proportion * coefficient * dt * 700.0f) + current_voxel_value;
+                            int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
                             if (new_value > 255)
                             {
@@ -524,7 +524,7 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
 }
 
 
-internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive)
+internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive, float32_t speed)
 {
     vector3_t ray_start_position = ws_to_xs(ws_position);
     vector3_t current_ray_position = ray_start_position;
@@ -543,7 +543,7 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
 
             if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
             {
-                terraform(ivector3_t(current_ray_position), 2, destructive, dt);
+                terraform(ivector3_t(current_ray_position), 2, destructive, dt, speed);
                 break;
             }
         }
@@ -1280,12 +1280,10 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                 {
                     // Adjust the sphere position, and call the function
                     vector3_t es_new_sphere_position = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
-                    
+
                     closest->under_terrain = 1;
                     closest->es_at = es_new_sphere_position;
                     closest->es_normal = es_up_normal_of_triangle;
-
-                    collide_with_triangle(triangle_vertices, es_new_sphere_position, es_velocity, closest);
                     
                     return;
                 }
@@ -1408,8 +1406,17 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
     }
 
     const float32_t es_very_close_distance_from_terrain = .01f;
-    
-    if (closest_collision.detected)
+
+    if (closest_collision.under_terrain)
+    {
+        collision_t collision = {};
+        collision.detected = 1;
+        collision.es_at = closest_collision.es_at;
+        collision.es_normal = closest_collision.es_normal;
+        collision.under_terrain = 1;
+        return(collision);
+    }
+    else if (closest_collision.detected)
     {
         uint32_t max_recursion_depth = 5;
 
@@ -1699,12 +1706,12 @@ internal_function void update_terraform_power_component(terraform_power_componen
 
     if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_DESTROY))
     {
-        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 1);
+        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 1, terraform_power->speed);
     }
 
     if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_ADD))
     {
-        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 0);
+        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 0, terraform_power->speed);
     }
 }
 
@@ -1840,9 +1847,6 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
             vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
             player->ws_v += friction * dt;
-
-
-           
         }
     }
 
@@ -1873,6 +1877,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         component->state = entity_physics_state_t::ON_GROUND;
 
         // Update rolling rotation speed
+        if (!collision.under_terrain)
         {
             movement_axes_t velocity_axes = compute_movement_axes(player->ws_v, player->ws_up);
             player->rolling_rotation_axis = velocity_axes.right;
@@ -1898,15 +1903,6 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
 
         player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
     }
-
-    /*if (collision.is_currently_in_air)
-    {
-        component->state = entity_physics_state_t::IN_AIR;
-    }
-    else
-    {
-        component->state = entity_physics_state_t::ON_GROUND;
-        }*/
 }
 
 
@@ -2146,6 +2142,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->rendering.push_k.color = colors[info->color];
     player->rendering.push_k.roughness = 0.8f;
     player->rendering.push_k.metalness = 0.6f;
+    player->terraform_power.speed = info->terraform_power_info.speed;
 }
 
 
@@ -2165,7 +2162,7 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.starting_velocity = 5.0f;
     main_player_create_info.color = player_color_t::DARK_GRAY;
     main_player_create_info.physics_info.enabled = 1;
-    main_player_create_info.terraform_power_info.speed = 700.0f;
+    main_player_create_info.terraform_power_info.speed = 300.0f;
     main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
     main_player_create_info.camera_info.camera_index = main_camera;
     main_player_create_info.camera_info.is_third_person = 1;

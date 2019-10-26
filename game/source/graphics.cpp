@@ -2087,6 +2087,7 @@ internal_function int32_t lua_end_frame_capture(lua_State *state);
 void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *input_state)
 {
     g_dfr_rendering->backbuffer_res = {(uint32_t)input_state->window_width, (uint32_t)input_state->window_height};
+    g_dfr_rendering->backbuffer_res = {2500, 1400};
     
     make_uniform_pool();
     make_dfr_rendering_data();

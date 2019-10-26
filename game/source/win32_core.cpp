@@ -425,7 +425,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         ShowWindow(g_window, showcmd);
         // TODO: ReleaseCapture(void) when alt tab / alt f4
         //SetCapture(g_window);
-        disable_cursor_display();
+        //disable_cursor_display();
     }
 
     // Loads function pointers into memory

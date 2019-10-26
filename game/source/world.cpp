@@ -66,6 +66,7 @@ internal_function float32_t lerp(float32_t a, float32_t b, float32_t x);
 internal_function vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x);
 internal_function float32_t squared(float32_t f);
 internal_function float32_t distance_squared(const vector3_t &dir);
+internal_function float32_t calculate_sphere_circumference(float32_t radius);
 
 // Collision
 struct movement_axes_t
@@ -1148,6 +1149,12 @@ internal_function float32_t distance_squared(const vector3_t &dir)
 }
 
 
+internal_function float32_t calculate_sphere_circumference(float32_t radius)
+{
+    return(2.0f * 3.1415f * radius);
+}
+
+
 internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision)
 {
     float32_t a = distance_squared(es_sphere_velocity);
@@ -1649,7 +1656,7 @@ internal_function void update_rendering_component(rendering_component_t *renderi
 {
     persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(180.0f), vector3_t(0.0f, 1.0f, 0.0f));
 
-    movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+    movement_axes_t axes = compute_movement_axes(player->ws_d, player->camera.ws_next_vector);
     matrix3_t normal_rotation_matrix3 = (matrix3_t(glm::normalize(axes.right), glm::normalize(axes.up), glm::normalize(-axes.forward)));
     matrix4_t normal_rotation_matrix4 = matrix4_t(normal_rotation_matrix3);
     normal_rotation_matrix4[3][3] = 1;
@@ -1663,7 +1670,12 @@ internal_function void update_rendering_component(rendering_component_t *renderi
 
     if (rendering->enabled)
     {
-        rendering->push_k.ws_t = glm::translate(player->ws_p) * normal_rotation_matrix4 * CORRECTION_90 * /*rot_matrix * */player->rolling_rotation * glm::scale(player->size);
+        if (player->rolling_mode)
+        {
+            normal_rotation_matrix4 = player->rolling_rotation;
+        }
+        
+        rendering->push_k.ws_t = glm::translate(player->ws_p) * normal_rotation_matrix4 * CORRECTION_90 * /*rot_matrix * */glm::scale(player->size);
     }
     else
     {
@@ -1697,8 +1709,89 @@ internal_function void update_terraform_power_component(terraform_power_componen
 }
 
 
-internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt)
+internal_function void update_standing_player_physics(physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
 {
+    if (component->state == entity_physics_state_t::IN_AIR)
+    {
+        player->ws_v += -player->ws_up * 9.81f * dt;
+    }
+    else if (component->state == entity_physics_state_t::ON_GROUND)
+    {
+        float32_t speed = 5.0f;
+        
+        bool moved = 1;
+
+        movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+
+        component->axes = vector3_t(0);
+        if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
+        {
+            component->axes.z += component->acceleration;
+            moved &= 1;
+
+            if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
+            {
+                speed *= 2.0f;
+            }
+        }
+        if (player->action_flags & (1 << action_flags_t::ACTION_LEFT))
+        {
+            component->axes.x -= component->acceleration;
+            moved &= 1;
+        }
+        if (player->action_flags & (1 << action_flags_t::ACTION_BACK))
+        {
+            component->axes.z -= component->acceleration;
+            moved &= 1;
+        }
+        if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT))
+        {
+            component->axes.x += component->acceleration;
+            moved &= 1;
+        }
+
+        vector3_t result_acceleration_vector = component->axes.x * axes.right + component->axes.y * axes.up + component->axes.z * axes.forward;
+
+        vector3_t current_velocity = result_acceleration_vector * speed;
+        
+        player->ws_v = current_velocity - player->ws_up * 9.81f * dt;
+
+        // Friction
+        /*persist_var constexpr float32_t TERRAIN_ROUGHNESS = .5f;
+        float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
+        vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
+        player->ws_v += friction * dt;*/
+    }
+
+    collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+    if (collision.detected)
+    {
+        if (player->is_entering)
+        {
+            player->is_entering = 0;
+        }
+
+        if (component->state == entity_physics_state_t::IN_AIR)
+        {
+            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+            player->ws_v = glm::normalize(glm::proj(player->ws_v, axes.forward));
+        }
+
+        player->ws_p = collision.es_at * player->size;
+
+        vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
+        player->ws_up = ws_normal;
+        
+        component->state = entity_physics_state_t::ON_GROUND;
+    }
+    else
+    {
+        // If there was no collision, update position (velocity should be the same)
+        player->ws_p = collision.es_at * player->size;
+        player->ws_v = (collision.es_velocity * player->size) / dt;
+
+        component->state = entity_physics_state_t::IN_AIR;
+    }
 }
 
 internal_function void update_rolling_player_physics(struct physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
@@ -1737,10 +1830,9 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             {
                 component->axes.x += component->acceleration;
             }
-
             vector3_t result_acceleration_vector = component->axes.x * axes.right + component->axes.y * axes.up + component->axes.z * axes.forward;
 
-            player->ws_v += result_acceleration_vector * dt * 10.0f;
+            player->ws_v += result_acceleration_vector * dt * 20.0f;
             player->ws_v -= player->ws_up * 9.81f * dt;
 
             // Friction
@@ -1748,9 +1840,28 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
             vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
             player->ws_v += friction * dt;
+
+
+            // Update rolling rotation speed
+            {
+                movement_axes_t velocity_axes = compute_movement_axes(player->ws_v, player->ws_up);
+                player->rolling_rotation_axis = velocity_axes.right;
+                player->current_rotation_speed = ((glm::length(player->ws_v)) / calculate_sphere_circumference(player->size.x)) * 360.0f;
+            }
         }
     }
 
+    // Update actual rolling rotation
+    {
+        player->current_rolling_rotation_angle += player->current_rotation_speed * dt;
+        if (player->current_rolling_rotation_angle > 360.0f)
+        {
+            player->current_rolling_rotation_angle = player->current_rolling_rotation_angle - 360.0f;
+        }
+
+        player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
+    }
+    
     collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
     if (collision.detected)
     {
@@ -1769,11 +1880,6 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         
         // If there "was" a collision (may not be on the ground right now as might have "slid" off) player's gravity pull direction changed
         vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
-
-        if (glm::dot(ws_normal, player->ws_up) < .99999f)
-        {
-            
-        }
 
         player->ws_up = ws_normal;
         player->camera.ws_next_vector = ws_normal;
@@ -2393,7 +2499,7 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
         if (!e->rolling_mode)
         {
             e->rolling_rotation = matrix4_t(1.0f);
-            e->rolling_rotation_angle = 0.0f;
+            e->current_rolling_rotation_angle = 0.0f;
         }
     }
     else if (!input_state->keyboard[keyboard_button_type_t::E].is_down)

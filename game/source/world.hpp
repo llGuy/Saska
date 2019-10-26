@@ -89,6 +89,8 @@ enum entity_physics_state_t { IN_AIR, ON_GROUND };
 
 struct physics_component_t
 {
+    float32_t standing_movement_speed = 0.0f;
+    
     bool enabled;
     hitbox_t hitbox;
     entity_physics_state_t state;
@@ -218,7 +220,10 @@ struct player_t
     vector3_t surface_normal;
     vector3_t surface_position;
 
-    float32_t rolling_rotation_angle = 0.0f;
+
+    float32_t current_rotation_speed = 0;
+    float32_t current_rolling_rotation_angle = 0;
+    vector3_t rolling_rotation_axis = vector3_t(1, 0, 0);
     matrix4_t rolling_rotation = matrix4_t(1.0f);
 
     uint32_t action_flags = 0;

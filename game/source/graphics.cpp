@@ -1198,7 +1198,7 @@ void make_dfr_rendering_data(void)
                                                    render_pass_attachment_t{VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                    render_pass_attachment_t{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
                                                    render_pass_attachment_t{get_device_supported_depth_format(), VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL} };
-        render_pass_subpass_t subpasses[2] = {};
+        render_pass_subpass_t subpasses[3] = {};
         subpasses[0].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 1, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
@@ -1213,15 +1213,21 @@ void make_dfr_rendering_data(void)
                                                      render_pass_attachment_reference_t{ 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
                                                      render_pass_attachment_reference_t{ 4, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
-        render_pass_dependency_t dependencies[3] = {};
+
+        subpasses[2].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
+        subpasses[2].enable_depth = 1;
+        subpasses[2].depth_attachment = render_pass_attachment_reference_t{ 5, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+        render_pass_dependency_t dependencies[4] = {};
         dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
                                                       0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                                       1, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
-        dependencies[2] = make_render_pass_dependency(1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        dependencies[2] = make_render_pass_dependency(1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      2, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        dependencies[3] = make_render_pass_dependency(2, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                                                       VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
         
-        make_render_pass(dfr_render_pass, {6, attachments}, {2, subpasses}, {3, dependencies});
+        make_render_pass(dfr_render_pass, {6, attachments}, {3, subpasses}, {4, dependencies});
     }
 
     // ---- Make deferred rendering framebuffer ----
@@ -1411,6 +1417,9 @@ void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *q
     
     command_buffer_push_constant(&deferred_push_k, sizeof(deferred_push_k), 0, VK_SHADER_STAGE_FRAGMENT_BIT, dfr_lighting_ppln->layout, &queue->q);
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
+
+    queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
+    
     queue->end_render_pass();
 }
 
@@ -2771,25 +2780,25 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
 
 void initialize_particle_rendering(void)
 {
-    g_particle_rendering.particle_instanced_model.binding_count = 1;
-    g_particle_rendering.particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
-    g_particle_rendering.particle_instanced_model.attribute_count = 1;
-    g_particle_rendering.particle_instanced_model.bindings = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexAttributeDescription));
+    g_particle_rendering->particle_instanced_model.binding_count = 1;
+    g_particle_rendering->particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
+    g_particle_rendering->particle_instanced_model.attribute_count = 1;
+    g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
 
-    g_particle_rendering.particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering.particle_instanced_model.attributes);
+    g_particle_rendering->particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering->particle_instanced_model.attributes_buffer);
     // Position
-    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
     // Velocity
-    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
     // Up
-    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(2, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(2, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
     // Life
-    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(3, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(3, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
     // Size
-    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(4, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
-    g_particle_rendering.particle_instanced_model.bindings[0].end_attributes_creation(g_particle_rendering.particle_instanced_model.attributes);
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(4, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].end_attributes_creation();
 
-    g_particle_rendering.particle_instanced_model.bindings[0].input_rate = VK_VERTEX_INPUT_RATE_INSTANCE;
+    g_particle_rendering->particle_instanced_model.bindings[0].input_rate = VK_VERTEX_INPUT_RATE_INSTANCE;
 }
 
 
@@ -2803,9 +2812,30 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
     particles.dead_count = 0;
     particles.dead = (uint16_t *)allocate_free_list(sizeof(uint16_t) * particles.max_dead);
     particles.update = effect;
-    make_unmappable_gpu_buffer(&particles.gpu_particle_buffer, sizeof(particle_t) * particles.max_particles, nullptr, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, g_uniform_pool);
+    make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(particle_t) * particles.max_particles, nullptr, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
     particles.shader = shader;
     return(particles);
+}
+
+
+pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path)
+{
+    pipeline_handle_t handle = g_pipeline_manager->add(shader_name);
+    graphics_pipeline_t *pipeline = g_pipeline_manager->get(handle);
+    graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+    shader_modules_t modules(shader_module_info_t{vsh_path, VK_SHADER_STAGE_VERTEX_BIT},
+                             shader_module_info_t{fsh_path, VK_SHADER_STAGE_FRAGMENT_BIT});
+    shader_uniform_layouts_t layouts = {};
+    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+    shader_blend_states_t blending{blend_type_t::ONE_MINUS_SRC_ALPHA, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING };
+    dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
+    fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_particle_rendering->particle_instanced_model,
+                                true, 0.0f, dynamic, g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass), 2, info);
+    pipeline->info = info;
+    make_graphics_pipeline(pipeline);
+
+    return(handle);
 }
 
 

@@ -746,6 +746,8 @@ struct particle_rendering_t
     model_t particle_instanced_model;
 };
 
+
+pipeline_handle_t initialize_particle_rendering_shader(const char *vsh_path, const char *fsh_path);
 void initialize_particle_rendering(void);
 particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader);
 void render_particles(particle_spawner_t *spawner);

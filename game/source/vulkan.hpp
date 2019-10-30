@@ -632,7 +632,6 @@ inline void init_pipeline_dynamic_states_info(memory_buffer_view_t<VkDynamicStat
 }
 
 void init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts, memory_buffer_view_t<VkPushConstantRange> *ranges, VkPipelineLayout *pipeline_layout);
-
 void init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, const memory_buffer_view_t<VkPushConstantRange> &ranges, VkPipelineLayout *pipeline_layout);
 
 inline void init_push_constant_range(VkShaderStageFlags stage_flags, uint32_t size, uint32_t offset, VkPushConstantRange *rng)
@@ -671,11 +670,8 @@ void init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo
                             VkPipeline *pipeline);
 
 void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_pool);
-
 void allocate_command_buffers(VkCommandPool *command_pool_source, VkCommandBufferLevel level, const memory_buffer_view_t<VkCommandBuffer> &command_buffers);
-
 void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, VkCommandPool *pool);
-    
 void begin_command_buffer(VkCommandBuffer *command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance);
 
 inline void end_command_buffer(VkCommandBuffer *command_buffer)

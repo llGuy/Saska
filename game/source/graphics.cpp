@@ -38,6 +38,9 @@ global_var atmosphere_t *g_atmosphere;
 global_var deferred_rendering_t *g_dfr_rendering;
 global_var post_processing_t *g_postfx;
 
+// Particles
+global_var particle_rendering_t *g_particle_rendering;
+
 gpu_command_queue_t make_command_queue(VkCommandPool *pool, submit_level_t level)
 {
     gpu_command_queue_t result;
@@ -2765,6 +2768,53 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
                       &queue->q);
 }
 
+
+void initialize_particle_rendering(void)
+{
+    g_particle_rendering.particle_instanced_model.binding_count = 1;
+    g_particle_rendering.particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
+    g_particle_rendering.particle_instanced_model.attribute_count = 1;
+    g_particle_rendering.particle_instanced_model.bindings = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexAttributeDescription));
+
+    g_particle_rendering.particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering.particle_instanced_model.attributes);
+    // Position
+    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    // Velocity
+    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    // Up
+    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(2, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+    // Life
+    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(3, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    // Size
+    g_particle_rendering.particle_instanced_model.bindings[0].push_attribute(4, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    g_particle_rendering.particle_instanced_model.bindings[0].end_attributes_creation(g_particle_rendering.particle_instanced_model.attributes);
+
+    g_particle_rendering.particle_instanced_model.bindings[0].input_rate = VK_VERTEX_INPUT_RATE_INSTANCE;
+}
+
+
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader)
+{
+    particle_spawner_t particles = {};
+    particles.max_particles = max_particle_count;
+    particles.particles_stack_head = 0;
+    particles.particles = (particle_t *)allocate_free_list(sizeof(particle_t) * particles.max_particles);
+    particles.max_dead = max_particle_count / 2;
+    particles.dead_count = 0;
+    particles.dead = (uint16_t *)allocate_free_list(sizeof(uint16_t) * particles.max_dead);
+    particles.update = effect;
+    make_unmappable_gpu_buffer(&particles.gpu_particle_buffer, sizeof(particle_t) * particles.max_particles, nullptr, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, g_uniform_pool);
+    particles.shader = shader;
+    return(particles);
+}
+
+
+void render_particles(particle_spawner_t *spawner)
+{
+    
+}
+
+
 void create_mesh_raw_buffer_list(mesh_t *mesh)
 {
     uint32_t vbo_count = mesh->buffer_count;
@@ -2837,6 +2887,9 @@ void initialize_graphics_translation_unit(game_memory_t *memory)
     // Post processing pipeline stuff:
     g_dfr_rendering = &memory->graphics_state.deferred_rendering;
     g_postfx = &memory->graphics_state.postfx;
+
+    // Particles
+    g_particle_rendering = &memory->graphics_state.particle_rendering;
 }
 
 void handle_window_resize(input_state_t *input_state)

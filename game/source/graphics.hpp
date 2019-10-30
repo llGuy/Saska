@@ -709,6 +709,48 @@ void destroy_animated_instance(animated_instance_t *instance);
 void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance);
 void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance);
 
+
+struct particle_t
+{
+    vector3_t ws_positin;
+    vector3_t ws_velocity;
+    vector3_t ws_up;
+    // May dictate the texture being displayed
+    float32_t life;
+    float32_t size;
+};
+
+
+typedef void(*particle_effect_function_t)(particle_t *particles, uint32_t max_particles, float32_t dt);
+
+
+// Each particle type will have a particle generator
+struct particle_spawner_t
+{
+    uint32_t max_particles;
+    uint32_t particles_stack_head;
+    particle_t *particles;
+    uint32_t max_dead;
+    uint32_t dead_count;
+    uint16_t *dead;
+
+    particle_effect_function_t update;
+    pipeline_handle_t shader;
+    gpu_buffer_t gpu_particles_buffer;
+    // TODO: Add texture
+};
+
+
+struct particle_rendering_t
+{
+    model_t particle_instanced_model;
+};
+
+void initialize_particle_rendering(void);
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader);
+void render_particles(particle_spawner_t *spawner);
+
+
 struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager
 {
     persist_var constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
@@ -716,6 +758,7 @@ struct gpu_material_submission_queue_manager_t // maybe in the future this will 
     uint32_t active_queue_ptr {0};
     gpu_command_queue_t active_queues[MAX_ACTIVE_QUEUES];
 };
+
 
 struct cameras_t
 {
@@ -915,6 +958,8 @@ struct graphics_t
     cameras_t cameras;
     lighting_t lighting;
     atmosphere_t atmosphere;
+
+    particle_rendering_t particle_rendering;
 };
 
 void initialize_graphics_translation_unit(struct game_memory_t *memory);

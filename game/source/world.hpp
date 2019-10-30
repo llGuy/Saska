@@ -9,6 +9,7 @@
 #include <glm/gtx/transform.hpp>
 
 #define MAX_PLAYERS 30
+#define MAX_BULLETS 100
 #define VOXEL_CHUNK_EDGE_LENGTH 16
 #define MAX_VERTICES_PER_VOXEL_CHUNK 5 * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1)
 
@@ -206,20 +207,21 @@ struct player_create_info_t
     rendering_component_create_info_t rendering_info;
 };
 
-struct player_t
+struct entity_t
 {
     constant_string_t id {""_hash};
     // position, direction, velocity
     // in above entity group space
     vector3_t ws_up = vector3_t(0, 1, 0);
     vector3_t ws_p{0.0f}, ws_d{0.0f}, ws_v{0.0f}, ws_input_v{0.0f};
-    vector3_t ws_acceleration {0.0f};
     quaternion_t ws_r{0.0f, 0.0f, 0.0f, 0.0f};
     vector3_t size{1.0f};
+};
 
+struct player_t : entity_t
+{
     vector3_t surface_normal;
     vector3_t surface_position;
-
 
     float32_t current_rotation_speed = 0;
     float32_t current_rolling_rotation_angle = 0;
@@ -252,6 +254,17 @@ struct player_t
 };
 
 
+struct bounce_physics_component_t
+{
+    
+};
+
+struct bullet_t : entity_t
+{
+    rendering_component_t rendering;
+    bounce_physics_component_t bounce_physics;
+};
+
 
 struct dbg_entities_t
 {
@@ -268,6 +281,10 @@ struct entities_t
     int32_t player_count = 0;
     player_t player_list[MAX_PLAYERS];
 
+
+    int32_t bullet_count = 0;
+    bullet_t bullet_list[MAX_BULLETS];
+
     
     struct hash_table_inline_t<player_handle_t, 30, 5, 5> name_map{"map.entities"};
 
@@ -282,7 +299,7 @@ struct entities_t
     
     pipeline_handle_t dbg_hitbox_ppln;
 
-    
+
     mesh_t rolling_player_mesh;
     model_t rolling_player_model;
 

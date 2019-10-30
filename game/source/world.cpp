@@ -1,4 +1,4 @@
-// TODO: Make player rotate depending on surface normal.
+// TODO: Remove all geometry shaders for performance
 
 #include "ui.hpp"
 #include "script.hpp"
@@ -67,6 +67,7 @@ internal_function vector3_t interpolate(const vector3_t &a, const vector3_t &b, 
 internal_function float32_t squared(float32_t f);
 internal_function float32_t distance_squared(const vector3_t &dir);
 internal_function float32_t calculate_sphere_circumference(float32_t radius);
+internal_function vector4_t hex_to_v4_color(uint32_t hex_value);
 
 // Collision
 struct movement_axes_t
@@ -919,7 +920,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     chunk->gpu_mesh = initialize_mesh(buffers, &indexed_data, &g_voxel_chunks->chunk_model.index_data);
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
-    chunk->push_k.color = vector4_t(118.0 / 255.0, 230.0 / 255.0, 72.0 / 255.0, 1.0f);
+    chunk->push_k.color = vector4_t(65.0 / 255.0, ((float32_t)(0x100)) / 255.0, ((float32_t)0x26) / 255.0, 1.0f);
 }
 
 
@@ -978,8 +979,8 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
 
 internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up)
 {
-    vector3_t right = glm::cross(view_direction, up);
-    vector3_t forward = glm::cross(up, right);
+    vector3_t right = glm::normalize(glm::cross(view_direction, up));
+    vector3_t forward = glm::normalize(glm::cross(up, right));
     movement_axes_t axes = {right, up, forward};
     return(axes);
 }
@@ -1578,7 +1579,7 @@ internal_function void update_camera_component(camera_component_t *camera_compon
     }
         
     vector3_t camera_position = player->ws_p + player->size.x * up;
-    if (camera_component->is_third_person)
+    if (player->camera.is_third_person)
     {
         vector3_t right = glm::cross(player->ws_d, up);
         camera_position += right * player->size.x + -camera_component->distance_from_player * player->ws_d;
@@ -1724,7 +1725,7 @@ internal_function void update_standing_player_physics(physics_component_t *compo
     }
     else if (component->state == entity_physics_state_t::ON_GROUND)
     {
-        float32_t speed = 5.0f;
+        float32_t speed = 2.5f;
         
         bool moved = 1;
 
@@ -2160,7 +2161,7 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     main_player_create_info.ws_size = vector3_t(2);
     main_player_create_info.starting_velocity = 5.0f;
-    main_player_create_info.color = player_color_t::DARK_GRAY;
+    main_player_create_info.color = player_color_t::GRAY;
     main_player_create_info.physics_info.enabled = 1;
     main_player_create_info.terraform_power_info.speed = 300.0f;
     main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -2409,7 +2410,7 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
 {
     if (input_state->cursor_moved)
     {
-        vector3_t up = e->ws_up;
+        vector3_t up = e->camera.ws_current_up_vector;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
         persist_var constexpr uint32_t SENSITIVITY = 15.0f;

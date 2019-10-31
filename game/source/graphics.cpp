@@ -1392,7 +1392,7 @@ void begin_deferred_rendering(uint32_t image_index /* to_t remove in the future 
     // User renders what is needed ...
 }    
 
-void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue)
+void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue)
 {
     queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
 
@@ -1419,7 +1419,11 @@ void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *q
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
 
     queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
-    
+    // Now start alpha blending scene (particles, etc...)
+}
+
+void end_deferred_rendering(gpu_command_queue_t *queue)
+{
     queue->end_render_pass();
 }
 
@@ -2108,6 +2112,7 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *
     make_sun_data();
     make_cube_model(pool);
     make_atmosphere_data(g_uniform_pool, pool);
+    initialize_particle_rendering();
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);
@@ -2780,10 +2785,12 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
 
 void initialize_particle_rendering(void)
 {
+    matrix4_t translate = glm::translate(vector3_t(1, 2, 3));
+    
     g_particle_rendering->particle_instanced_model.binding_count = 1;
     g_particle_rendering->particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
     g_particle_rendering->particle_instanced_model.attribute_count = 1;
-    g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
+    g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 5);
 
     g_particle_rendering->particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering->particle_instanced_model.attributes_buffer);
     // Position
@@ -2802,7 +2809,7 @@ void initialize_particle_rendering(void)
 }
 
 
-particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader)
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_particle_life_length)
 {
     particle_spawner_t particles = {};
     particles.max_particles = max_particle_count;
@@ -2814,6 +2821,7 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
     particles.update = effect;
     make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(particle_t) * particles.max_particles, nullptr, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
     particles.shader = shader;
+    particles.max_life_length = max_particle_life_length;
     return(particles);
 }
 
@@ -2839,9 +2847,54 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
 }
 
 
-void render_particles(particle_spawner_t *spawner)
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner)
 {
+    graphics_pipeline_t *particle_pipeline = g_pipeline_manager->get(spawner->shader);
     
+    command_buffer_bind_pipeline(&particle_pipeline->pipeline, &queue->q);
+
+    command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {1, camera_transforms}, &queue->q);
+
+    VkDeviceSize zero = 0;
+    command_buffer_bind_vbos({1, &spawner->gpu_particles_buffer.buffer}, {1, &zero}, 0, 1, &queue->q);
+    
+    command_buffer_draw_instanced(&queue->q, 4, spawner->particles_stack_head);
+}
+
+
+void particle_spawner_t::declare_dead(uint32_t index)
+{
+    if (index == particles_stack_head - 1)
+    {
+        --particles_stack_head;
+    }
+    else if (dead_count < max_dead)
+    {
+        dead[dead_count++] = index;
+    }
+}
+
+    
+particle_t *particle_spawner_t::fetch_next_dead_particle(void)
+{
+    if (dead_count)
+    {
+        uint16_t next_dead = dead[dead_count - 1];
+        --dead_count;
+        return(&particles[next_dead]);
+    }
+    else if (particles_stack_head < max_particles)
+    {
+        particle_t *next_dead = &particles[particles_stack_head++];
+        return(next_dead);
+    }
+    return(nullptr);
+}
+
+
+particle_t *particle_spawner_t::particle(void)
+{
+    return(fetch_next_dead_particle());
 }
 
 

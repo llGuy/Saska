@@ -563,7 +563,8 @@ void end_shadow_offscreen(gpu_command_queue_t *queue);
 
 resolution_t get_backbuffer_resolution(void);
 void begin_deferred_rendering(uint32_t image_index /* to remove in the future */, gpu_command_queue_t *queue);
-void end_deferred_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue);
+void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue);
+void end_deferred_rendering(gpu_command_queue_t *queue);
 
 void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue);
 void update_atmosphere(gpu_command_queue_t *queue);
@@ -712,7 +713,7 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
 
 struct particle_t
 {
-    vector3_t ws_positin;
+    vector3_t ws_position;
     vector3_t ws_velocity;
     vector3_t ws_up;
     // May dictate the texture being displayed
@@ -721,18 +722,23 @@ struct particle_t
 };
 
 
-typedef void(*particle_effect_function_t)(particle_t *particles, uint32_t max_particles, float32_t dt);
+typedef void(*particle_effect_function_t)(struct particle_spawner_t *spawner, float32_t dt);
 
 
 // Each particle type will have a particle generator
 struct particle_spawner_t
 {
+    void declare_dead(uint32_t index);
+    particle_t *fetch_next_dead_particle(void);
+    particle_t *particle(void);
+    
     uint32_t max_particles;
     uint32_t particles_stack_head;
     particle_t *particles;
     uint32_t max_dead;
     uint32_t dead_count;
     uint16_t *dead;
+    float32_t max_life_length;
 
     particle_effect_function_t update;
     pipeline_handle_t shader;
@@ -747,10 +753,10 @@ struct particle_rendering_t
 };
 
 
-pipeline_handle_t initialize_particle_rendering_shader(const char *vsh_path, const char *fsh_path);
+pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path);
 void initialize_particle_rendering(void);
-particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader);
-void render_particles(particle_spawner_t *spawner);
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length);
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner);
 
 
 struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager

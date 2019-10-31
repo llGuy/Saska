@@ -22,6 +22,7 @@ constexpr float32_t PI = 3.14159265359f;
 // To initialize with initialize translation unit function
 global_var struct entities_t *g_entities;
 global_var struct voxel_chunks_t *g_voxel_chunks;
+global_var struct particles_t *g_particles;
 
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
 
@@ -125,11 +126,16 @@ internal_function void update_standing_player_physics(physics_component_t *compo
 internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
+internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
 internal_function void update_entities(float32_t dt, application_type_t app_type);
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
 internal_function void initialize_players(input_state_t *input_state, application_type_t app_type);
 internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
+
+internal_function void hard_initialize_particles(void);
+internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt);
+internal_function void update_particles(float32_t dt);
 
 internal_function int32_t lua_get_player_position(lua_State *state);
 internal_function int32_t lua_set_player_position(lua_State *state);
@@ -1950,6 +1956,26 @@ internal_function void update_physics_component(physics_component_t *physics, pl
 }
 
 
+internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt)
+{
+    uint32_t *action_flags = &player->action_flags;
+
+    if (player->shoot.cool_off < player->shoot.shoot_speed)
+    {
+        player->shoot.cool_off += dt;
+    }
+    
+    if (*action_flags & (1 << action_flags_t::SHOOT))
+    {
+        if (player->shoot.cool_off > player->shoot.shoot_speed)
+        {
+            spawn_explosion(player->ws_p);
+            player->shoot.cool_off = 0.0f;
+        }
+    }
+}
+
+
 internal_function player_handle_t add_player(const player_t &e)
 {
     player_handle_t view;
@@ -1981,6 +2007,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 update_rendering_component(&player->rendering, player, dt);
                 update_animation_component(&player->animation, player, dt);
                 update_terraform_power_component(&player->terraform_power, player, dt);
+                update_shoot_component(&player->shoot, player, dt);
             } break;
         case application_type_t::CONSOLE_APPLICATION_MODE:
             {
@@ -2144,6 +2171,8 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->rendering.push_k.roughness = 0.8f;
     player->rendering.push_k.metalness = 0.6f;
     player->terraform_power.speed = info->terraform_power_info.speed;
+    player->shoot.cool_off = info->shoot_info.cool_off;
+    player->shoot.shoot_speed = info->shoot_info.shoot_speed;
 }
 
 
@@ -2171,12 +2200,57 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
     main_player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
     main_player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
+    main_player_create_info.shoot_info.cool_off = 0.0f;
+    main_player_create_info.shoot_info.shoot_speed = 0.3f;
 
     player_t user;
     construct_player(&user, &main_player_create_info);
 
     player_handle_t user_handle = add_player(user);
     make_player_main(user_handle);
+}
+
+
+// ******************************** Particles code ******************************
+void spawn_explosion(const vector3_t &position)
+{
+    particle_t *particle =g_particles->explosion_particle_spawner.particle();
+    particle->ws_position = position;
+    particle->ws_velocity = vector3_t(0.0f);
+    particle->life = 0.0f;
+    particle->size = 10.0f;;
+}
+
+
+internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
+{
+    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
+    {
+        particle_t *particle = &spawner->particles[i];
+        if (particle->life < spawner->max_life_length)
+        {
+            particle->life += dt;
+            particle->size += dt * 8.0f;
+
+            if (particle->life > spawner->max_life_length)
+            {
+                spawner->declare_dead(i);
+            }
+        }
+    }
+}
+
+
+internal_function void update_particles(float32_t dt)
+{
+    (*g_particles->explosion_particle_spawner.update)(&g_particles->explosion_particle_spawner, dt);
+}
+
+
+internal_function void hard_initialize_particles(void)
+{
+    pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv");
+    g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.3f);
 }
 
 
@@ -2224,7 +2298,13 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         render_atmosphere({1, uniform_groups}, camera->p, queue);
         render_sun(uniform_groups, queue);
     }
-    end_deferred_rendering(camera->v_m, queue);
+    do_lighting_and_transition_to_alpha_rendering(camera->v_m, queue);
+    {
+        // Render particles
+        // TODO: In future, render skybox and sun here
+        render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner);
+    }
+    end_deferred_rendering(queue);
 
     apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
 }
@@ -2388,6 +2468,7 @@ void update_world(input_state_t *input_state,
             clear_chunk_render_queue();
             {
                 update_entities(dt, app_type);
+                update_particles(dt);
             }
             push_chunks_with_active_vertices();
 
@@ -2703,6 +2784,7 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
 {
     g_entities = &memory->world_state.entities;
     g_voxel_chunks = &memory->world_state.voxel_chunks;
+    g_particles = &memory->world_state.particles;
 }
 
 

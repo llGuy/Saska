@@ -174,6 +174,18 @@ struct rendering_component_t
     bool enabled = true;
 };
 
+struct shoot_component_create_info_t
+{
+    float32_t cool_off;
+    float32_t shoot_speed;
+};
+
+struct shoot_component_t
+{
+    float32_t cool_off;
+    float32_t shoot_speed;
+};
+
 struct entity_body_t
 {
     float32_t weight = 1.0f;
@@ -181,7 +193,7 @@ struct entity_body_t
 };
 
 // Action components can be modified over keyboard / mouse input, or on a network
-enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD };
+enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD, SHOOT };
 
 struct network_component_t
 {
@@ -205,6 +217,7 @@ struct player_create_info_t
     camera_component_create_info_t camera_info;
     animation_component_create_info_t animation_info;
     rendering_component_create_info_t rendering_info;
+    shoot_component_create_info_t shoot_info;
 };
 
 struct entity_t
@@ -251,6 +264,7 @@ struct player_t : entity_t
     animation_component_t animation;
     network_component_t network;
     terraform_power_component_t terraform_power;
+    shoot_component_t shoot;
 };
 
 
@@ -319,16 +333,22 @@ struct entities_t
     gpu_material_submission_queue_t rolling_player_submission_queue;
 };
 
+struct particles_t
+{
+    particle_spawner_t explosion_particle_spawner;
+};
+
 struct world_t
 {
     struct entities_t entities;
     struct voxel_chunks_t voxel_chunks;
+    struct particles_t particles;
 };
 
 player_t *get_player(player_handle_t player_handle);
 voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
-// For now, take in the color
+void spawn_explosion(const vector3_t &position);
 player_handle_t spawn_player(const char *player_name, player_color_t color);
 player_handle_t spawn_player_at(const char *player_name, player_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
 void make_player_renderable(player_handle_t player_handle, player_color_t color);

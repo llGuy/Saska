@@ -411,7 +411,12 @@ struct model_t
         return(ret);
     }
 };
-    
+
+inline void command_buffer_draw_instanced(VkCommandBuffer *command_buffer, uint32_t vertex_count, uint32_t instance_count)
+{
+    vkCmdDraw(*command_buffer, vertex_count, instance_count, 0, 0);
+}
+
 inline void command_buffer_draw_indexed(VkCommandBuffer *command_buffer, const draw_indexed_data_t &data)
 {
     vkCmdDrawIndexed(*command_buffer, data.index_count, data.instance_count, data.first_index, (int32_t)data.vertex_offset, data.first_instance);

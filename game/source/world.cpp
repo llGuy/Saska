@@ -136,6 +136,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
 internal_function void hard_initialize_particles(void);
 internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt);
 internal_function void update_particles(float32_t dt);
+internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue);
 
 internal_function int32_t lua_get_player_position(lua_State *state);
 internal_function int32_t lua_set_player_position(lua_State *state);
@@ -2159,6 +2160,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->size = info->ws_size;
     player->ws_r = info->ws_rotation;
     player->is_entering = 1;
+    player->is_sliding_not_rolling_mode = 0;
     player->rolling_mode = 1;
     player->camera.camera = info->camera_info.camera_index;
     player->camera.is_third_person = info->camera_info.is_third_person;
@@ -2238,6 +2240,12 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
             }
         }
     }
+}
+
+
+internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
+{
+    update_gpu_buffer(&g_particles->explosion_particle_spawner.gpu_particles_buffer, g_particles->explosion_particle_spawner.particles, sizeof(particle_t) * g_particles->explosion_particle_spawner.particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 }
 
 
@@ -2355,7 +2363,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     }
 
     hard_initialize_chunks();
-    
+    hard_initialize_particles();
+
     initialize_world(input_state, cmdpool, app_type, app_mode);
     
     clear_linear();
@@ -2435,8 +2444,8 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
 {
     update_animation_gpu_data(cmdbuf);
     update_3d_output_camera_transforms(image_index);
-
     sync_gpu_with_chunk_state(cmdbuf);
+    sync_gpu_with_particle_state(cmdbuf);
 }
 
 
@@ -2538,6 +2547,9 @@ void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, 
     if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
     {
         *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
+
+        // TODO: Introduce concept of class: each class has different powers
+        *action_flags |= (1 << action_flags_t::SHOOT);
     }
 }
 

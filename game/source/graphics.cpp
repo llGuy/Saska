@@ -2789,7 +2789,7 @@ void initialize_particle_rendering(void)
     
     g_particle_rendering->particle_instanced_model.binding_count = 1;
     g_particle_rendering->particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
-    g_particle_rendering->particle_instanced_model.attribute_count = 1;
+    g_particle_rendering->particle_instanced_model.attribute_count = 5;
     g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 5);
 
     g_particle_rendering->particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering->particle_instanced_model.attributes_buffer);
@@ -2815,11 +2815,12 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
     particles.max_particles = max_particle_count;
     particles.particles_stack_head = 0;
     particles.particles = (particle_t *)allocate_free_list(sizeof(particle_t) * particles.max_particles);
+    memset(particles.particles, 0, sizeof(particle_t) * particles.max_particles);
     particles.max_dead = max_particle_count / 2;
     particles.dead_count = 0;
     particles.dead = (uint16_t *)allocate_free_list(sizeof(uint16_t) * particles.max_dead);
     particles.update = effect;
-    make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(particle_t) * particles.max_particles, nullptr, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
+    make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(particle_t) * particles.max_particles, particles.particles, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
     particles.shader = shader;
     particles.max_life_length = max_particle_life_length;
     return(particles);
@@ -2833,9 +2834,9 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
     graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
     shader_modules_t modules(shader_module_info_t{vsh_path, VK_SHADER_STAGE_VERTEX_BIT},
                              shader_module_info_t{fsh_path, VK_SHADER_STAGE_FRAGMENT_BIT});
-    shader_uniform_layouts_t layouts = {};
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
     shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-    shader_blend_states_t blending{blend_type_t::ONE_MINUS_SRC_ALPHA, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING };
+    shader_blend_states_t blending{blend_type_t::ONE_MINUS_SRC_ALPHA };
     dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
     fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                 VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_particle_rendering->particle_instanced_model,

@@ -2,8 +2,6 @@
 
 layout(location = 0) in VS_DATA
 {
-    mat4 projection_matrix;
-    vec3 projected_coords;
     vec3 vs_position;
     bool dead;
     vec2 before_uvs;
@@ -23,8 +21,6 @@ void main(void)
     if (fs_in.dead) discard;
 
     vec4 vs_position = subpassLoad(g_buffer_position);
-    //    vec4 projected_position = fs_in.projection_matrix * vs_position;
-    //    projected_position /= projected_position.w;
 
     float max = 3.0;
     float difference = clamp(fs_in.vs_position.z - vs_position.z, 0, max) / max;

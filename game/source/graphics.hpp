@@ -750,6 +750,7 @@ struct particle_spawner_t
 struct particle_rendering_t
 {
     model_t particle_instanced_model;
+    uniform_group_t position_subpass_input;
 };
 
 

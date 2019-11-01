@@ -8,6 +8,9 @@ layout(location = 4) in float vertex_size;
 
 layout(location = 0) out VS_DATA
 {
+    mat4 projection_matrix;
+    vec3 projected_coords;
+    vec3 vs_position;
     bool dead;
     vec2 before_uvs;
     vec2 after_uvs;
@@ -69,9 +72,14 @@ void main(void)
 	    model_matrix[i][j] = rotation_part[i][j];
 	}
     }
-    
-    gl_Position = camera_transforms.proj * camera_transforms.view * model_matrix * vec4(ms_vertex, 1);
 
+    vec4 vs_position = camera_transforms.view * model_matrix * vec4(ms_vertex, 1);
+    gl_Position = camera_transforms.proj * vs_position;
+
+    vs_out.vs_position = vs_position.xyz;
+    vs_out.projected_coords = vec4(gl_Position / gl_Position.w).xyz;
+    vs_out.projection_matrix = camera_transforms.proj;
+    
     vs_out.width = float(explosion_info.atlas_width);
     vs_out.height = float(explosion_info.atlas_height);
     vs_out.before_uvs = QUAD_UVS[gl_VertexIndex];

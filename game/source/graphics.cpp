@@ -1217,6 +1217,7 @@ void make_dfr_rendering_data(void)
         subpasses[2].set_color_attachment_references(render_pass_attachment_reference_t{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL });
         subpasses[2].enable_depth = 1;
         subpasses[2].depth_attachment = render_pass_attachment_reference_t{ 5, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL };
+        subpasses[2].set_input_attachment_references(render_pass_attachment_reference_t{ 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
         render_pass_dependency_t dependencies[4] = {};
         dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
                                                       0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
@@ -2806,6 +2807,19 @@ void initialize_particle_rendering(void)
     g_particle_rendering->particle_instanced_model.bindings[0].end_attributes_creation();
 
     g_particle_rendering->particle_instanced_model.bindings[0].input_rate = VK_VERTEX_INPUT_RATE_INSTANCE;
+
+
+    uniform_layout_handle_t subpass_input_layout_hdl = g_uniform_layout_manager->add("uniform_layout.particle_position_subpass_input"_hash);
+    uniform_layout_t *subpass_input_layout_ptr = g_uniform_layout_manager->get(subpass_input_layout_hdl);
+    uniform_layout_info_t info = {};
+    info.push(1, 0, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_SHADER_STAGE_FRAGMENT_BIT);
+    *subpass_input_layout_ptr = make_uniform_layout(&info);
+
+
+    g_particle_rendering->position_subpass_input = make_uniform_group(subpass_input_layout_ptr, g_uniform_pool);
+    image_handle_t position_tx_hdl = g_image_manager->get_handle("image2D.fbo_position"_hash);
+    auto *position_tx = g_image_manager->get(position_tx_hdl);
+    update_uniform_group(&g_particle_rendering->position_subpass_input, update_binding_t{INPUT_ATTACHMENT, position_tx, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 }
 
 
@@ -2834,7 +2848,7 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
     graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
     shader_modules_t modules(shader_module_info_t{vsh_path, VK_SHADER_STAGE_VERTEX_BIT},
                              shader_module_info_t{fsh_path, VK_SHADER_STAGE_FRAGMENT_BIT});
-    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash), texture_atlas);
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash), texture_atlas, g_uniform_layout_manager->get_handle("uniform_layout.particle_position_subpass_input"_hash));
     shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
     shader_blend_states_t blending{blend_type_t::ADDITIVE_BLENDING };
     dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
@@ -2854,8 +2868,8 @@ void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transf
     
     command_buffer_bind_pipeline(&particle_pipeline->pipeline, &queue->q);
 
-    uniform_group_t groups[] { *camera_transforms, texture_atlas };
-    command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {2, groups}, &queue->q);
+    uniform_group_t groups[] { *camera_transforms, texture_atlas, g_particle_rendering->position_subpass_input };
+    command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {3, groups}, &queue->q);
 
     VkDeviceSize zero = 0;
     command_buffer_bind_vbos({1, &spawner->gpu_particles_buffer.buffer}, {1, &zero}, 0, 1, &queue->q);

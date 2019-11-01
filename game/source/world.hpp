@@ -335,6 +335,10 @@ struct entities_t
 
 struct particles_t
 {
+    image2d_t explosion_texture_atlas;
+    uniform_group_t explosion_texture_uniform;
+    resolution_t atlas_resolution;
+    uint32_t explosion_num_images;
     particle_spawner_t explosion_particle_spawner;
 };
 

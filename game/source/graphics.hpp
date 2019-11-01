@@ -753,10 +753,10 @@ struct particle_rendering_t
 };
 
 
-pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path);
+pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path, uniform_layout_handle_t texture_atlas);
 void initialize_particle_rendering(void);
 particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length);
-void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner);
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, uniform_group_t texture_atlas, void *push_constant, uint32_t push_constant_size);
 
 
 struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager

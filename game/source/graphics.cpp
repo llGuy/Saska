@@ -2827,16 +2827,16 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
 }
 
 
-pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path)
+pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path, uniform_layout_handle_t texture_atlas)
 {
     pipeline_handle_t handle = g_pipeline_manager->add(shader_name);
     graphics_pipeline_t *pipeline = g_pipeline_manager->get(handle);
     graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
     shader_modules_t modules(shader_module_info_t{vsh_path, VK_SHADER_STAGE_VERTEX_BIT},
                              shader_module_info_t{fsh_path, VK_SHADER_STAGE_FRAGMENT_BIT});
-    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
-    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
-    shader_blend_states_t blending{blend_type_t::ONE_MINUS_SRC_ALPHA };
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash), texture_atlas);
+    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+    shader_blend_states_t blending{blend_type_t::ADDITIVE_BLENDING };
     dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
     fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
                                 VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &g_particle_rendering->particle_instanced_model,
@@ -2848,16 +2848,19 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
 }
 
 
-void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner)
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, uniform_group_t texture_atlas, void *push_constant, uint32_t push_constant_size)
 {
     graphics_pipeline_t *particle_pipeline = g_pipeline_manager->get(spawner->shader);
     
     command_buffer_bind_pipeline(&particle_pipeline->pipeline, &queue->q);
 
-    command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {1, camera_transforms}, &queue->q);
+    uniform_group_t groups[] { *camera_transforms, texture_atlas };
+    command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {2, groups}, &queue->q);
 
     VkDeviceSize zero = 0;
     command_buffer_bind_vbos({1, &spawner->gpu_particles_buffer.buffer}, {1, &zero}, 0, 1, &queue->q);
+
+    command_buffer_push_constant(push_constant, push_constant_size, 0, VK_SHADER_STAGE_VERTEX_BIT, particle_pipeline->layout, &queue->q);
     
     command_buffer_draw_instanced(&queue->q, 4, spawner->particles_stack_head);
 }

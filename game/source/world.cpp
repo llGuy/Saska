@@ -2220,7 +2220,7 @@ void spawn_explosion(const vector3_t &position)
     particle->ws_position = position;
     particle->ws_velocity = vector3_t(0.0f);
     particle->life = 0.0f;
-    particle->size = 10.0f;;
+    particle->size = 5.0f;
 }
 
 
@@ -2232,7 +2232,6 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
         if (particle->life < spawner->max_life_length)
         {
             particle->life += dt;
-            particle->size += dt * 8.0f;
 
             if (particle->life > spawner->max_life_length)
             {
@@ -2257,8 +2256,35 @@ internal_function void update_particles(float32_t dt)
 
 internal_function void hard_initialize_particles(void)
 {
-    pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv");
-    g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.3f);
+    file_handle_t explosion_png_handle = create_file("textures/particles/explosion.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+    external_image_data_t image_data = read_image(explosion_png_handle);
+    g_particles->atlas_resolution.width = 4;
+    g_particles->atlas_resolution.height = 4;
+    g_particles->explosion_num_images = 14;
+    make_texture(&g_particles->explosion_texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
+    transition_image_layout(&g_particles->explosion_texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            get_global_command_pool());
+    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                 get_global_command_pool(),
+                                                 &g_particles->explosion_texture_atlas,
+                                                 (uint32_t)image_data.width,
+                                                 (uint32_t)image_data.height);
+    transition_image_layout(&g_particles->explosion_texture_atlas.image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            get_global_command_pool());
+
+    free_external_image_data(&image_data);
+
+    uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
+    g_particles->explosion_texture_uniform = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
+    update_uniform_group(&g_particles->explosion_texture_uniform, update_binding_t{TEXTURE, &g_particles->explosion_texture_atlas, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    
+    pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv", single_tx_layout_hdl);
+    g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f);
 }
 
 
@@ -2310,7 +2336,18 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     {
         // Render particles
         // TODO: In future, render skybox and sun here
-        render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner);
+        struct explosion_push_constant_t
+        {
+            float32_t max_time;
+            uint32_t atlas_width;
+            uint32_t atlas_height;
+            uint32_t num_images;
+        } explosion_pk;
+        explosion_pk.max_time = g_particles->explosion_particle_spawner.max_life_length;
+        explosion_pk.atlas_width = g_particles->atlas_resolution.width;
+        explosion_pk.atlas_height = g_particles->atlas_resolution.height;
+        explosion_pk.num_images = g_particles->explosion_num_images;
+        render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner, g_particles->explosion_texture_uniform, &explosion_pk, sizeof(explosion_pk));
     }
     end_deferred_rendering(queue);
 

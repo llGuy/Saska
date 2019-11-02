@@ -1,10 +1,8 @@
 #version 450
 
 layout(location = 0) in vec3 vertex_position;
-layout(location = 1) in vec3 vertex_velocity;
-layout(location = 2) in vec3 vertex_up_vector;
-layout(location = 3) in float vertex_life;
-layout(location = 4) in float vertex_size;
+layout(location = 1) in float vertex_life; 
+layout(location = 2) in float vertex_size;
 
 layout(location = 0) out VS_DATA
 {

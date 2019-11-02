@@ -109,17 +109,21 @@ internal_function player_t *get_main_player(void);
 internal_function player_t *get_player(const constant_string_t &name);
 player_t *get_player(player_handle_t v);
 
+internal_function void push_bullet_to_queue(bullet_t *bullet);
 internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
 internal_function void push_player_to_animated_queue(player_t *player);
 internal_function void push_player_to_rolling_queue(player_t *player);
+internal_function void push_bullet_to_rolling_queue(bullet_t *b);
 internal_function void update_animation_gpu_data(gpu_command_queue_t *queue);
 
-player_t construct_player(player_create_info_t *info);
+internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *info);
+internal_function void construct_player(player_t *player, player_create_info_t *info);
 internal_function player_handle_t add_player(const player_t &e);
 internal_function void make_player_main(player_handle_t player_handle);
 
 internal_function void update_camera_component(camera_component_t *camera, player_t *player, float32_t dt);
 internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt);
+internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *player, float32_t dt);
 internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt);
 internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt);
 internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
@@ -127,6 +131,7 @@ internal_function void update_rolling_player_physics(physics_component_t *compon
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
+internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt);
 internal_function void update_entities(float32_t dt, application_type_t app_type);
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
@@ -1545,6 +1550,32 @@ internal_function void push_player_to_animated_queue(player_t *e)
 }
 
 
+internal_function void push_bullet_to_queue(bullet_t *bullet)
+{
+    rendering_component_t *component = &bullet->rendering;
+
+    uniform_group_t *group = nullptr;
+    
+    g_entities->rolling_player_submission_queue.push_material(&component->push_k,
+                                                              sizeof(component->push_k),
+                                                              &g_entities->rolling_player_mesh,
+                                                              group);
+}
+
+
+internal_function void push_bullet_to_rolling_queue(bullet_t *b)
+{
+    rendering_component_t *component = &b->rendering;
+
+    uniform_group_t *group = nullptr;
+    
+    g_entities->rolling_player_submission_queue.push_material(&component->push_k,
+                                                                  sizeof(component->push_k),
+                                                                  &g_entities->rolling_player_mesh,
+                                                                  group);
+}    
+
+
 internal_function void push_player_to_rolling_queue(player_t *e)
 {
     rendering_component_t *component = &e->rendering;
@@ -1664,6 +1695,14 @@ internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 
         update_animated_instance_ubo(queue, &animation->animation_instance);
     }
+}
+
+
+internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt)
+{
+    rendering->push_k.ws_t = glm::translate(bullet->ws_p) * glm::scale(bullet->size);
+
+    push_bullet_to_rolling_queue(bullet);
 }
 
 
@@ -1970,8 +2009,37 @@ internal_function void update_shoot_component(shoot_component_t *shoot, player_t
     {
         if (player->shoot.cool_off > player->shoot.shoot_speed)
         {
-            spawn_explosion(player->ws_p);
+            spawn_bullet(player);
+            
             player->shoot.cool_off = 0.0f;
+        }
+    }
+}
+
+
+internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt)
+{
+    bullet->ws_v -= bullet->ws_up * 9.81f * dt;
+
+    // Project and test if is going to be within chunk zone
+    vector3_t projected_position = bullet->ws_p + bullet->ws_v * dt;
+    if (get_chunk_encompassing_point(ws_to_xs(projected_position)) == nullptr)
+    {
+        return;
+    }
+    else
+    {
+        collision_t collision = collide(bullet->ws_p, bullet->size, bullet->ws_v * dt, 0, {});
+
+        if (collision.detected)
+        {
+            vector3_t normal = glm::normalize(collision.es_normal * bullet->size);
+            // Reflect velocity vector
+            bullet->ws_v = glm::reflect(bullet->ws_v, normal);
+        }
+        else
+        {
+            bullet->ws_p = collision.es_at * bullet->size;
         }
     }
 }
@@ -1994,7 +2062,7 @@ internal_function player_handle_t add_player(const player_t &e)
 
 
 internal_function void update_entities(float32_t dt, application_type_t app_type)
-{
+{       
     for (uint32_t player_index = 0; player_index < g_entities->player_count; ++player_index)
     {
         player_t *player = &g_entities->player_list[player_index];
@@ -2015,7 +2083,25 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 update_physics_component(&player->physics, player, dt);
             } break;
         }
-    }    
+    }
+
+    for (uint32_t bullet_index = 0; bullet_index < g_entities->bullet_count; ++bullet_index)
+    {
+        bullet_t *bullet = &g_entities->bullet_list[bullet_index];
+        
+        switch (app_type)
+        {
+        case application_type_t::WINDOW_APPLICATION_MODE:
+            {
+                update_bullet_rendering_component(&bullet->rendering, bullet, dt);
+                update_bounce_physics_component(&bullet->bounce_physics, bullet, dt);
+            } break;
+        case application_type_t::CONSOLE_APPLICATION_MODE:
+            {
+                //update_physics_component(&player->physics, player, dt);
+            } break;
+        }
+    }
 }
 
 
@@ -2145,6 +2231,40 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
 }
 
 
+void spawn_bullet(player_t *shooter)
+{
+    bullet_t *new_bullet = &g_entities->bullet_list[g_entities->bullet_count++];
+    bullet_create_info_t info = {};
+    info.ws_position = shooter->ws_p;
+    info.ws_direction = glm::normalize(shooter->ws_d);
+    info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+    info.ws_size = vector3_t(0.7f);
+    info.color = player_color_t::DARK_GRAY;
+    construct_bullet(new_bullet, &info);
+
+    new_bullet->ws_v = shooter->ws_d * 30.0f;
+    new_bullet->ws_up = shooter->ws_up;
+}
+
+
+internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *info)
+{
+    persist_var vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
+                                                                    vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
+                                                                    vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
+                                                                    vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
+                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f) };
+    
+    bullet->ws_p = info->ws_position;
+    bullet->ws_d = info->ws_direction;
+    bullet->size = info->ws_size;
+    bullet->ws_r = info->ws_rotation;
+    bullet->rendering.push_k.color = colors[info->color];
+    bullet->rendering.push_k.roughness = 0.8f;
+    bullet->rendering.push_k.metalness = 0.6f;
+}
+
+
 internal_function void construct_player(player_t *player, player_create_info_t *info)
 {
     persist_var vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
@@ -2160,6 +2280,8 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->size = info->ws_size;
     player->ws_r = info->ws_rotation;
     player->is_entering = 1;
+    player->is_sitting = 0;
+    player->is_in_air = 0;
     player->is_sliding_not_rolling_mode = 0;
     player->rolling_mode = 1;
     player->camera.camera = info->camera_info.camera_index;
@@ -2169,6 +2291,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->animation.cycles = info->animation_info.cycles;
     player->animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
     switch_to_cycle(&player->animation.animation_instance, player_t::animated_state_t::IDLE, 1);
+    
     player->rendering.push_k.color = colors[info->color];
     player->rendering.push_k.roughness = 0.8f;
     player->rendering.push_k.metalness = 0.6f;
@@ -2191,7 +2314,7 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.ws_direction = -glm::normalize(main_player_create_info.ws_position);
     main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     main_player_create_info.ws_size = vector3_t(2);
-    main_player_create_info.starting_velocity = 5.0f;
+    main_player_create_info.starting_velocity = 15.0f;
     main_player_create_info.color = player_color_t::GRAY;
     main_player_create_info.physics_info.enabled = 1;
     main_player_create_info.terraform_power_info.speed = 300.0f;
@@ -2226,16 +2349,23 @@ void spawn_explosion(const vector3_t &position)
 
 internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
 {
+    camera_t *main_camera = get_camera_bound_to_3d_output();
+    
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
         particle_t *particle = &spawner->particles[i];
         if (particle->life < spawner->max_life_length)
         {
             particle->life += dt;
-
+            
             if (particle->life > spawner->max_life_length)
             {
+                particle->life += 10.0f;
                 spawner->declare_dead(i);
+            }
+            else
+            {
+                spawner->push_for_render(i);
             }
         }
     }
@@ -2244,47 +2374,26 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
 
 internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
 {
-    update_gpu_buffer(&g_particles->explosion_particle_spawner.gpu_particles_buffer, g_particles->explosion_particle_spawner.particles, sizeof(particle_t) * g_particles->explosion_particle_spawner.particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
+    update_gpu_buffer(&g_particles->explosion_particle_spawner.gpu_particles_buffer, g_particles->explosion_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * g_particles->explosion_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 }
 
 
 internal_function void update_particles(float32_t dt)
 {
-    (*g_particles->explosion_particle_spawner.update)(&g_particles->explosion_particle_spawner, dt);
+    g_particles->explosion_particle_spawner.clear();
+    {
+        (*g_particles->explosion_particle_spawner.update)(&g_particles->explosion_particle_spawner, dt);
+    }
+    g_particles->explosion_particle_spawner.sort_for_render();
 }
 
 
 internal_function void hard_initialize_particles(void)
 {
-    file_handle_t explosion_png_handle = create_file("textures/particles/explosion.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
-    external_image_data_t image_data = read_image(explosion_png_handle);
-    g_particles->atlas_resolution.width = 4;
-    g_particles->atlas_resolution.height = 4;
-    g_particles->explosion_num_images = 14;
-    make_texture(&g_particles->explosion_texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
-    transition_image_layout(&g_particles->explosion_texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            get_global_command_pool());
-    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
-                                                 get_global_command_pool(),
-                                                 &g_particles->explosion_texture_atlas,
-                                                 (uint32_t)image_data.width,
-                                                 (uint32_t)image_data.height);
-    transition_image_layout(&g_particles->explosion_texture_atlas.image,
-                            VK_FORMAT_R8G8B8A8_UNORM,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            get_global_command_pool());
-
-    free_external_image_data(&image_data);
-
     uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
-    g_particles->explosion_texture_uniform = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
-    update_uniform_group(&g_particles->explosion_texture_uniform, update_binding_t{TEXTURE, &g_particles->explosion_texture_atlas, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     
     pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv", single_tx_layout_hdl);
-    g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f);
+    g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f, "textures/particles/explosion.png", 4, 4, 14);
 }
 
 
@@ -2344,10 +2453,10 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
             uint32_t num_images;
         } explosion_pk;
         explosion_pk.max_time = g_particles->explosion_particle_spawner.max_life_length;
-        explosion_pk.atlas_width = g_particles->atlas_resolution.width;
-        explosion_pk.atlas_height = g_particles->atlas_resolution.height;
-        explosion_pk.num_images = g_particles->explosion_num_images;
-        render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner, g_particles->explosion_texture_uniform, &explosion_pk, sizeof(explosion_pk));
+        explosion_pk.atlas_width = g_particles->explosion_particle_spawner.image_x_count;
+        explosion_pk.atlas_height = g_particles->explosion_particle_spawner.image_y_count;
+        explosion_pk.num_images = g_particles->explosion_particle_spawner.num_images;
+        render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner, &explosion_pk, sizeof(explosion_pk));
     }
     end_deferred_rendering(queue);
 

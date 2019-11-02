@@ -722,6 +722,14 @@ struct particle_t
 };
 
 
+struct rendered_particle_data_t
+{
+    vector3_t ws_position;
+    float32_t life;
+    float32_t size;
+};
+
+
 typedef void(*particle_effect_function_t)(struct particle_spawner_t *spawner, float32_t dt);
 
 
@@ -731,10 +739,18 @@ struct particle_spawner_t
     void declare_dead(uint32_t index);
     particle_t *fetch_next_dead_particle(void);
     particle_t *particle(void);
+    void push_for_render(uint32_t index);
+    void sort_for_render(void);
+    void clear(void);
     
     uint32_t max_particles;
     uint32_t particles_stack_head;
     particle_t *particles;
+
+    uint32_t rendered_particles_stack_head = 0;
+    rendered_particle_data_t *rendered_particles;
+    float32_t *distances_from_camera;
+
     uint32_t max_dead;
     uint32_t dead_count;
     uint16_t *dead;
@@ -743,7 +759,12 @@ struct particle_spawner_t
     particle_effect_function_t update;
     pipeline_handle_t shader;
     gpu_buffer_t gpu_particles_buffer;
-    // TODO: Add texture
+
+    image2d_t texture_atlas;
+    uniform_group_t texture_uniform;
+    uint32_t image_x_count;
+    uint32_t image_y_count;
+    uint32_t num_images;
 };
 
 
@@ -756,8 +777,8 @@ struct particle_rendering_t
 
 pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path, uniform_layout_handle_t texture_atlas);
 void initialize_particle_rendering(void);
-particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length);
-void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, uniform_group_t texture_atlas, void *push_constant, uint32_t push_constant_size);
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length, const char *texture_atlas, uint32_t x_count, uint32_t y_count, uint32_t num_images);
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, void *push_constant, uint32_t push_constant_size);
 
 
 struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager

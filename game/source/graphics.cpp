@@ -2790,20 +2790,16 @@ void initialize_particle_rendering(void)
     
     g_particle_rendering->particle_instanced_model.binding_count = 1;
     g_particle_rendering->particle_instanced_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
-    g_particle_rendering->particle_instanced_model.attribute_count = 5;
-    g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 5);
+    g_particle_rendering->particle_instanced_model.attribute_count = 3;
+    g_particle_rendering->particle_instanced_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription) * 3);
 
     g_particle_rendering->particle_instanced_model.bindings[0].begin_attributes_creation(g_particle_rendering->particle_instanced_model.attributes_buffer);
     // Position
     g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
-    // Velocity
-    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
-    // Up
-    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(2, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
     // Life
-    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(3, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(1, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
     // Size
-    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(4, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
+    g_particle_rendering->particle_instanced_model.bindings[0].push_attribute(2, VK_FORMAT_R32_SFLOAT, sizeof(float32_t));
     g_particle_rendering->particle_instanced_model.bindings[0].end_attributes_creation();
 
     g_particle_rendering->particle_instanced_model.bindings[0].input_rate = VK_VERTEX_INPUT_RATE_INSTANCE;
@@ -2823,20 +2819,59 @@ void initialize_particle_rendering(void)
 }
 
 
-particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_particle_life_length)
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length, const char *texture_atlas, uint32_t x_count, uint32_t y_count, uint32_t num_images)
 {
     particle_spawner_t particles = {};
     particles.max_particles = max_particle_count;
     particles.particles_stack_head = 0;
     particles.particles = (particle_t *)allocate_free_list(sizeof(particle_t) * particles.max_particles);
     memset(particles.particles, 0, sizeof(particle_t) * particles.max_particles);
+    
+    particles.rendered_particles_stack_head = 0;
+    particles.rendered_particles = (rendered_particle_data_t *)allocate_free_list(sizeof(rendered_particle_data_t) * particles.max_particles);
+    memset(particles.rendered_particles, 0, sizeof(rendered_particle_data_t) * particles.max_particles);
+
+    particles.distances_from_camera = (float32_t *)allocate_free_list(sizeof(float32_t) * particles.max_particles);
+    memset(particles.distances_from_camera, 0, sizeof(float32_t) * particles.max_particles);
+    
     particles.max_dead = max_particle_count / 2;
     particles.dead_count = 0;
     particles.dead = (uint16_t *)allocate_free_list(sizeof(uint16_t) * particles.max_dead);
+    
     particles.update = effect;
-    make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(particle_t) * particles.max_particles, particles.particles, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
+    
+    make_unmappable_gpu_buffer(&particles.gpu_particles_buffer, sizeof(rendered_particle_data_t) * particles.max_particles, particles.particles, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
+    
     particles.shader = shader;
-    particles.max_life_length = max_particle_life_length;
+    particles.max_life_length = max_life_length;
+    particles.num_images = num_images;
+    particles.image_x_count = x_count;
+    particles.image_y_count = y_count;
+
+    file_handle_t png_handle = create_file(texture_atlas, file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+    external_image_data_t image_data = read_image(png_handle);
+    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
+    transition_image_layout(&particles.texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            get_global_command_pool());
+    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                 get_global_command_pool(),
+                                                 &particles.texture_atlas,
+                                                 (uint32_t)image_data.width,
+                                                 (uint32_t)image_data.height);
+    transition_image_layout(&particles.texture_atlas.image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            get_global_command_pool());
+
+    free_external_image_data(&image_data);
+
+    uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
+    particles.texture_uniform = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
+    update_uniform_group(&particles.texture_uniform, update_binding_t{TEXTURE, &particles.texture_atlas, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    
     return(particles);
 }
 
@@ -2862,13 +2897,13 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
 }
 
 
-void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, uniform_group_t texture_atlas, void *push_constant, uint32_t push_constant_size)
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, void *push_constant, uint32_t push_constant_size)
 {
     graphics_pipeline_t *particle_pipeline = g_pipeline_manager->get(spawner->shader);
     
     command_buffer_bind_pipeline(&particle_pipeline->pipeline, &queue->q);
 
-    uniform_group_t groups[] { *camera_transforms, texture_atlas, g_particle_rendering->position_subpass_input };
+    uniform_group_t groups[] { *camera_transforms, spawner->texture_uniform, g_particle_rendering->position_subpass_input };
     command_buffer_bind_descriptor_sets(&particle_pipeline->layout, {3, groups}, &queue->q);
 
     VkDeviceSize zero = 0;
@@ -2876,7 +2911,54 @@ void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transf
 
     command_buffer_push_constant(push_constant, push_constant_size, 0, VK_SHADER_STAGE_VERTEX_BIT, particle_pipeline->layout, &queue->q);
     
-    command_buffer_draw_instanced(&queue->q, 4, spawner->particles_stack_head);
+    command_buffer_draw_instanced(&queue->q, 4, spawner->rendered_particles_stack_head);
+}
+
+
+void particle_spawner_t::clear(void)
+{
+    rendered_particles_stack_head = 0;
+}
+
+
+void particle_spawner_t::push_for_render(uint32_t index)
+{
+    particle_t *particle = &particles[index];
+    rendered_particle_data_t *rendered_particle = &rendered_particles[rendered_particles_stack_head];
+    float32_t *distance_to_camera = &distances_from_camera[rendered_particles_stack_head++];
+    camera_t *bound_camera = get_camera_bound_to_3d_output();
+    vector3_t direction_to_camera = bound_camera->p - particle->ws_position;
+    *distance_to_camera = glm::dot(direction_to_camera, direction_to_camera);
+    rendered_particle->ws_position = particle->ws_position;
+    rendered_particle->size = particle->size;
+    rendered_particle->life = particle->life;
+}
+
+
+void particle_spawner_t::sort_for_render(void)
+{
+    for (uint32_t i = 1; i < rendered_particles_stack_head; ++i)
+    {
+        for (uint32_t j = i; j > 0; --j)
+        {
+            float32_t current_distance = distances_from_camera[j];
+            float32_t below_distance = distances_from_camera[j - 1];
+            if (current_distance > below_distance)
+            {
+                // Swap
+                distances_from_camera[j - 1] = current_distance;
+                distances_from_camera[j] = below_distance;
+
+                rendered_particle_data_t below = rendered_particles[j - 1];
+                rendered_particles[j - 1] = rendered_particles[j];
+                rendered_particles[j] = below;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
 }
 
 

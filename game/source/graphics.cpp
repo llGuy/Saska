@@ -2964,6 +2964,8 @@ void particle_spawner_t::sort_for_render(void)
 
 void particle_spawner_t::declare_dead(uint32_t index)
 {
+    particles[index].life = -1.0f;
+    
     if (index == particles_stack_head - 1)
     {
         --particles_stack_head;

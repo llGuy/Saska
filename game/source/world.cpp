@@ -2037,7 +2037,7 @@ uint32_t spawn_fire(const vector3_t &position)
     particle->ws_position = position;
     particle->ws_velocity = vector3_t(0.0f);
     particle->life = 0.0f;
-    particle->size = 2.0f;
+    particle->size = 3.0f;
     return(index);
 }
 
@@ -2436,17 +2436,21 @@ internal_function void particle_effect_fire(particle_spawner_t *spawner, float32
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
         particle_t *particle = &spawner->particles[i];
-        if (particle->life < spawner->max_life_length)
-        {
-            particle->life += dt;
 
-            // Doesn't die unless from another source
-            if (particle->life > spawner->max_life_length)
+        if (particle->life >= 0.0f)
+        {        
+            if (particle->life < spawner->max_life_length)
             {
-                particle->life = glm::mod(particle->life, spawner->max_life_length);
-            }
+                particle->life += dt;
 
-            spawner->push_for_render(i);
+                // Doesn't die unless from another source
+                if (particle->life > spawner->max_life_length)
+                {
+                    particle->life = glm::mod(particle->life, spawner->max_life_length);
+                }
+
+                spawner->push_for_render(i);
+            }
         }
     }
 }
@@ -2457,19 +2461,25 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
         particle_t *particle = &spawner->particles[i];
-        if (particle->life < spawner->max_life_length)
+
+        if (particle->life >= 0)
         {
-            particle->life += dt;
+        
+            if (particle->life < spawner->max_life_length)
+            {
+                particle->life += dt;
             
-            if (particle->life > spawner->max_life_length)
-            {
-                particle->life += 10.0f;
-                spawner->declare_dead(i);
+                if (particle->life > spawner->max_life_length)
+                {
+                    particle->life += 10.0f;
+                    spawner->declare_dead(i);
+                }
+                else
+                {
+                    spawner->push_for_render(i);
+                }
             }
-            else
-            {
-                spawner->push_for_render(i);
-            }
+
         }
     }
 }
@@ -2508,7 +2518,7 @@ internal_function void hard_initialize_particles(void)
 
 
     
-    g_particles->fire_particle_spawner = initialize_particle_spawner(50, &particle_effect_fire, explosion_shader_handle, 1.0f, "textures/particles/fire.png", 3, 3, 9);
+    g_particles->fire_particle_spawner = initialize_particle_spawner(50, &particle_effect_fire, explosion_shader_handle, 2.0f, "textures/particles/smoke.png", 6, 5, 30);
 }
 
 

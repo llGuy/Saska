@@ -186,6 +186,13 @@ struct shoot_component_t
     float32_t shoot_speed;
 };
 
+struct burnable_component_t
+{
+    bool burning = 0;
+    // Going to have to update this every frame
+    int32_t particle_index = 0;
+};
+
 struct entity_body_t
 {
     float32_t weight = 1.0f;
@@ -222,6 +229,7 @@ struct player_create_info_t
 
 struct entity_t
 {
+    bool dead = false;
     constant_string_t id {""_hash};
     // position, direction, velocity
     // in above entity group space
@@ -297,6 +305,7 @@ struct bullet_t : entity_t
     uint32_t player_index;
     rendering_component_t rendering;
     bounce_physics_component_t bounce_physics;
+    burnable_component_t burnable;
 };
 
 
@@ -318,9 +327,11 @@ struct entities_t
 
     int32_t bullet_count = 0;
     bullet_t bullet_list[MAX_BULLETS];
+    uint32_t removed_bullets_stack_head;
+    uint16_t removed_bullets_stack[MAX_BULLETS];
 
     
-    struct hash_table_inline_t<player_handle_t, 30, 5, 5> name_map{"map.entities"};
+    hash_table_inline_t<player_handle_t, 30, 5, 5> name_map{"map.entities"};
 
 
     pipeline_handle_t player_ppln;
@@ -369,6 +380,7 @@ struct world_t
 player_t *get_player(player_handle_t player_handle);
 voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
+uint32_t spawn_fire(const vector3_t &position);
 void spawn_explosion(const vector3_t &position);
 void spawn_bullet(player_t *shooter);
 player_handle_t spawn_player(const char *player_name, player_color_t color);

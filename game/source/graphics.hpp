@@ -737,8 +737,8 @@ typedef void(*particle_effect_function_t)(struct particle_spawner_t *spawner, fl
 struct particle_spawner_t
 {
     void declare_dead(uint32_t index);
-    particle_t *fetch_next_dead_particle(void);
-    particle_t *particle(void);
+    particle_t *fetch_next_dead_particle(uint32_t *index);
+    particle_t *particle(uint32_t *index);
     void push_for_render(uint32_t index);
     void sort_for_render(void);
     void clear(void);

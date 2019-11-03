@@ -2850,7 +2850,7 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
 
     file_handle_t png_handle = create_file(texture_atlas, file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
     external_image_data_t image_data = read_image(png_handle);
-    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
+    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_NEAREST);
     transition_image_layout(&particles.texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -2975,16 +2975,18 @@ void particle_spawner_t::declare_dead(uint32_t index)
 }
 
     
-particle_t *particle_spawner_t::fetch_next_dead_particle(void)
+particle_t *particle_spawner_t::fetch_next_dead_particle(uint32_t *index)
 {
     if (dead_count)
     {
         uint16_t next_dead = dead[dead_count - 1];
         --dead_count;
+        *index = next_dead;
         return(&particles[next_dead]);
     }
     else if (particles_stack_head < max_particles)
     {
+        *index = particles_stack_head;
         particle_t *next_dead = &particles[particles_stack_head++];
         return(next_dead);
     }
@@ -2992,9 +2994,9 @@ particle_t *particle_spawner_t::fetch_next_dead_particle(void)
 }
 
 
-particle_t *particle_spawner_t::particle(void)
+particle_t *particle_spawner_t::particle(uint32_t *index)
 {
-    return(fetch_next_dead_particle());
+    return(fetch_next_dead_particle(index));
 }
 
 

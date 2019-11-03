@@ -53,7 +53,7 @@ internal_function void clear_chunk_render_queue(void);
 internal_function void push_chunks_with_active_vertices(void);
 // TODO: Function that only pushes chunks that are in player sight
 internal_function void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level);
-internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist);
+internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist);
 internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk);
 internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level);
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
@@ -116,6 +116,7 @@ internal_function void push_player_to_rolling_queue(player_t *player);
 internal_function void push_bullet_to_rolling_queue(bullet_t *b);
 internal_function void update_animation_gpu_data(gpu_command_queue_t *queue);
 
+internal_function void destroy_bullet(uint32_t index);
 internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *info);
 internal_function void construct_player(player_t *player, player_create_info_t *info);
 internal_function player_handle_t add_player(const player_t &e);
@@ -123,7 +124,7 @@ internal_function void make_player_main(player_handle_t player_handle);
 
 internal_function void update_camera_component(camera_component_t *camera, player_t *player, float32_t dt);
 internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt);
-internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *player, float32_t dt);
+internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *player, float32_t dt, uint32_t index);
 internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt);
 internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt);
 internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
@@ -131,7 +132,10 @@ internal_function void update_rolling_player_physics(physics_component_t *compon
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
-internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt);
+internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
+internal_function void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index);
+internal_function void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position);
+internal_function void extinguish_fire(burnable_component_t *burnable_component);
 internal_function void update_entities(float32_t dt, application_type_t app_type);
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
@@ -140,6 +144,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
 
 internal_function void hard_initialize_particles(void);
 internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt);
+internal_function void particle_effect_fire(particle_spawner_t *spawner, float32_t dt);
 internal_function void update_particles(float32_t dt);
 internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue);
 
@@ -332,8 +337,6 @@ internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &x
     ivector3_t chunk_coord = rounded / (VOXEL_CHUNK_EDGE_LENGTH);
 
     return(*get_voxel_chunk(convert_3d_to_1d_index(chunk_coord.x, chunk_coord.y, chunk_coord.z, g_voxel_chunks->grid_edge_size)));
-    
-    ivector3_t cs_voxel_coord = ivector3_t(rounded.x % VOXEL_CHUNK_EDGE_LENGTH, rounded.y % (VOXEL_CHUNK_EDGE_LENGTH), rounded.z % (VOXEL_CHUNK_EDGE_LENGTH));
 }
 
 
@@ -714,11 +717,16 @@ internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel
 }
 
 
-internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, bool *doesnt_exist)
+internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist)
 {
+    if (x < 0 || y < 0 || z < 0)
+    {
+        OutputDebugString("Weird\n");
+    }
+    
     // Voxel coords
-    uint32_t chunk_coord_offset_x = 0, chunk_coord_offset_y = 0, chunk_coord_offset_z = 0;
-    uint32_t final_x = x, final_y = y, final_z = z;
+    int32_t chunk_coord_offset_x = 0, chunk_coord_offset_y = 0, chunk_coord_offset_z = 0;
+    int32_t final_x = x, final_y = y, final_z = z;
 
     if (x == VOXEL_CHUNK_EDGE_LENGTH)
     {
@@ -939,7 +947,12 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
 voxel_chunk_t **get_voxel_chunk(int32_t index)
 {
     persist_var voxel_chunk_t *nul = nullptr;
-    if (index == -1) return(&nul);
+    
+    if (index == -1)
+    {
+        return(&nul);
+    }
+        
     return(&g_voxel_chunks->chunks[index]);
 }
 
@@ -1698,7 +1711,7 @@ internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 }
 
 
-internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt)
+internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt, uint32_t index)
 {
     rendering->push_k.ws_t = glm::translate(bullet->ws_p) * glm::scale(bullet->size);
 
@@ -2017,14 +2030,54 @@ internal_function void update_shoot_component(shoot_component_t *shoot, player_t
 }
 
 
-internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt)
+uint32_t spawn_fire(const vector3_t &position)
 {
-    bullet->ws_v -= bullet->ws_up * 9.81f * dt;
+    uint32_t index = 0;
+    particle_t *particle = g_particles->fire_particle_spawner.particle(&index);
+    particle->ws_position = position;
+    particle->ws_velocity = vector3_t(0.0f);
+    particle->life = 0.0f;
+    particle->size = 2.0f;
+    return(index);
+}
+
+
+internal_function void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position)
+{
+    burnable_component->burning = 1;
+    burnable_component->particle_index = spawn_fire(position);
+}
+
+
+internal_function void extinguish_fire(burnable_component_t *burnable_component)
+{
+    burnable_component->burning = 0;
+    g_particles->fire_particle_spawner.declare_dead(burnable_component->particle_index);
+    burnable_component->particle_index = 0;
+}
+
+
+internal_function void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index)
+{
+    if (burnable_component->burning)
+    {
+        particle_t *fire_particle = &g_particles->fire_particle_spawner.particles[burnable_component->particle_index];
+
+        fire_particle->ws_position = entity->ws_p;
+    }
+}
+
+
+internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index)
+{
+    bullet->ws_v -= bullet->ws_up * 14.81f * dt;
 
     // Project and test if is going to be within chunk zone
-    vector3_t projected_position = bullet->ws_p + bullet->ws_v * dt;
+    vector3_t projected_position = bullet->ws_p + bullet->ws_v * dt * bullet->size * 5.0f;
     if (get_chunk_encompassing_point(ws_to_xs(projected_position)) == nullptr)
     {
+        extinguish_fire(&bullet->burnable);
+        destroy_bullet(index);
         return;
     }
     else
@@ -2033,9 +2086,17 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
 
         if (collision.detected)
         {
-            vector3_t normal = glm::normalize(collision.es_normal * bullet->size);
+            //vector3_t normal = glm::normalize(collision.es_normal * bullet->size);
             // Reflect velocity vector
-            bullet->ws_v = glm::reflect(bullet->ws_v, normal);
+            //bullet->ws_v = glm::reflect(bullet->ws_v, normal);
+
+            vector3_t collision_position = collision.es_at * bullet->size;
+            // EXPLODE !!!
+            spawn_explosion(collision_position);
+            terraform(ws_to_xs(collision_position), 2, 1, 1, 100.0f);
+
+            extinguish_fire(&bullet->burnable);
+            destroy_bullet(index);
         }
         else
         {
@@ -2088,18 +2149,22 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
     for (uint32_t bullet_index = 0; bullet_index < g_entities->bullet_count; ++bullet_index)
     {
         bullet_t *bullet = &g_entities->bullet_list[bullet_index];
-        
-        switch (app_type)
+
+        if (!bullet->dead)
         {
-        case application_type_t::WINDOW_APPLICATION_MODE:
+            switch (app_type)
             {
-                update_bullet_rendering_component(&bullet->rendering, bullet, dt);
-                update_bounce_physics_component(&bullet->bounce_physics, bullet, dt);
-            } break;
-        case application_type_t::CONSOLE_APPLICATION_MODE:
-            {
-                //update_physics_component(&player->physics, player, dt);
-            } break;
+            case application_type_t::WINDOW_APPLICATION_MODE:
+                {
+                    update_bullet_rendering_component(&bullet->rendering, bullet, dt, bullet_index);
+                    update_bounce_physics_component(&bullet->bounce_physics, bullet, dt, bullet_index);
+                    update_burnable_component(&bullet->burnable, bullet, dt, bullet_index);
+                } break;
+            case application_type_t::CONSOLE_APPLICATION_MODE:
+                {
+                    //update_physics_component(&player->physics, player, dt);
+                } break;
+            }
         }
     }
 }
@@ -2233,7 +2298,16 @@ internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool,
 
 void spawn_bullet(player_t *shooter)
 {
-    bullet_t *new_bullet = &g_entities->bullet_list[g_entities->bullet_count++];
+    bullet_t *new_bullet;
+    if (g_entities->removed_bullets_stack_head > 0)
+    {
+        new_bullet = &g_entities->bullet_list[g_entities->removed_bullets_stack[g_entities->removed_bullets_stack_head--]];
+        new_bullet->dead = 0;
+    }
+    else
+    {
+        new_bullet = &g_entities->bullet_list[g_entities->bullet_count++];
+    }
     bullet_create_info_t info = {};
     info.ws_position = shooter->ws_p;
     info.ws_direction = glm::normalize(shooter->ws_d);
@@ -2242,8 +2316,17 @@ void spawn_bullet(player_t *shooter)
     info.color = player_color_t::DARK_GRAY;
     construct_bullet(new_bullet, &info);
 
-    new_bullet->ws_v = shooter->ws_d * 30.0f;
+    new_bullet->ws_v = shooter->ws_d * 50.0f;
     new_bullet->ws_up = shooter->ws_up;
+
+    set_on_fire(&new_bullet->burnable, new_bullet->ws_p);
+}
+
+
+internal_function void destroy_bullet(uint32_t index)
+{
+    g_entities->bullet_list[index].dead = 1;
+    g_entities->removed_bullets_stack[g_entities->removed_bullets_stack_head++] = index;
 }
 
 
@@ -2339,18 +2422,38 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
 // ******************************** Particles code ******************************
 void spawn_explosion(const vector3_t &position)
 {
-    particle_t *particle =g_particles->explosion_particle_spawner.particle();
+    uint32_t index;
+    particle_t *particle = g_particles->explosion_particle_spawner.particle(&index);
     particle->ws_position = position;
     particle->ws_velocity = vector3_t(0.0f);
     particle->life = 0.0f;
-    particle->size = 5.0f;
+    particle->size = 15.0f;
+}
+
+
+internal_function void particle_effect_fire(particle_spawner_t *spawner, float32_t dt)
+{
+    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
+    {
+        particle_t *particle = &spawner->particles[i];
+        if (particle->life < spawner->max_life_length)
+        {
+            particle->life += dt;
+
+            // Doesn't die unless from another source
+            if (particle->life > spawner->max_life_length)
+            {
+                particle->life = glm::mod(particle->life, spawner->max_life_length);
+            }
+
+            spawner->push_for_render(i);
+        }
+    }
 }
 
 
 internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
 {
-    camera_t *main_camera = get_camera_bound_to_3d_output();
-    
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
         particle_t *particle = &spawner->particles[i];
@@ -2375,6 +2478,8 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
 internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
 {
     update_gpu_buffer(&g_particles->explosion_particle_spawner.gpu_particles_buffer, g_particles->explosion_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * g_particles->explosion_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
+
+    update_gpu_buffer(&g_particles->fire_particle_spawner.gpu_particles_buffer, g_particles->fire_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * g_particles->fire_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 }
 
 
@@ -2385,6 +2490,12 @@ internal_function void update_particles(float32_t dt)
         (*g_particles->explosion_particle_spawner.update)(&g_particles->explosion_particle_spawner, dt);
     }
     g_particles->explosion_particle_spawner.sort_for_render();
+
+    g_particles->fire_particle_spawner.clear();
+    {
+        (*g_particles->fire_particle_spawner.update)(&g_particles->fire_particle_spawner, dt);
+    }
+    g_particles->fire_particle_spawner.sort_for_render();
 }
 
 
@@ -2394,6 +2505,10 @@ internal_function void hard_initialize_particles(void)
     
     pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv", single_tx_layout_hdl);
     g_particles->explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f, "textures/particles/explosion.png", 4, 4, 14);
+
+
+    
+    g_particles->fire_particle_spawner = initialize_particle_spawner(50, &particle_effect_fire, explosion_shader_handle, 1.0f, "textures/particles/fire.png", 3, 3, 9);
 }
 
 
@@ -2451,12 +2566,18 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
             uint32_t atlas_width;
             uint32_t atlas_height;
             uint32_t num_images;
-        } explosion_pk;
+        } explosion_pk, fire_pk;
         explosion_pk.max_time = g_particles->explosion_particle_spawner.max_life_length;
         explosion_pk.atlas_width = g_particles->explosion_particle_spawner.image_x_count;
         explosion_pk.atlas_height = g_particles->explosion_particle_spawner.image_y_count;
         explosion_pk.num_images = g_particles->explosion_particle_spawner.num_images;
         render_particles(queue, uniform_groups, &g_particles->explosion_particle_spawner, &explosion_pk, sizeof(explosion_pk));
+
+        fire_pk.max_time = g_particles->fire_particle_spawner.max_life_length;
+        fire_pk.atlas_width = g_particles->fire_particle_spawner.image_x_count;
+        fire_pk.atlas_height = g_particles->fire_particle_spawner.image_y_count;
+        fire_pk.num_images = g_particles->fire_particle_spawner.num_images;
+        render_particles(queue, uniform_groups, &g_particles->fire_particle_spawner, &fire_pk, sizeof(fire_pk));
     }
     end_deferred_rendering(queue);
 
@@ -2692,7 +2813,7 @@ void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, 
 
     if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
     {
-        *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
+        //        *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
 
         // TODO: Introduce concept of class: each class has different powers
         *action_flags |= (1 << action_flags_t::SHOOT);

@@ -27,6 +27,8 @@ bool send_to(network_socket_t *socket, network_address_t address, char *buffer, 
 uint32_t str_to_ipv4_int32(const char *address);
 uint32_t host_to_network_byte_order(uint32_t bytes);
 uint32_t network_to_host_byte_order(uint32_t bytes);
+float32_t host_to_network_byte_order_f32(float32_t bytes);
+float32_t network_to_host_byte_order_f32(float32_t bytes);
 
 void initialize_socket_api(void);
 
@@ -36,6 +38,24 @@ struct socket_manager_t
     SOCKET sockets[MAX_SOCKETS] = {};
     uint32_t socket_count = 0;
 };
+
+struct serializer_t
+{
+    uint32_t data_buffer_size;
+    uint8_t *data_buffer;
+    uint32_t data_buffer_head = 0;
+};
+
+void initialize_serializer(serializer_t *serializer, uint32_t max_size);
+uint8_t *grow_serializer_data_buffer(serializer_t *serializer, uint32_t bytes);
+
+void serialize_uint8(serializer_t *serializer, uint8_t u8);
+void serialize_uint32(serializer_t *serializer, uint32_t u32);
+void serialize_float32(serializer_t *serializer, float32_t f32);
+
+uint8_t deserialize_uint8(serializer_t *serializer);
+uint32_t deserialize_uint32(serializer_t *serializer);
+float32_t deserialize_float32(serializer_t *serializer);
 
 struct packet_header_t
 {
@@ -55,9 +75,6 @@ struct server_handshake_packet_t
     packet_header_t header;
     uint16_t client_id;
     uint8_t color;
-
-    uint32_t terrain_base_count;
-    uint32_t terrain_count;
 };
 
 #define CLIENT_NAME_MAX_LENGTH 40

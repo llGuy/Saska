@@ -46,6 +46,7 @@ internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position);
 internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
 internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
 internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
+internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius);
 internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive);
 
 // Rendering / Mesh / GPU operations
@@ -481,6 +482,59 @@ internal_function void construct_plane(const vector3_t &ws_plane_origin, float32
                 cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
 
                 chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = 255;
+            }
+        }
+    }
+}
+
+
+internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius)
+{
+    vector3_t xs_sphere_position = ws_to_xs(ws_sphere_position);
+    
+    voxel_chunk_t *chunk = get_chunk_encompassing_point(xs_sphere_position);
+    ready_chunk_for_gpu_sync(chunk);
+    
+    ivector3_t sphere_center = xs_sphere_position;
+
+    radius /= g_voxel_chunks->size;
+    radius = glm::round(radius);
+    
+    float32_t radius_squared = radius * radius;
+    
+    ivector3_t bottom_corner = sphere_center - ivector3_t((uint32_t)radius);
+
+    uint32_t diameter = (uint32_t)radius * 2 + 1;
+
+    for (uint32_t z = 0; z < diameter; ++z)
+    {
+        for (uint32_t y = 0; y < diameter; ++y)
+        {
+            for (uint32_t x = 0; x < diameter; ++x)
+            {
+                vector3_t v_f = vector3_t(x, y, z) + vector3_t(bottom_corner);
+                vector3_t diff = v_f - vector3_t(sphere_center);
+                float32_t real_distance_squared = glm::dot(diff, diff);
+
+                if (real_distance_squared <= radius_squared && real_distance_squared >= (radius - 3.5f) * (radius - 3.0f))
+                {
+                    ivector3_t cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+
+                    if (is_voxel_coord_within_chunk(cs_vcoord))
+                    {
+                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                    }
+                    else
+                    {
+                        chunk = get_chunk_encompassing_point(ivector3_t(v_f));
+                        ready_chunk_for_gpu_sync(chunk);
+                        cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+
+                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                    }
+                }
             }
         }
     }
@@ -940,7 +994,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     chunk->gpu_mesh = initialize_mesh(buffers, &indexed_data, &g_voxel_chunks->chunk_model.index_data);
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
-    chunk->push_k.color = vector4_t(65.0 / 255.0, ((float32_t)(0x100)) / 255.0, ((float32_t)0x26) / 255.0, 1.0f);
+    chunk->push_k.color = vector4_t(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0, 1.0f);
 }
 
 
@@ -1634,6 +1688,29 @@ internal_function void update_camera_component(camera_component_t *camera_compon
     {
         vector3_t right = glm::cross(player->ws_d, up);
         camera_position += right * player->size.x + -camera_component->distance_from_player * player->ws_d;
+
+        if (camera_component->initialized_previous_position)
+        {
+            // Check that camera isn't underneath the terrain
+            collision_t collision = collide(camera_position, vector3_t(2.0f), camera_position - camera_component->previous_position, 0, collision_t{});
+
+            if (collision.under_terrain || collision.detected)
+            {
+                camera_position = collision.es_at * vector3_t(2.0f);
+            }
+            else
+            {
+                collision_t post_collision = collide(camera_position, vector3_t(1.5f), camera_position - camera_component->previous_position, 0, collision_t{});
+            }
+
+            // Update camera position and previous camera position
+            camera_component->previous_position = camera_position;
+        }
+        else
+        {
+            camera_component->previous_position = camera_position;
+            camera_component->initialized_previous_position = 1;
+        }
     }
         
     camera->v_m = glm::lookAt(camera_position, player->ws_p + up + player->ws_d, up);
@@ -2073,8 +2150,8 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
     bullet->ws_v -= bullet->ws_up * 14.81f * dt;
 
     // Project and test if is going to be within chunk zone
-    vector3_t projected_position = bullet->ws_p + bullet->ws_v * dt * bullet->size * 5.0f;
-    if (get_chunk_encompassing_point(ws_to_xs(projected_position)) == nullptr)
+    vector3_t projected_limit = bullet->ws_p + bullet->ws_v * dt + bullet->ws_v * bullet->size;
+    if (get_chunk_encompassing_point(ws_to_xs(projected_limit)) == nullptr)
     {
         extinguish_fire(&bullet->burnable);
         destroy_bullet(index);
@@ -2095,7 +2172,7 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
             spawn_explosion(collision_position);
             terraform(ws_to_xs(collision_position), 2, 1, 1, 100.0f);
 
-            extinguish_fire(&bullet->burnable);
+             extinguish_fire(&bullet->burnable);
             destroy_bullet(index);
         }
         else
@@ -2370,6 +2447,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->camera.camera = info->camera_info.camera_index;
     player->camera.is_third_person = info->camera_info.is_third_person;
     player->camera.distance_from_player = info->camera_info.distance_from_player;
+    player->camera.initialized_previous_position = 0;
     player->physics.enabled = info->physics_info.enabled;
     player->animation.cycles = info->animation_info.cycles;
     player->animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
@@ -2441,12 +2519,25 @@ internal_function void particle_effect_fire(particle_spawner_t *spawner, float32
         {        
             if (particle->life < spawner->max_life_length)
             {
-                particle->life += dt;
+                float32_t direction = 1.0f;
+
+                if (particle->flag0)
+                {
+                    direction = -1.0f;
+                }
+                
+                particle->life += dt * direction;
 
                 // Doesn't die unless from another source
                 if (particle->life > spawner->max_life_length)
                 {
-                    particle->life = glm::mod(particle->life, spawner->max_life_length);
+                    particle->flag0 = 1;
+                    particle->life -= dt * direction;
+                }
+                else if (particle->life < 0.0f)
+                {
+                    particle->flag0 = 0;
+                    particle->life += dt * direction;
                 }
 
                 spawner->push_for_render(i);
@@ -2677,9 +2768,9 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    construct_sphere(vector3_t(80.0f, 70.0f, 0.0f), 60.0f);
+    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
     construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
-    //construct_plane(vector3_t(0.0f), 60.0f);
+    construct_sphere(vector3_t(-220.0f, 70.0f, -120.0f), 60.0f);
 }
 
 

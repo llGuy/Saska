@@ -2850,7 +2850,7 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
 
     file_handle_t png_handle = create_file(texture_atlas, file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
     external_image_data_t image_data = read_image(png_handle);
-    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_NEAREST);
+    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
     transition_image_layout(&particles.texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

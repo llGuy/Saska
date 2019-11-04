@@ -136,8 +136,11 @@ struct camera_component_t
     // When for example, the layer is standing somewhere with different surface normal (when in rolling mode only)
     uint8_t is_in_rotation_animation: 1;
     uint8_t is_third_person: 1;
+    uint8_t initialized_previous_position: 1;
     
     float32_t distance_from_player = 40.0f;
+
+    vector3_t previous_position = vector3_t(0.0f);
 };
 
 struct animation_component_create_info_t

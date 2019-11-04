@@ -719,6 +719,15 @@ struct particle_t
     // May dictate the texture being displayed
     float32_t life;
     float32_t size;
+
+    uint8_t flag0: 1;
+    uint8_t flag1: 1;
+    uint8_t flag2: 1;
+    uint8_t flag3: 1;
+    uint8_t flag4: 1;
+    uint8_t flag5: 1;
+    uint8_t flag6: 1;
+    uint8_t flag7: 1;
 };
 
 

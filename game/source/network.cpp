@@ -135,15 +135,97 @@ void initialize_socket_api(void)
     }
 }
 
+void initialize_serializer(serializer_t *serializer, uint32_t max_size)
+{
+    serializer->data_buffer = (uint8_t *)malloc(max_size * sizeof(uint8_t));
+}
+
+uint8_t *grow_serializer_data_buffer(serializer_t *serializer, uint32_t bytes)
+{
+    uint32_t previous = serializer->data_buffer_head;
+    serializer->data_buffer_head += bytes;
+    return(&serializer->data_buffer[previous]);
+}
+
+void serialize_uint8(serializer_t *serializer, uint8_t u8)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+    *pointer = u8;
+}
+
+uint8_t deserialize_uint8(serializer_t *serializer)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+    return(*pointer);
+}
+
+void serialize_float32(serializer_t *serializer, float32_t f32)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    *(float32_t *)pointer = f32;
+#else
+    uint32_t *f = (uint32_t *)&f32;
+    *pointer++ = (uint8_t)*f;
+    *pointer++ = (uint8_t)(*f >> 8);
+    *pointer++ = (uint8_t)(*f >> 16);
+    *pointer++ = (uint8_t)(*f >> 24);
+#endif
+}
+
+float32_t deserialize_float32(serializer_t *serializer)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    return(*(float32_t *)pointer);
+#else
+    uint32_t ret = 0;
+    ret += (*pointer++);
+    ret += ((uint32_t)(*pointer++)) << 8;
+    ret += ((uint32_t)(*pointer++)) << 16;
+    ret += ((uint32_t)(*pointer++)) << 24;
+    
+    return(*(float32_t *)(&ret));
+#endif
+}
+
+void serialize_uint32(serializer_t *serializer, uint32_t u32)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    *(uint32_t *)pointer = u32;
+    #else
+    *pointer++ = (uint8_t)u32;
+    *pointer++ = (uint8_t)(u32 >> 8);
+    *pointer++ = (uint8_t)(u32 >> 16);
+    *pointer++ = (uint8_t)(u32 >> 24);
+    #endif
+}
+
+uint32_t deserialize_uint32(serializer_t *serializer)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
+    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    return(*(uint32_t *)pointer);
+    #else
+    uint32_t ret = 0;
+    ret += (*pointer++);
+    ret += ((uint32_t)(*pointer++)) << 8;
+    ret += ((uint32_t)(*pointer++)) << 16;
+    ret += ((uint32_t)(*pointer++)) << 24;
+    return(ret);
+    #endif
+}
+
 void join_server(const char *ip_address)
 {
     client_join_packet_t packet_to_send = {};
     packet_to_send.header.packet_mode = packet_header_t::packet_mode_t::CLIENT_MODE;
     packet_to_send.header.packet_type = packet_header_t::client_packet_type_t::CLIENT_JOIN;
     packet_to_send.header.total_packet_size = sizeof(packet_to_send);
-    const char *message = "saska\0";
+    const char *message = "Walter Sobchak\0";
     memcpy(packet_to_send.client_name, message, strlen(message));
-
+    
     network_address_t server_address { (uint16_t)host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
     send_to(&g_network_state->main_network_socket,
             server_address,
@@ -160,14 +242,11 @@ void initialize_as_client(void)
                               AF_INET,
                               SOCK_DGRAM,
                               IPPROTO_UDP);
-     
     network_address_t address = {};
     address.port = host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_CLIENT);
     bind_network_socket_to_port(&g_network_state->main_network_socket,
                                 address);
-
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
-
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
 }
 
@@ -178,12 +257,10 @@ void initialize_as_server(void)
                                AF_INET,
                                SOCK_DGRAM,
                                IPPROTO_UDP);
-     
      network_address_t address = {};
      address.port = host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER);
      bind_network_socket_to_port(&g_network_state->main_network_socket,
                                  address);
-
      set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
 }
 
@@ -195,20 +272,7 @@ void initialize_network_translation_unit(struct game_memory_t *memory)
 // Adds a client to the network_component_t array in entities_t
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle)
 {
-    /*uint16_t client_id = g_network_state->client_count++;
-    g_network_state->clients[client_id].client_id = client_id;
-    g_network_state->clients[client_id].network_address = network_address;
-    memcpy(g_network_state->clients[client_id].client_name, client_name, strlen(client_name) + 1);
-
-    uint32_t component_index = add_network_component();
-    g_network_state->clients[client_id].network_component_index = component_index;
-
-    network_component_t *component_ptr = get_network_component(component_index);
-    component_ptr->entity_index = entity_handle;
-    component_ptr->client_state_index = client_id;
-
-    entity_t *entity = get_entity(entity_handle);
-    entity->components.network_component = component_index;*/
+    // Initialize network component or something
 
     return(0);
 }
@@ -231,7 +295,11 @@ void update_as_server(void)
             {
             case packet_header_t::client_packet_type_t::CLIENT_JOIN:
                 {
+
+                    
+
                 } break;
+                // case packet_header_t::client_packet_type_t::ETC:
             }
         }
     }
@@ -252,7 +320,9 @@ void update_as_client(void)
             {
             case packet_header_t::server_packet_type_t::SERVER_HANDSHAKE:
                 {
+
                     
+
                 } break;
             }
         }

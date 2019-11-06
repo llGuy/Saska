@@ -54,7 +54,7 @@ void request_quit(void)
     PostQuitMessage(0);
 }
 
-void ouptut_debug_string(const char *string)
+void output_debug_string(const char *string)
 {
     OutputDebugString(string);
 }

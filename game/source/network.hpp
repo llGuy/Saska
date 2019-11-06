@@ -21,7 +21,7 @@ void initialize_network_socket(network_socket_t *socket, int32_t family, int32_t
 void bind_network_socket_to_port(network_socket_t *socket, network_address_t address);
 void set_socket_to_non_blocking_mode(network_socket_t *socket);
 
-bool receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size, network_address_t *address_dst);
+int32_t receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_size, network_address_t *address_dst);
 bool send_to(network_socket_t *socket, network_address_t address, char *buffer, uint32_t buffer_size);
 
 uint32_t str_to_ipv4_int32(const char *address);
@@ -48,31 +48,47 @@ struct serializer_t
 
 void initialize_serializer(serializer_t *serializer, uint32_t max_size);
 uint8_t *grow_serializer_data_buffer(serializer_t *serializer, uint32_t bytes);
+void send_serialized_message(serializer_t *serializer, network_address_t address);
+void receive_serialized_message(serializer_t *serializer, network_address_t address);
 
 void serialize_uint8(serializer_t *serializer, uint8_t u8);
+void serialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 void serialize_uint32(serializer_t *serializer, uint32_t u32);
 void serialize_float32(serializer_t *serializer, float32_t f32);
+void serialize_string(serializer_t *serializer, const char *string);
 
 uint8_t deserialize_uint8(serializer_t *serializer);
 uint32_t deserialize_uint32(serializer_t *serializer);
 float32_t deserialize_float32(serializer_t *serializer);
+const char *deserialize_string(serializer_t *serializer);
+void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
+
+enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
+enum client_packet_type_t { CPT_CLIENT_JOIN };
+enum server_packet_type_t { SPT_SERVER_HANDSHAKE };
 
 struct packet_header_t
 {
-    enum packet_mode_t { CLIENT_MODE, SERVER_MODE };
-    enum client_packet_type_t { CLIENT_JOIN };
-    enum server_packet_type_t { SERVER_HANDSHAKE };
+    union
+    {
+        struct
+        {
+            uint32_t packet_mode: 1;
+            uint32_t packet_type: 4 /* To increase in the future when more packet types appear */;
+            // Includes header
+            uint32_t total_packet_size: 27;
+        };
 
-    uint32_t packet_mode: 1;
-    uint32_t packet_type: 4 /* To increase in the future when more packet types appear */;
-    // Includes header
-    uint32_t total_packet_size: 27;
+        uint32_t bytes;
+    };
 };
+
+void serialize_packet_header(serializer_t *serializer, packet_header_t *packet);
+void deserialize_packet_header(serializer_t *serializer, packet_header_t *packet);
 
 // This also needs to send the state of the world
 struct server_handshake_packet_t
 {
-    packet_header_t header;
     uint16_t client_id;
     uint8_t color;
 };
@@ -81,9 +97,11 @@ struct server_handshake_packet_t
 
 struct client_join_packet_t
 {
-    packet_header_t header;
-    char client_name[CLIENT_NAME_MAX_LENGTH];
+    const char *client_name;
 };
+
+void serialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
+void deserialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
 
 struct client_state_t
 {
@@ -115,6 +133,9 @@ struct network_state_t
 
     // THIS IS ONLY FOR THE CLIENT, NOT THE SERVER APPLICATION
     uint16_t client_id_stack[MAX_CLIENTS] = {};
+
+    // If packet size doesn't match the size of the size defined in the header
+    // ...
 };
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
@@ -122,3 +143,7 @@ void update_network_state(void);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);
 void initialize_network_state(struct game_memory_t *memory, application_mode_t app_mode);
+
+
+
+void join_server(const char *ip_address, const char *client_name);

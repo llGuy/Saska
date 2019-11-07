@@ -4,6 +4,7 @@
 
 #include "core.hpp"
 #include "vulkan.hpp"
+#include "network.hpp"
 #include "graphics.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
@@ -42,6 +43,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
 voxel_chunk_t **get_voxel_chunk(int32_t index);
+
 
 struct voxel_chunks_t
 {
@@ -395,6 +397,7 @@ void make_player_renderable(player_handle_t player_handle, player_color_t color)
 void make_player_main(player_handle_t player_handle, input_state_t *input_state);
 
 void update_network_world_state(void);
+void initialize_game_state_initialize_packet(struct game_state_initialize_packet_t *packet, player_handle_t new_client_handle);
 
 void clean_up_world_data(void);
 void make_world_data(void);

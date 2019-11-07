@@ -979,6 +979,8 @@ internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord)
 {
+    chunk->should_do_gpu_sync = 0;
+    
     chunk->xs_bottom_corner = chunk_coord * VOXEL_CHUNK_EDGE_LENGTH;
     chunk->chunk_coord = chunk_coord;
     
@@ -2660,7 +2662,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_player_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2743,8 +2745,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     hard_initialize_particles();
 
     initialize_world(input_state, cmdpool, app_type, app_mode);
-    deinitialize_world();
-    
+        
     clear_linear();
 }
 
@@ -2861,6 +2862,31 @@ void make_world_data(void /* Some kind of state */)
 
 void update_network_world_state(void)
 {
+}
+
+
+void initialize_game_state_initialize_packet(game_state_initialize_packet_t *packet, player_handle_t new_client_index)
+{
+    packet->voxels.size = g_voxel_chunks->size;
+    packet->voxels.grid_edge_size = g_voxel_chunks->grid_edge_size;
+    packet->voxels.max_chunks = g_voxel_chunks->max_chunks;
+    packet->voxels.chunk_count = g_voxel_chunks->chunk_count;
+
+    packet->client_index = new_client_index;
+    packet->player_count = g_entities->player_count;
+    packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * g_entities->player_count);
+
+    for (uint32_t player = 0; player < g_entities->player_count; ++player)
+    {
+        player_t *p_player = &g_entities->player_list[player];
+        packet->player[player].ws_position_x = p_player->ws_p.x;
+        packet->player[player].ws_position_y = p_player->ws_p.y;
+        packet->player[player].ws_position_z = p_player->ws_p.z;
+
+        packet->player[player].ws_view_direction_x = p_player->ws_d.x;
+        packet->player[player].ws_view_direction_y = p_player->ws_d.y;
+        packet->player[player].ws_view_direction_z = p_player->ws_d.z;
+    }
 }
 
 

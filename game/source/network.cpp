@@ -285,6 +285,71 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
     packet->client_name = deserialize_string(serializer);
 }
 
+void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
+{
+    serialize_float32(serializer, packet->ws_position_x);
+    serialize_float32(serializer, packet->ws_position_y);
+    serialize_float32(serializer, packet->ws_position_z);
+
+    serialize_float32(serializer, packet->ws_view_direction_x);
+    serialize_float32(serializer, packet->ws_view_direction_y);
+    serialize_float32(serializer, packet->ws_view_direction_z);
+
+    // Etc...
+}
+
+void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
+{
+    packet->ws_position_x = deserialize_float32(serializer);
+    packet->ws_position_y = deserialize_float32(serializer);
+    packet->ws_position_z = deserialize_float32(serializer);
+
+    packet->ws_view_direction_x = deserialize_float32(serializer);
+    packet->ws_view_direction_y = deserialize_float32(serializer);
+    packet->ws_view_direction_z = deserialize_float32(serializer);
+
+    // Etc...
+}
+
+void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->grid_edge_size);
+    serialize_float32(serializer, packet->size);
+    serialize_uint32(serializer, packet->chunk_count);
+    serialize_uint32(serializer, packet->max_chunks);
+}
+
+void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
+{
+    packet->grid_edge_size = deserialize_uint32(serializer);
+    packet->size = deserialize_float32(serializer);
+    packet->chunk_count = deserialize_uint32(serializer);
+    packet->max_chunks = deserialize_uint32(serializer);
+}
+
+void serialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
+{
+    serialize_voxel_state_initialize_packet(serializer, &packet->voxels);
+    serialize_uint32(serializer, packet->client_index);
+    serialize_uint32(serializer, packet->player_count);
+    for (uint32_t i = 0; i < packet->player_count; ++i)
+    {
+        serialize_player_state_initialize_packet(serializer, &packet->player[i]);
+    }
+}
+
+void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
+{
+    deserialize_voxel_state_initialize_packet(serializer, &packet->voxels);
+    packet->client_index = deserialize_uint32(serializer);
+    packet->player_count = deserialize_uint32(serializer);
+    packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * packet->player_count);
+    for (uint32_t i = 0; i < packet->player_count; ++i)
+    {
+        deserialize_player_state_initialize_packet(serializer, &packet->player[i]);
+    }
+}
+
 
 void join_server(const char *ip_address, const char *client_name)
 {
@@ -356,12 +421,12 @@ void update_as_server(void)
 
     if (bytes_received > 0)
     {
-        serializer_t serializer = {};
-        serializer.data_buffer = (uint8_t *)message_buffer;
-        serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
+        serializer_t in_serializer = {};
+        in_serializer.data_buffer = (uint8_t *)message_buffer;
+        in_serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
 
         packet_header_t header = {};
-        deserialize_packet_header(&serializer, &header);
+        deserialize_packet_header(&in_serializer, &header);
 
         if (header.total_packet_size == bytes_received)
         {
@@ -373,7 +438,25 @@ void update_as_server(void)
                     {
 
                         client_join_packet_t client_join = {};
-                        deserialize_client_join_packet(&serializer, &client_join);
+                        deserialize_client_join_packet(&in_serializer, &client_join);
+
+                        // Create handshake packet
+                        serializer_t out_serializer = {};
+                        initialize_serializer(&out_serializer, 1000);
+                        game_state_initialize_packet_t game_state_init_packet = {};
+                        initialize_game_state_initialize_packet(&game_state_init_packet, 0);
+
+                        packet_header_t handshake_header = {};
+                        handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+                        handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
+                        handshake_header.total_packet_size = sizeof(packet_header_t::bytes);
+                        handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
+                        handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
+                        handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
+                        
+                        serialize_packet_header(&out_serializer, &handshake_header);
+                        serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
+                        send_serialized_message(&out_serializer, received_address);
 
                     } break;
                     // case packet_header_t::client_packet_type_t::ETC:
@@ -394,16 +477,24 @@ void update_as_client(void)
 
     if (received)
     {
-        packet_header_t *header = (packet_header_t *)message_buffer;
+        serializer_t in_serializer = {};
+        in_serializer.data_buffer = (uint8_t *)message_buffer;
+        in_serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
 
-        if (header->packet_mode == packet_mode_t::PM_SERVER_MODE)
+        packet_header_t header = {};
+        deserialize_packet_header(&in_serializer, &header);
+
+        if (header.packet_mode == packet_mode_t::PM_SERVER_MODE)
         {
-            switch(header->packet_type)
+            switch(header.packet_type)
             {
             case server_packet_type_t::SPT_SERVER_HANDSHAKE:
                 {
 
+                    game_state_initialize_packet_t game_state_init_packet = {};
+                    deserialize_game_state_initialize_packet(&in_serializer, &game_state_init_packet);
                     
+                    deinitialize_world();
 
                 } break;
             }

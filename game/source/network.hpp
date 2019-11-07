@@ -100,6 +100,41 @@ struct client_join_packet_t
     const char *client_name;
 };
 
+struct voxel_state_initialize_packet_t
+{
+    uint32_t grid_edge_size;
+    float32_t size;
+    uint32_t chunk_count;
+    uint32_t max_chunks;
+};
+
+struct player_state_initialize_packet_t
+{
+    float32_t ws_position_x;
+    float32_t ws_position_y;
+    float32_t ws_position_z;
+
+    float32_t ws_view_direction_x;
+    float32_t ws_view_direction_y;
+    float32_t ws_view_direction_z;
+};
+
+struct game_state_initialize_packet_t
+{
+    voxel_state_initialize_packet_t voxels;
+    uint32_t client_index;
+    uint32_t player_count;
+    player_state_initialize_packet_t *player;
+};
+
+void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
+void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
+void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
+void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
+
+void serialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet);
+void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet);
+
 void serialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
 void deserialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
 

@@ -506,6 +506,7 @@ using camera_handle_t = int32_t;
 enum { CAMERA_BOUND_TO_3D_OUTPUT = -1 };
 
 camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution);
+void remove_all_cameras(void);
 void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far);
 camera_t *get_camera(camera_handle_t handle);
 camera_t *get_camera_bound_to_3d_output(void);
@@ -676,11 +677,15 @@ struct animation_cycles_t
     persist_var constexpr uint32_t MAX_ANIMATIONS = 10;
     animation_cycle_t cycles[MAX_ANIMATIONS];
     uint32_t cycle_count;
+
+    uint32_t destroyed_groups_count = 0;
+    uniform_group_t *destroyed_uniform_groups;
 };
 
 joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton);
 skeleton_t load_skeleton(const char *path);
 animation_cycles_t load_animations(const char *path);
+void push_uniform_group_to_destroyed_uniform_group_cache(animation_cycles_t *cycles, struct animated_instance_t *instance);
 
 struct animated_instance_t
 {

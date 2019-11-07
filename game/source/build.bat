@@ -46,6 +46,7 @@ If "%1" == "help" goto help
 
 :compile
 %CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
+%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%     
 popd
 
 goto :eof

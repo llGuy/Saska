@@ -23,12 +23,14 @@ constexpr float32_t PI = 3.14159265359f;
 global_var struct entities_t *g_entities;
 global_var struct voxel_chunks_t *g_voxel_chunks;
 global_var struct particles_t *g_particles;
+global_var bool *g_initialized_world;
 
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
 
 // Initialization
 internal_function void hard_initialize_chunks(void);
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord);
+void deinitialize_chunk(voxel_chunk_t *chunk);
 
 // Vector space operations
 internal_function vector3_t get_voxel_world_origin(void);
@@ -995,6 +997,13 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
     chunk->push_k.color = vector4_t(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0, 1.0f);
+}
+
+
+void deinitialize_chunk(voxel_chunk_t *chunk)
+{
+    chunk->chunk_mesh_gpu_buffer.destroy();
+    deallocate_free_list(chunk->gpu_mesh.raw_buffer_list.buffer);
 }
 
 
@@ -2734,6 +2743,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     hard_initialize_particles();
 
     initialize_world(input_state, cmdpool, app_type, app_mode);
+    deinitialize_world();
     
     clear_linear();
 }
@@ -2771,6 +2781,52 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
     construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
     construct_sphere(vector3_t(-220.0f, 70.0f, -120.0f), 60.0f);
+}
+
+void deinitialize_world(void)
+{
+    // Deinitialize chunks:
+    uint32_t i = 0;
+    for (uint32_t z = 0; z < g_voxel_chunks->grid_edge_size; ++z)
+    {
+        for (uint32_t y = 0; y < g_voxel_chunks->grid_edge_size; ++y)
+        {
+            for (uint32_t x = 0; x < g_voxel_chunks->grid_edge_size; ++x)
+            {
+                voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
+
+                deinitialize_chunk(*chunk_ptr);
+                
+                deallocate_free_list(*chunk_ptr);
+    
+                ++i;
+            }    
+        }    
+    }
+    deallocate_free_list(g_voxel_chunks->chunks);
+
+    g_voxel_chunks->grid_edge_size = 0;
+    g_voxel_chunks->size = 0;
+    g_voxel_chunks->chunk_count = 0;
+    g_voxel_chunks->max_chunks = 0;
+    g_voxel_chunks->to_sync_count = 0;
+
+    // Deinitialize entities:
+    for (uint32_t i = 0; i < g_entities->player_count; ++i)
+    {
+        player_t *player = &g_entities->player_list[i];
+        deallocate_free_list(player->animation.animation_instance.interpolated_transforms);
+        deallocate_free_list(player->animation.animation_instance.current_joint_transforms);
+        player->animation.animation_instance.interpolated_transforms_ubo.destroy();
+        push_uniform_group_to_destroyed_uniform_group_cache(&g_entities->player_mesh_cycles, &player->animation.animation_instance);
+    }
+
+    g_entities->player_count = 0;
+    g_entities->main_player = -1;
+    g_entities->bullet_count = 0;
+    g_entities->removed_bullets_stack_head = 0;
+
+    bind_camera_to_3d_scene_output(-1);
 }
 
 
@@ -3165,6 +3221,7 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
     g_entities = &memory->world_state.entities;
     g_voxel_chunks = &memory->world_state.voxel_chunks;
     g_particles = &memory->world_state.particles;
+    g_initialized_world = &memory->world_state.initialized_world;
 }
 
 

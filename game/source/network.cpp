@@ -318,6 +318,8 @@ void initialize_as_client(void)
     bind_network_socket_to_port(&g_network_state->main_network_socket, address);
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
+
+    join_server("127.0.0.1", "Walter Sobschak");
 }
 
 void initialize_as_server(void)
@@ -372,9 +374,6 @@ void update_as_server(void)
 
                         client_join_packet_t client_join = {};
                         deserialize_client_join_packet(&serializer, &client_join);
-
-                        output_debug_string(client_join.client_name);
-                        output_debug_string("\n");
 
                     } break;
                     // case packet_header_t::client_packet_type_t::ETC:

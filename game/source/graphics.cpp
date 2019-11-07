@@ -557,6 +557,11 @@ internal_function void make_camera_data(VkDescriptorPool *pool)
     g_cameras->spectator_camera.v_m = matrix4_t(1.0f);
 }
 
+void remove_all_cameras(void)
+{
+    g_cameras->camera_count = 0;
+}
+
 bool is_in_spectator_mode(void)
 {
     return(!g_cameras->camera_count);
@@ -2631,7 +2636,15 @@ animation_cycles_t load_animations(const char *path)
         }
     }
 
+    animation_cycles.destroyed_uniform_groups = (uniform_group_t *)allocate_free_list(sizeof(uniform_group_t) * 30);
+    
     return animation_cycles;
+}
+
+void push_uniform_group_to_destroyed_uniform_group_cache(animation_cycles_t *cycles, animated_instance_t *instance)
+{
+    cycles->destroyed_uniform_groups[cycles->destroyed_groups_count++] = instance->group;
+    instance->group = VK_NULL_HANDLE;
 }
 
 animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles)
@@ -2656,7 +2669,11 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
                                gpu_buffer_usage_t::UNIFORM_BUFFER,
                                pool);
 
-    if (instance.group == VK_NULL_HANDLE)
+    if (cycles->destroyed_groups_count)
+    {
+        instance.group = cycles->destroyed_uniform_groups[--cycles->destroyed_groups_count];
+    }
+    else if (instance.group == VK_NULL_HANDLE)
     {
         instance.group = make_uniform_group(gpu_ubo_layout, g_uniform_pool);
     }

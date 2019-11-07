@@ -378,6 +378,9 @@ struct world_t
     struct entities_t entities;
     struct voxel_chunks_t voxel_chunks;
     struct particles_t particles;
+
+    // Not hard initialize (rendering state, vulkan objects, shaders...) but just initialize game data like initialized entities, voxels, etc...
+    bool initialized_world;
 };
 
 player_t *get_player(player_handle_t player_handle);
@@ -401,8 +404,9 @@ void remove_focus_for_world(void);
 
 void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
+void deinitialize_world(void);
+void destroy_world(void);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
 void handle_world_input(input_state_t *input_state, float32_t dt);
 void handle_input_debug(input_state_t *input_state, float32_t dt);
-void destroy_world(void);
 void initialize_world_translation_unit(struct game_memory_t *memory);

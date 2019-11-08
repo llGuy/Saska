@@ -70,7 +70,7 @@ int32_t receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_siz
     if (bytes_received == SOCKET_ERROR)
     {
         //OutputDebugString("recvfrom failed\n");
-        return -1;
+        return 0;
     }
     else
     {
@@ -384,7 +384,7 @@ void initialize_as_client(void)
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
 
-    join_server("127.0.0.1", "Walter Sobschak");
+    //join_server("127.0.0.1", "Walter Sobschak");
 }
 
 void initialize_as_server(void)
@@ -414,7 +414,7 @@ uint32_t add_client(network_address_t network_address, const char *client_name, 
 global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
 
 // Might have to be done on a separate thread just for updating world data
-void update_as_server(void)
+void update_as_server(input_state_t *input_state)
 {
     network_address_t received_address = {};
     int32_t bytes_received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
@@ -470,7 +470,8 @@ void update_as_server(void)
     }
 }
 
-void update_as_client(void)
+
+void update_as_client(input_state_t *input_state)
 {
     network_address_t received_address = {};
     bool received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
@@ -496,18 +497,20 @@ void update_as_client(void)
                     
                     deinitialize_world();
 
+                    initialize_world(&game_state_init_packet, input_state);
+
                 } break;
             }
         }
     }
 }
 
-void update_network_state(void)
+void update_network_state(input_state_t *input_state)
 {
     switch(g_network_state->current_app_mode)
     {
-    case application_mode_t::CLIENT_MODE: { update_as_client(); } break;
-    case application_mode_t::SERVER_MODE: { update_as_server(); } break;
+    case application_mode_t::CLIENT_MODE: { update_as_client(input_state); } break;
+    case application_mode_t::SERVER_MODE: { update_as_server(input_state); } break;
     }
 }
 

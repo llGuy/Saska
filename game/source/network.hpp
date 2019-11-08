@@ -174,7 +174,7 @@ struct network_state_t
 };
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
-void update_network_state(void);
+void update_network_state(input_state_t *input_state);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);
 void initialize_network_state(struct game_memory_t *memory, application_mode_t app_mode);

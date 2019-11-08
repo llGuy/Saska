@@ -92,7 +92,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             handle_global_game_input(memory, input_state);
-            update_network_state();
+            update_network_state(input_state);
             hotreload_assets_if_changed();
             
             // ---- begin recording instructions into the command buffers ----
@@ -111,7 +111,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            update_network_state();
+            update_network_state(input_state);
             update_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type, memory->screen_focus);
         } break;
     }

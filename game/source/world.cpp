@@ -143,6 +143,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
 
 internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
 internal_function void initialize_players(input_state_t *input_state, application_type_t app_type);
+internal_function void initialize_players(game_state_initialize_packet_t *packet);
 internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
 
 internal_function void hard_initialize_particles(void);
@@ -2473,6 +2474,45 @@ internal_function void construct_player(player_t *player, player_create_info_t *
 }
 
 
+internal_function void initialize_players(game_state_initialize_packet_t *packet, input_state_t *input_state)
+{
+    camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
+    bind_camera_to_3d_scene_output(main_camera);
+    
+    for (uint32_t i = 0; i < packet->player_count; ++i)
+    {
+        player_create_info_t main_player_create_info = {};
+        main_player_create_info.name = "main"_hash;
+        main_player_create_info.ws_position = vector3_t(-140, 140, -140);
+        main_player_create_info.ws_direction = -glm::normalize(main_player_create_info.ws_position);
+        main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+        main_player_create_info.ws_size = vector3_t(2);
+        main_player_create_info.starting_velocity = 15.0f;
+        main_player_create_info.color = player_color_t::GRAY;
+        main_player_create_info.physics_info.enabled = 1;
+        main_player_create_info.terraform_power_info.speed = 300.0f;
+        main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
+        main_player_create_info.camera_info.camera_index = main_camera;
+        main_player_create_info.camera_info.is_third_person = 1;
+        main_player_create_info.camera_info.distance_from_player = 15.0f;
+        main_player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+        main_player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
+        main_player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
+        main_player_create_info.shoot_info.cool_off = 0.0f;
+        main_player_create_info.shoot_info.shoot_speed = 0.3f;
+
+        player_t user;
+        construct_player(&user, &main_player_create_info);
+        
+        if (i == packet->client_index)
+        {
+            player_handle_t user_handle = add_player(user);
+            make_player_main(user_handle);
+        }
+    }
+}
+
+
 internal_function void initialize_players(input_state_t *input_state, application_type_t app_type)
 {
     // This makes the this player the "main" player of the game, that the user is going to control with mouse and keyboard
@@ -2750,6 +2790,38 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 }
 
 
+void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state)
+{
+    g_voxel_chunks->size = packet->voxels.size;
+    g_voxel_chunks->grid_edge_size = packet->voxels.grid_edge_size;
+
+    // Initialize players
+    initialize_players(packet, input_state);
+    
+    g_voxel_chunks->max_chunks = packet->voxels.max_chunks;
+    g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
+    memset(g_voxel_chunks->chunks, 0, sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
+
+    uint32_t i = 0;
+    
+    for (uint32_t z = 0; z < g_voxel_chunks->grid_edge_size; ++z)
+    {
+        for (uint32_t y = 0; y < g_voxel_chunks->grid_edge_size; ++y)
+        {
+            for (uint32_t x = 0; x < g_voxel_chunks->grid_edge_size; ++x)
+            {
+                voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
+                *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
+    
+                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z));
+
+                ++i;
+            }    
+        }    
+    }
+}
+
+
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     g_voxel_chunks->size = 9.0f;
@@ -2828,6 +2900,7 @@ void deinitialize_world(void)
     g_entities->removed_bullets_stack_head = 0;
 
     bind_camera_to_3d_scene_output(-1);
+    remove_all_cameras();
 }
 
 

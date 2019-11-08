@@ -407,6 +407,7 @@ void remove_focus_for_world(void);
 
 void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
+void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state);
 void deinitialize_world(void);
 void destroy_world(void);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);

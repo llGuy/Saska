@@ -1,4 +1,5 @@
 /* win32_core.cpp */
+// TODO: NEED TO REFACTOR GAME SO THAT EVERYTHING IS SPLIT INTO MORE READABLE FILES (e.g. console.hpp/cpp, voxel_chunk.hpp/cpp, etc...)
 
 #define NOMINMAX
 

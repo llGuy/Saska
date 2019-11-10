@@ -2136,6 +2136,39 @@ internal_function void update_shoot_component(shoot_component_t *shoot, player_t
 }
 
 
+player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id /* Index into the clients array */)
+{
+    // Spawns a player at the edge of a world
+    player_create_info_t player_create_info = {};
+    player_create_info.name = make_constant_string(player_name, strlen(player_name));
+    // TODO: Spawn player in a random position on the edge of the chunk grid
+    player_create_info.ws_position = vector3_t(-140, 140, -140);
+    player_create_info.ws_direction = -glm::normalize(player_create_info.ws_position);
+    player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+    player_create_info.ws_size = vector3_t(2);
+    player_create_info.starting_velocity = 15.0f;
+    player_create_info.color = player_color_t::GRAY;
+    player_create_info.physics_info.enabled = 1;
+    player_create_info.terraform_power_info.speed = 300.0f;
+    player_create_info.terraform_power_info.terraform_radius = 20.0f;
+    player_create_info.camera_info.camera_index = main_camera;
+    player_create_info.camera_info.is_third_person = 1;
+    player_create_info.camera_info.distance_from_player = 15.0f;
+    player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
+    player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
+    player_create_info.shoot_info.cool_off = 0.0f;
+    player_create_info.shoot_info.shoot_speed = 0.3f;
+    player_create_info.network_info.entity_index /* = will be set in the add_player() function*/;
+    player_create_info.network_info.client_state_index = client_id;
+
+    player_t player;
+    construct_player(&player, &player_create_info);
+
+    return(add_player(player));
+}
+
+
 uint32_t spawn_fire(const vector3_t &position)
 {
     uint32_t index = 0;
@@ -2221,8 +2254,9 @@ internal_function player_handle_t add_player(const player_t &e)
     
     g_entities->player_list[g_entities->player_count++] = e;
 
-    auto e_ptr = get_player(view);
+    player_t *e_ptr = get_player(view);
     e_ptr->index = view;
+    e_ptr->network.entity_index = view;
 
     return(view);
 }
@@ -2488,6 +2522,8 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->terraform_power.speed = info->terraform_power_info.speed;
     player->shoot.cool_off = info->shoot_info.cool_off;
     player->shoot.shoot_speed = info->shoot_info.shoot_speed;
+    player->network.entity_index = info->network_info.entity_index;
+    player->network.client_state_index = info->network_info.client_state_index;
 }
 
 
@@ -2972,6 +3008,11 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
     for (uint32_t player = 0; player < g_entities->player_count; ++player)
     {
         player_t *p_player = &g_entities->player_list[player];
+
+        packet->player[player].client_id = p_player->network.client_state_index;
+
+        p_player->network.client_state_index;
+        
         packet->player[player].ws_position_x = p_player->ws_p.x;
         packet->player[player].ws_position_y = p_player->ws_p.y;
         packet->player[player].ws_position_z = p_player->ws_p.z;

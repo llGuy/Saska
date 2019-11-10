@@ -115,6 +115,8 @@ struct voxel_state_initialize_packet_t
 
 struct player_state_initialize_packet_t
 {
+    uint32_t client_id;
+
     float32_t ws_position_x;
     float32_t ws_position_y;
     float32_t ws_position_z;
@@ -146,6 +148,14 @@ struct game_state_initialize_packet_t
     player_state_initialize_packet_t *player;
 };
 
+struct client_input_state_packet_t
+{
+    // Contains stuff like which buttons did the client press
+    // Server will then use this input to update the client's data on the server side
+    // Server will then send back some snippets of the actual state of the game while the client is "guessing" what the current state is
+    uint32_t action_flags;
+};
+
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
 void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
@@ -159,6 +169,9 @@ void deserialize_game_state_initialize_packet(serializer_t *serializer, game_sta
 void serialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
 void deserialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet);
 
+void serialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet);
+void deserialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet);
+
 struct client_state_t
 {
     // Name, id, etc...
@@ -170,6 +183,9 @@ struct client_state_t
     uint32_t network_component_index;
 
     uint64_t current_packet_count;
+
+    // Handle to the player struct in the world_t megastruct
+    player_handle_t player_handle;
 };
 
 #define MAX_CLIENTS 40

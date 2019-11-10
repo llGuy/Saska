@@ -206,15 +206,23 @@ struct entity_body_t
     hitbox_t hitbox;
 };
 
-// Action components can be modified over keyboard / mouse input, or on a network
-enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD, SHOOT };
+struct network_component_create_info_t
+{
+    uint32_t entity_index;
+    uint32_t client_state_index;
+};
 
 struct network_component_t
 {
+    // May be different from client to client
+    uint32_t entity_index;
+    // Is the same from client to client
     uint32_t client_state_index;
 };
 
 
+// Action components can be modified over keyboard / mouse input, or on a network
+enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD, SHOOT };
 enum player_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, INVALID_COLOR };
 
 struct player_create_info_t
@@ -232,6 +240,7 @@ struct player_create_info_t
     animation_component_create_info_t animation_info;
     rendering_component_create_info_t rendering_info;
     shoot_component_create_info_t shoot_info;
+    network_component_create_info_t network_info;
 };
 
 struct entity_t

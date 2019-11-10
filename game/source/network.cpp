@@ -1,3 +1,20 @@
+/*   // How client-server model will work for now (may need to introduce an extra TCP connection for more important packets (join, game state hard update, etc...))
+
+     - Client sends join packet to server
+     - Server receives this packet; spawns player into the world; creates a client_state for the player, of which the array index will end up being the actual client ID of the player
+     - Server sends all game state to the player (voxel values, world dimensions, etc..., other players' positions, client IDs, etc...)
+     - Client receives this handshake packet, reinitializes its local game state
+     - Starts to send action flags to the server
+     - Server takes these action flags and updates the client position, dispatches it to all clients (sends the new position/direction/rotation/everything)
+     - All clients will receive this and interpolate between the different states
+     - The client which sent its action flags to the server will receive its new position (the client and server will keep track of its current "frame count", and the client will make sure that it has not gone off track with the server's state)
+     - If it has, client needs to hard reload its own data
+     - Furthermore, client can also predict where it will be in the next frame, as well as the other players.
+     - This will allow for the client to have more smooth gameplay
+     - (this is not going to be easy)
+*/
+
+
 #include <cassert>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -202,37 +219,37 @@ float32_t deserialize_float32(serializer_t *serializer)
 void serialize_uint32(serializer_t *serializer, uint32_t u32)
 {
     uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
-    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(uint32_t *)pointer = u32;
-    #else
+#else
     *pointer++ = (uint8_t)u32;
     *pointer++ = (uint8_t)(u32 >> 8);
     *pointer++ = (uint8_t)(u32 >> 16);
     *pointer++ = (uint8_t)(u32 >> 24);
-    #endif
+#endif
 }
 
 uint32_t deserialize_uint32(serializer_t *serializer)
 {
     uint8_t *pointer = grow_serializer_data_buffer(serializer, 4);
-    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(uint32_t *)pointer);
-    #else
+#else
     uint32_t ret = 0;
     ret += (*pointer++);
     ret += ((uint32_t)(*pointer++)) << 8;
     ret += ((uint32_t)(*pointer++)) << 16;
     ret += ((uint32_t)(*pointer++)) << 24;
     return(ret);
-    #endif
+#endif
 }
 
 void serialize_uint64(serializer_t *serializer, uint64_t u64)
 {
     uint8_t *pointer = grow_serializer_data_buffer(serializer, 8);
-    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(uint64_t *)pointer = u64;
-    #else
+#else
     *pointer++ = (uint8_t)u32;
     *pointer++ = (uint8_t)(u32 >> 8);
     *pointer++ = (uint8_t)(u32 >> 16);
@@ -241,15 +258,15 @@ void serialize_uint64(serializer_t *serializer, uint64_t u64)
     *pointer++ = (uint8_t)(u32 >> 40);
     *pointer++ = (uint8_t)(u32 >> 48);
     *pointer++ = (uint8_t)(u32 >> 56);
-    #endif
+#endif
 }
 
 uint64_t deserialize_uint64(serializer_t *serializer)
 {
     uint8_t *pointer = grow_serializer_data_buffer(serializer, 8);
-    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+#if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(uint64_t *)pointer);
-    #else
+#else
     uint64_t ret = 0;
     ret += (*pointer++);
     ret += ((uint64_t)(*pointer++)) << 8;
@@ -260,7 +277,7 @@ uint64_t deserialize_uint64(serializer_t *serializer)
     ret += ((uint64_t)(*pointer++)) << 48;
     ret += ((uint64_t)(*pointer++)) << 56;
     return(ret);
-    #endif
+#endif
 }
 
 void serialize_string(serializer_t *serializer, const char *string)
@@ -324,8 +341,22 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
 }
 
 
+void serialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->action_flags);
+}
+
+
+void deserialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet)
+{
+    packet->action_flags = deserialize_uint32(serializer);
+}
+
+
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
+    serialize_uint32(serializer, packet->client_id);
+    
     serialize_float32(serializer, packet->ws_position_x);
     serialize_float32(serializer, packet->ws_position_y);
     serialize_float32(serializer, packet->ws_position_z);
@@ -340,6 +371,8 @@ void serialize_player_state_initialize_packet(serializer_t *serializer, player_s
 
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
+    packet->client_id = deserialize_uint32(serializer);
+    
     packet->ws_position_x = deserialize_float32(serializer);
     packet->ws_position_y = deserialize_float32(serializer);
     packet->ws_position_z = deserialize_float32(serializer);
@@ -561,6 +594,10 @@ void update_as_server(input_state_t *input_state)
                         client->client_id = g_network_state->client_count;
                         client->network_address = received_address;
                         client->current_packet_count = 0;
+
+                        // Add the player to the actual entities list (spawn the player in the world)
+                        client->player_handle = spawn_player(client->name, player_color_t::GRAY);
+
                         ++g_network_state->client_count;
                         constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
                         g_network_state->client_table_by_name.insert(constant_str_name.hash, client->client_id);

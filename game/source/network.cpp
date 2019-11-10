@@ -227,6 +227,42 @@ uint32_t deserialize_uint32(serializer_t *serializer)
     #endif
 }
 
+void serialize_uint64(serializer_t *serializer, uint64_t u64)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 8);
+    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    *(uint64_t *)pointer = u64;
+    #else
+    *pointer++ = (uint8_t)u32;
+    *pointer++ = (uint8_t)(u32 >> 8);
+    *pointer++ = (uint8_t)(u32 >> 16);
+    *pointer++ = (uint8_t)(u32 >> 24);
+    *pointer++ = (uint8_t)(u32 >> 32);
+    *pointer++ = (uint8_t)(u32 >> 40);
+    *pointer++ = (uint8_t)(u32 >> 48);
+    *pointer++ = (uint8_t)(u32 >> 56);
+    #endif
+}
+
+uint64_t deserialize_uint64(serializer_t *serializer)
+{
+    uint8_t *pointer = grow_serializer_data_buffer(serializer, 8);
+    #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
+    return(*(uint64_t *)pointer);
+    #else
+    uint64_t ret = 0;
+    ret += (*pointer++);
+    ret += ((uint64_t)(*pointer++)) << 8;
+    ret += ((uint64_t)(*pointer++)) << 16;
+    ret += ((uint64_t)(*pointer++)) << 24;
+    ret += ((uint64_t)(*pointer++)) << 32;
+    ret += ((uint64_t)(*pointer++)) << 40;
+    ret += ((uint64_t)(*pointer++)) << 48;
+    ret += ((uint64_t)(*pointer++)) << 56;
+    return(ret);
+    #endif
+}
+
 void serialize_string(serializer_t *serializer, const char *string)
 {
     uint32_t string_length = strlen(string);
@@ -265,12 +301,14 @@ void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size)
 void serialize_packet_header(serializer_t *serializer, packet_header_t *packet)
 {
     serialize_uint32(serializer, packet->bytes);
+    serialize_uint64(serializer, packet->packet_id);
 }
 
 
 void deserialize_packet_header(serializer_t *serializer, packet_header_t *packet)
 {
     packet->bytes = deserialize_uint32(serializer);
+    packet->packet_id = deserialize_uint64(serializer);
 }
 
 
@@ -285,6 +323,7 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
     packet->client_name = deserialize_string(serializer);
 }
 
+
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
     serialize_float32(serializer, packet->ws_position_x);
@@ -297,6 +336,7 @@ void serialize_player_state_initialize_packet(serializer_t *serializer, player_s
 
     // Etc...
 }
+
 
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
@@ -311,6 +351,7 @@ void deserialize_player_state_initialize_packet(serializer_t *serializer, player
     // Etc...
 }
 
+
 void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
 {
     serialize_uint32(serializer, packet->grid_edge_size);
@@ -319,6 +360,7 @@ void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_sta
     serialize_uint32(serializer, packet->max_chunks);
 }
 
+
 void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
 {
     packet->grid_edge_size = deserialize_uint32(serializer);
@@ -326,6 +368,27 @@ void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_s
     packet->chunk_count = deserialize_uint32(serializer);
     packet->max_chunks = deserialize_uint32(serializer);
 }
+
+
+void serialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet)
+{
+    serialize_uint8(serializer, packet->chunk_coord_x);
+    serialize_uint8(serializer, packet->chunk_coord_y);
+    serialize_uint8(serializer, packet->chunk_coord_z);
+    serialize_bytes(serializer, packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+}
+
+
+void deserialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet)
+{
+    packet->chunk_coord_x = deserialize_uint8(serializer);
+    packet->chunk_coord_y = deserialize_uint8(serializer);
+    packet->chunk_coord_z = deserialize_uint8(serializer);
+
+    packet->voxels = (uint8_t *)allocate_linear(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+    deserialize_bytes(serializer, packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+}
+
 
 void serialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
 {
@@ -360,7 +423,7 @@ void join_server(const char *ip_address, const char *client_name)
         header.packet_type = client_packet_type_t::CPT_CLIENT_JOIN;
         packet.client_name = client_name;
     }
-    header.total_packet_size = sizeof(packet_header_t::bytes);
+    header.total_packet_size = sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id);
     header.total_packet_size += strlen(packet.client_name) + 1;
 
     serializer_t serializer = {};
@@ -383,8 +446,6 @@ void initialize_as_client(void)
     bind_network_socket_to_port(&g_network_state->main_network_socket, address);
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
-
-    //join_server("127.0.0.1", "Walter Sobschak");
 }
 
 void initialize_as_server(void)
@@ -410,8 +471,62 @@ uint32_t add_client(network_address_t network_address, const char *client_name, 
     return(0);
 }
 
-#define MAX_MESSAGE_BUFFER_SIZE 3000
+#define MAX_MESSAGE_BUFFER_SIZE 40000
 global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
+
+void send_chunks_hard_update_packets(network_address_t address)
+{
+    serializer_t chunks_serializer = {};
+    initialize_serializer(&chunks_serializer, (sizeof(uint8_t) * 3 + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
+
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE;
+    // TODO: Increment this with every packet sent
+    header.packet_id = 0;
+
+    uint32_t hard_update_count = 0;
+    voxel_chunk_values_packet_t *voxel_update_packets = initialize_chunk_values_packets(&hard_update_count);
+
+    uint32_t loop_count = (hard_update_count / 8);
+    for (uint32_t packet = 0; packet < loop_count; ++packet)
+    {
+        voxel_chunk_values_packet_t *pointer = &voxel_update_packets[packet * 8];
+
+        header.total_packet_size = sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
+        serialize_packet_header(&chunks_serializer, &header);
+
+        serialize_uint32(&chunks_serializer, 8);
+        
+        for (uint32_t chunk = 0; chunk < 8; ++chunk)
+        {
+            serialize_voxel_chunk_values_packet(&chunks_serializer, &pointer[chunk]);
+        }
+
+        send_serialized_message(&chunks_serializer, address);
+        chunks_serializer.data_buffer_head = 0;
+
+        hard_update_count -= 8;
+    }
+
+    if (hard_update_count)
+    {
+        voxel_chunk_values_packet_t *pointer = &voxel_update_packets[loop_count * 8];
+
+        header.total_packet_size = sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
+        serialize_packet_header(&chunks_serializer, &header);
+
+        serialize_uint32(&chunks_serializer, hard_update_count);
+        
+        for (uint32_t chunk = 0; chunk < hard_update_count; ++chunk)
+        {
+            serialize_voxel_chunk_values_packet(&chunks_serializer, &pointer[chunk]);
+        }
+
+        
+        send_serialized_message(&chunks_serializer, address);
+    }
+}
 
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state)
@@ -440,24 +555,51 @@ void update_as_server(input_state_t *input_state)
                         client_join_packet_t client_join = {};
                         deserialize_client_join_packet(&in_serializer, &client_join);
 
-                        // Create handshake packet
+                        // Add client
+                        client_state_t *client = &g_network_state->clients[g_network_state->client_count];
+                        client->name = client_join.client_name;
+                        client->client_id = g_network_state->client_count;
+                        client->network_address = received_address;
+                        client->current_packet_count = 0;
+                        ++g_network_state->client_count;
+                        constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
+                        g_network_state->client_table_by_name.insert(constant_str_name.hash, client->client_id);
+                        g_network_state->client_table_by_address.insert(received_address.ipv4_address, client->client_id);
+                        
+                        // LOG:
+                        console_out(client_join.client_name);
+                        console_out(" joined the game!\n\n");
+                        
+                        // Reply - Create handshake packet
                         serializer_t out_serializer = {};
-                        initialize_serializer(&out_serializer, 1000);
+                        initialize_serializer(&out_serializer, 2000);
                         game_state_initialize_packet_t game_state_init_packet = {};
                         initialize_game_state_initialize_packet(&game_state_init_packet, 0);
 
+
+                        
                         packet_header_t handshake_header = {};
                         handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
                         handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
-                        handshake_header.total_packet_size = sizeof(packet_header_t::bytes);
+                        handshake_header.total_packet_size = sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id);
                         handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
                         handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
                         handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
                         
                         serialize_packet_header(&out_serializer, &handshake_header);
                         serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
-                        send_serialized_message(&out_serializer, received_address);
+                        send_serialized_message(&out_serializer, client->network_address);
 
+                        console_out("Sent initialization game state to ");
+                        console_out(client_join.client_name);
+                        console_out("\n\n");
+
+                        send_chunks_hard_update_packets(client->network_address);
+
+                        console_out("Sent hard chunks update to ");
+                        console_out(client_join.client_name);
+                        console_out("\n\n");
+                        
                     } break;
                     // case packet_header_t::client_packet_type_t::ETC:
                 }
@@ -496,9 +638,24 @@ void update_as_client(input_state_t *input_state)
                     deserialize_game_state_initialize_packet(&in_serializer, &game_state_init_packet);
                     
                     deinitialize_world();
-
+                    
                     initialize_world(&game_state_init_packet, input_state);
 
+                } break;
+            case server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE:
+                {
+                    
+                    uint32_t chunks_to_update = deserialize_uint32(&in_serializer);
+                    for (uint32_t i = 0; i < chunks_to_update; ++i)
+                    {
+                        voxel_chunk_values_packet_t packet = {};
+                        deserialize_voxel_chunk_values_packet(&in_serializer, &packet);
+                        
+                        voxel_chunk_t *chunk = *get_voxel_chunk(packet.chunk_coord_x, packet.chunk_coord_y, packet.chunk_coord_z);
+                        memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+
+                        ready_chunk_for_gpu_sync(chunk);
+                    }
                 } break;
             }
         }

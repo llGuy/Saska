@@ -54,18 +54,20 @@ void receive_serialized_message(serializer_t *serializer, network_address_t addr
 void serialize_uint8(serializer_t *serializer, uint8_t u8);
 void serialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 void serialize_uint32(serializer_t *serializer, uint32_t u32);
+void serialize_uint64(serializer_t *serializer, uint64_t u64);
 void serialize_float32(serializer_t *serializer, float32_t f32);
 void serialize_string(serializer_t *serializer, const char *string);
 
 uint8_t deserialize_uint8(serializer_t *serializer);
 uint32_t deserialize_uint32(serializer_t *serializer);
+uint64_t deserialize_uint64(serializer_t *serializer);
 float32_t deserialize_float32(serializer_t *serializer);
 const char *deserialize_string(serializer_t *serializer);
 void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
 enum client_packet_type_t { CPT_CLIENT_JOIN };
-enum server_packet_type_t { SPT_SERVER_HANDSHAKE };
+enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE };
 
 struct packet_header_t
 {
@@ -81,6 +83,9 @@ struct packet_header_t
 
         uint32_t bytes;
     };
+
+    // To make sure order is still all good
+    uint64_t packet_id;
 };
 
 void serialize_packet_header(serializer_t *serializer, packet_header_t *packet);
@@ -119,6 +124,20 @@ struct player_state_initialize_packet_t
     float32_t ws_view_direction_z;
 };
 
+struct voxel_chunk_values_packet_t
+{
+    uint8_t chunk_coord_x;
+    uint8_t chunk_coord_y;
+    uint8_t chunk_coord_z;
+    uint8_t *voxels;
+};
+
+struct voxel_chunks_hard_update_packet_t
+{
+    uint32_t to_update_chunks;
+    voxel_chunk_values_packet_t *packets;
+};
+
 struct game_state_initialize_packet_t
 {
     voxel_state_initialize_packet_t voxels;
@@ -131,6 +150,8 @@ void serialize_player_state_initialize_packet(serializer_t *serializer, player_s
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
 void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
 void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
+void serialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet);
+void deserialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet);
 
 void serialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet);
 void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet);
@@ -141,11 +162,14 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
 struct client_state_t
 {
     // Name, id, etc...
-    char client_name[CLIENT_NAME_MAX_LENGTH];
+    const char *name;
     uint16_t client_id;
+    
     network_address_t network_address;
 
     uint32_t network_component_index;
+
+    uint64_t current_packet_count;
 };
 
 #define MAX_CLIENTS 40
@@ -166,7 +190,9 @@ struct network_state_t
     uint32_t client_count = {};
     client_state_t clients[MAX_CLIENTS] = {};
 
-    // THIS IS ONLY FOR THE CLIENT, NOT THE SERVER APPLICATION
+    hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_name;
+    hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_address;
+
     uint16_t client_id_stack[MAX_CLIENTS] = {};
 
     // If packet size doesn't match the size of the size defined in the header

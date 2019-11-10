@@ -627,6 +627,7 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
 void push_chunk_to_render_queue(voxel_chunk_t *chunk)
 {
     g_voxel_chunks->gpu_queue.push_material(&chunk->push_k, sizeof(chunk->push_k), &chunk->gpu_mesh);
+    g_voxel_chunks->chunks_to_update[g_voxel_chunks->chunks_to_render_count++] = chunk;
 }
 
 
@@ -648,6 +649,7 @@ internal_function inline vector3_t interpolate(const vector3_t &a, const vector3
 internal_function void clear_chunk_render_queue(void)
 {
     g_voxel_chunks->gpu_queue.flush_queue();
+    g_voxel_chunks->chunks_to_render_count = 0;
 }
 
 
@@ -1012,6 +1014,21 @@ void deinitialize_chunk(voxel_chunk_t *chunk)
 
 voxel_chunk_t **get_voxel_chunk(int32_t index)
 {
+    persist_var voxel_chunk_t *nul = nullptr;
+    
+    if (index == -1)
+    {
+        return(&nul);
+    }
+        
+    return(&g_voxel_chunks->chunks[index]);
+}
+
+
+voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z)
+{
+    int32_t index = convert_3d_to_1d_index(x, y, z, g_voxel_chunks->grid_edge_size);
+    
     persist_var voxel_chunk_t *nul = nullptr;
     
     if (index == -1)
@@ -2702,7 +2719,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
         g_entities->rolling_player_submission_queue.flush_queue();
         
         render_3d_frustum_debug_information(&uniform_groups[0], queue, image_index, g_pipeline_manager->get(g_entities->dbg_hitbox_ppln));
-        dbg_render_chunk_edges(queue, &uniform_groups[0]);
+        //dbg_render_chunk_edges(queue, &uniform_groups[0]);
 
         // ---- render skybox ----
         render_atmosphere({1, uniform_groups}, camera->p, queue);
@@ -2785,6 +2802,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     hard_initialize_particles();
 
     initialize_world(input_state, cmdpool, app_type, app_mode);
+    deinitialize_world();
+    initialize_world(input_state, cmdpool, app_type, app_mode);
         
     clear_linear();
 }
@@ -2794,6 +2813,9 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
 {
     g_voxel_chunks->size = packet->voxels.size;
     g_voxel_chunks->grid_edge_size = packet->voxels.grid_edge_size;
+
+    g_voxel_chunks->chunks_to_render_count = 0;
+    g_voxel_chunks->chunks_to_update = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->grid_edge_size * g_voxel_chunks->grid_edge_size * g_voxel_chunks->grid_edge_size);
 
     // Initialize players
     initialize_players(packet, input_state);
@@ -2832,6 +2854,8 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
     memset(g_voxel_chunks->chunks, 0, sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
+    g_voxel_chunks->chunks_to_render_count = 0;
+    g_voxel_chunks->chunks_to_update = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
 
     uint32_t i = 0;
     
@@ -2853,7 +2877,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
 
     construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
     construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
-    construct_sphere(vector3_t(-220.0f, 70.0f, -120.0f), 60.0f);
+    //    construct_sphere(vector3_t(-220.0f, 70.0f, -120.0f), 60.0f);
 }
 
 void deinitialize_world(void)
@@ -2877,6 +2901,7 @@ void deinitialize_world(void)
         }    
     }
     deallocate_free_list(g_voxel_chunks->chunks);
+    deallocate_free_list(g_voxel_chunks->chunks_to_update);
 
     g_voxel_chunks->grid_edge_size = 0;
     g_voxel_chunks->size = 0;
@@ -2908,11 +2933,6 @@ internal_function void clean_up_entities(void)
 {
     // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
     g_entities->player_count = 0;
-    
-    /*for (uint32_t i = 0; i < g_entities->animation_component_count; ++i)
-    {
-        destroy_animated_instance(&g_entities->animation_components[i].animation_instance);
-    }*/
     
     g_entities->main_player = -1;
 
@@ -2960,6 +2980,24 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
         packet->player[player].ws_view_direction_y = p_player->ws_d.y;
         packet->player[player].ws_view_direction_z = p_player->ws_d.z;
     }
+}
+
+
+voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count)
+{
+    voxel_chunk_values_packet_t *packets = (voxel_chunk_values_packet_t *)allocate_linear(sizeof(voxel_chunk_values_packet_t) * g_voxel_chunks->chunks_to_render_count);
+    for (uint32_t i = 0; i < g_voxel_chunks->chunks_to_render_count; ++i)
+    {
+        voxel_chunk_t *chunk = g_voxel_chunks->chunks_to_update[i];
+        packets[i].chunk_coord_x = chunk->chunk_coord.x;
+        packets[i].chunk_coord_y = chunk->chunk_coord.y;
+        packets[i].chunk_coord_z = chunk->chunk_coord.z;
+        packets[i].voxels = &chunk->voxels[0][0][0];
+    }
+
+    *count = g_voxel_chunks->chunks_to_render_count;
+
+    return(packets);
 }
 
 

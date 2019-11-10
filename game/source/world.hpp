@@ -43,6 +43,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
 voxel_chunk_t **get_voxel_chunk(int32_t index);
+voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z);
 
 
 struct voxel_chunks_t
@@ -66,7 +67,8 @@ struct voxel_chunks_t
     pipeline_handle_t chunk_mesh_shadow_pipeline;
 
     gpu_material_submission_queue_t gpu_queue;
-
+    uint32_t chunks_to_render_count = 0;
+    voxel_chunk_t **chunks_to_update;
 
     uint32_t to_sync_count = 0;
     uint32_t chunks_to_gpu_sync[20];
@@ -398,6 +400,8 @@ void make_player_main(player_handle_t player_handle, input_state_t *input_state)
 
 void update_network_world_state(void);
 void initialize_game_state_initialize_packet(struct game_state_initialize_packet_t *packet, player_handle_t new_client_handle);
+// Will create packet for each chunk
+struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);
 
 void clean_up_world_data(void);
 void make_world_data(void);

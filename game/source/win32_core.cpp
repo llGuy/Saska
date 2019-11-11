@@ -378,15 +378,17 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 #if defined (SERVER_APPLICATION)
     application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
     application_mode_t app_mode = application_mode_t::SERVER_MODE;
+    const char *application_name = "Server";    
 #elif defined (CLIENT_APPLICATION)
     application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
     application_mode_t app_mode = application_mode_t::CLIENT_MODE;
+    const char *application_name = "Saska";
 #endif
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
     {
         const char *window_class_name = "saska_window_class";
-        const char *window_name = "Saska";
+        const char *window_name = application_name;
 
         g_cursor = LoadCursor(0, IDC_ARROW);
     

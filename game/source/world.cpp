@@ -1685,10 +1685,23 @@ internal_function void push_player_to_rolling_queue(player_t *e)
 }
 
 
+player_t *get_user_player(void)
+{
+    return(&g_entities->player_list[g_entities->main_player]);
+}
+
+
+
 internal_function player_t *get_player(const constant_string_t &name)
 {
     player_handle_t v = *g_entities->name_map.get(name.hash);
     return(&g_entities->player_list[v]);
+}
+
+
+player_t *get_player(const char *name)
+{
+    return(get_player(make_constant_string(name, strlen(name))));
 }
 
 
@@ -2151,7 +2164,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
-    player_create_info.camera_info.camera_index = main_camera;
+    //    player_create_info.camera_info.camera_index = main_camera;
     player_create_info.camera_info.is_third_person = 1;
     player_create_info.camera_info.distance_from_player = 15.0f;
     player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
@@ -2534,32 +2547,44 @@ internal_function void initialize_players(game_state_initialize_packet_t *packet
     
     for (uint32_t i = 0; i < packet->player_count; ++i)
     {
-        player_create_info_t main_player_create_info = {};
-        main_player_create_info.name = "main"_hash;
-        main_player_create_info.ws_position = vector3_t(-140, 140, -140);
-        main_player_create_info.ws_direction = -glm::normalize(main_player_create_info.ws_position);
-        main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
-        main_player_create_info.ws_size = vector3_t(2);
-        main_player_create_info.starting_velocity = 15.0f;
-        main_player_create_info.color = player_color_t::GRAY;
-        main_player_create_info.physics_info.enabled = 1;
-        main_player_create_info.terraform_power_info.speed = 300.0f;
-        main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
-        main_player_create_info.camera_info.camera_index = main_camera;
-        main_player_create_info.camera_info.is_third_person = 1;
-        main_player_create_info.camera_info.distance_from_player = 15.0f;
-        main_player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
-        main_player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
-        main_player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
-        main_player_create_info.shoot_info.cool_off = 0.0f;
-        main_player_create_info.shoot_info.shoot_speed = 0.3f;
+        player_state_initialize_packet_t *player_init_packet = &packet->player[i];
+
+
+        bool is_current_client = (player_init_packet->client_id == packet->client_index);
+
+        
+        player_create_info_t player_create_info = {};
+        player_create_info.name = make_constant_string(player_init_packet->player_name, strlen(player_init_packet->player_name));
+        player_create_info.ws_position = vector3_t(player_init_packet->ws_position_x, player_init_packet->ws_position_y, player_init_packet->ws_position_z);
+        player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_z, player_init_packet->ws_view_direction_z, player_init_packet->ws_view_direction_z);
+        player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+        player_create_info.ws_size = vector3_t(2);
+        player_create_info.starting_velocity = 15.0f;
+        player_create_info.color = player_color_t::GRAY;
+        player_create_info.physics_info.enabled = 1;
+        player_create_info.terraform_power_info.speed = 300.0f;
+        player_create_info.terraform_power_info.terraform_radius = 20.0f;
+        
+        if (is_current_client)
+        {
+            player_create_info.camera_info.camera_index = main_camera;
+            player_create_info.camera_info.is_third_person = 1;
+            player_create_info.camera_info.distance_from_player = 15.0f;
+        }
+        
+        player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+        player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
+        player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
+        player_create_info.shoot_info.cool_off = 0.0f;
+        player_create_info.shoot_info.shoot_speed = 0.3f;
 
         player_t user;
-        construct_player(&user, &main_player_create_info);
+        construct_player(&user, &player_create_info);
         
-        if (i == packet->client_index)
+        player_handle_t user_handle = add_player(user);
+        
+        if (is_current_client)
         {
-            player_handle_t user_handle = add_player(user);
             make_player_main(user_handle);
         }
     }
@@ -2842,6 +2867,11 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     initialize_world(input_state, cmdpool, app_type, app_mode);
         
     clear_linear();
+
+
+
+    // For server mode
+    update_spectator_camera(glm::lookAt(vector3_t(-140.0f, 140.0f, -140.0f), glm::normalize(vector3_t(1.0f, -1.0f, 1.0f)) + vector3_t(-140.0f, 140.0f, -140.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 }
 
 
@@ -2885,7 +2915,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
     
-    initialize_players(input_state, app_type);
+    //initialize_players(input_state, app_type);
     
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -3010,6 +3040,7 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
         player_t *p_player = &g_entities->player_list[player];
 
         packet->player[player].client_id = p_player->network.client_state_index;
+        packet->player[player].player_name = p_player->id.str;
 
         p_player->network.client_state_index;
         
@@ -3062,13 +3093,7 @@ void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t 
 }
 
 
-void update_world(input_state_t *input_state,
-                  float32_t dt,
-                  uint32_t image_index,
-                  uint32_t current_frame,
-                  gpu_command_queue_t *cmdbuf,
-                  application_type_t app_type,
-                  element_focus_t focus)
+void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus)
 {    
     switch (app_type)
     {

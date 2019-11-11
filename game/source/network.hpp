@@ -66,8 +66,8 @@ const char *deserialize_string(serializer_t *serializer);
 void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
-enum client_packet_type_t { CPT_CLIENT_JOIN };
-enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE };
+enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE };
+enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE };
 
 struct packet_header_t
 {
@@ -86,6 +86,8 @@ struct packet_header_t
 
     // To make sure order is still all good
     uint64_t packet_id;
+    // When client sends to server, this needs to be filled
+    uint32_t client_id;
 };
 
 void serialize_packet_header(serializer_t *serializer, packet_header_t *packet);
@@ -116,6 +118,7 @@ struct voxel_state_initialize_packet_t
 struct player_state_initialize_packet_t
 {
     uint32_t client_id;
+    const char *player_name;
 
     float32_t ws_position_x;
     float32_t ws_position_y;
@@ -156,6 +159,11 @@ struct client_input_state_packet_t
     uint32_t action_flags;
 };
 
+struct game_state_packet_t
+{
+    
+};
+
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
 void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet);
@@ -194,11 +202,20 @@ enum application_mode_t { CLIENT_MODE, SERVER_MODE };
 
 struct network_state_t
 {
+    bool is_connected_to_server = false;
+    
+    // Incremented every data update
+    uint64_t local_frame_id;
+
+
+    
     application_mode_t current_app_mode;
 
     const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
     const uint16_t GAME_OUTPUT_PORT_CLIENT = 6001;
     network_socket_t main_network_socket;
+    // For client
+    network_address_t server_address;
 
     // API stuff
     socket_manager_t sockets;
@@ -224,3 +241,8 @@ void initialize_network_state(struct game_memory_t *memory, application_mode_t a
 
 
 void join_server(const char *ip_address, const char *client_name);
+
+
+// Helper stuff
+constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id) + sizeof(packet_header_t::client_id)); }
+

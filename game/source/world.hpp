@@ -396,13 +396,16 @@ struct world_t
     bool initialized_world;
 };
 
+// Gets the data of the player that is being controlled by client
+player_t *get_user_player(void);
+player_t *get_player(const char *name);
 player_t *get_player(player_handle_t player_handle);
 voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
 uint32_t spawn_fire(const vector3_t &position);
 void spawn_explosion(const vector3_t &position);
 void spawn_bullet(player_t *shooter);
-player_handle_t spawn_player(const char *player_name, player_color_t color);
+player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id);
 player_handle_t spawn_player_at(const char *player_name, player_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
 void make_player_renderable(player_handle_t player_handle, player_color_t color);
 void make_player_main(player_handle_t player_handle, input_state_t *input_state);

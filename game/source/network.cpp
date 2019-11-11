@@ -319,6 +319,7 @@ void serialize_packet_header(serializer_t *serializer, packet_header_t *packet)
 {
     serialize_uint32(serializer, packet->bytes);
     serialize_uint64(serializer, packet->packet_id);
+    serialize_uint32(serializer, packet->client_id);
 }
 
 
@@ -326,6 +327,7 @@ void deserialize_packet_header(serializer_t *serializer, packet_header_t *packet
 {
     packet->bytes = deserialize_uint32(serializer);
     packet->packet_id = deserialize_uint64(serializer);
+    packet->client_id = deserialize_uint32(serializer);
 }
 
 
@@ -356,6 +358,7 @@ void deserialize_client_input_state_packet(serializer_t *serializer, client_inpu
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
     serialize_uint32(serializer, packet->client_id);
+    serialize_string(serializer, packet->player_name);
     
     serialize_float32(serializer, packet->ws_position_x);
     serialize_float32(serializer, packet->ws_position_y);
@@ -372,6 +375,7 @@ void serialize_player_state_initialize_packet(serializer_t *serializer, player_s
 void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
 {
     packet->client_id = deserialize_uint32(serializer);
+    packet->player_name = deserialize_string(serializer);
     
     packet->ws_position_x = deserialize_float32(serializer);
     packet->ws_position_y = deserialize_float32(serializer);
@@ -456,7 +460,7 @@ void join_server(const char *ip_address, const char *client_name)
         header.packet_type = client_packet_type_t::CPT_CLIENT_JOIN;
         packet.client_name = client_name;
     }
-    header.total_packet_size = sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id);
+    header.total_packet_size = sizeof_packet_header();
     header.total_packet_size += strlen(packet.client_name) + 1;
 
     serializer_t serializer = {};
@@ -466,6 +470,8 @@ void join_server(const char *ip_address, const char *client_name)
     
     network_address_t server_address { (uint16_t)host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
     send_serialized_message(&serializer, server_address);
+
+    g_network_state->server_address = server_address;
 }
 
 internal_function int32_t lua_join_server(lua_State *state);
@@ -526,7 +532,7 @@ void send_chunks_hard_update_packets(network_address_t address)
     {
         voxel_chunk_values_packet_t *pointer = &voxel_update_packets[packet * 8];
 
-        header.total_packet_size = sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
         serialize_packet_header(&chunks_serializer, &header);
 
         serialize_uint32(&chunks_serializer, 8);
@@ -546,7 +552,7 @@ void send_chunks_hard_update_packets(network_address_t address)
     {
         voxel_chunk_values_packet_t *pointer = &voxel_update_packets[loop_count * 8];
 
-        header.total_packet_size = sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
         serialize_packet_header(&chunks_serializer, &header);
 
         serialize_uint32(&chunks_serializer, hard_update_count);
@@ -564,6 +570,8 @@ void send_chunks_hard_update_packets(network_address_t address)
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state)
 {
+    // Send game state to ALL players (here because at this point the data has been udpated)
+    
     network_address_t received_address = {};
     int32_t bytes_received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
 
@@ -596,7 +604,9 @@ void update_as_server(input_state_t *input_state)
                         client->current_packet_count = 0;
 
                         // Add the player to the actual entities list (spawn the player in the world)
-                        client->player_handle = spawn_player(client->name, player_color_t::GRAY);
+                        client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
+                        player_t *local_player_data_ptr = get_player(client->player_handle);
+                        local_player_data_ptr->network.client_state_index = client->client_id;
 
                         ++g_network_state->client_count;
                         constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
@@ -618,7 +628,7 @@ void update_as_server(input_state_t *input_state)
                         packet_header_t handshake_header = {};
                         handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
                         handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
-                        handshake_header.total_packet_size = sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id);
+                        handshake_header.total_packet_size = sizeof_packet_header();
                         handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
                         handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
                         handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
@@ -638,6 +648,18 @@ void update_as_server(input_state_t *input_state)
                         console_out("\n\n");
                         
                     } break;
+
+                case client_packet_type_t::CPT_INPUT_STATE:
+                    {
+                        client_input_state_packet_t input_packet = {};
+                        deserialize_client_input_state_packet(&in_serializer, &input_packet);
+
+                        client_state_t *client = &g_network_state->clients[header.client_id];
+                        player_t *player = get_player(client->player_handle);
+
+                        player->action_flags = input_packet.action_flags;
+                        
+                    } break;
                     // case packet_header_t::client_packet_type_t::ETC:
                 }
             }
@@ -650,8 +672,39 @@ void update_as_server(input_state_t *input_state)
 }
 
 
+internal_function void send_client_action_flags(void)
+{
+    client_input_state_packet_t input_packet = {};
+    
+    player_t *user = get_user_player();
+    uint32_t action_flags = user->action_flags;
+
+    input_packet.action_flags = action_flags;
+
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, 10);
+
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+    header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
+    header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) /* action_flags */;
+    header.client_id = user->network.client_state_index;
+    
+    serialize_packet_header(&serializer, &header);
+    serialize_client_input_state_packet(&serializer, &input_packet);
+
+    send_serialized_message(&serializer, g_network_state->server_address);
+}
+
+
 void update_as_client(input_state_t *input_state)
 {
+    // Send stuff out to the server (input state and stuff...)
+    if (g_network_state->is_connected_to_server)
+    {
+        send_client_action_flags();
+    }
+
     network_address_t received_address = {};
     bool received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
 
@@ -678,6 +731,20 @@ void update_as_client(input_state_t *input_state)
                     
                     initialize_world(&game_state_init_packet, input_state);
 
+                    // Add client structs (indices of the structs on the server will be the same as on the client)
+                    for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
+                    {
+                        player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
+                        player_t *player = get_player(player_packet->player_name);
+
+                        client_state_t *client = &g_network_state->clients[player_packet->client_id];
+                        client->name = player->id.str;
+                        client->client_id = player_packet->client_id;
+                        client->player_handle = player->index;
+                    }
+
+                    g_network_state->is_connected_to_server = 1;
+
                 } break;
             case server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE:
                 {
@@ -693,6 +760,7 @@ void update_as_client(input_state_t *input_state)
 
                         ready_chunk_for_gpu_sync(chunk);
                     }
+                    
                 } break;
             }
         }

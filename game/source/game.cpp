@@ -92,13 +92,14 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             handle_global_game_input(memory, input_state);
-            update_network_state(input_state);
+            update_network_state(input_state, dt);
             hotreload_assets_if_changed();
             
             // ---- begin recording instructions into the command buffers ----
             frame_rendering_data_t frame = begin_frame_rendering(input_state);
             gpu_command_queue_t queue{frame.command_buffer};
             {
+                // Important function: may need to change structure of world API to incorporate networking
                 update_world(input_state, dt, frame.image_index, 0 /* Don't need this argument */, &queue, memory->app_type, memory->screen_focus);
 
                 dbg_handle_input(input_state);
@@ -111,7 +112,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            update_network_state(input_state);
+            update_network_state(input_state, dt);
             update_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type, memory->screen_focus);
         } break;
     }

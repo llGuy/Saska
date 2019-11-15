@@ -568,7 +568,7 @@ void send_chunks_hard_update_packets(network_address_t address)
 }
 
 // Might have to be done on a separate thread just for updating world data
-void update_as_server(input_state_t *input_state)
+void update_as_server(input_state_t *input_state, float32_t dt)
 {
     // Send game state to ALL players (here because at this point the data has been udpated)
     
@@ -697,10 +697,15 @@ internal_function void send_client_action_flags(void)
 }
 
 
-void update_as_client(input_state_t *input_state)
+void update_as_client(input_state_t *input_state, float32_t dt)
 {
+    persist_var float32_t time_accumulator = 0.0f;
+
+    time_accumulator += dt;
+    
     // Send stuff out to the server (input state and stuff...)
-    if (g_network_state->is_connected_to_server)
+    // TODO: Add changeable
+    if (g_network_state->is_connected_to_server && time_accumulator > 5.0f / 60.0f)
     {
         send_client_action_flags();
     }
@@ -767,12 +772,12 @@ void update_as_client(input_state_t *input_state)
     }
 }
 
-void update_network_state(input_state_t *input_state)
+void update_network_state(input_state_t *input_state, float32_t dt)
 {
     switch(g_network_state->current_app_mode)
     {
-    case application_mode_t::CLIENT_MODE: { update_as_client(input_state); } break;
-    case application_mode_t::SERVER_MODE: { update_as_server(input_state); } break;
+    case application_mode_t::CLIENT_MODE: { update_as_client(input_state, dt); } break;
+    case application_mode_t::SERVER_MODE: { update_as_server(input_state, dt); } break;
     }
 }
 

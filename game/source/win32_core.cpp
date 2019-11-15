@@ -9,6 +9,7 @@
 
 #if defined(UNITY_BUILD)
 #include "network.cpp"
+#include "thread_pool.cpp"
 #include <vulkan/vulkan.h>
 #include "memory.cpp"
 #include "ui.cpp"
@@ -20,8 +21,8 @@
 #include "file_system.cpp"
 #else
 
+#include "thread_pool.hpp"
 #include "memory.hpp"
-
 #include "vulkan.hpp"
 #include "core.hpp"
 #include "world.hpp"

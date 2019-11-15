@@ -263,7 +263,7 @@ internal_function void hard_initialize_chunks(void)
         shader_modules_t modules(shader_module_info_t{"shaders/SPV/voxel_mesh_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
                                  shader_module_info_t{"shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
         shader_blend_states_t blending(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
@@ -1613,6 +1613,21 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
 
 // ********************* Player code ***************************
 
+
+player_state_t initialize_player_state(player_t *player)
+{
+    player_state_t state = {};
+    state.action_flags = player->action_flags;
+    state.mouse_x_diff = player->camera.mouse_diff.x;
+    state.mouse_y_diff = player->camera.mouse_diff.y;
+    state.is_entering = player->is_entering;
+    state.rolling_mode = player->rolling_mode;
+    state.ws_position = player->ws_p;
+    state.ws_direction = player->ws_d;
+    return(state);
+}
+
+
 internal_function player_t *get_main_player(void)
 {
     if (g_entities->main_player == -1)
@@ -2863,8 +2878,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     hard_initialize_particles();
 
     initialize_world(input_state, cmdpool, app_type, app_mode);
-    deinitialize_world();
-    initialize_world(input_state, cmdpool, app_type, app_mode);
+    //deinitialize_world();
+    //initialize_world(input_state, cmdpool, app_type, app_mode);
         
     clear_linear();
 
@@ -2915,7 +2930,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
     
-    //initialize_players(input_state, app_type);
+    initialize_players(input_state, app_type);
     
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -3138,6 +3153,8 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
         vector3_t res = e->ws_d;
 	    
         vector2_t d = (curr_mp - prev_mp);
+
+        e->camera.mouse_diff = d;
 
         float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
         float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;

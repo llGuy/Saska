@@ -228,12 +228,14 @@ struct network_state_t
 
     uint16_t client_id_stack[MAX_CLIENTS] = {};
 
-    // If packet size doesn't match the size of the size defined in the header
-    // ...
+
+
+    // Some sort of keep track of player's previous state
+    
 };
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
-void update_network_state(input_state_t *input_state);
+void update_network_state(input_state_t *input_state, float32_t dt);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);
 void initialize_network_state(struct game_memory_t *memory, application_mode_t app_mode);

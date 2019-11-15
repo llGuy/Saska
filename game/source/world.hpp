@@ -145,6 +145,8 @@ struct camera_component_t
     float32_t distance_from_player = 40.0f;
 
     vector3_t previous_position = vector3_t(0.0f);
+    
+    vector2_t mouse_diff = vector2_t(0.0f);
 };
 
 struct animation_component_create_info_t
@@ -292,9 +294,26 @@ struct player_t : entity_t
 };
 
 
+// What is player doing, how has it changed (mouse movement, etc..)
+struct player_state_t
+{
+    uint32_t action_flags;
+    float32_t mouse_x_diff;
+    float32_t mouse_y_diff;
+    // Flags
+    uint8_t is_entering: 1;
+    uint8_t rolling_mode: 1;
+
+    vector3_t ws_position;
+    vector3_t ws_direction;
+};
+
+
+player_state_t initialize_player_state(player_t *player);
+
+
 struct bounce_physics_component_create_info_t
 {
-    
 };
 
 

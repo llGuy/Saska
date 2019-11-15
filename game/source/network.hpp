@@ -85,7 +85,7 @@ struct packet_header_t
     };
 
     // To make sure order is still all good
-    uint64_t packet_id;
+    uint64_t current_tick;
     // When client sends to server, this needs to be filled
     uint32_t client_id;
 };
@@ -151,12 +151,25 @@ struct game_state_initialize_packet_t
     player_state_initialize_packet_t *player;
 };
 
+
+// Command packet
 struct client_input_state_packet_t
 {
     // Contains stuff like which buttons did the client press
     // Server will then use this input to update the client's data on the server side
     // Server will then send back some snippets of the actual state of the game while the client is "guessing" what the current state is
     uint32_t action_flags;
+    float32_t mouse_x_diff;
+    float32_t mouse_y_diff;
+    union
+    {
+        struct
+        {
+            uint8_t is_entering: 1;
+            uint8_t rolling_mode: 1;
+        } flags;
+        uint8_t flags_byte;
+    };
 };
 
 struct game_state_packet_t
@@ -204,11 +217,6 @@ struct network_state_t
 {
     bool is_connected_to_server = false;
     
-    // Incremented every data update
-    uint64_t local_frame_id;
-
-
-    
     application_mode_t current_app_mode;
 
     const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
@@ -228,9 +236,18 @@ struct network_state_t
 
     uint16_t client_id_stack[MAX_CLIENTS] = {};
 
-
-
+    
     // Some sort of keep track of player's previous state
+    uint32_t current_player_state_index = 0;
+    uint32_t buffered_player_states_count;
+    player_state_t *buffered_player_states;
+
+
+
+    // Settings:
+    // Rate settings are all on a per second basis
+    float32_t client_input_snapshot_rate = 30.0f;
+    float32_t server_world_snapshot_rate = 20.0f;
     
 };
 
@@ -246,5 +263,6 @@ void join_server(const char *ip_address, const char *client_name);
 
 
 // Helper stuff
-constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) + sizeof(packet_header_t::packet_id) + sizeof(packet_header_t::client_id)); }
+constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) + sizeof(packet_header_t::current_tick) + sizeof(packet_header_t::client_id)); }
+constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client_input_state_packet_t::action_flags) + sizeof(client_input_state_packet_t::mouse_x_diff) + sizeof(client_input_state_packet_t::mouse_y_diff) + sizeof(client_input_state_packet_t::flags_byte)) };
 

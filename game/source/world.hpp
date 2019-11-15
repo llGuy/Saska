@@ -214,12 +214,22 @@ struct network_component_create_info_t
     uint32_t client_state_index;
 };
 
+#define MAX_PLAYER_STATES 40
+
 struct network_component_t
 {
     // May be different from client to client
     uint32_t entity_index;
     // Is the same from client to client
     uint32_t client_state_index;
+
+
+
+    // Circular buffer
+    bool head_will_be_under_tail = 0;
+    uint32_t head = 0;
+    uint32_t tail = 0;
+    player_state_t *player_states;
 };
 
 
@@ -301,8 +311,15 @@ struct player_state_t
     float32_t mouse_x_diff;
     float32_t mouse_y_diff;
     // Flags
-    uint8_t is_entering: 1;
-    uint8_t rolling_mode: 1;
+    union
+    {
+        struct
+        {
+            uint8_t is_entering: 1;
+            uint8_t rolling_mode: 1;
+        };
+        uint8_t flags_byte;
+    };
 
     vector3_t ws_position;
     vector3_t ws_direction;
@@ -413,6 +430,10 @@ struct world_t
 
     // Not hard initialize (rendering state, vulkan objects, shaders...) but just initialize game data like initialized entities, voxels, etc...
     bool initialized_world;
+
+
+    // Gets incremented every frame
+    uint64_t current_tick_id = 0;
 };
 
 // Gets the data of the player that is being controlled by client
@@ -445,7 +466,9 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum a
 void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state);
 void deinitialize_world(void);
 void destroy_world(void);
-void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
+void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
 void handle_world_input(input_state_t *input_state, float32_t dt);
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 void initialize_world_translation_unit(struct game_memory_t *memory);
+
+uint64_t *get_current_tick(void);

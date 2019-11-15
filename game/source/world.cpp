@@ -24,6 +24,7 @@ global_var struct entities_t *g_entities;
 global_var struct voxel_chunks_t *g_voxel_chunks;
 global_var struct particles_t *g_particles;
 global_var bool *g_initialized_world;
+global_var uint64_t *g_current_tick;
 
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
 
@@ -133,6 +134,7 @@ internal_function void update_terraform_power_component(terraform_power_componen
 internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+internal_function void update_network_component(network_component_t *network, player_t *player, float32_t dt);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
 internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
@@ -194,6 +196,11 @@ void handle_world_input(input_state_t *input_state, float32_t dt);
 void handle_input_debug(input_state_t *input_state, float32_t dt);
 void destroy_world(void);
 
+
+uint64_t *get_current_tick(void)
+{
+    return(g_current_tick);
+}
 
 
 
@@ -2121,6 +2128,52 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 }
 
 
+internal_function void update_network_component(network_component_t *network, player_t *player, float32_t dt)
+{
+    // Basically sets the action flags, toggles rolling mode, etc...
+    // Get next player_state_t
+
+    if (network->tail < network->head || network->head_will_be_under_tail)
+    {
+        player_state_t *next_player_state = network->player_states[network->tail++];
+
+        if (network->head > network->tail)
+        {
+            network->head_will_be_under_tail = 0;
+        }
+
+        player->action_flags = next_player_state->action_flags;
+
+        // Update view direction with mouse differences
+        vector3_t res = e->ws_d;
+        vector2_t d = vector2_t(next_player_state->mouse_x_diff, next_player_state->mouse_y_diff);
+
+        e->camera.mouse_diff = d;
+
+        float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
+        float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
+                
+        res = matrix3_t(glm::rotate(x_angle, up)) * res;
+        vector3_t rotate_y = glm::cross(res, up);
+        res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
+
+        res = glm::normalize(res);
+                
+        float32_t up_dot_view = glm::dot(up, res);
+        float32_t minus_up_dot_view = glm::dot(-up, res);
+                
+        float32_t limit = 0.99f;
+        if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
+        {
+            e->ws_d = res;
+        }
+        else
+        {
+        }
+    }
+}
+
+
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt)
 {
     uint32_t *action_flags = &player->action_flags;
@@ -2300,6 +2353,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
         {
         case application_type_t::WINDOW_APPLICATION_MODE:
             {
+                update_network_component(&player->network, player, dt);
                 update_physics_component(&player->physics, player, dt);
                 update_camera_component(&player->camera, player, dt);
                 update_rendering_component(&player->rendering, player, dt);
@@ -2552,6 +2606,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->shoot.shoot_speed = info->shoot_info.shoot_speed;
     player->network.entity_index = info->network_info.entity_index;
     player->network.client_state_index = info->network_info.client_state_index;
+    player->network.player_states = (player_state_t *)allocate_free_list(sizeof(player_state_t) * MAX_PLAYER_STATES /* Maximum amount of player_state_t that the player can buffer at any one time */);
 }
 
 
@@ -2892,6 +2947,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 
 void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state)
 {
+    *g_current_tick = 0;
+    
     g_voxel_chunks->size = packet->voxels.size;
     g_voxel_chunks->grid_edge_size = packet->voxels.grid_edge_size;
 
@@ -2927,6 +2984,8 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
 
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
+    *g_current_tick = 0;
+    
     g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
     
@@ -3108,7 +3167,7 @@ void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t 
 }
 
 
-void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus)
+void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus)
 {    
     switch (app_type)
     {
@@ -3132,6 +3191,9 @@ void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index
             update_entities(dt, app_type);
         } break;
     }
+
+    // Increment current tick
+    ++(*g_current_tick);
 }
 
 

@@ -223,13 +223,7 @@ struct network_component_t
     // Is the same from client to client
     uint32_t client_state_index;
 
-
-
-    // Circular buffer
-    bool head_will_be_under_tail = 0;
-    uint32_t head = 0;
-    uint32_t tail = 0;
-    player_state_t *player_states;
+    circular_buffer_t<struct player_state_t> player_states_cbuffer;
 };
 
 

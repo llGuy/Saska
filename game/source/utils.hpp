@@ -65,6 +65,34 @@ inline constant_string_t init_const_str(const char *str, uint32_t count)
     return(constant_string_t{str, count, compile_hash(str, count)});
 }
 
+template <typename T> struct heap_array_t
+{
+    uint32_t array_size;
+    T *array;
+
+    void initialize(uint32_t size)
+    {
+        array_size = size;
+        array = (T *)allocate_free_list(sizeof(T) * array_size);
+    }
+
+    void deinitialize(void)
+    {
+        deallocate_free_list(array);
+    }
+
+    T &operator[](uint32_t index)
+    {
+        // TODO: May need to remove this for release mode
+        if (index >= array_size)
+        {
+            assert(0);
+        }
+        
+        return(array[index]);
+    }
+};
+
 enum memory_buffer_view_allocation_t { LINEAR, FREE_LIST, STACK };
 
 template <typename T>
@@ -72,21 +100,18 @@ struct memory_buffer_view_t
 {
     uint32_t count;
     T *buffer;
-
-    void
-    zero(void)
+    
+    void zero(void)
     {
 	memset(buffer, 0, count * sizeof(T));
     }
     
-    T &
-    operator[](uint32_t i)
+    T &operator[](uint32_t i)
     {
 	return(buffer[i]);
     }
 
-    const T &
-    operator[](uint32_t i) const
+    const T &operator[](uint32_t i) const
     {
 	return(buffer[i]);
     }
@@ -187,3 +212,62 @@ template <typename T, uint32_t Bucket_Count, uint32_t Bucket_Size, uint32_t Buck
 	return(nullptr);
     }
 };
+
+template <typename T> struct circular_buffer_t
+{
+    uint32_t head_tail_difference = 0;
+    uint32_t head = 0;
+    uint32_t tail = 0;
+    uint32_t buffer_size;
+    T *buffer;
+
+    void initialize(uint32_t count)
+    {
+        buffer_size = count;
+        uint32_t byte_count = buffer_size * sizeof(T);
+        buffer = (T *)allocate_free_list(byte_count);
+    }
+
+    void push_item(T *item)
+    {
+        if (head == buffer_size)
+        {
+            head = 0;
+        }
+        buffer[head++] = *item;
+        ++head_tail_difference;
+    }
+
+    T *get_next_item(void)
+    {
+        if (head_tail_difference > 0)
+        {
+            if (tail == buffer_size)
+            {
+                tail = 0;
+            }
+    
+            T *item = &buffer[tail++];
+            --head_tail_difference;
+
+            return(item);
+        }
+
+        return(nullptr);
+    }
+
+    void deinitialize(void)
+    {
+        if (buffer)
+        {
+            deallocate_free_list(buffer);
+        }
+        buffer = nullptr;
+        buffer_size = 0;
+        head = 0;
+        tail = 0;
+        head_tail_difference = 0;
+    }
+};
+
+

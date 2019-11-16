@@ -2133,23 +2133,24 @@ internal_function void update_network_component(network_component_t *network, pl
     // Basically sets the action flags, toggles rolling mode, etc...
     // Get next player_state_t
 
-    if (network->tail < network->head || network->head_will_be_under_tail)
+    // Is there any player states to burn through
+    player_state_t *player_state = network->player_states_cbuffer.get_next_item();
+    if (player_state)
     {
-        player_state_t *next_player_state = network->player_states[network->tail++];
-
-        if (network->head > network->tail)
-        {
-            network->head_will_be_under_tail = 0;
-        }
+        player_state_t *next_player_state = player_state;
 
         player->action_flags = next_player_state->action_flags;
 
         // Update view direction with mouse differences
-        vector3_t res = e->ws_d;
+        vector3_t up = player->camera.ws_current_up_vector;
+        
+        vector3_t res = player->ws_d;
         vector2_t d = vector2_t(next_player_state->mouse_x_diff, next_player_state->mouse_y_diff);
 
-        e->camera.mouse_diff = d;
+        player->camera.mouse_diff = d;
 
+        persist_var constexpr uint32_t SENSITIVITY = 15.0f;
+        
         float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
         float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
                 
@@ -2165,7 +2166,7 @@ internal_function void update_network_component(network_component_t *network, pl
         float32_t limit = 0.99f;
         if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
         {
-            e->ws_d = res;
+            player->ws_d = res;
         }
         else
         {
@@ -2606,7 +2607,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->shoot.shoot_speed = info->shoot_info.shoot_speed;
     player->network.entity_index = info->network_info.entity_index;
     player->network.client_state_index = info->network_info.client_state_index;
-    player->network.player_states = (player_state_t *)allocate_free_list(sizeof(player_state_t) * MAX_PLAYER_STATES /* Maximum amount of player_state_t that the player can buffer at any one time */);
+    player->network.player_states_cbuffer.initialize(MAX_PLAYER_STATES);
 }
 
 
@@ -2626,7 +2627,7 @@ internal_function void initialize_players(game_state_initialize_packet_t *packet
         player_create_info_t player_create_info = {};
         player_create_info.name = make_constant_string(player_init_packet->player_name, strlen(player_init_packet->player_name));
         player_create_info.ws_position = vector3_t(player_init_packet->ws_position_x, player_init_packet->ws_position_y, player_init_packet->ws_position_z);
-        player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_z, player_init_packet->ws_view_direction_z, player_init_packet->ws_view_direction_z);
+        player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_x, player_init_packet->ws_view_direction_y, player_init_packet->ws_view_direction_z);
         player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
         player_create_info.ws_size = vector3_t(2);
         player_create_info.starting_velocity = 15.0f;
@@ -2989,7 +2990,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
     
-    initialize_players(input_state, app_type);
+    //initialize_players(input_state, app_type);
     
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -3057,6 +3058,7 @@ void deinitialize_world(void)
         deallocate_free_list(player->animation.animation_instance.current_joint_transforms);
         player->animation.animation_instance.interpolated_transforms_ubo.destroy();
         push_uniform_group_to_destroyed_uniform_group_cache(&g_entities->player_mesh_cycles, &player->animation.animation_instance);
+        player->network.player_states_cbuffer.deinitialize();
     }
 
     g_entities->player_count = 0;
@@ -3504,6 +3506,7 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
     g_voxel_chunks = &memory->world_state.voxel_chunks;
     g_particles = &memory->world_state.particles;
     g_initialized_world = &memory->world_state.initialized_world;
+    g_current_tick = &memory->world_state.current_tick_id;
 }
 
 

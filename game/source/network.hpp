@@ -66,7 +66,7 @@ const char *deserialize_string(serializer_t *serializer);
 void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
-enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE };
+enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION };
 enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE };
 
 struct packet_header_t
@@ -172,6 +172,11 @@ struct client_input_state_packet_t
     };
 };
 
+struct game_state_acknowledge_packet_t
+{
+    uint64_t game_state_tick;
+};
+
 struct game_state_packet_t
 {
     
@@ -193,7 +198,14 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
 void serialize_client_input_state_packet(serializer_t *serializer, player_state_t *packet);
 void deserialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet);
 
-struct client_state_t
+struct historical_player_state_t
+{
+    bool ackowledged = 0;
+    uint64_t tick;
+    player_state_t player_state;
+};
+
+struct client_t
 {
     // Name, id, etc...
     const char *name;
@@ -207,6 +219,8 @@ struct client_state_t
 
     // Handle to the player struct in the world_t megastruct
     player_handle_t player_handle;
+
+    circular_buffer_t<historical_player_state_t> player_state_history;
 };
 
 #define MAX_CLIENTS 40
@@ -230,7 +244,7 @@ struct network_state_t
     socket_manager_t sockets;
 
     uint32_t client_count = {};
-    client_state_t clients[MAX_CLIENTS] = {};
+    client_t clients[MAX_CLIENTS] = {};
 
     hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_name;
     hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_address;
@@ -243,11 +257,12 @@ struct network_state_t
     // Settings:
     // Rate settings are all on a per second basis
     float32_t client_input_snapshot_rate = 30.0f;
-    float32_t server_world_snapshot_rate = 20.0f;
+    float32_t server_game_state_snapshot_rate = 20.0f;
     
 };
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
+client_t *get_client(uint32_t index);
 void update_network_state(input_state_t *input_state, float32_t dt);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);

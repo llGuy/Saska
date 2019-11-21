@@ -112,8 +112,8 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            update_network_state(input_state, dt);
             tick_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type, memory->screen_focus);
+            update_network_state(input_state, dt);
         } break;
     }
 }

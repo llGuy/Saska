@@ -524,6 +524,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
+        // Disable this for debugging
         /*if (dt > TICK_TIME)
         {
             g_dt = dt;

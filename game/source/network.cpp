@@ -86,7 +86,6 @@ int32_t receive_from(network_socket_t *socket, char *buffer, uint32_t buffer_siz
 
     if (bytes_received == SOCKET_ERROR)
     {
-        //OutputDebugString("recvfrom failed\n");
         return 0;
     }
     else
@@ -518,6 +517,11 @@ uint32_t add_client(network_address_t network_address, const char *client_name, 
     return(0);
 }
 
+client_t *get_client(uint32_t index)
+{
+    return(&g_network_state->clients[index]);
+}
+
 #define MAX_MESSAGE_BUFFER_SIZE 40000
 global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
 
@@ -581,7 +585,28 @@ void update_as_server(input_state_t *input_state, float32_t dt)
     // Send Snapshots (25 per second)
     // Every 40ms (25 sps) - basically every frame
     // TODO: Add function to send snapshot
+    persist_var float32_t time_accumulator = 0.0f;
     
+    // Send stuff out to the clients (game state and stuff...)
+    // TODO: Add changeable
+    if (g_network_state->is_connected_to_server)
+    {
+        time_accumulator += dt;
+        float32_t max_time = 1.0f / g_network_state->server_game_state_snapshot_rate;
+        
+        if (time_accumulator > max_time)
+        {
+            //buffer_player_state();       
+        
+            
+
+            time_accumulator = 0.0f;
+        }
+        else
+        {
+            //buffer_player_state();
+        }
+    }
     
     
     network_address_t received_address = {};
@@ -609,7 +634,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                         deserialize_client_join_packet(&in_serializer, &client_join);
 
                         // Add client
-                        client_state_t *client = &g_network_state->clients[g_network_state->client_count];
+                        client_t *client = get_client(g_network_state->client_count);
                         client->name = client_join.client_name;
                         client->client_id = g_network_state->client_count;
                         client->network_address = received_address;
@@ -664,7 +689,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
 
                 case client_packet_type_t::CPT_INPUT_STATE:
                     {
-                        client_state_t *client = &g_network_state->clients[header.client_id];
+                        client_t *client = get_client(header.client_id);
                         player_t *player = get_player(client->player_handle);
                         
                         uint32_t player_state_count = deserialize_uint32(&in_serializer);
@@ -683,7 +708,12 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                         }
                         
                     } break;
-                    // case packet_header_t::client_packet_type_t::ETC:
+                case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
+                    {
+                        uint64_t game_state_acknowledged_tick = deserialize_uint64(&in_serializer);
+                        client_t *client = get_client(header.client_id);
+                        
+                    } break;
                 }
             }
         }
@@ -796,7 +826,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
                         player_t *player = get_player(player_packet->player_name);
 
-                        client_state_t *client = &g_network_state->clients[player_packet->client_id];
+                        client_t *client = get_client(player_packet->client_id);
                         client->name = player->id.str;
                         client->client_id = player_packet->client_id;
                         client->player_handle = player->index;

@@ -2140,6 +2140,7 @@ internal_function void update_network_component(network_component_t *network, pl
         player_state_t *next_player_state = player_state;
 
         player->action_flags = next_player_state->action_flags;
+        player->rolling_mode = next_player_state->rolling_mode;
 
         // Update view direction with mouse differences
         vector3_t up = player->camera.ws_current_up_vector;
@@ -2316,7 +2317,7 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
             spawn_explosion(collision_position);
             terraform(ws_to_xs(collision_position), 2, 1, 1, 100.0f);
 
-             extinguish_fire(&bullet->burnable);
+            extinguish_fire(&bullet->burnable);
             destroy_bullet(index);
         }
         else
@@ -2367,6 +2368,8 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 update_physics_component(&player->physics, player, dt);
             } break;
         }
+
+        player->action_flags = 0;
     }
 
     for (uint32_t bullet_index = 0; bullet_index < g_entities->bullet_count; ++bullet_index)

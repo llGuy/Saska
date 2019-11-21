@@ -127,7 +127,7 @@ enum keyboard_button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q,
                               ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, UP, LEFT, DOWN, RIGHT,
                               SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE, INVALID_KEY };
 
-enum is_down_t : bool { NOT_DOWN, INSTANT, REPEAT };
+enum is_down_t : bool { NOT_DOWN, INSTANT, REPEAT, RELEASE };
 
 struct keyboard_button_input_t
 {

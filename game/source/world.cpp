@@ -2133,10 +2133,6 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 
 internal_function float32_t update_network_component(network_component_t *network, player_t *player)
 {
-    console_clear();
-    console_out("Position: ", player->ws_p, "\n");
-    console_out("Direction: ", player->ws_d, "\n");
-    
     // Basically sets the action flags, toggles rolling mode, etc...
     // Get next player_state_t
 
@@ -2147,10 +2143,6 @@ internal_function float32_t update_network_component(network_component_t *networ
     {
         float32_t dt = player_state->dt;
 
-        console_out("Delta: ", dt, "\n");
-        
-        output_to_debug_console("Circular buffer head-tail difference: ", (int32_t)network->player_states_cbuffer.head_tail_difference, "\n");
-        
         player_state_t *next_player_state = player_state;
 
         player->action_flags = next_player_state->action_flags;
@@ -2425,6 +2417,8 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             update_animation_component(&player->animation, player, dt);
             update_terraform_power_component(&player->terraform_power, player, dt);
             update_shoot_component(&player->shoot, player, dt);
+
+            fill_last_player_state_if_needed(player);
         }
         
         

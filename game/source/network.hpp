@@ -67,7 +67,7 @@ void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
 enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION };
-enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE };
+enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE_SNAPSHOT };
 
 struct packet_header_t
 {
@@ -178,9 +178,19 @@ struct game_state_acknowledge_packet_t
     uint64_t game_state_tick;
 };
 
-struct game_state_packet_t
+
+// State that the client will use to simply verify if the client prediction hasn't been incorrect
+struct player_state_to_verify_t
 {
-    
+    vector3_t ws_position;
+    vector3_t ws_direction;
+};
+
+// This gets sent to the client at intervals (snapshots) - 20 per second
+struct game_snapshot_player_state_packet_t
+{
+    vector3_t ws_position;
+    vector3_t ws_direction;
 };
 
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
@@ -198,6 +208,9 @@ void deserialize_client_join_packet(serializer_t *serializer, client_join_packet
 
 void serialize_client_input_state_packet(serializer_t *serializer, player_state_t *packet);
 void deserialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet);
+
+void serialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet);
+void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet);
 
 struct historical_player_state_t
 {
@@ -222,6 +235,9 @@ struct client_t
     player_handle_t player_handle;
 
     circular_buffer_t<historical_player_state_t> player_state_history;
+
+    // Tick id of the previously received client input packet
+    uint64_t previous_client_tick;
 };
 
 #define MAX_CLIENTS 40
@@ -230,7 +246,6 @@ enum application_mode_t { CLIENT_MODE, SERVER_MODE };
 
 struct network_state_t
 {
-    
     bool is_connected_to_server = false;
     
     application_mode_t current_app_mode;
@@ -252,15 +267,20 @@ struct network_state_t
 
     uint16_t client_id_stack[MAX_CLIENTS] = {};
     
-    // Some sort of keep track of player's previous state
+    // Some sort of keep track of player's previous state (so that client can compare with the game snapshots that the server sent)
+    bool fill_requested = 0;
+    circular_buffer_t<player_state_t> player_state_history;
+
+    // Keeps track of player states to send to the server (like 25 a second or whatever value is specified)
     circular_buffer_t<player_state_t> player_state_cbuffer;
 
     // Settings:
     // Rate settings are all on a per second basis
     float32_t client_input_snapshot_rate = 25.0f;
     float32_t server_game_state_snapshot_rate = 20.0f;
-    
 };
+
+void fill_last_player_state_if_needed(player_t *player);
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
 client_t *get_client(uint32_t index);
@@ -283,5 +303,7 @@ constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client
                                                                    sizeof(client_input_state_packet_t::mouse_x_diff) +
                                                                    sizeof(client_input_state_packet_t::mouse_y_diff) +
                                                                    sizeof(client_input_state_packet_t::flags_byte) +
-                                                                   sizeof(client_input_state_packet_t::dt)); };
+                                                                   sizeof(client_input_state_packet_t::dt)); }
+constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::ws_position) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_direction)); }
 

@@ -445,6 +445,31 @@ void serialize_game_state_initialize_packet(serializer_t *serializer, game_state
     }
 }
 
+
+void serialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet)
+{
+    serialize_float32(serializer, packet->ws_position.x);
+    serialize_float32(serializer, packet->ws_position.y);
+    serialize_float32(serializer, packet->ws_position.z);
+
+    serialize_float32(serializer, packet->ws_direction.x);
+    serialize_float32(serializer, packet->ws_direction.y);
+    serialize_float32(serializer, packet->ws_direction.z);
+}
+
+
+void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet)
+{
+    packet->ws_position.x = deserialize_float32(serializer);
+    packet->ws_position.y = deserialize_float32(serializer);
+    packet->ws_position.z = deserialize_float32(serializer);
+
+    packet->ws_direction.x = deserialize_float32(serializer);
+    packet->ws_direction.y = deserialize_float32(serializer);
+    packet->ws_direction.z = deserialize_float32(serializer);
+}
+
+
 void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
 {
     deserialize_voxel_state_initialize_packet(serializer, &packet->voxels);
@@ -494,6 +519,7 @@ void initialize_as_client(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
 
     g_network_state->player_state_cbuffer.initialize(40);
+    g_network_state->player_state_history.initialize(60);
 }
 
 void initialize_as_server(void)
@@ -581,6 +607,43 @@ void send_chunks_hard_update_packets(network_address_t address)
     }
 }
 
+void dispatch_snapshot_to_clients(void)
+{
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_GAME_STATE_SNAPSHOT;
+    
+    serializer_t out_serializer = {};
+    initialize_serializer(&out_serializer, 2000);
+    
+    for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
+    {
+        out_serializer.data_buffer_head = 0;
+
+
+        header.total_packet_size = sizeof_packet_header() +
+            sizeof(uint64_t) +
+            sizeof_game_snapshot_player_state_packet();
+        
+        serialize_packet_header(&out_serializer, &header);
+
+        
+        client_t *client = get_client(client_index);
+        player_t *player = get_player(client->player_handle);
+
+        uint64_t previous_received_tick = client->previous_client_tick;
+        serialize_uint64(&out_serializer, previous_received_tick);
+        
+        // TODO: Add full snapshot in the future - for now, just client's snapshot
+        game_snapshot_player_state_packet_t player_snapshot_packet = {};
+        player_snapshot_packet.ws_position = player->ws_p;
+        player_snapshot_packet.ws_direction = player->ws_d;
+
+        serialize_game_snapshot_player_state_packet(&out_serializer, &player_snapshot_packet);
+        send_serialized_message(&out_serializer, client->network_address);
+    }
+}
+
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state, float32_t dt)
 
@@ -588,27 +651,20 @@ void update_as_server(input_state_t *input_state, float32_t dt)
     // Send Snapshots (25 per second)
     // Every 40ms (25 sps) - basically every frame
     // TODO: Add function to send snapshot
-    persist_var float32_t time_accumulator = 0.0f;
+    persist_var float32_t time_since_previous_snapshot = 0.0f;
     
     // Send stuff out to the clients (game state and stuff...)
     // TODO: Add changeable
-    if (g_network_state->is_connected_to_server)
+    
+    time_since_previous_snapshot += dt;
+    float32_t max_time = 1.0f / g_network_state->server_game_state_snapshot_rate; // 20 per second
+        
+    if (time_since_previous_snapshot > max_time)
     {
-        time_accumulator += dt;
-        float32_t max_time = 1.0f / g_network_state->server_game_state_snapshot_rate;
-        
-        if (time_accumulator > max_time)
-        {
-            //buffer_player_state();       
-        
+        // Dispath game state to all clients
+        dispatch_snapshot_to_clients();
             
-
-            time_accumulator = 0.0f;
-        }
-        else
-        {
-            //buffer_player_state();
-        }
+        time_since_previous_snapshot = 0.0f;
     }
     
     
@@ -693,6 +749,12 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                 case client_packet_type_t::CPT_INPUT_STATE:
                     {
                         client_t *client = get_client(header.client_id);
+                        // Current client tick (will be used for the snapshot that will be sent to the clients)
+                        // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
+                        client->previous_client_tick = header.current_tick;
+
+                        output_to_debug_console("Received packet sent at tick: ", (int32_t)client->previous_client_tick, "\n");
+
                         player_t *player = get_player(client->player_handle);
                         
                         uint32_t player_state_count = deserialize_uint32(&in_serializer);
@@ -746,6 +808,8 @@ internal_function void send_client_action_flags(void)
     header.client_id = user->network.client_state_index;
     header.current_tick = *get_current_tick();
 
+    output_to_debug_console("Sending at tick: ", (int32_t)header.current_tick, "\n");
+
     serializer_t serializer = {};
     initialize_serializer(&serializer, header.total_packet_size);
     
@@ -754,11 +818,19 @@ internal_function void send_client_action_flags(void)
     serialize_uint32(&serializer, g_network_state->player_state_cbuffer.head_tail_difference);
 
     uint32_t player_states_to_send = g_network_state->player_state_cbuffer.head_tail_difference;
+
+    player_state_t *state;
     for (uint32_t i = 0; i < player_states_to_send; ++i)
     {
-        player_state_t *state = g_network_state->player_state_cbuffer.get_next_item();
+        state = g_network_state->player_state_cbuffer.get_next_item();
         serialize_client_input_state_packet(&serializer, state);
     }
+
+    player_state_t to_store = *state;
+    to_store.tick = header.current_tick;
+    g_network_state->player_state_history.push_item(&to_store);
+    // Now the client has to fill in the position and direction values of the player state struct in the update_entities
+    g_network_state->fill_requested = 1;
 
     send_serialized_message(&serializer, g_network_state->server_address);
 }
@@ -774,22 +846,46 @@ void buffer_player_state(float32_t dt)
 }
 
 
+void fill_last_player_state_if_needed(player_t *player)
+{
+    if (g_network_state->fill_requested)
+    {
+        uint32_t head = g_network_state->player_state_history.head;
+        if (!head)
+        {
+            head = g_network_state->player_state_history.buffer_size - 1;
+        }
+        else
+        {
+            --head;
+        }
+    
+        player_state_t *player_state = &g_network_state->player_state_history.buffer[head];
+
+        player_state->ws_position = player->ws_p;
+        player_state->ws_direction = player->ws_d;
+
+        g_network_state->fill_requested = 0;
+    }
+}
+
+
 void update_as_client(input_state_t *input_state, float32_t dt)
 {
-    persist_var float32_t time_accumulator = 0.0f;
+    persist_var float32_t time_since_last_input_state = 0.0f;
     
     // Send stuff out to the server (input state and stuff...)
     // TODO: Add changeable
     if (g_network_state->is_connected_to_server)
     {
-        time_accumulator += dt;
+        time_since_last_input_state += dt;
         float32_t max_time = 1.0f / g_network_state->client_input_snapshot_rate;
         
-        if (time_accumulator > max_time)
+        if (time_since_last_input_state > max_time)
         {
             send_client_action_flags();
 
-            time_accumulator = 0.0f;
+            time_since_last_input_state = 0.0f;
         }
     }
 
@@ -851,6 +947,39 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         ready_chunk_for_gpu_sync(chunk);
                     }
                     
+                } break;
+            case server_packet_type_t::SPT_GAME_STATE_SNAPSHOT:
+                {
+                    uint64_t previous_tick = deserialize_uint64(&in_serializer);
+
+                    output_to_debug_console("Received from server, update for tick: ", (int32_t)previous_tick, "\n");
+                    
+                    for (uint32_t i = 0; i < g_network_state->player_state_history.head_tail_difference; ++i)
+                    {
+                        player_state_t *player_state = g_network_state->player_state_history.get_next_item();
+                        if (player_state->tick == previous_tick)
+                        {
+                            // This is the player state to compare with what the server sent
+                            game_snapshot_player_state_packet_t player_snapshot_packet = {};
+                            deserialize_game_snapshot_player_state_packet(&in_serializer, &player_snapshot_packet);
+
+                            // Compare
+                            float32_t precision = 0.0001f;
+                            vector3_t ws_position_difference = glm::abs(player_state->ws_position - player_snapshot_packet.ws_position);
+                            vector3_t ws_direction_difference = glm::abs(player_state->ws_direction - player_snapshot_packet.ws_direction);
+                            if (ws_position_difference.x > precision ||
+                                ws_position_difference.y > precision ||
+                                ws_position_difference.z > precision ||
+                                ws_direction_difference.x > precision ||
+                                ws_direction_difference.y > precision ||
+                                ws_direction_difference.z > precision)
+                            {
+                                output_to_debug_console("Need to do correction\n");
+                            }
+
+                            break;
+                        }
+                    }
                 } break;
             }
         }

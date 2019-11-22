@@ -319,6 +319,7 @@ struct player_state_t
 
     vector3_t ws_position;
     vector3_t ws_direction;
+    uint64_t tick;
     float32_t dt;
 };
 

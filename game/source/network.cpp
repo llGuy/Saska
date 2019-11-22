@@ -780,15 +780,9 @@ void update_as_client(input_state_t *input_state, float32_t dt)
         
         if (time_accumulator > max_time)
         {
-            buffer_player_state();       
-        
             send_client_action_flags();
 
             time_accumulator = 0.0f;
-        }
-        else
-        {
-            buffer_player_state();
         }
     }
 

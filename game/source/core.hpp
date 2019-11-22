@@ -44,7 +44,20 @@ left_shift(uint32_t n)
     return 1 << n;
 }
 
-void output_debug_string(const char *string);
+void output_to_debug_console_i(float32_t f);
+void output_to_debug_console_i(int32_t i);
+void output_to_debug_console_i(const char *string);
+
+template <typename ...T> void output_to_debug_console(T &&...ts)
+{
+    // Could do this with C++17
+    //(output_to_debug_console_i(ts), ...);
+
+    // But in case C++17 is not supported:
+    char dummy[] = { 0, (output_to_debug_console_i(ts), 0)... };
+}
+
+
 void print_text_to_console(const char *string);
 
 template <typename T> inline void destroy(T *ptr, uint32_t size = 1)

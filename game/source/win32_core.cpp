@@ -56,7 +56,21 @@ void request_quit(void)
     PostQuitMessage(0);
 }
 
-void output_debug_string(const char *string)
+void output_to_debug_console_i(int32_t i)
+{
+    char buffer[15] = {};
+    sprintf(buffer, "%i\0", i);
+    OutputDebugString(buffer);
+}
+
+void output_to_debug_console_i(float32_t f)
+{
+    char buffer[15] = {};
+    sprintf(buffer, "%f\0", f);
+    OutputDebugString(buffer);
+}
+
+void output_to_debug_console_i(const char *string)
 {
     OutputDebugString(string);
 }

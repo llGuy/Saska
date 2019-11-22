@@ -256,13 +256,14 @@ struct network_state_t
 
     // Settings:
     // Rate settings are all on a per second basis
-    float32_t client_input_snapshot_rate = 30.0f;
+    float32_t client_input_snapshot_rate = 25.0f;
     float32_t server_game_state_snapshot_rate = 20.0f;
     
 };
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
 client_t *get_client(uint32_t index);
+void buffer_player_state(void);
 void update_network_state(input_state_t *input_state, float32_t dt);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);

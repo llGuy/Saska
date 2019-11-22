@@ -1627,6 +1627,9 @@ player_state_t initialize_player_state(player_t *player)
     state.action_flags = player->action_flags;
     state.mouse_x_diff = player->camera.mouse_diff.x;
     state.mouse_y_diff = player->camera.mouse_diff.y;
+
+    //    output_to_debug_console("Mouse difference: ", player->camera.mouse_diff.x, player->camera.mouse_diff.y, "\n");
+
     state.is_entering = player->is_entering;
     state.rolling_mode = player->rolling_mode;
     state.ws_position = player->ws_p;
@@ -2137,6 +2140,8 @@ internal_function void update_network_component(network_component_t *network, pl
     player_state_t *player_state = network->player_states_cbuffer.get_next_item();
     if (player_state)
     {
+        output_to_debug_console("Circular buffer head-tail difference: ", (int32_t)network->player_states_cbuffer.head_tail_difference, "\n");
+        
         player_state_t *next_player_state = player_state;
 
         player->action_flags = next_player_state->action_flags;
@@ -2367,6 +2372,11 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             {
                 update_physics_component(&player->physics, player, dt);
             } break;
+        }
+
+        if (player_index == g_entities->main_player)
+        {
+            buffer_player_state();
         }
 
         player->action_flags = 0;
@@ -3244,6 +3254,10 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
         else
         {
         }
+    }
+    else
+    {
+        e->camera.mouse_diff = vector2_t(0.0f);
     }
 }
 

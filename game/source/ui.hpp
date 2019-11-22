@@ -175,7 +175,18 @@ void load_font(const constant_string_t &font_name, const char *fmt_file);
 
 bool console_is_receiving_input(void);
 
-void console_out(const char *string);
+void console_clear(void);
+void console_out_i(const char *string);
+void console_out_i(const vector3_t &v3);
+void console_out_i(const vector2_t &v2);
+void console_out_i(float32_t f);
+void console_out_i(int32_t f);
+
+template <typename ...T> void console_out(T &&...t)
+{
+    char dummy[] = { 0, (console_out_i(t), 0)... };
+}
+
 void set_console_for_focus(void);
 void remove_console_for_focus(void);
 

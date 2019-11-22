@@ -170,6 +170,7 @@ struct client_input_state_packet_t
         } flags;
         uint8_t flags_byte;
     };
+    float32_t dt;
 };
 
 struct game_state_acknowledge_packet_t
@@ -263,7 +264,7 @@ struct network_state_t
 
 uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle);
 client_t *get_client(uint32_t index);
-void buffer_player_state(void);
+void buffer_player_state(float32_t dt);
 void update_network_state(input_state_t *input_state, float32_t dt);
 
 void initialize_network_translation_unit(struct game_memory_t *memory);
@@ -281,5 +282,6 @@ constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::b
 constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client_input_state_packet_t::action_flags) +
                                                                    sizeof(client_input_state_packet_t::mouse_x_diff) +
                                                                    sizeof(client_input_state_packet_t::mouse_y_diff) +
-                                                                   sizeof(client_input_state_packet_t::flags_byte)); };
+                                                                   sizeof(client_input_state_packet_t::flags_byte) +
+                                                                   sizeof(client_input_state_packet_t::dt)); };
 

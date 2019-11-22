@@ -134,7 +134,7 @@ internal_function void update_terraform_power_component(terraform_power_componen
 internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_network_component(network_component_t *network, player_t *player, float32_t dt);
+internal_function float32_t update_network_component(network_component_t *network, player_t *player);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
 internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
@@ -2131,15 +2131,24 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 }
 
 
-internal_function void update_network_component(network_component_t *network, player_t *player, float32_t dt)
+internal_function float32_t update_network_component(network_component_t *network, player_t *player)
 {
+    console_clear();
+    console_out("Position: ", player->ws_p, "\n");
+    console_out("Direction: ", player->ws_d, "\n");
+    
     // Basically sets the action flags, toggles rolling mode, etc...
     // Get next player_state_t
 
     // Is there any player states to burn through
     player_state_t *player_state = network->player_states_cbuffer.get_next_item();
+
     if (player_state)
     {
+        float32_t dt = player_state->dt;
+
+        console_out("Delta: ", dt, "\n");
+        
         output_to_debug_console("Circular buffer head-tail difference: ", (int32_t)network->player_states_cbuffer.head_tail_difference, "\n");
         
         player_state_t *next_player_state = player_state;
@@ -2177,7 +2186,11 @@ internal_function void update_network_component(network_component_t *network, pl
         else
         {
         }
+
+        return(dt);
     }
+
+    return(-1.0f);
 }
 
 
@@ -2350,33 +2363,75 @@ internal_function player_handle_t add_player(const player_t &e)
 }
 
 
+void update_networked_player(uint32_t player_index)
+{
+    player_t *player = &g_entities->player_list[player_index];
+
+    float32_t dt = update_network_component(&player->network, player);
+
+    if (dt > 0.0f)
+    {
+        update_physics_component(&player->physics, player, dt);
+        update_camera_component(&player->camera, player, dt);
+        update_rendering_component(&player->rendering, player, dt);
+        update_animation_component(&player->animation, player, dt);
+        update_terraform_power_component(&player->terraform_power, player, dt);
+        update_shoot_component(&player->shoot, player, dt);
+
+        player->action_flags = 0;
+    }
+}
+
+
 internal_function void update_entities(float32_t dt, application_type_t app_type)
 {       
     for (uint32_t player_index = 0; player_index < g_entities->player_count; ++player_index)
     {
         player_t *player = &g_entities->player_list[player_index];
-        
-        switch (app_type)
+
+        if (player->network.commands_to_flush > 0)
         {
-        case application_type_t::WINDOW_APPLICATION_MODE:
+            for (uint32_t i = 0; i < player->network.commands_to_flush; ++i)
             {
-                update_network_component(&player->network, player, dt);
-                update_physics_component(&player->physics, player, dt);
-                update_camera_component(&player->camera, player, dt);
-                update_rendering_component(&player->rendering, player, dt);
-                update_animation_component(&player->animation, player, dt);
-                update_terraform_power_component(&player->terraform_power, player, dt);
-                update_shoot_component(&player->shoot, player, dt);
-            } break;
-        case application_type_t::CONSOLE_APPLICATION_MODE:
-            {
-                update_physics_component(&player->physics, player, dt);
-            } break;
+                switch (app_type)
+                {
+                case application_type_t::WINDOW_APPLICATION_MODE:
+                    {
+                        float32_t client_local_dt = update_network_component(&player->network, player);
+                        update_physics_component(&player->physics, player, client_local_dt);
+                        update_camera_component(&player->camera, player, client_local_dt);
+                        update_rendering_component(&player->rendering, player, client_local_dt);
+                        update_animation_component(&player->animation, player, client_local_dt);
+                        update_terraform_power_component(&player->terraform_power, player, client_local_dt);
+                        update_shoot_component(&player->shoot, player, client_local_dt);
+                    } break;
+                case application_type_t::CONSOLE_APPLICATION_MODE:
+                    {
+                        float32_t client_local_dt = update_network_component(&player->network, player);
+                        update_physics_component(&player->physics, player, dt);
+                    } break;
+                }
+            }
+
+            player->network.commands_to_flush = 0;
         }
+        // Basically if it is the client program running
+        else if (player_index == g_entities->main_player)
+        {
+            update_network_component(&player->network, player);
+            update_physics_component(&player->physics, player, dt);
+            update_camera_component(&player->camera, player, dt);
+            update_rendering_component(&player->rendering, player, dt);
+            update_animation_component(&player->animation, player, dt);
+            update_terraform_power_component(&player->terraform_power, player, dt);
+            update_shoot_component(&player->shoot, player, dt);
+        }
+        
+        
 
         if (player_index == g_entities->main_player)
         {
-            buffer_player_state();
+            buffer_player_state(dt);
         }
 
         player->action_flags = 0;

@@ -50,7 +50,7 @@ inline constexpr uint32_t compile_hash(const char *string, uint32_t size)
     return ((size ? compile_hash(string, size - 1) : 2166136261u) ^ string[size]) * 16777619u;
 }
 
-inline constexpr constant_string_t operator""_hash(const char *string, size_t size)
+inline constexpr constant_string_t operator""_hash(const char *string, size_t size) // "
 {
     return(constant_string_t{string, (uint32_t)size, compile_hash(string, (uint32_t)size)});
 }

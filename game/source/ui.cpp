@@ -551,9 +551,46 @@ internal_function void output_to_output_section(const char *string, uint32_t col
     draw_string(&g_console->console_output, string, color);
 }
 
-void console_out(const char *string)
+void console_clear(void)
+{
+    g_console->console_output.char_count = 0;
+}
+
+void console_out_i(const char *string)
 {
     draw_string(&g_console->console_output, string, g_console->output_color);
+}
+
+void console_out_i(int32_t i)
+{
+    char buffer[15] = {};
+    sprintf(buffer, "%i\0", i);
+    
+    draw_string(&g_console->console_output, buffer, g_console->output_color);
+}
+
+void console_out_i(float32_t f)
+{
+    char buffer[15] = {};
+    sprintf(buffer, "%f\0", f);
+
+    draw_string(&g_console->console_output, buffer, g_console->output_color);
+}
+
+void console_out_i(const vector2_t &v2)
+{
+    char buffer[40] = {};
+    sprintf(buffer, "%f %f\0", v2.x, v2.y);
+
+    draw_string(&g_console->console_output, buffer, g_console->output_color);
+}
+
+void console_out_i(const vector3_t &v3)
+{
+    char buffer[40] = {};
+    sprintf(buffer, "%f %f %f\0", v3.x, v3.y, v3.z);
+
+    draw_string(&g_console->console_output, buffer, g_console->output_color);
 }
 
 void console_out_color_override(const char *string, uint32_t color)

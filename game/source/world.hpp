@@ -218,6 +218,8 @@ struct network_component_create_info_t
 
 struct network_component_t
 {
+    uint32_t commands_to_flush = 0;
+    
     // May be different from client to client
     uint32_t entity_index;
     // Is the same from client to client
@@ -317,6 +319,7 @@ struct player_state_t
 
     vector3_t ws_position;
     vector3_t ws_direction;
+    float32_t dt;
 };
 
 
@@ -445,6 +448,7 @@ void make_player_renderable(player_handle_t player_handle, player_color_t color)
 void make_player_main(player_handle_t player_handle, input_state_t *input_state);
 
 void update_network_world_state(void);
+void update_networked_player(uint32_t player_index);
 void initialize_game_state_initialize_packet(struct game_state_initialize_packet_t *packet, player_handle_t new_client_handle);
 // Will create packet for each chunk
 struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);

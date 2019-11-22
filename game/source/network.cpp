@@ -348,6 +348,7 @@ void serialize_client_input_state_packet(serializer_t *serializer, player_state_
     serialize_float32(serializer, state->mouse_x_diff);
     serialize_float32(serializer, state->mouse_y_diff);
     serialize_uint8(serializer, state->flags_byte);
+    serialize_float32(serializer, state->dt);
 }
 
 
@@ -357,6 +358,7 @@ void deserialize_client_input_state_packet(serializer_t *serializer, client_inpu
     packet->mouse_x_diff = deserialize_float32(serializer);
     packet->mouse_y_diff = deserialize_float32(serializer);
     packet->flags_byte = deserialize_uint8(serializer);
+    packet->dt = deserialize_float32(serializer);
 }
 
 
@@ -581,6 +583,7 @@ void send_chunks_hard_update_packets(network_address_t address)
 
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state, float32_t dt)
+
 {
     // Send Snapshots (25 per second)
     // Every 40ms (25 sps) - basically every frame
@@ -703,9 +706,12 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                             player_state.mouse_x_diff = input_packet.mouse_x_diff;
                             player_state.mouse_y_diff = input_packet.mouse_y_diff;
                             player_state.flags_byte = input_packet.flags_byte;
+                            player_state.dt = input_packet.dt;
 
                             player->network.player_states_cbuffer.push_item(&player_state);
                         }
+
+                        player->network.commands_to_flush = player_state_count;
                         
                     } break;
                 case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
@@ -758,10 +764,11 @@ internal_function void send_client_action_flags(void)
 }
 
 
-void buffer_player_state(void)
+void buffer_player_state(float32_t dt)
 {
     player_t *user = get_user_player();
     player_state_t player_state = initialize_player_state(user);
+    player_state.dt = dt;
 
     g_network_state->player_state_cbuffer.push_item(&player_state);
 }

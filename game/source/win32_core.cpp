@@ -39,6 +39,8 @@
 
 global_var bool g_running;
 global_var bool g_hasfocus;
+global_var bool g_toggled_fullscreen = 0;
+global_var bool g_in_fullscreen = 0;
 global_var double g_game_time = 0.0f;
 global_var double g_dt = 0.0f;
 global_var HWND g_window;
@@ -210,6 +212,57 @@ internal_function void set_mouse_button_state(input_state_t *input_state, mouse_
     }
 }
 
+void enter_fullscreen(void)
+{
+    POINT point = {0};
+    HMONITOR monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitor_info = { sizeof(monitor_info) };
+    if (GetMonitorInfo(monitor, &monitor_info))
+    {
+        DWORD style = WS_POPUP | WS_VISIBLE;
+        SetWindowLongPtr(g_window, GWL_STYLE, style);
+        SetWindowPos(g_window, 0, monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
+                     monitor_info.rcMonitor.right - monitor_info.rcMonitor.left, monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top,
+                     SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        g_input_state.resized = 1;
+        g_input_state.window_width = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+        g_input_state.window_height = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+    }
+}
+
+void exit_fullscreen(void)
+{
+    /*DWORD style = WS_OVERLAPPEDWINDOW;
+
+    SetWindowLongPtr(g_window, GWL_STYLE, style);
+
+    RECT rect = {};
+    GetClientRect(g_window, &rect);
+    
+    g_input_state.resized = 1;
+    g_input_state.window_width = rect.right - rect.left;
+    g_input_state.window_height = rect.bottom - rect.top;*/
+}
+
+void toggle_fullscreen(void)
+{
+    if (!g_toggled_fullscreen)
+    {
+        g_toggled_fullscreen = 1;
+
+        if (g_in_fullscreen)
+        {
+            g_in_fullscreen = 0;
+            exit_fullscreen();
+        }
+        else
+        {
+            g_in_fullscreen = 1;
+            enter_fullscreen();
+        }
+    }
+}
+
 internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
 {
     switch(wparam)
@@ -260,6 +313,7 @@ internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32
     case VK_RETURN: { set_key_state(&g_input_state, keyboard_button_type_t::ENTER, action); } break;
     case VK_BACK: { set_key_state(&g_input_state, keyboard_button_type_t::BACKSPACE, action); } break;
     case VK_ESCAPE: { set_key_state(&g_input_state, keyboard_button_type_t::ESCAPE, action); } break;
+    case VK_F11: { if (action == key_action_t::KEY_ACTION_UP) g_toggled_fullscreen = 0; else toggle_fullscreen(); } break;
     }
 }
 

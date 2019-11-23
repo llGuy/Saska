@@ -53,6 +53,7 @@ void receive_serialized_message(serializer_t *serializer, network_address_t addr
 
 void serialize_uint8(serializer_t *serializer, uint8_t u8);
 void serialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
+void serialize_uint16(serializer_t *serializer, uint16_t u16);
 void serialize_uint32(serializer_t *serializer, uint32_t u32);
 void serialize_uint64(serializer_t *serializer, uint64_t u64);
 void serialize_float32(serializer_t *serializer, float32_t f32);
@@ -60,6 +61,7 @@ void serialize_vector3(serializer_t *serializer, const vector3_t &v3);
 void serialize_string(serializer_t *serializer, const char *string);
 
 uint8_t deserialize_uint8(serializer_t *serializer);
+uint16_t deserialize_uint16(serializer_t *serializer);
 uint32_t deserialize_uint32(serializer_t *serializer);
 uint64_t deserialize_uint64(serializer_t *serializer);
 float32_t deserialize_float32(serializer_t *serializer);
@@ -191,6 +193,7 @@ struct player_state_to_verify_t
 // This gets sent to the client at intervals (snapshots) - 20 per second
 struct game_snapshot_player_state_packet_t
 {
+    uint16_t client_id;
     vector3_t ws_position;
     vector3_t ws_direction;
 
@@ -199,6 +202,8 @@ struct game_snapshot_player_state_packet_t
         struct
         {
             uint8_t need_to_do_correction: 1;
+            uint8_t is_to_ignore: 1;
+            // Will have other flags
         };
         uint8_t flags;
     };
@@ -328,7 +333,8 @@ constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client
                                                                    sizeof(client_input_state_packet_t::mouse_y_diff) +
                                                                    sizeof(client_input_state_packet_t::flags_byte) +
                                                                    sizeof(client_input_state_packet_t::dt)); }
-constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::ws_position) +
+constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::client_id) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_position) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_direction) +
                                                                            sizeof(game_snapshot_player_state_packet_t::flags)); }
 

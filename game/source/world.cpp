@@ -2417,11 +2417,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             update_animation_component(&player->animation, player, dt);
             update_terraform_power_component(&player->terraform_power, player, dt);
             update_shoot_component(&player->shoot, player, dt);
-
-            fill_last_player_state_if_needed(player);
         }
-        
-        
 
         if (player_index == g_entities->main_player)
         {
@@ -3536,7 +3532,7 @@ internal_function int32_t lua_enable_physics(lua_State *state)
 
     player_t *player = get_player(kname);
 
-    player->physics.enabled = 0;
+    player->physics.enabled = 1;
 
     return(0);
 }

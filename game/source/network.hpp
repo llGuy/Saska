@@ -56,17 +56,19 @@ void serialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 void serialize_uint32(serializer_t *serializer, uint32_t u32);
 void serialize_uint64(serializer_t *serializer, uint64_t u64);
 void serialize_float32(serializer_t *serializer, float32_t f32);
+void serialize_vector3(serializer_t *serializer, const vector3_t &v3);
 void serialize_string(serializer_t *serializer, const char *string);
 
 uint8_t deserialize_uint8(serializer_t *serializer);
 uint32_t deserialize_uint32(serializer_t *serializer);
 uint64_t deserialize_uint64(serializer_t *serializer);
 float32_t deserialize_float32(serializer_t *serializer);
+vector3_t deserialize_vector3(serializer_t *serializer);
 const char *deserialize_string(serializer_t *serializer);
 void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
-enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION };
+enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION, CPT_PREDICTION_ERROR_CORRECTION };
 enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE_SNAPSHOT };
 
 struct packet_header_t
@@ -191,6 +193,20 @@ struct game_snapshot_player_state_packet_t
 {
     vector3_t ws_position;
     vector3_t ws_direction;
+
+    union
+    {
+        struct
+        {
+            uint8_t need_to_do_correction: 1;
+        };
+        uint8_t flags;
+    };
+};
+
+struct client_prediction_error_correction_t
+{
+    uint64_t tick;
 };
 
 void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet);
@@ -238,8 +254,14 @@ struct client_t
 
     // Tick id of the previously received client input packet
     uint64_t previous_client_tick;
+    player_state_t previous_received_player_state;
 
     bool received_input_commands = 0;
+
+
+
+    // Server will not take in input commands from client if this flag does not get set to false (gets set to false when server receives error correction packet)
+    bool needs_to_acknowledge_prediction_error = 0;
 };
 
 #define MAX_CLIENTS 40
@@ -307,5 +329,6 @@ constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client
                                                                    sizeof(client_input_state_packet_t::flags_byte) +
                                                                    sizeof(client_input_state_packet_t::dt)); }
 constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::ws_position) +
-                                                                           sizeof(game_snapshot_player_state_packet_t::ws_direction)); }
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_direction) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::flags)); }
 

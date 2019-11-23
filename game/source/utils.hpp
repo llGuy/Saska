@@ -269,3 +269,5 @@ template <typename T> struct circular_buffer_t
         head_tail_difference = 0;
     }
 };
+
+void do_nothing(void) {}

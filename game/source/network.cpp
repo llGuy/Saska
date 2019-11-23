@@ -618,29 +618,34 @@ void dispatch_snapshot_to_clients(void)
     
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
     {
-        out_serializer.data_buffer_head = 0;
-
-
-        header.total_packet_size = sizeof_packet_header() +
-            sizeof(uint64_t) +
-            sizeof_game_snapshot_player_state_packet();
-        
-        serialize_packet_header(&out_serializer, &header);
-
-        
         client_t *client = get_client(client_index);
         player_t *player = get_player(client->player_handle);
 
-        uint64_t previous_received_tick = client->previous_client_tick;
-        serialize_uint64(&out_serializer, previous_received_tick);
-        
-        // TODO: Add full snapshot in the future - for now, just client's snapshot
-        game_snapshot_player_state_packet_t player_snapshot_packet = {};
-        player_snapshot_packet.ws_position = player->ws_p;
-        player_snapshot_packet.ws_direction = player->ws_d;
+        if (client->received_input_commands)
+        {
+            out_serializer.data_buffer_head = 0;
 
-        serialize_game_snapshot_player_state_packet(&out_serializer, &player_snapshot_packet);
-        send_serialized_message(&out_serializer, client->network_address);
+
+            header.total_packet_size = sizeof_packet_header() +
+                sizeof(uint64_t) +
+                sizeof_game_snapshot_player_state_packet();
+        
+            serialize_packet_header(&out_serializer, &header);
+
+            uint64_t previous_received_tick = client->previous_client_tick;
+            serialize_uint64(&out_serializer, previous_received_tick);
+        
+            // TODO: Add full snapshot in the future - for now, just client's snapshot
+            game_snapshot_player_state_packet_t player_snapshot_packet = {};
+            player_snapshot_packet.ws_position = player->ws_p;
+            player_snapshot_packet.ws_direction = player->ws_d;
+
+            serialize_game_snapshot_player_state_packet(&out_serializer, &player_snapshot_packet);
+            send_serialized_message(&out_serializer, client->network_address);
+
+            // Just for debugging
+            //            __debugbreak();
+        }
     }
 }
 
@@ -749,11 +754,11 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                 case client_packet_type_t::CPT_INPUT_STATE:
                     {
                         client_t *client = get_client(header.client_id);
+                        client->received_input_commands = 1;
+                        
                         // Current client tick (will be used for the snapshot that will be sent to the clients)
                         // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
                         client->previous_client_tick = header.current_tick;
-
-                        output_to_debug_console("Received packet sent at tick: ", (int32_t)client->previous_client_tick, "\n");
 
                         player_t *player = get_player(client->player_handle);
                         
@@ -808,8 +813,6 @@ internal_function void send_client_action_flags(void)
     header.client_id = user->network.client_state_index;
     header.current_tick = *get_current_tick();
 
-    output_to_debug_console("Sending at tick: ", (int32_t)header.current_tick, "\n");
-
     serializer_t serializer = {};
     initialize_serializer(&serializer, header.total_packet_size);
     
@@ -827,10 +830,12 @@ internal_function void send_client_action_flags(void)
     }
 
     player_state_t to_store = *state;
+    to_store.ws_position = user->ws_p;
+    to_store.ws_direction = user->ws_d;
     to_store.tick = header.current_tick;
     g_network_state->player_state_history.push_item(&to_store);
     // Now the client has to fill in the position and direction values of the player state struct in the update_entities
-    g_network_state->fill_requested = 1;
+    //g_network_state->fill_requested = 1;
 
     send_serialized_message(&serializer, g_network_state->server_address);
 }
@@ -952,19 +957,22 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                 {
                     uint64_t previous_tick = deserialize_uint64(&in_serializer);
 
-                    output_to_debug_console("Received from server, update for tick: ", (int32_t)previous_tick, "\n");
+                    // Need to create separate variable because head_tail_difference shrinks everytime get_next_item() is called
+                    uint32_t head_tail_difference = g_network_state->player_state_history.head_tail_difference;
                     
-                    for (uint32_t i = 0; i < g_network_state->player_state_history.head_tail_difference; ++i)
+                    for (uint32_t i = 0; i < head_tail_difference; ++i)
                     {
                         player_state_t *player_state = g_network_state->player_state_history.get_next_item();
                         if (player_state->tick == previous_tick)
                         {
+                            output_to_debug_console("Comparing at tick: ", (int32_t)previous_tick, " | ");
+                            
                             // This is the player state to compare with what the server sent
                             game_snapshot_player_state_packet_t player_snapshot_packet = {};
                             deserialize_game_snapshot_player_state_packet(&in_serializer, &player_snapshot_packet);
 
                             // Compare
-                            float32_t precision = 0.0001f;
+                            float32_t precision = 0.2f;
                             vector3_t ws_position_difference = glm::abs(player_state->ws_position - player_snapshot_packet.ws_position);
                             vector3_t ws_direction_difference = glm::abs(player_state->ws_direction - player_snapshot_packet.ws_direction);
                             if (ws_position_difference.x > precision ||
@@ -974,8 +982,10 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                                 ws_direction_difference.y > precision ||
                                 ws_direction_difference.z > precision)
                             {
-                                output_to_debug_console("Need to do correction\n");
+                                output_to_debug_console("Need to do correction");
                             }
+                            
+                            output_to_debug_console("\n");
 
                             break;
                         }

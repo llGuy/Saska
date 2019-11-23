@@ -238,6 +238,8 @@ struct client_t
 
     // Tick id of the previously received client input packet
     uint64_t previous_client_tick;
+
+    bool received_input_commands = 0;
 };
 
 #define MAX_CLIENTS 40

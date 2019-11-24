@@ -953,7 +953,7 @@ internal_function void send_client_action_flags(void)
     to_store.ws_position = user->ws_p;
     to_store.ws_direction = user->ws_d;
     to_store.tick = header.current_tick;
-    g_network_state->player_state_history.push_item(&to_store);
+    //g_network_state->player_state_history.push_item(&to_store);
 
     serialize_vector3(&serializer, to_store.ws_position);
     serialize_vector3(&serializer, to_store.ws_direction);
@@ -1119,13 +1119,13 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         {
 
                             // Need to create separate variable because head_tail_difference shrinks everytime get_next_item() is called
-                            uint32_t head_tail_difference = g_network_state->player_state_history.head_tail_difference;
+                            //uint32_t head_tail_difference = g_network_state->player_state_history.head_tail_difference;
                     
-                            for (uint32_t i = 0; i < head_tail_difference; ++i)
-                            {
-                                player_state_t *player_state = g_network_state->player_state_history.get_next_item();
-                                if (player_state->tick == previous_tick)
-                                {
+                            //for (uint32_t i = 0; i < head_tail_difference; ++i)
+                            //{
+                            //player_state_t *player_state = g_network_state->player_state_history.get_next_item();
+                                /*if (player_state->tick == previous_tick)
+                                  {*/
                                     if (player_snapshot_packet.need_to_do_correction)
                                     {
                                         output_to_debug_console("Doing correction\n");
@@ -1138,16 +1138,16 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                                         // Send a prediction error correction packet
                                         send_prediction_error_correction(previous_tick);
 
-                                        g_network_state->player_state_history.tail = g_network_state->player_state_history.head;
+                                        /*g_network_state->player_state_history.tail = g_network_state->player_state_history.head;
                                         g_network_state->player_state_history.head_tail_difference = 0;
 
                                         g_network_state->player_state_cbuffer.tail = g_network_state->player_state_cbuffer.head;
-                                        g_network_state->player_state_cbuffer.head_tail_difference = 0;
+                                        g_network_state->player_state_cbuffer.head_tail_difference = 0;*/
                                     }
 
                                     break;
-                                }
-                            }
+                                    //}
+                            //}
                             
                         }
                         // We are dealing with a remote client: we need to deal with entity interpolation stuff

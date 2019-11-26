@@ -1,19 +1,4 @@
-/*   // How client-server model will work for now (may need to introduce an extra TCP connection for more important packets (join, game state hard update, etc...))
-
-     - Client sends join packet to server
-     - Server receives this packet; spawns player into the world; creates a client_state for the player, of which the array index will end up being the actual client ID of the player
-     - Server sends all game state to the player (voxel values, world dimensions, etc..., other players' positions, client IDs, etc...)
-     - Client receives this handshake packet, reinitializes its local game state
-     - Starts to send action flags to the server
-     - Server takes these action flags and updates the client position, dispatches it to all clients (sends the new position/direction/rotation/everything)
-     - All clients will receive this and interpolate between the different states
-     - The client which sent its action flags to the server will receive its new position (the client and server will keep track of its current "frame count", and the client will make sure that it has not gone off track with the server's state)
-     - If it has, client needs to hard reload its own data
-     - Furthermore, client can also predict where it will be in the next frame, as well as the other players.
-     - This will allow for the client to have more smooth gameplay
-     - (this is not going to be easy)
-*/
-
+// TODO: Debug what happens when an extra client joins 
 
 #include <cassert>
 #include <winsock2.h>
@@ -64,7 +49,10 @@ void bind_network_socket_to_port(network_socket_t *socket, network_address_t add
     if (bind(*sock, (SOCKADDR *)&address_struct, sizeof(address_struct)) == SOCKET_ERROR)
     {
         OutputDebugString("Failed to bind socket to local port");
-        assert(0);
+        
+        // Try again with different port
+        address.port = g_network_state->GAME_OUTPUT_PORT_BACKUP;
+        bind_network_socket_to_port(socket, address);
     }
 }
 
@@ -656,6 +644,37 @@ void send_chunks_hard_update_packets(network_address_t address)
     }
 }
 
+void dispatch_newcoming_client_to_clients(uint32_t new_client_index)
+{
+    client_t *newcoming_client = get_client(new_client_index);
+    player_t *player = get_player(newcoming_client->player_handle);
+    
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, 80);
+
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_CLIENT_JOINED;
+    header.current_tick = *get_current_tick();
+
+    serialize_packet_header(&serializer, &header);
+
+    player_state_initialize_packet_t player_initialize_packet = {};
+    player_initialize_packet.client_id = new_client_index;
+    player_initialize_packet.player_name = newcoming_client->name;
+    player_initialize_packet.ws_position = player->ws_p;
+    player_initialize_packet.ws_direction = player->ws_d;
+    
+    serialize_player_state_initialize_packet(&serializer, &player_initialize_packet);
+
+    for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
+    {
+        client_t *current_client = get_client(client_index);
+
+        send_serialized_message(&serializer, current_client->network_address);
+    }
+}
+
 void dispatch_snapshot_to_clients(void)
 {
     packet_header_t header = {};
@@ -748,7 +767,6 @@ void dispatch_snapshot_to_clients(void)
 
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state, float32_t dt)
-
 {
     // Send Snapshots (25 per second)
     // Every 40ms (25 sps) - basically every frame
@@ -1068,7 +1086,8 @@ void update_as_client(input_state_t *input_state, float32_t dt)
 
                     // Add client structs (indices of the structs on the server will be the same as on the client)
                     g_network_state->client_count = game_state_init_packet.player_count;
-                    
+
+                    // Existing players when client joined the game
                     for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
                     {
                         player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
@@ -1117,38 +1136,20 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         // We are dealing with the local client: we need to deal with the correction stuff
                         if (local_user->network.client_state_index == player_snapshot_packet.client_id && !player_snapshot_packet.is_to_ignore)
                         {
-
-                            // Need to create separate variable because head_tail_difference shrinks everytime get_next_item() is called
-                            //uint32_t head_tail_difference = g_network_state->player_state_history.head_tail_difference;
-                    
-                            //for (uint32_t i = 0; i < head_tail_difference; ++i)
-                            //{
-                            //player_state_t *player_state = g_network_state->player_state_history.get_next_item();
-                                /*if (player_state->tick == previous_tick)
-                                  {*/
-                                    if (player_snapshot_packet.need_to_do_correction)
-                                    {
-                                        output_to_debug_console("Doing correction\n");
+                            if (player_snapshot_packet.need_to_do_correction)
+                            {
+                                output_to_debug_console("Doing correction\n");
                                         
-                                        // Do correction here
-                                        player_t *player = get_user_player();
-                                        player->ws_p = player_snapshot_packet.ws_position;
-                                        player->ws_d = player_snapshot_packet.ws_direction;
+                                // Do correction here
+                                player_t *player = get_user_player();
+                                player->ws_p = player_snapshot_packet.ws_position;
+                                player->ws_d = player_snapshot_packet.ws_direction;
 
-                                        // Send a prediction error correction packet
-                                        send_prediction_error_correction(previous_tick);
+                                // Send a prediction error correction packet
+                                send_prediction_error_correction(previous_tick);
+                            }
 
-                                        /*g_network_state->player_state_history.tail = g_network_state->player_state_history.head;
-                                        g_network_state->player_state_history.head_tail_difference = 0;
-
-                                        g_network_state->player_state_cbuffer.tail = g_network_state->player_state_cbuffer.head;
-                                        g_network_state->player_state_cbuffer.head_tail_difference = 0;*/
-                                    }
-
-                                    break;
-                                    //}
-                            //}
-                            
+                            break;
                         }
                         // We are dealing with a remote client: we need to deal with entity interpolation stuff
                         else
@@ -1158,6 +1159,27 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                     }
                     
                     
+                } break;
+            case server_packet_type_t::SPT_CLIENT_JOINED:
+                {
+                    player_state_initialize_packet_t new_client_init_packet = {};
+                    deserialize_player_state_initialize_packet(&in_serializer, &new_client_init_packet);
+
+                    player_t *user = get_user_player();
+
+                    // In case server sends init data to the user
+                    if (new_client_init_packet.client_id != user->network.client_state_index)
+                    {
+                        player_handle_t new_player_handle = initialize_player_from_player_init_packet(user->network.client_state_index, &new_client_init_packet);
+
+                        player_t *player = get_player(new_player_handle);
+
+                        // Sync the network.cpp's client data with the world.cpp's player data
+                        client_t *client = get_client(new_client_init_packet.client_id);
+                        client->name = player->id.str;
+                        client->client_id = new_client_init_packet.client_id;
+                        client->player_handle = player->index;
+                    }
                 } break;
             }
         }
@@ -1187,9 +1209,10 @@ void initialize_network_state(game_memory_t *memory, application_mode_t app_mode
 
 internal_function int32_t lua_join_server(lua_State *state)
 {
-    const char *string = lua_tostring(state, -1);
+    const char *ip_address = lua_tostring(state, -2);
+    const char *user_name = lua_tostring(state, -1);
 
-    join_server(string, "Walter Sobschak");
+    join_server(ip_address, user_name);
 
     return(0);
 }

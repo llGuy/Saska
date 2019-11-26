@@ -440,6 +440,7 @@ player_t *get_player(const char *name);
 player_t *get_player(player_handle_t player_handle);
 voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
+player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_client_index, struct player_state_initialize_packet_t *player_init_packet, camera_handle_t camera /* Optional */ = 0);
 uint32_t spawn_fire(const vector3_t &position);
 void spawn_explosion(const vector3_t &position);
 void spawn_bullet(player_t *shooter);

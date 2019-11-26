@@ -623,7 +623,7 @@ internal_function void initialize_console(void)
                                      0x16161636,
                                      get_backbuffer_resolution());
 
-    font_t *font_ptr = load_font("console_font"_hash, "fonts/consolas.fnt", "");
+    font_t *font_ptr = load_font("liberation_mono_font"_hash, "fonts/liberation_mono.fnt", "");
     make_text(&g_console->back_box,
               font_ptr,
               ui_text_t::font_stream_box_relative_to_t::BOTTOM,
@@ -917,7 +917,7 @@ void initialize_ui_rendering_state(VkFormat swapchain_format,
     image_handle_t tx_hdl = g_image_manager->add("image2D.fontmap"_hash);
     auto *tx_ptr = g_image_manager->get(tx_hdl);
     {
-        file_handle_t font_png_handle = create_file("fonts/consolas.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+        file_handle_t font_png_handle = create_file("fonts/liberation_mono.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
         external_image_data_t image_data = read_image(font_png_handle);
         
         make_texture(tx_ptr,

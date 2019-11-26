@@ -71,7 +71,7 @@ void deserialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size);
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
 enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION, CPT_PREDICTION_ERROR_CORRECTION };
-enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE_SNAPSHOT };
+enum server_packet_type_t { SPT_SERVER_HANDSHAKE, SPT_CHUNK_VOXELS_HARD_UPDATE, SPT_GAME_STATE_SNAPSHOT, SPT_CLIENT_JOINED };
 
 struct packet_header_t
 {
@@ -119,18 +119,33 @@ struct voxel_state_initialize_packet_t
     uint32_t max_chunks;
 };
 
+// TODO: This needs to contain more stuff
 struct player_state_initialize_packet_t
 {
     uint32_t client_id;
     const char *player_name;
 
-    float32_t ws_position_x;
-    float32_t ws_position_y;
-    float32_t ws_position_z;
+    union
+    {
+        struct
+        {
+            float32_t ws_position_x;
+            float32_t ws_position_y;
+            float32_t ws_position_z;
+        };
+        vector3_t ws_position;
+    };
 
-    float32_t ws_view_direction_x;
-    float32_t ws_view_direction_y;
-    float32_t ws_view_direction_z;
+    union
+    {
+        struct
+        {
+            float32_t ws_view_direction_x;
+            float32_t ws_view_direction_y;
+            float32_t ws_view_direction_z;
+        };
+        vector3_t ws_direction;
+    };
 };
 
 struct voxel_chunk_values_packet_t
@@ -191,6 +206,7 @@ struct player_state_to_verify_t
 };
 
 // This gets sent to the client at intervals (snapshots) - 20 per second
+// TODO: This needs to contain more stuff (like velocity)
 struct game_snapshot_player_state_packet_t
 {
     uint16_t client_id;
@@ -281,6 +297,7 @@ struct network_state_t
 
     const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
     const uint16_t GAME_OUTPUT_PORT_CLIENT = 6001;
+    const uint16_t GAME_OUTPUT_PORT_BACKUP = 6002;
     network_socket_t main_network_socket;
     // For client
     network_address_t server_address;

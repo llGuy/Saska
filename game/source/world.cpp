@@ -2669,6 +2669,49 @@ internal_function void construct_player(player_t *player, player_create_info_t *
 }
 
 
+player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_client_index, player_state_initialize_packet_t *player_init_packet, camera_handle_t main_camera)
+{
+    bool is_current_client = (player_init_packet->client_id == local_user_client_index);
+        
+    player_create_info_t player_create_info = {};
+    player_create_info.name = make_constant_string(player_init_packet->player_name, strlen(player_init_packet->player_name));
+    player_create_info.ws_position = vector3_t(player_init_packet->ws_position_x, player_init_packet->ws_position_y, player_init_packet->ws_position_z);
+    player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_x, player_init_packet->ws_view_direction_y, player_init_packet->ws_view_direction_z);
+    player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+    player_create_info.ws_size = vector3_t(2);
+    player_create_info.starting_velocity = 15.0f;
+    player_create_info.color = player_color_t::GRAY;
+    player_create_info.physics_info.enabled = 1;
+    player_create_info.terraform_power_info.speed = 300.0f;
+    player_create_info.terraform_power_info.terraform_radius = 20.0f;
+        
+    if (is_current_client)
+    {
+        player_create_info.camera_info.camera_index = main_camera;
+        player_create_info.camera_info.is_third_person = 1;
+        player_create_info.camera_info.distance_from_player = 15.0f;
+    }
+        
+    player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
+    player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
+    player_create_info.shoot_info.cool_off = 0.0f;
+    player_create_info.shoot_info.shoot_speed = 0.3f;
+
+    player_t user;
+    construct_player(&user, &player_create_info);
+        
+    player_handle_t user_handle = add_player(user);
+        
+    if (is_current_client)
+    {
+        make_player_main(user_handle);
+    }
+
+    return(user_handle);
+}
+
+
 internal_function void initialize_players(game_state_initialize_packet_t *packet, input_state_t *input_state)
 {
     camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
@@ -2678,44 +2721,7 @@ internal_function void initialize_players(game_state_initialize_packet_t *packet
     {
         player_state_initialize_packet_t *player_init_packet = &packet->player[i];
 
-
-        bool is_current_client = (player_init_packet->client_id == packet->client_index);
-
-        
-        player_create_info_t player_create_info = {};
-        player_create_info.name = make_constant_string(player_init_packet->player_name, strlen(player_init_packet->player_name));
-        player_create_info.ws_position = vector3_t(player_init_packet->ws_position_x, player_init_packet->ws_position_y, player_init_packet->ws_position_z);
-        player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_x, player_init_packet->ws_view_direction_y, player_init_packet->ws_view_direction_z);
-        player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
-        player_create_info.ws_size = vector3_t(2);
-        player_create_info.starting_velocity = 15.0f;
-        player_create_info.color = player_color_t::GRAY;
-        player_create_info.physics_info.enabled = 1;
-        player_create_info.terraform_power_info.speed = 300.0f;
-        player_create_info.terraform_power_info.terraform_radius = 20.0f;
-        
-        if (is_current_client)
-        {
-            player_create_info.camera_info.camera_index = main_camera;
-            player_create_info.camera_info.is_third_person = 1;
-            player_create_info.camera_info.distance_from_player = 15.0f;
-        }
-        
-        player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
-        player_create_info.animation_info.skeleton = &g_entities->player_mesh_skeleton;
-        player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
-        player_create_info.shoot_info.cool_off = 0.0f;
-        player_create_info.shoot_info.shoot_speed = 0.3f;
-
-        player_t user;
-        construct_player(&user, &player_create_info);
-        
-        player_handle_t user_handle = add_player(user);
-        
-        if (is_current_client)
-        {
-            make_player_main(user_handle);
-        }
+        initialize_player_from_player_init_packet(packet->client_index, &packet->player[i], main_camera);
     }
 }
 

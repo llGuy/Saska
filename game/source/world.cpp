@@ -2418,6 +2418,12 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             update_terraform_power_component(&player->terraform_power, player, dt);
             update_shoot_component(&player->shoot, player, dt);
         }
+        // Local client (if entity is not controled by user) or server when there are no commands to flush
+        else
+        {
+            update_rendering_component(&player->rendering, player, dt);
+            update_animation_component(&player->animation, player, dt);
+        }
 
         if (player_index == g_entities->main_player)
         {
@@ -3191,6 +3197,8 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
         packet->player[player].ws_view_direction_x = p_player->ws_d.x;
         packet->player[player].ws_view_direction_y = p_player->ws_d.y;
         packet->player[player].ws_view_direction_z = p_player->ws_d.z;
+
+        // TODO: Also need to set the rolling mode and other flags here
     }
 }
 

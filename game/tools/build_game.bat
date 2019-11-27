@@ -39,9 +39,7 @@ set LIBS=ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.1
 pushd ..\binaries
 
 If "%1" == "compile" goto compile
-If "%1" == "debug" goto debug
 If "%1" == "clean" goto clean
-If "%1" == "run" goto run
 If "%1" == "help" goto help
 
 :compile
@@ -50,17 +48,9 @@ popd
 
 goto :eof
 
-:debug
-%DB% %CLIENT_BIN%
-goto :eof
-
 :clean
 rm *.exe *.obj *.ilk *.pdb TAGS
 popd
-goto :eof
-
-:run
-%CLIENT_BIN%
 goto :eof
 
 :help

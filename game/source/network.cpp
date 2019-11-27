@@ -837,7 +837,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                         serializer_t out_serializer = {};
                         initialize_serializer(&out_serializer, 2000);
                         game_state_initialize_packet_t game_state_init_packet = {};
-                        initialize_game_state_initialize_packet(&game_state_init_packet, 0);
+                        initialize_game_state_initialize_packet(&game_state_init_packet, client->client_id);
 
 
                         

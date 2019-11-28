@@ -18,6 +18,7 @@
 #define MAX_ENTITIES_UNDER_PLANET 150
 
 constexpr float32_t PI = 3.14159265359f;
+constexpr float32_t MAX_VOXEL_VALUE = 255.0f;
 
 // To initialize with initialize translation unit function
 global_var struct entities_t *g_entities;
@@ -404,9 +405,9 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                         int32_t current_voxel_value = (int32_t)*voxel;
                         int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                        if (new_value > 255)
+                        if (new_value > MAX_VOXEL_VALUE)
                         {
-                            *voxel = 255;
+                            *voxel = MAX_VOXEL_VALUE;
                         }
                         else if (new_value < 0)
                         {
@@ -433,9 +434,9 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                             int32_t current_voxel_value = (int32_t)*voxel;
                             int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                            if (new_value > 255)
+                            if (new_value > MAX_VOXEL_VALUE)
                             {
-                                *voxel = 255;
+                                *voxel = MAX_VOXEL_VALUE;
                             }
                             else if (new_value < 0)
                             {
@@ -483,7 +484,7 @@ internal_function void construct_plane(const vector3_t &ws_plane_origin, float32
 
             if (is_voxel_coord_within_chunk(cs_vcoord))
             {
-                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = 255;
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = MAX_VOXEL_VALUE;
             }
             else
             {
@@ -491,7 +492,7 @@ internal_function void construct_plane(const vector3_t &ws_plane_origin, float32
                 ready_chunk_for_gpu_sync(chunk);
                 cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
 
-                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = 255;
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = MAX_VOXEL_VALUE;
             }
         }
     }
@@ -533,7 +534,7 @@ internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_positi
                     if (is_voxel_coord_within_chunk(cs_vcoord))
                     {
                         float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
-                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * (float32_t)MAX_VOXEL_VALUE);
                     }
                     else
                     {
@@ -542,7 +543,7 @@ internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_positi
                         cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
 
                         float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
-                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * (float32_t)MAX_VOXEL_VALUE);
                     }
                 }
             }
@@ -586,7 +587,7 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
                     if (is_voxel_coord_within_chunk(cs_vcoord))
                     {
                         float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
-                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * (float32_t)MAX_VOXEL_VALUE);
                     }
                     else
                     {
@@ -595,7 +596,7 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
                         cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
 
                         float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
-                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * 255.0f);
+                        chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint32_t)((proportion) * (float32_t)MAX_VOXEL_VALUE);
                     }
                 }
             }
@@ -1008,7 +1009,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     chunk->gpu_mesh = initialize_mesh(buffers, &indexed_data, &g_voxel_chunks->chunk_model.index_data);
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
-    chunk->push_k.color = vector4_t(118.0 / 255.0, 169.0 / 255.0, 72.0 / 255.0, 1.0f);
+    chunk->push_k.color = vector4_t(122.0 / 255.0, 177.0 / 255.0, 213.0 / 255.0, 1.0f);
 }
 
 
@@ -2240,7 +2241,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::GRAY;
+    player_create_info.color = player_color_t::ORANGE;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -2623,7 +2624,8 @@ internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *
                                                                     vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
                                                                     vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
                                                                     vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
-                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f) };
+                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f),
+                                                                    vector4_t(246.0f, 177.0f, 38.0f, 256.0f) / 256.0f };
     
     bullet->ws_p = info->ws_position;
     bullet->ws_d = info->ws_direction;
@@ -2641,7 +2643,8 @@ internal_function void construct_player(player_t *player, player_create_info_t *
                                                                     vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
                                                                     vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
                                                                     vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
-                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f) };
+                                                                    vector4_t(0.0f, 0.7f, 0.0f, 1.0f),
+                                                                    vector4_t(222.0f, 88.0f, 36.0f, 256.0f) / 256.0f };
     
     player->id = info->name;
     player->ws_p = info->ws_position;
@@ -2686,7 +2689,7 @@ player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_cl
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::GRAY;
+    player_create_info.color = player_color_t::ORANGE;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -2703,6 +2706,7 @@ player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_cl
     player_create_info.animation_info.cycles = &g_entities->player_mesh_cycles;
     player_create_info.shoot_info.cool_off = 0.0f;
     player_create_info.shoot_info.shoot_speed = 0.3f;
+    player_create_info.network_info.client_state_index = player_init_packet->client_id;
 
     player_t user;
     construct_player(&user, &player_create_info);
@@ -2746,7 +2750,7 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     main_player_create_info.ws_size = vector3_t(2);
     main_player_create_info.starting_velocity = 15.0f;
-    main_player_create_info.color = player_color_t::GRAY;
+    main_player_create_info.color = player_color_t::ORANGE;
     main_player_create_info.physics_info.enabled = 1;
     main_player_create_info.terraform_power_info.speed = 300.0f;
     main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -3188,8 +3192,6 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
         packet->player[player].client_id = p_player->network.client_state_index;
         packet->player[player].player_name = p_player->id.str;
 
-        p_player->network.client_state_index;
-        
         packet->player[player].ws_position_x = p_player->ws_p.x;
         packet->player[player].ws_position_y = p_player->ws_p.y;
         packet->player[player].ws_position_z = p_player->ws_p.z;

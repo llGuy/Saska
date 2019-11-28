@@ -231,7 +231,7 @@ struct network_component_t
 
 // Action components can be modified over keyboard / mouse input, or on a network
 enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD, SHOOT };
-enum player_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, INVALID_COLOR };
+enum player_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, ORANGE, INVALID_COLOR };
 
 struct player_create_info_t
 {

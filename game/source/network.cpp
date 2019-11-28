@@ -714,17 +714,17 @@ void dispatch_snapshot_to_clients(void)
         
             serialize_packet_header(&out_serializer, &header);
 
+            player_state_t *previous_received_player_state = &client->previous_received_player_state;
+
+            uint64_t previous_received_tick = client->previous_client_tick;
+            serialize_uint64(&out_serializer, previous_received_tick);
+            
             for (uint32_t i = 0; i < g_network_state->client_count; ++i)
             {
                 if (i == client_index)
                 {
                     if (client->received_input_commands)
                     {
-                        player_state_t *previous_received_player_state = &client->previous_received_player_state;
-
-                        uint64_t previous_received_tick = client->previous_client_tick;
-                        serialize_uint64(&out_serializer, previous_received_tick);
-        
                         // Do comparison to determine if client correction is needed
                         float32_t precision = 0.1f;
                         vector3_t ws_position_difference = glm::abs(previous_received_player_state->ws_position - player_snapshot_packet->ws_position);

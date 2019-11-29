@@ -216,6 +216,22 @@ struct network_component_create_info_t
 
 #define MAX_PLAYER_STATES 40
 
+struct remote_player_snapshot_t
+{
+    vector3_t ws_position;
+    vector3_t ws_direction;
+
+    union
+    {
+        struct
+        {
+            uint8_t rolling_mode: 1;
+            // ...
+        };
+        uint8_t flags;
+    };
+};
+
 struct network_component_t
 {
     uint32_t commands_to_flush = 0;
@@ -225,7 +241,23 @@ struct network_component_t
     // Is the same from client to client
     uint32_t client_state_index;
 
+    // This will only be allocated for servers
     circular_buffer_t<struct player_state_t> player_states_cbuffer;
+
+    // Stuff for remote players
+    struct
+    {
+        // Rendering time for the remote players will be 100ms behind (two snapshots - TODO: Make this depend on the snapshot rate of the server)
+        
+        // This will only be allocated for remote players
+        circular_buffer_t<struct remote_player_snapshot_t> remote_player_states;
+        // Previous = remote_player_states.tail
+
+        float32_t elapsed_time = 0.0f;
+        float32_t max_time = 0.0f /* Set this depending on the snapshot rate of the server snapshot rate */;
+    };
+
+    bool is_remote = 0;
 };
 
 

@@ -213,7 +213,9 @@ template <typename T, uint32_t Bucket_Count, uint32_t Bucket_Size, uint32_t Buck
     }
 };
 
-template <typename T> struct circular_buffer_t
+typedef enum circular_buffer_ht_difference_tracking_t { NO_TRACKING, TRACKING } cbhtdt_t;
+
+template <typename T, cbhtdt_t CBHTDT = cbhtdt_t::TRACKING> struct circular_buffer_t
 {
     uint32_t head_tail_difference = 0;
     uint32_t head = 0;
@@ -235,22 +237,26 @@ template <typename T> struct circular_buffer_t
             head = 0;
         }
         buffer[head++] = *item;
-        ++head_tail_difference;
+
+        if constexpr (CBHTDT) { ++head_tail_difference; }
     }
 
     T *get_next_item(void)
     {
-        if (head_tail_difference > 0)
+        if constexpr (CBHTDT)
         {
-            if (tail == buffer_size)
+            if (head_tail_difference > 0)
             {
-                tail = 0;
-            }
+                if (tail == buffer_size)
+                {
+                    tail = 0;
+                }
     
-            T *item = &buffer[tail++];
-            --head_tail_difference;
+                T *item = &buffer[tail++];
+                --head_tail_difference;
 
-            return(item);
+                return(item);
+            }
         }
 
         return(nullptr);

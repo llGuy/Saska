@@ -765,6 +765,11 @@ void dispatch_snapshot_to_clients(void)
     }
 }
 
+float32_t get_snapshot_server_rate(void)
+{
+    return(g_network_state->server_game_state_snapshot_rate);
+}
+
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state, float32_t dt)
 {
@@ -831,7 +836,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                         
                         // LOG:
                         console_out(client_join.client_name);
-                        console_out(" joined the game!\n\n");
+                        console_out(" joined the game!\n");
                         
                         // Reply - Create handshake packet
                         serializer_t out_serializer = {};
@@ -854,15 +859,9 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                         serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
                         send_serialized_message(&out_serializer, client->network_address);
 
-                        console_out("Sent initialization game state to ");
-                        console_out(client_join.client_name);
-                        console_out("\n\n");
-
                         send_chunks_hard_update_packets(client->network_address);
 
-                        console_out("Sent hard chunks update to ");
-                        console_out(client_join.client_name);
-                        console_out("\n\n");
+                        dispatch_newcoming_client_to_clients(client->client_id);
                         
                     } break;
 
@@ -1097,6 +1096,12 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         client->name = player->id.str;
                         client->client_id = player_packet->client_id;
                         client->player_handle = player->index;
+
+                        if (client->client_id != game_state_init_packet.client_index)
+                        {
+                            player->network.is_remote = 1;
+                            player->network.max_time = 1.0f / get_snapshot_server_rate();
+                        }
                     }
 
                     g_network_state->is_connected_to_server = 1;
@@ -1148,13 +1153,14 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                                 // Send a prediction error correction packet
                                 send_prediction_error_correction(previous_tick);
                             }
-
-                            break;
                         }
                         // We are dealing with a remote client: we need to deal with entity interpolation stuff
                         else
                         {
-                            
+                            remote_player_snapshot_t remote_player_snapshot = {};
+                            remote_player_snapshot.ws_position = player_snapshot_packet.ws_position;
+                            remote_player_snapshot.ws_direction = player_snapshot_packet.ws_direction;
+                            current_player->network.remote_player_states.push_item(&remote_player_snapshot);
                         }
                     }
                     
@@ -1167,9 +1173,12 @@ void update_as_client(input_state_t *input_state, float32_t dt)
 
                     player_t *user = get_user_player();
 
+                    
                     // In case server sends init data to the user
                     if (new_client_init_packet.client_id != user->network.client_state_index)
                     {
+                        ++g_network_state->client_count;
+                        
                         player_handle_t new_player_handle = initialize_player_from_player_init_packet(user->network.client_state_index, &new_client_init_packet);
 
                         player_t *player = get_player(new_player_handle);
@@ -1179,6 +1188,11 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         client->name = player->id.str;
                         client->client_id = new_client_init_packet.client_id;
                         client->player_handle = player->index;
+
+                        player->network.is_remote = 1;
+                        player->network.max_time = 1.0f / get_snapshot_server_rate();
+
+                        console_out(client->name, " joined the game!\n");
                     }
                 } break;
             }

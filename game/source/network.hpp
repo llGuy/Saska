@@ -333,6 +333,8 @@ client_t *get_client(uint32_t index);
 void buffer_player_state(float32_t dt);
 void update_network_state(input_state_t *input_state, float32_t dt);
 
+float32_t get_snapshot_server_rate(void);
+
 void initialize_network_translation_unit(struct game_memory_t *memory);
 void initialize_network_state(struct game_memory_t *memory, application_mode_t app_mode);
 

@@ -135,7 +135,7 @@ internal_function void update_terraform_power_component(terraform_power_componen
 internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
 internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
-internal_function float32_t update_network_component(network_component_t *network, player_t *player);
+internal_function float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt);
 internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
 internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
 internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
@@ -2132,57 +2132,98 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 }
 
 
-internal_function float32_t update_network_component(network_component_t *network, player_t *player)
+internal_function float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt)
 {
-    // Basically sets the action flags, toggles rolling mode, etc...
-    // Get next player_state_t
-
-    // Is there any player states to burn through
-    player_state_t *player_state = network->player_states_cbuffer.get_next_item();
-
-    if (player_state)
+    if (network->is_remote)
     {
-        float32_t dt = player_state->dt;
-
-        player_state_t *next_player_state = player_state;
-
-        player->action_flags = next_player_state->action_flags;
-        player->rolling_mode = next_player_state->rolling_mode;
-
-        // Update view direction with mouse differences
-        vector3_t up = player->camera.ws_current_up_vector;
-        
-        vector3_t res = player->ws_d;
-        vector2_t d = vector2_t(next_player_state->mouse_x_diff, next_player_state->mouse_y_diff);
-
-        player->camera.mouse_diff = d;
-
-        persist_var constexpr uint32_t SENSITIVITY = 15.0f;
-        
-        float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
-        float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
-                
-        res = matrix3_t(glm::rotate(x_angle, up)) * res;
-        vector3_t rotate_y = glm::cross(res, up);
-        res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
-
-        res = glm::normalize(res);
-                
-        float32_t up_dot_view = glm::dot(up, res);
-        float32_t minus_up_dot_view = glm::dot(-up, res);
-                
-        float32_t limit = 0.99f;
-        if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
+        if (network->remote_player_states.head_tail_difference >= 3)
         {
-            player->ws_d = res;
-        }
-        else
-        {
-        }
+            uint32_t previous_snapshot_index = network->remote_player_states.tail;
+            uint32_t next_snapshot_index = network->remote_player_states.tail;
+            if (++next_snapshot_index == network->remote_player_states.buffer_size)
+            {
+                next_snapshot_index = 0;
+            }
+        
+            network->elapsed_time += dt;
+            float32_t progression = network->elapsed_time / network->max_time;
 
-        return(dt);
+            if (progression > 1.0f)
+            {
+                network->elapsed_time = 0.0f;
+                network->remote_player_states.get_next_item();
+
+                previous_snapshot_index = network->remote_player_states.tail;
+                next_snapshot_index = network->remote_player_states.tail;
+                if (++next_snapshot_index == network->remote_player_states.buffer_size)
+                {
+                    next_snapshot_index = 0;
+                }
+
+                progression -= 1.0f;
+            }
+
+            remote_player_snapshot_t *previous_remote_snapshot = &network->remote_player_states.buffer[previous_snapshot_index],
+                                     *next_remote_snapshot = &network->remote_player_states.buffer[next_snapshot_index];
+
+            player->ws_p = interpolate(previous_remote_snapshot->ws_position, next_remote_snapshot->ws_position, progression);
+            player->ws_d = interpolate(previous_remote_snapshot->ws_direction, next_remote_snapshot->ws_direction, progression);
+
+            output_to_debug_console("Previous: ", (int32_t)previous_snapshot_index, " | Next: ", (int32_t)next_snapshot_index, " | Head Tail Difference: ", (int32_t)(network->remote_player_states.head_tail_difference), "\n");
+        }
     }
+    else
+    {
+        // Basically sets the action flags, toggles rolling mode, etc...
+        // Get next player_state_t
 
+        // Is there any player states to burn through
+        player_state_t *player_state = network->player_states_cbuffer.get_next_item();
+
+        if (player_state)
+        {
+            float32_t dt = player_state->dt;
+
+            player_state_t *next_player_state = player_state;
+
+            player->action_flags = next_player_state->action_flags;
+            player->rolling_mode = next_player_state->rolling_mode;
+
+            // Update view direction with mouse differences
+            vector3_t up = player->camera.ws_current_up_vector;
+        
+            vector3_t res = player->ws_d;
+            vector2_t d = vector2_t(next_player_state->mouse_x_diff, next_player_state->mouse_y_diff);
+
+            player->camera.mouse_diff = d;
+
+            persist_var constexpr uint32_t SENSITIVITY = 15.0f;
+        
+            float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
+            float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
+                
+            res = matrix3_t(glm::rotate(x_angle, up)) * res;
+            vector3_t rotate_y = glm::cross(res, up);
+            res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
+
+            res = glm::normalize(res);
+                
+            float32_t up_dot_view = glm::dot(up, res);
+            float32_t minus_up_dot_view = glm::dot(-up, res);
+                
+            float32_t limit = 0.99f;
+            if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
+            {
+                player->ws_d = res;
+            }
+            else
+            {
+            }
+
+            return(dt);
+        }
+    }
+    
     return(-1.0f);
 }
 
@@ -2360,7 +2401,7 @@ void update_networked_player(uint32_t player_index)
 {
     player_t *player = &g_entities->player_list[player_index];
 
-    float32_t dt = update_network_component(&player->network, player);
+    float32_t dt = update_network_component(&player->network, player, 0.0f);
 
     if (dt > 0.0f)
     {
@@ -2390,7 +2431,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 {
                 case application_type_t::WINDOW_APPLICATION_MODE:
                     {
-                        float32_t client_local_dt = update_network_component(&player->network, player);
+                        float32_t client_local_dt = update_network_component(&player->network, player, 0.0f);
                         update_physics_component(&player->physics, player, client_local_dt);
                         update_camera_component(&player->camera, player, client_local_dt);
                         update_rendering_component(&player->rendering, player, client_local_dt);
@@ -2400,7 +2441,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                     } break;
                 case application_type_t::CONSOLE_APPLICATION_MODE:
                     {
-                        float32_t client_local_dt = update_network_component(&player->network, player);
+                        float32_t client_local_dt = update_network_component(&player->network, player, 0.0f);
                         update_physics_component(&player->physics, player, dt);
                     } break;
                 }
@@ -2411,7 +2452,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
         // Basically if it is the client program running
         else if (player_index == g_entities->main_player)
         {
-            update_network_component(&player->network, player);
+            update_network_component(&player->network, player, 0.0f);
             update_physics_component(&player->physics, player, dt);
             update_camera_component(&player->camera, player, dt);
             update_rendering_component(&player->rendering, player, dt);
@@ -2422,6 +2463,10 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
         // Local client (if entity is not controled by user) or server when there are no commands to flush
         else
         {
+            if (player->network.is_remote)
+            {
+                update_network_component(&player->network, player, dt);
+            }
             update_rendering_component(&player->rendering, player, dt);
             update_animation_component(&player->animation, player, dt);
         }
@@ -2675,6 +2720,7 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->network.entity_index = info->network_info.entity_index;
     player->network.client_state_index = info->network_info.client_state_index;
     player->network.player_states_cbuffer.initialize(MAX_PLAYER_STATES);
+    player->network.remote_player_states.initialize(MAX_PLAYER_STATES);
 }
 
 
@@ -3133,6 +3179,7 @@ void deinitialize_world(void)
         player->animation.animation_instance.interpolated_transforms_ubo.destroy();
         push_uniform_group_to_destroyed_uniform_group_cache(&g_entities->player_mesh_cycles, &player->animation.animation_instance);
         player->network.player_states_cbuffer.deinitialize();
+        player->network.remote_player_states.deinitialize();
     }
 
     g_entities->player_count = 0;

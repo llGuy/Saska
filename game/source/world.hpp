@@ -220,6 +220,7 @@ struct remote_player_snapshot_t
 {
     vector3_t ws_position;
     vector3_t ws_direction;
+    quaternion_t ws_rotation;
 
     union
     {

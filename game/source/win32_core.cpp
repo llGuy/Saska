@@ -72,6 +72,11 @@ void output_to_debug_console_i(float32_t f)
     OutputDebugString(buffer);
 }
 
+void output_to_debug_console_i(const vector3_t &v3)
+{
+    output_to_debug_console((float32_t)(v3[0]), "|", (float32_t)(v3[1]), "|", (float32_t)(v3[2]));
+}
+
 void output_to_debug_console_i(const char *string)
 {
     OutputDebugString(string);
@@ -100,7 +105,7 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
 {
     persist_var int32_t true_prev_x = 0;
     persist_var int32_t true_prev_y = 0;
-
+ 
     RECT client_rect = {};
     GetClientRect(g_window, &client_rect);
 

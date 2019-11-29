@@ -2084,9 +2084,42 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         // Update rolling rotation speed
         if (!collision.under_terrain)
         {
-            movement_axes_t velocity_axes = compute_movement_axes(player->ws_v, player->ws_up);
-            player->rolling_rotation_axis = velocity_axes.right;
-            player->current_rotation_speed = ((glm::length(player->ws_p - previous_position)) / calculate_sphere_circumference(player->size.x)) * 360.0f;
+            persist_var vector3_t previous_velocity;
+
+            /*vector3_t velocity = player->ws_v;
+            
+            if (glm::dot(player->ws_v, player->ws_v) < 0.001f)
+            {
+                velocity = p
+            }*/
+
+            // TODO: FIX SO THAT WS_V IS EQUAL TO THE ACTUAL VELOCITY OF THE PLAYER
+
+
+            vector3_t actual_player_v = player->ws_p - previous_position;
+            float32_t velocity_length = glm::length(actual_player_v);
+
+            if (glm::dot(actual_player_v, actual_player_v) < 0.0001f)
+            {
+                actual_player_v = previous_velocity;
+                velocity_length = 0.0f;
+            }
+            else
+            {
+                previous_velocity = actual_player_v;
+            }
+            
+            vector3_t cross = glm::cross(actual_player_v, player->ws_up);
+            vector3_t right = glm::normalize(cross);
+
+            player->rolling_rotation_axis = right;
+            player->current_rotation_speed = ((velocity_length) / calculate_sphere_circumference(player->size.x)) * 360.0f;
+
+            output_to_debug_console("Axis: ", (vector3_t)player->rolling_rotation_axis, " || Up: ", player->ws_up, " || Velocity: ", actual_player_v, " || Cross: ", cross, "\n");
+            /*if (glm::dot(player->ws_v, player->ws_v) > 0.001f)
+            {
+                previous_velocity = player->ws_v;
+                }*/
         }
     }
     else
@@ -2108,6 +2141,10 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
 
         player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
     }
+
+    player->ws_r = glm::quat_cast(player->rolling_rotation);
+
+    //output_to_debug_console("Rotation: ", player->ws_r[0], " ; ", player->ws_r[1], " ; ", player->ws_r[2], " ; ", player->ws_r[3], "\n");
 }
 
 
@@ -2168,6 +2205,9 @@ internal_function float32_t update_network_component(network_component_t *networ
 
             player->ws_p = interpolate(previous_remote_snapshot->ws_position, next_remote_snapshot->ws_position, progression);
             player->ws_d = interpolate(previous_remote_snapshot->ws_direction, next_remote_snapshot->ws_direction, progression);
+            player->ws_r = glm::mix(previous_remote_snapshot->ws_rotation, next_remote_snapshot->ws_rotation, progression);
+
+            player->rolling_rotation = glm::mat4_cast(player->ws_r);
 
             output_to_debug_console("Previous: ", (int32_t)previous_snapshot_index, " | Next: ", (int32_t)next_snapshot_index, " | Head Tail Difference: ", (int32_t)(network->remote_player_states.head_tail_difference), "\n");
         }
@@ -2443,6 +2483,8 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                     {
                         float32_t client_local_dt = update_network_component(&player->network, player, 0.0f);
                         update_physics_component(&player->physics, player, dt);
+                        update_terraform_power_component(&player->terraform_power, player, client_local_dt);
+                        update_shoot_component(&player->shoot, player, client_local_dt);
                     } break;
                 }
             }
@@ -2467,8 +2509,14 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             {
                 update_network_component(&player->network, player, dt);
             }
-            update_rendering_component(&player->rendering, player, dt);
-            update_animation_component(&player->animation, player, dt);
+            switch (app_type)
+            {
+            case application_type_t::WINDOW_APPLICATION_MODE:
+                {
+                    update_rendering_component(&player->rendering, player, dt);
+                    update_animation_component(&player->animation, player, dt);
+                } break;
+            }
         }
 
         if (player_index == g_entities->main_player)
@@ -2495,7 +2543,8 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 } break;
             case application_type_t::CONSOLE_APPLICATION_MODE:
                 {
-                    //update_physics_component(&player->physics, player, dt);
+                    update_bounce_physics_component(&bullet->bounce_physics, bullet, dt, bullet_index);
+                    update_burnable_component(&bullet->burnable, bullet, dt, bullet_index);
                 } break;
             }
         }

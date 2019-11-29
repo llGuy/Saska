@@ -487,6 +487,11 @@ void serialize_game_snapshot_player_state_packet(serializer_t *serializer, game_
     serialize_float32(serializer, packet->ws_direction.y);
     serialize_float32(serializer, packet->ws_direction.z);
 
+    serialize_float32(serializer, packet->ws_rotation[0]);
+    serialize_float32(serializer, packet->ws_rotation[1]);
+    serialize_float32(serializer, packet->ws_rotation[2]);
+    serialize_float32(serializer, packet->ws_rotation[3]);
+
     serialize_uint8(serializer, packet->flags);
 }
 
@@ -502,6 +507,11 @@ void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, gam
     packet->ws_direction.x = deserialize_float32(serializer);
     packet->ws_direction.y = deserialize_float32(serializer);
     packet->ws_direction.z = deserialize_float32(serializer);
+
+    packet->ws_rotation[0] = deserialize_float32(serializer);
+    packet->ws_rotation[1] = deserialize_float32(serializer);
+    packet->ws_rotation[2] = deserialize_float32(serializer);
+    packet->ws_rotation[3] = deserialize_float32(serializer);
 
     packet->flags = deserialize_uint8(serializer);
 }
@@ -695,6 +705,7 @@ void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].client_id = client->client_id;
         player_snapshots[client_index].ws_position = player->ws_p;
         player_snapshots[client_index].ws_direction = player->ws_d;
+        player_snapshots[client_index].ws_rotation = player->ws_r;
     }
     
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
@@ -1160,6 +1171,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                             remote_player_snapshot_t remote_player_snapshot = {};
                             remote_player_snapshot.ws_position = player_snapshot_packet.ws_position;
                             remote_player_snapshot.ws_direction = player_snapshot_packet.ws_direction;
+                            remote_player_snapshot.ws_rotation = player_snapshot_packet.ws_rotation;
                             current_player->network.remote_player_states.push_item(&remote_player_snapshot);
                         }
                     }

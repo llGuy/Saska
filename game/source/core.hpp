@@ -45,6 +45,7 @@ left_shift(uint32_t n)
 }
 
 void output_to_debug_console_i(float32_t f);
+void output_to_debug_console_i(const vector3_t &v3);
 void output_to_debug_console_i(int32_t i);
 void output_to_debug_console_i(const char *string);
 

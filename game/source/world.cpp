@@ -2203,8 +2203,6 @@ internal_function float32_t update_network_component(network_component_t *networ
             player->ws_r = glm::mix(previous_remote_snapshot->ws_rotation, next_remote_snapshot->ws_rotation, progression);
 
             player->rolling_rotation = glm::mat4_cast(player->ws_r);
-
-            output_to_debug_console("Previous: ", (int32_t)previous_snapshot_index, " | Next: ", (int32_t)next_snapshot_index, " | Head Tail Difference: ", (int32_t)(network->remote_player_states.head_tail_difference), "\n");
         }
     }
     else

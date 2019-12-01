@@ -421,7 +421,6 @@ void deserialize_player_state_initialize_packet(serializer_t *serializer, player
     packet->ws_view_direction_x = deserialize_float32(serializer);
     packet->ws_view_direction_y = deserialize_float32(serializer);
     packet->ws_view_direction_z = deserialize_float32(serializer);
-
     // Etc...
 }
 
@@ -488,6 +487,10 @@ void serialize_game_snapshot_player_state_packet(serializer_t *serializer, game_
     serialize_float32(serializer, packet->ws_direction.y);
     serialize_float32(serializer, packet->ws_direction.z);
 
+    serialize_float32(serializer, packet->ws_velocity.x);
+    serialize_float32(serializer, packet->ws_velocity.y);
+    serialize_float32(serializer, packet->ws_velocity.z);
+
     serialize_float32(serializer, packet->ws_rotation[0]);
     serialize_float32(serializer, packet->ws_rotation[1]);
     serialize_float32(serializer, packet->ws_rotation[2]);
@@ -508,6 +511,10 @@ void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, gam
     packet->ws_direction.x = deserialize_float32(serializer);
     packet->ws_direction.y = deserialize_float32(serializer);
     packet->ws_direction.z = deserialize_float32(serializer);
+
+    packet->ws_velocity.x = deserialize_float32(serializer);
+    packet->ws_velocity.y = deserialize_float32(serializer);
+    packet->ws_velocity.z = deserialize_float32(serializer);
 
     packet->ws_rotation[0] = deserialize_float32(serializer);
     packet->ws_rotation[1] = deserialize_float32(serializer);
@@ -555,6 +562,7 @@ void join_server(const char *ip_address, const char *client_name)
 }
 
 internal_function int32_t lua_join_server(lua_State *state);
+internal_function int32_t lua_toggle_freeze_receiver_thread(lua_State *state);
 
 void initialize_as_client(void)
 {
@@ -565,6 +573,7 @@ void initialize_as_client(void)
     bind_network_socket_to_port(&g_network_state->main_network_socket, address);
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_freeze_receiver_thread", &lua_toggle_freeze_receiver_thread);
 
     g_network_state->player_state_cbuffer.initialize(40);
     g_network_state->player_state_history.initialize(60);
@@ -578,11 +587,10 @@ internal_function void receiver_thread_process(void *receiver_thread_data)
 
     for (;;)
     {
-        if (wait_for_mutex_and_own(process_data->mutex))
+        if (wait_for_mutex_and_own(process_data->mutex) && !process_data->receiver_freezed)
         {
             if (process_data->receiver_thread_loop_count == 0)
             {
-                output_to_debug_console("Just got reset\n");
             }
             
             ++(process_data->receiver_thread_loop_count);
@@ -756,6 +764,7 @@ void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].client_id = client->client_id;
         player_snapshots[client_index].ws_position = player->ws_p;
         player_snapshots[client_index].ws_direction = player->ws_d;
+        player_snapshots[client_index].ws_velocity = player->ws_v;
         player_snapshots[client_index].ws_rotation = player->ws_r;
     }
     
@@ -834,29 +843,28 @@ float32_t get_snapshot_server_rate(void)
 
 // Might have to be done on a separate thread just for updating world data
 void update_as_server(input_state_t *input_state, float32_t dt)
-{
-    // Send Snapshots (25 per second)
-    // Every 40ms (25 sps) - basically every frame
-    // TODO: Add function to send snapshot
-    persist_var float32_t time_since_previous_snapshot = 0.0f;
-    
-    // Send stuff out to the clients (game state and stuff...)
-    // TODO: Add changeable
-    
-    time_since_previous_snapshot += dt;
-    float32_t max_time = 1.0f / g_network_state->server_game_state_snapshot_rate; // 20 per second
-        
-    if (time_since_previous_snapshot > max_time)
-    {
-        // Dispath game state to all clients
-        dispatch_snapshot_to_clients();
-            
-        time_since_previous_snapshot = 0.0f;
-    }
-    
+{    
     if (wait_for_mutex_and_own(g_network_state->receiver_thread.mutex))
     {
-        output_to_debug_console((int32_t)(g_network_state->receiver_thread.packet_count), "\n");
+        // Send Snapshots (25 per second)
+        // Every 40ms (25 sps) - basically every frame
+        // TODO: Add function to send snapshot
+        persist_var float32_t time_since_previous_snapshot = 0.0f;
+    
+        // Send stuff out to the clients (game state and stuff...)
+        // TODO: Add changeable
+    
+        time_since_previous_snapshot += dt;
+        float32_t max_time = 1.0f / g_network_state->server_game_state_snapshot_rate; // 20 per second
+        
+        if (time_since_previous_snapshot > max_time)
+        {
+            // Dispath game state to all clients
+            dispatch_snapshot_to_clients();
+            
+            time_since_previous_snapshot = 0.0f;
+        }
+        
         g_network_state->receiver_thread.receiver_thread_loop_count = 0;
 
         for (uint32_t packet_index = 0; packet_index < g_network_state->receiver_thread.packet_count; ++packet_index)
@@ -1211,6 +1219,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                                 player_t *player = get_user_player();
                                 player->ws_p = player_snapshot_packet.ws_position;
                                 player->ws_d = player_snapshot_packet.ws_direction;
+                                player->ws_v = player_snapshot_packet.ws_velocity;
 
                                 // Send a prediction error correction packet
                                 send_prediction_error_correction(previous_tick);
@@ -1290,6 +1299,13 @@ internal_function int32_t lua_join_server(lua_State *state)
     const char *user_name = lua_tostring(state, -1);
 
     join_server(ip_address, user_name);
+
+    return(0);
+}
+
+internal_function int32_t lua_toggle_freeze_receiver_thread(lua_State *state)
+{
+    g_network_state->receiver_thread.receiver_freezed ^= 1;
 
     return(0);
 }

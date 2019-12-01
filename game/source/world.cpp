@@ -1635,6 +1635,7 @@ player_state_t initialize_player_state(player_t *player)
     state.rolling_mode = player->rolling_mode;
     state.ws_position = player->ws_p;
     state.ws_direction = player->ws_d;
+    state.ws_velocity = player->ws_v;
     return(state);
 }
 
@@ -2114,12 +2115,6 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
 
             player->rolling_rotation_axis = right;
             player->current_rotation_speed = ((velocity_length) / calculate_sphere_circumference(player->size.x)) * 360.0f;
-
-            output_to_debug_console("Axis: ", (vector3_t)player->rolling_rotation_axis, " || Up: ", player->ws_up, " || Velocity: ", actual_player_v, " || Cross: ", cross, "\n");
-            /*if (glm::dot(player->ws_v, player->ws_v) > 0.001f)
-            {
-                previous_velocity = player->ws_v;
-                }*/
         }
     }
     else

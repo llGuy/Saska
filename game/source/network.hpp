@@ -213,6 +213,7 @@ struct game_snapshot_player_state_packet_t
     uint16_t client_id;
     vector3_t ws_position;
     vector3_t ws_direction;
+    vector3_t ws_velocity;
     quaternion_t ws_rotation;
 
     union
@@ -308,6 +309,8 @@ struct receiver_thread_t
     mutex_t *mutex;
 
     uint32_t receiver_thread_loop_count = 0;
+
+    bool receiver_freezed = 0;
 };
 
 
@@ -380,6 +383,7 @@ constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client
 constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::client_id) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_position) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_direction) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_velocity) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_rotation) +
                                                                            sizeof(game_snapshot_player_state_packet_t::flags)); }
 

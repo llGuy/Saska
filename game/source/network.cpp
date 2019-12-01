@@ -1,4 +1,4 @@
-// TODO: Debug what happens when an extra client joins 
+// PREDICTION ERROR STILL HAPPENING!!! WAHHH
 
 #include <cassert>
 #include <winsock2.h>
@@ -52,7 +52,7 @@ void bind_network_socket_to_port(network_socket_t *socket, network_address_t add
         OutputDebugString("Failed to bind socket to local port");
         
         // Try again with different port
-        address.port = g_network_state->GAME_OUTPUT_PORT_BACKUP;
+        ++address.port;
         bind_network_socket_to_port(socket, address);
     }
 }

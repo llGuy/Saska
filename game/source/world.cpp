@@ -2240,18 +2240,19 @@ internal_function float32_t update_network_component(network_component_t *networ
             res = matrix3_t(glm::rotate(y_angle, rotate_y)) * res;
 
             res = glm::normalize(res);
+            
+            player->ws_d = res;
                 
-            float32_t up_dot_view = glm::dot(up, res);
+            /*float32_t up_dot_view = glm::dot(up, res);
             float32_t minus_up_dot_view = glm::dot(-up, res);
                 
             float32_t limit = 0.99f;
             if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
             {
-                player->ws_d = res;
             }
             else
             {
-            }
+            }*/
 
             return(dt);
         }
@@ -3392,18 +3393,19 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
 
         res = glm::normalize(res);
                 
-        float32_t up_dot_view = glm::dot(up, res);
+        e->ws_d = res;
+            
+        /*float32_t up_dot_view = glm::dot(up, res);
         float32_t minus_up_dot_view = glm::dot(-up, res);
                 
 
         float32_t limit = 0.99f;
         if (up_dot_view > -limit && up_dot_view < limit && minus_up_dot_view > -limit && minus_up_dot_view < limit)
         {
-            e->ws_d = res;
         }
         else
         {
-        }
+        }*/
     }
     else
     {

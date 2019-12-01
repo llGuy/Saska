@@ -2,6 +2,7 @@
 
 #include "core.hpp"
 #include "world.hpp"
+#include "thread_pool.hpp"
 
 // Send, receive, etc...
 // Network stuff, socket stuff, ...
@@ -290,6 +291,26 @@ struct client_t
 
 enum application_mode_t { CLIENT_MODE, SERVER_MODE };
 
+
+#define MAX_RECEIVED_PACKETS_IN_QUEUE 60
+struct receiver_thread_t
+{
+    linear_allocator_t packet_allocator = {};
+    thread_process_t process;
+
+    // Pointers into the packet allocator
+    uint32_t packet_count;
+    void *packets[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    uint32_t packet_sizes[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    network_address_t addresses[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    
+    // Mutex
+    mutex_t *mutex;
+
+    uint32_t receiver_thread_loop_count = 0;
+};
+
+
 struct network_state_t
 {
     bool is_connected_to_server = false;
@@ -323,8 +344,11 @@ struct network_state_t
 
     // Settings:
     // Rate settings are all on a per second basis
-    float32_t client_input_snapshot_rate = 20.0f;
+    float32_t client_input_snapshot_rate = 25.0f;
     float32_t server_game_state_snapshot_rate = 20.0f;
+
+    // This will be used for the server (maybe also for client in future, but for now, just the server)
+    receiver_thread_t receiver_thread;
 };
 
 void fill_last_player_state_if_needed(player_t *player);

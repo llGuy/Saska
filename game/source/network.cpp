@@ -9,6 +9,7 @@
 #include "ui.hpp"
 #include "script.hpp"
 #include "core.hpp"
+#include "thread_pool.hpp"
 
 // Network code stuff for windows
 global_var network_state_t *g_network_state;
@@ -569,6 +570,53 @@ void initialize_as_client(void)
     g_network_state->player_state_history.initialize(60);
 }
 
+internal_function void receiver_thread_process(void *receiver_thread_data)
+{
+    output_to_debug_console("Started receiver thread\n");
+    
+    receiver_thread_t *process_data = (receiver_thread_t *)receiver_thread_data;
+
+    for (;;)
+    {
+        if (wait_for_mutex_and_own(process_data->mutex))
+        {
+            if (process_data->receiver_thread_loop_count == 0)
+            {
+                output_to_debug_console("Just got reset\n");
+            }
+            
+            ++(process_data->receiver_thread_loop_count);
+            // ^^^^^^^^^^ debug stuff ^^^^^^^^^^^^
+
+            char *message_buffer = (char *)process_data->packet_allocator.current;
+        
+            network_address_t received_address = {};
+            int32_t bytes_received = receive_from(&g_network_state->main_network_socket, message_buffer, process_data->packet_allocator.capacity - process_data->packet_allocator.used_capacity, &received_address);
+
+            if (bytes_received > 0)
+            {
+                // Actually officially allocate memory on linear allocator (even though it will already have been filled)
+                process_data->packets[process_data->packet_count] = allocate_linear(bytes_received, 1, "", &process_data->packet_allocator);
+                process_data->packet_sizes[process_data->packet_count] = bytes_received;
+                process_data->addresses[process_data->packet_count] = received_address;
+
+                ++(process_data->packet_count);
+            }
+
+            release_mutex(process_data->mutex);
+        }
+    }
+}
+
+internal_function void initialize_receiver_thread(void)
+{
+    g_network_state->receiver_thread.packet_allocator.capacity = megabytes(30);
+    g_network_state->receiver_thread.packet_allocator.start = g_network_state->receiver_thread.packet_allocator.current = malloc(g_network_state->receiver_thread.packet_allocator.capacity);
+
+    g_network_state->receiver_thread.mutex = request_mutex();
+    request_thread_for_process(&receiver_thread_process, &g_network_state->receiver_thread);
+}
+
 void initialize_as_server(void)
 {
      add_network_socket(&g_network_state->main_network_socket);
@@ -577,6 +625,8 @@ void initialize_as_server(void)
      address.port = host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER);
      bind_network_socket_to_port(&g_network_state->main_network_socket, address);
      set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
+
+     initialize_receiver_thread();
 }
 
 void initialize_network_translation_unit(struct game_memory_t *memory)
@@ -599,6 +649,7 @@ client_t *get_client(uint32_t index)
 
 #define MAX_MESSAGE_BUFFER_SIZE 40000
 global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
+
 
 void send_chunks_hard_update_packets(network_address_t address)
 {
@@ -803,148 +854,148 @@ void update_as_server(input_state_t *input_state, float32_t dt)
         time_since_previous_snapshot = 0.0f;
     }
     
-    
-    network_address_t received_address = {};
-    int32_t bytes_received = receive_from(&g_network_state->main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
-
-    if (bytes_received > 0)
+    if (wait_for_mutex_and_own(g_network_state->receiver_thread.mutex))
     {
-        serializer_t in_serializer = {};
-        in_serializer.data_buffer = (uint8_t *)message_buffer;
-        in_serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
+        output_to_debug_console((int32_t)(g_network_state->receiver_thread.packet_count), "\n");
+        g_network_state->receiver_thread.receiver_thread_loop_count = 0;
 
-        packet_header_t header = {};
-        deserialize_packet_header(&in_serializer, &header);
-
-        if (header.total_packet_size == bytes_received)
+        for (uint32_t packet_index = 0; packet_index < g_network_state->receiver_thread.packet_count; ++packet_index)
         {
-            if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
+            network_address_t received_address = g_network_state->receiver_thread.addresses[packet_index];
+            
+            serializer_t in_serializer = {};
+            in_serializer.data_buffer = (uint8_t *)(g_network_state->receiver_thread.packets[packet_index]);
+            in_serializer.data_buffer_size = g_network_state->receiver_thread.packet_sizes[packet_index];
+
+            packet_header_t header = {};
+            deserialize_packet_header(&in_serializer, &header);
+
+            if (header.total_packet_size == in_serializer.data_buffer_size)
             {
-                switch (header.packet_type)
+                if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
                 {
-                case client_packet_type_t::CPT_CLIENT_JOIN:
+                    switch (header.packet_type)
                     {
-
-                        client_join_packet_t client_join = {};
-                        deserialize_client_join_packet(&in_serializer, &client_join);
-
-                        // Add client
-                        client_t *client = get_client(g_network_state->client_count);
-                        client->name = client_join.client_name;
-                        client->client_id = g_network_state->client_count;
-                        client->network_address = received_address;
-                        client->current_packet_count = 0;
-
-                        // Add the player to the actual entities list (spawn the player in the world)
-                        client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
-                        player_t *local_player_data_ptr = get_player(client->player_handle);
-                        local_player_data_ptr->network.client_state_index = client->client_id;
-
-                        ++g_network_state->client_count;
-                        constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
-                        g_network_state->client_table_by_name.insert(constant_str_name.hash, client->client_id);
-                        g_network_state->client_table_by_address.insert(received_address.ipv4_address, client->client_id);
-                        
-                        // LOG:
-                        console_out(client_join.client_name);
-                        console_out(" joined the game!\n");
-                        
-                        // Reply - Create handshake packet
-                        serializer_t out_serializer = {};
-                        initialize_serializer(&out_serializer, 2000);
-                        game_state_initialize_packet_t game_state_init_packet = {};
-                        initialize_game_state_initialize_packet(&game_state_init_packet, client->client_id);
-
-
-                        
-                        packet_header_t handshake_header = {};
-                        handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
-                        handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
-                        handshake_header.total_packet_size = sizeof_packet_header();
-                        handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
-                        handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
-                        handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
-                        handshake_header.current_tick = *get_current_tick();
-                        
-                        serialize_packet_header(&out_serializer, &handshake_header);
-                        serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
-                        send_serialized_message(&out_serializer, client->network_address);
-
-                        send_chunks_hard_update_packets(client->network_address);
-
-                        dispatch_newcoming_client_to_clients(client->client_id);
-                        
-                    } break;
-
-                case client_packet_type_t::CPT_INPUT_STATE:
-                    {
-                        client_t *client = get_client(header.client_id);
-                        if (!client->needs_to_acknowledge_prediction_error)
+                    case client_packet_type_t::CPT_CLIENT_JOIN:
                         {
-                            client->received_input_commands = 1;
-                        
-                            // Current client tick (will be used for the snapshot that will be sent to the clients)
-                            // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
-                            client->previous_client_tick = header.current_tick;
 
-                            player_t *player = get_player(client->player_handle);
-                        
-                            uint32_t player_state_count = deserialize_uint32(&in_serializer);
+                            client_join_packet_t client_join = {};
+                            deserialize_client_join_packet(&in_serializer, &client_join);
 
-                            player_state_t last_player_state = {};
+                            // Add client
+                            client_t *client = get_client(g_network_state->client_count);
+                            client->name = client_join.client_name;
+                            client->client_id = g_network_state->client_count;
+                            client->network_address = received_address;
+                            client->current_packet_count = 0;
+
+                            // Add the player to the actual entities list (spawn the player in the world)
+                            client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
+                            player_t *local_player_data_ptr = get_player(client->player_handle);
+                            local_player_data_ptr->network.client_state_index = client->client_id;
+
+                            ++g_network_state->client_count;
+                            constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
+                            g_network_state->client_table_by_name.insert(constant_str_name.hash, client->client_id);
+                            g_network_state->client_table_by_address.insert(received_address.ipv4_address, client->client_id);
                         
-                            for (uint32_t i = 0; i < player_state_count; ++i)
+                            // LOG:
+                            console_out(client_join.client_name);
+                            console_out(" joined the game!\n");
+                        
+                            // Reply - Create handshake packet
+                            serializer_t out_serializer = {};
+                            initialize_serializer(&out_serializer, 2000);
+                            game_state_initialize_packet_t game_state_init_packet = {};
+                            initialize_game_state_initialize_packet(&game_state_init_packet, client->client_id);
+
+
+                        
+                            packet_header_t handshake_header = {};
+                            handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+                            handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
+                            handshake_header.total_packet_size = sizeof_packet_header();
+                            handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
+                            handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
+                            handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
+                            handshake_header.current_tick = *get_current_tick();
+                        
+                            serialize_packet_header(&out_serializer, &handshake_header);
+                            serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
+                            send_serialized_message(&out_serializer, client->network_address);
+
+                            send_chunks_hard_update_packets(client->network_address);
+
+                            dispatch_newcoming_client_to_clients(client->client_id);
+                        
+                        } break;
+
+                    case client_packet_type_t::CPT_INPUT_STATE:
+                        {
+                            client_t *client = get_client(header.client_id);
+                            if (!client->needs_to_acknowledge_prediction_error)
                             {
-                                client_input_state_packet_t input_packet = {};
-                                player_state_t player_state = {};
-                                deserialize_client_input_state_packet(&in_serializer, &input_packet);
-
-                                player_state.action_flags = input_packet.action_flags;
-                                player_state.mouse_x_diff = input_packet.mouse_x_diff;
-                                player_state.mouse_y_diff = input_packet.mouse_y_diff;
-                                player_state.flags_byte = input_packet.flags_byte;
-                                player_state.dt = input_packet.dt;
-
-                                player->network.player_states_cbuffer.push_item(&player_state);
-
-                                last_player_state = player_state;
-                            }
-
-                            // Will use the data in here to check whether the client needs correction or not
-                            client->previous_received_player_state = last_player_state;
-
-                            client->previous_received_player_state.ws_position = deserialize_vector3(&in_serializer);
-                            client->previous_received_player_state.ws_direction = deserialize_vector3(&in_serializer);
-
-                            player->network.commands_to_flush = player_state_count;
-                        }
-                    } break;
-                case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
-                    {
-                        client_t *client = get_client(header.client_id);
-                        client->needs_to_acknowledge_prediction_error = 0;
-
-                        client->previous_client_tick = deserialize_uint64(&in_serializer);
-                        client->received_input_commands = 0;
-
-                        //                        __debugbreak();
-                    } break;
-                case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
-                    {
-                        uint64_t game_state_acknowledged_tick = deserialize_uint64(&in_serializer);
-                        client_t *client = get_client(header.client_id);
+                                client->received_input_commands = 1;
                         
-                    } break;
+                                // Current client tick (will be used for the snapshot that will be sent to the clients)
+                                // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
+                                client->previous_client_tick = header.current_tick;
+
+                                player_t *player = get_player(client->player_handle);
+                        
+                                uint32_t player_state_count = deserialize_uint32(&in_serializer);
+
+                                player_state_t last_player_state = {};
+                        
+                                for (uint32_t i = 0; i < player_state_count; ++i)
+                                {
+                                    client_input_state_packet_t input_packet = {};
+                                    player_state_t player_state = {};
+                                    deserialize_client_input_state_packet(&in_serializer, &input_packet);
+
+                                    player_state.action_flags = input_packet.action_flags;
+                                    player_state.mouse_x_diff = input_packet.mouse_x_diff;
+                                    player_state.mouse_y_diff = input_packet.mouse_y_diff;
+                                    player_state.flags_byte = input_packet.flags_byte;
+                                    player_state.dt = input_packet.dt;
+
+                                    player->network.player_states_cbuffer.push_item(&player_state);
+
+                                    last_player_state = player_state;
+                                }
+
+                                // Will use the data in here to check whether the client needs correction or not
+                                client->previous_received_player_state = last_player_state;
+
+                                client->previous_received_player_state.ws_position = deserialize_vector3(&in_serializer);
+                                client->previous_received_player_state.ws_direction = deserialize_vector3(&in_serializer);
+
+                                player->network.commands_to_flush = player_state_count;
+                            }
+                        } break;
+                    case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
+                        {
+                            client_t *client = get_client(header.client_id);
+                            client->needs_to_acknowledge_prediction_error = 0;
+
+                            client->previous_client_tick = deserialize_uint64(&in_serializer);
+                            client->received_input_commands = 0;
+                        } break;
+                    case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
+                        {
+                            uint64_t game_state_acknowledged_tick = deserialize_uint64(&in_serializer);
+                            client_t *client = get_client(header.client_id);
+                        
+                        } break;
+                    }
                 }
             }
         }
-        else
-        {
-            // Handle UDP packet split (*sad face*)
-        }
-    }
 
-    
+        g_network_state->receiver_thread.packet_count = 0;
+        clear_linear(&g_network_state->receiver_thread.packet_allocator);
+        release_mutex(g_network_state->receiver_thread.mutex);
+    }
 }
 
 

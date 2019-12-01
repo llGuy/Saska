@@ -21,6 +21,7 @@ void *allocate_linear(uint32_t alloc_size, alignment_t alignment, const char *na
     void *new_crnt = (byte_t *)allocator->current + alloc_size;
 
     allocator->current = new_crnt;
+    allocator->used_capacity += alloc_size;
 
     return(prev);
 }

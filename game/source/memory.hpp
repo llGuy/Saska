@@ -21,6 +21,7 @@ extern struct linear_allocator_t
     void *current = nullptr;
 
     uint32_t capacity;
+    uint32_t used_capacity = 0;
 } linear_allocator_global;
 
 void *allocate_linear(uint32_t alloc_size, alignment_t alignment = 1, const char *name = "", linear_allocator_t *allocator = &linear_allocator_global);

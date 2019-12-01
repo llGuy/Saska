@@ -807,6 +807,10 @@ void dispatch_snapshot_to_clients(void)
                             ws_direction_difference.y > precision ||
                             ws_direction_difference.z > precision)
                         {
+                            // Make sure that server invalidates all packets previously sent by the client
+                            player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
+                            player->network.player_states_cbuffer.head_tail_difference = 0;
+                            
                             // Force client to do correction
                             player_snapshot_packet->need_to_do_correction = 1;
 

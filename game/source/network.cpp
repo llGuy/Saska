@@ -1,4 +1,4 @@
-// PREDICTION ERROR STILL HAPPENING!!! WAHHH
+// PREDICTION ERROR STILL HAPPENING!!! WAHHH ---- May have something to do with the fact that moving one player, changes the rotation of another???
 
 #include <cassert>
 #include <winsock2.h>
@@ -563,6 +563,7 @@ void join_server(const char *ip_address, const char *client_name)
 
 internal_function int32_t lua_join_server(lua_State *state);
 internal_function int32_t lua_toggle_freeze_receiver_thread(lua_State *state);
+internal_function int32_t lua_toggle_freeze_client_after_input(lua_State *state);
 
 void initialize_as_client(void)
 {
@@ -574,6 +575,7 @@ void initialize_as_client(void)
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_freeze_receiver_thread", &lua_toggle_freeze_receiver_thread);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "freeze_after_input_packet_sent", &lua_toggle_freeze_client_after_input);
 
     g_network_state->player_state_cbuffer.initialize(40);
     g_network_state->player_state_history.initialize(60);
@@ -981,6 +983,11 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                         player_state.flags_byte = input_packet.flags_byte;
                                         player_state.dt = input_packet.dt;
 
+                                        if (player_state.action_flags)
+                                        {
+                                            __debugbreak();
+                                        }
+
                                         player->network.player_states_cbuffer.push_item(&player_state);
 
                                         last_player_state = player_state;
@@ -1028,43 +1035,51 @@ void update_as_server(input_state_t *input_state, float32_t dt)
 
 internal_function void send_client_action_flags(void)
 {
-    player_t *user = get_user_player();    
-
-    packet_header_t header = {};
-    
-    header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
-    header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
-    
-    header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * g_network_state->player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 /* These two vectors are the outputs of the commands */;
-    header.client_id = user->network.client_state_index;
-    header.current_tick = *get_current_tick();
-
-    serializer_t serializer = {};
-    initialize_serializer(&serializer, header.total_packet_size);
-    
-    serialize_packet_header(&serializer, &header);
-
-    serialize_uint32(&serializer, g_network_state->player_state_cbuffer.head_tail_difference);
-
-    uint32_t player_states_to_send = g_network_state->player_state_cbuffer.head_tail_difference;
-
-    player_state_t *state;
-    for (uint32_t i = 0; i < player_states_to_send; ++i)
+    if (!g_network_state->client_will_freeze_after_input && g_network_state->sent_active_action_flags)
     {
-        state = g_network_state->player_state_cbuffer.get_next_item();
-        serialize_client_input_state_packet(&serializer, state);
+        player_t *user = get_user_player();    
+
+        packet_header_t header = {};
+    
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
+    
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * g_network_state->player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 /* These two vectors are the outputs of the commands */;
+        header.client_id = user->network.client_state_index;
+        header.current_tick = *get_current_tick();
+
+        serializer_t serializer = {};
+        initialize_serializer(&serializer, header.total_packet_size);
+    
+        serialize_packet_header(&serializer, &header);
+
+        serialize_uint32(&serializer, g_network_state->player_state_cbuffer.head_tail_difference);
+
+        uint32_t player_states_to_send = g_network_state->player_state_cbuffer.head_tail_difference;
+
+        player_state_t *state;
+        for (uint32_t i = 0; i < player_states_to_send; ++i)
+        {
+            state = g_network_state->player_state_cbuffer.get_next_item();
+            serialize_client_input_state_packet(&serializer, state);
+        }
+
+        player_state_t to_store = *state;
+        to_store.ws_position = user->ws_p;
+        to_store.ws_direction = user->ws_d;
+        to_store.tick = header.current_tick;
+        //g_network_state->player_state_history.push_item(&to_store);
+
+        serialize_vector3(&serializer, to_store.ws_position);
+        serialize_vector3(&serializer, to_store.ws_direction);
+
+        send_serialized_message(&serializer, g_network_state->server_address);
+
+        if (to_store.action_flags)
+        {
+            g_network_state->sent_active_action_flags = 1;
+        }
     }
-
-    player_state_t to_store = *state;
-    to_store.ws_position = user->ws_p;
-    to_store.ws_direction = user->ws_d;
-    to_store.tick = header.current_tick;
-    //g_network_state->player_state_history.push_item(&to_store);
-
-    serialize_vector3(&serializer, to_store.ws_position);
-    serialize_vector3(&serializer, to_store.ws_direction);
-
-    send_serialized_message(&serializer, g_network_state->server_address);
 }
 
 
@@ -1325,6 +1340,13 @@ internal_function int32_t lua_join_server(lua_State *state)
 internal_function int32_t lua_toggle_freeze_receiver_thread(lua_State *state)
 {
     g_network_state->receiver_thread.receiver_freezed ^= 1;
+
+    return(0);
+}
+
+internal_function int32_t lua_toggle_freeze_client_after_input(lua_State *state)
+{
+    g_network_state->client_will_freeze_after_input ^= 1;
 
     return(0);
 }

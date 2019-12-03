@@ -352,6 +352,11 @@ struct network_state_t
 
     // This will be used for the server (maybe also for client in future, but for now, just the server)
     receiver_thread_t receiver_thread;
+
+
+    // For debugging
+    bool client_will_freeze_after_input = 0;
+    bool sent_active_action_flags = 0;
 };
 
 void fill_last_player_state_if_needed(player_t *player);

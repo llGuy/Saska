@@ -82,6 +82,7 @@ struct movement_axes_t
     vector3_t up;
     vector3_t forward;
 };
+
 internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up);
 enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
 struct collision_t

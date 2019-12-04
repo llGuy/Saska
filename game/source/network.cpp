@@ -329,7 +329,7 @@ const char *deserialize_string(serializer_t *serializer)
     return(ret);
 }
 
-
+// Hello there
 void serialize_bytes(serializer_t *serializer, uint8_t *bytes, uint32_t size)
 {
     uint8_t *pointer = grow_serializer_data_buffer(serializer, size);
@@ -985,7 +985,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
 
                                         if (player_state.action_flags)
                                         {
-                                            __debugbreak();
+                                            //                                            __debugbreak();
                                         }
 
                                         player->network.player_states_cbuffer.push_item(&player_state);
@@ -999,7 +999,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                     client->previous_received_player_state.ws_position = deserialize_vector3(&in_serializer);
                                     client->previous_received_player_state.ws_direction = deserialize_vector3(&in_serializer);
 
-                                    player->network.commands_to_flush = player_state_count;
+                                    player->network.commands_to_flush += player_state_count;
                                 }
                             } break;
                         case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
@@ -1032,10 +1032,10 @@ void update_as_server(input_state_t *input_state, float32_t dt)
     }
 }
 
-
+ 
 internal_function void send_client_action_flags(void)
 {
-    if (!g_network_state->client_will_freeze_after_input && g_network_state->sent_active_action_flags)
+    //    if (!g_network_state->client_will_freeze_after_input && !g_network_state->sent_active_action_flags)
     {
         player_t *user = get_user_player();    
 
@@ -1192,8 +1192,8 @@ void update_as_client(input_state_t *input_state, float32_t dt)
 
                     // Existing players when client joined the game
                     for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
-                    {
-                        player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
+                    { 
+                       player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
                         player_t *player = get_player(player_packet->player_name);
 
                         client_t *client = get_client(player_packet->client_id);

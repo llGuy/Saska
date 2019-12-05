@@ -77,6 +77,11 @@ void output_to_debug_console_i(const vector3_t &v3)
     output_to_debug_console((float32_t)(v3[0]), "|", (float32_t)(v3[1]), "|", (float32_t)(v3[2]));
 }
 
+void output_to_debug_console_i(const quaternion_t &q4)
+{
+    output_to_debug_console((float32_t)(q4[0]), "|", (float32_t)(q4[1]), "|", (float32_t)(q4[2]), "|", (float32_t)(q4[3]));
+}
+
 void output_to_debug_console_i(const char *string)
 {
     OutputDebugString(string);

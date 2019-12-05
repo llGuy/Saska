@@ -1,4 +1,4 @@
-// PREDICTION ERROR STILL HAPPENING!!! WAHHH ---- May have something to do with the fact that moving one player, changes the rotation of another???
+// BUG: WHY DO OTHER PLAYERS ROTATE WEIRDLY WHEN CLIENT MOVES?!??????! WTF
 
 #include <cassert>
 #include <winsock2.h>
@@ -819,7 +819,7 @@ void dispatch_snapshot_to_clients(void)
                             // Server will now wait until reception of a prediction error packet
                             client->needs_to_acknowledge_prediction_error = 1;
 
-                            output_to_debug_console("Client ", (int32_t)client_index, "(", client->name, ")", " needs to correct | ", previous_received_player_state->ws_position, " -> ", player_snapshot_packet->ws_position, "\n");
+                            //output_to_debug_console("Client ", (int32_t)client_index, "(", client->name, ")", " needs to correct | ", previous_received_player_state->ws_position, " -> ", player_snapshot_packet->ws_position, "\n");
                         }
                         else
                         {
@@ -840,6 +840,13 @@ void dispatch_snapshot_to_clients(void)
             send_serialized_message(&out_serializer, client->network_address);
         }
     }
+
+    for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
+    {
+        output_to_debug_console(g_network_state->clients[client_index].name, ": ", player_snapshots[client_index].ws_rotation, " ; ");
+    }
+
+    output_to_debug_console("\n");
 }
 
 float32_t get_snapshot_server_rate(void)
@@ -1268,8 +1275,11 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                             remote_player_snapshot.ws_rotation = player_snapshot_packet.ws_rotation;
                             current_player->network.remote_player_states.push_item(&remote_player_snapshot);
                         }
+
+                        output_to_debug_console(current_player->id.str, ": ", current_player->ws_r, " ; ");
                     }
-                    
+
+                    output_to_debug_console("\n");
                     
                 } break;
             case server_packet_type_t::SPT_CLIENT_JOINED:

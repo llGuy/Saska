@@ -2109,12 +2109,13 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             else
             {
                 previous_velocity = actual_player_v;
+
+                vector3_t cross = glm::cross(actual_player_v, player->ws_up);
+                vector3_t right = glm::normalize(cross);
+
+                player->rolling_rotation_axis = right;
             }
             
-            vector3_t cross = glm::cross(actual_player_v, player->ws_up);
-            vector3_t right = glm::normalize(cross);
-
-            player->rolling_rotation_axis = right;
             player->current_rotation_speed = ((velocity_length) / calculate_sphere_circumference(player->size.x)) * 360.0f;
         }
     }
@@ -2467,6 +2468,11 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 case application_type_t::WINDOW_APPLICATION_MODE:
                     {
                         float32_t client_local_dt = update_network_component(&player->network, player, 0.0f);
+
+                        if (player->action_flags)
+                        {
+                            //__debugbreak();
+                        }
                         update_physics_component(&player->physics, player, client_local_dt);
                         update_camera_component(&player->camera, player, client_local_dt);
                         update_rendering_component(&player->rendering, player, client_local_dt);

@@ -818,8 +818,6 @@ void dispatch_snapshot_to_clients(void)
 
                             // Server will now wait until reception of a prediction error packet
                             client->needs_to_acknowledge_prediction_error = 1;
-
-                            //output_to_debug_console("Client ", (int32_t)client_index, "(", client->name, ")", " needs to correct | ", previous_received_player_state->ws_position, " -> ", player_snapshot_packet->ws_position, "\n");
                         }
                         else
                         {
@@ -840,13 +838,6 @@ void dispatch_snapshot_to_clients(void)
             send_serialized_message(&out_serializer, client->network_address);
         }
     }
-
-    for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
-    {
-        output_to_debug_console(g_network_state->clients[client_index].name, ": ", player_snapshots[client_index].ws_rotation, " ; ");
-    }
-
-    output_to_debug_console("\n");
 }
 
 float32_t get_snapshot_server_rate(void)
@@ -1018,8 +1009,6 @@ void update_as_server(input_state_t *input_state, float32_t dt)
 
                                 client->previous_client_tick = deserialize_uint64(&in_serializer);
                                 client->received_input_commands = 0;
-
-                                output_to_debug_console("Client ", (int32_t)client->client_id, "(", client->name, ")", " did correction | is now at ", player->ws_p, "\n");
                             } break;
                         case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
                             {
@@ -1260,8 +1249,6 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                                 player->ws_d = player_snapshot_packet.ws_direction;
                                 player->ws_v = player_snapshot_packet.ws_velocity;
 
-                                output_to_debug_console("Client ", (int32_t)local_user->network.client_state_index, "(", client->name, ")", " did correction | now at ", local_user->ws_p, "\n\n");
-
                                 // Send a prediction error correction packet
                                 send_prediction_error_correction(previous_tick);
                             }
@@ -1275,11 +1262,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                             remote_player_snapshot.ws_rotation = player_snapshot_packet.ws_rotation;
                             current_player->network.remote_player_states.push_item(&remote_player_snapshot);
                         }
-
-                        output_to_debug_console(current_player->id.str, ": ", current_player->ws_r, " ; ");
                     }
-
-                    output_to_debug_console("\n");
                     
                 } break;
             case server_packet_type_t::SPT_CLIENT_JOINED:

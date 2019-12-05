@@ -2176,15 +2176,19 @@ internal_function float32_t update_network_component(network_component_t *networ
             uint32_t next_snapshot_index = network->remote_player_states.tail;
             if (++next_snapshot_index == network->remote_player_states.buffer_size)
             {
+                output_to_debug_console("next_snapshot_index == network->remote_player_states.buffer_size\n");
+                
                 next_snapshot_index = 0;
             }
         
             network->elapsed_time += dt;
             float32_t progression = network->elapsed_time / network->max_time;
 
-            if (progression > 1.0f)
+            if (progression >= 1.0f)
             {
-                network->elapsed_time = 0.0f;
+                output_to_debug_console("Progression >= 1.0f\n");
+                
+                network->elapsed_time = network->elapsed_time - network->max_time;
                 network->remote_player_states.get_next_item();
 
                 previous_snapshot_index = network->remote_player_states.tail;

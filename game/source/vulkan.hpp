@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <memory.h>
 #include "core.hpp"
+#include "allocators.hpp"
 //#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 

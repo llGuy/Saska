@@ -6,12 +6,16 @@
 #include <stb_image.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
+// Empty
+#define MEMORY_API
+#define SOURCE_GAME
 
 #if defined(UNITY_BUILD)
 #include "network.cpp"
 #include "thread_pool.cpp"
 #include <vulkan/vulkan.h>
 #include "memory.cpp"
+#include "allocators.cpp"
 #include "ui.cpp"
 #include "game.cpp"
 #include "world.cpp"

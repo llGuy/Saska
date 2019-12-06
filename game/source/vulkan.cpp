@@ -249,7 +249,6 @@ struct instance_create_extension_params_t
     const char **r_extension_names;
 };
 
-// TODO(luc) : make validation layers truly optional, enable / disable when requested
 internal_function void init_instance(VkApplicationInfo *app_info, instance_create_validation_layer_params_t *validation_params, instance_create_extension_params_t *extension_params)
 {
     VkInstanceCreateInfo instance_info = {};
@@ -1367,8 +1366,6 @@ VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uin
     
 graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
 {
-    init_manager();
-	
     // initialize instance
     persist_var constexpr uint32_t layer_count = 1;
     const char *layer_names[layer_count] = { "VK_LAYER_LUNARG_standard_validation" };

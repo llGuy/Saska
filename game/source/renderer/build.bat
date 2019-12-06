@@ -38,7 +38,7 @@ REM Don't need GLFW for now: C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glf
 REM If link errors appear, maybe add these libs into the list: Shell32.lib kernel32.lib msvcmrt.lib 
 set LIBS=ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/Lua/lib/lua5.1.lib
 
-pushd ..\binaries
+pushd ..\..\binaries
 
 If "%1" == "compile" goto compile
 If "%1" == "debug" goto debug
@@ -47,8 +47,7 @@ If "%1" == "run" goto run
 If "%1" == "help" goto help
 
 :compile
-%CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
-%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%
+%CC% /LD %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%VULKAN_DLL% %VULKAN_SRC% %LIBS%
 
 popd
 

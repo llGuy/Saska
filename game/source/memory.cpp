@@ -2,11 +2,7 @@
 #include <stdlib.h>
 #include <cassert>
 
-linear_allocator_t linear_allocator_global;
-stack_allocator_t stack_allocator_global;
-free_list_allocator_t free_list_allocator_global;
-
-inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
+MEMORY_API inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
 {
     byte_t *byte_cast_ptr = (byte_t *)ptr;
     uint8_t adjustment = alignment - reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1);
@@ -15,7 +11,7 @@ inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
     return(adjustment);
 }
 
-void *allocate_linear(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
+MEMORY_API void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
 {
     void *prev = allocator->current;
     void *new_crnt = (byte_t *)allocator->current + alloc_size;
@@ -26,12 +22,12 @@ void *allocate_linear(uint32_t alloc_size, alignment_t alignment, const char *na
     return(prev);
 }
 
-void clear_linear(linear_allocator_t *allocator)
+MEMORY_API void clear_linear_impl(linear_allocator_t *allocator)
 {
     allocator->current = allocator->start;
 }
 
-void *allocate_stack(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
+MEMORY_API void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
 {
     byte_t *would_be_address;
 
@@ -64,13 +60,13 @@ void *allocate_stack(uint32_t allocation_size, alignment_t alignment, const char
     return(start_address + sizeof(stack_allocation_header_t));
 }
 
-void extend_stack_top(uint32_t extension_size, stack_allocator_t *allocator)
+MEMORY_API void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     current_header->size += extension_size;
 }
 
-void pop_stack(stack_allocator_t *allocator)
+MEMORY_API void pop_stack_impl(stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     
@@ -95,7 +91,7 @@ void pop_stack(stack_allocator_t *allocator)
     --(allocator->allocation_count);
 }
 
-void *allocate_free_list(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
+MEMORY_API void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
 {
     uint32_t total_allocation_size = allocation_size + sizeof(free_list_allocation_header_t);
 
@@ -142,9 +138,7 @@ void *allocate_free_list(uint32_t allocation_size, alignment_t alignment, const 
 }
 
 // TODO(luc) : optimize free list allocator so that all the blocks are stored in order
-void
-deallocate_free_list(void *pointer
-		     , free_list_allocator_t *allocator)
+MEMORY_API void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 {
     free_list_allocation_header_t *allocation_header = (free_list_allocation_header_t *)((byte_t *)pointer - sizeof(free_list_allocation_header_t));
     free_block_header_t *new_free_block_header = (free_block_header_t *)allocation_header;
@@ -225,84 +219,4 @@ deallocate_free_list(void *pointer
 	// at the end of the loop, previous is that last current before current = nullptr
 	previous->next_free_block = new_free_block_header;
     }
-}
-
-struct memory_register_info_t
-{
-    uint32_t active_count = 0;
-    void *p; // pointer to the actual object
-    uint32_t size;
-};
-
-global_var free_list_allocator_t object_allocator;
-global_var hash_table_inline_t<memory_register_info_t /* destroyed count */, 20, 4, 4> objects_list("map.object_removed_list");
-
-void init_manager(void)
-{
-    object_allocator.start = malloc(megabytes(10));
-    object_allocator.available_bytes = megabytes(10);
-    memset(object_allocator.start, 0, object_allocator.available_bytes);
-	
-    object_allocator.free_block_head = (free_block_header_t *)object_allocator.start;
-    object_allocator.free_block_head->free_block_size = object_allocator.available_bytes;
-}
-    
-registered_memory_base_t register_memory(const constant_string_t &id, uint32_t bytes_size)
-{
-    void *p = allocate_free_list(bytes_size, 1, "", &object_allocator);
-
-    memory_register_info_t register_info {0, p, bytes_size};
-    objects_list.insert(id.hash, register_info, "");
-
-    return(registered_memory_base_t(p, id, bytes_size));
-}
-
-registered_memory_base_t register_existing_memory(void *p, const constant_string_t &id, uint32_t bytes_size)
-{
-    memory_register_info_t register_info {0, p, bytes_size};
-    objects_list.insert(id.hash, register_info, "");
-
-    return(registered_memory_base_t(p, id, bytes_size));
-}
-
-void deregister_memory(const constant_string_t &id)
-{
-    objects_list.remove(id.hash);
-}
-
-registered_memory_base_t get_memory(const constant_string_t &id)
-{
-    memory_register_info_t *info = objects_list.get(id.hash);
-
-    if (!info)
-    {
-	//	OUTPUT_DEBUG_LOG("unable to find element %s\n", id.str);
-    }
-	
-    return(registered_memory_base_t(info->p, id, info->size));
-}
-
-void remove_memory(const constant_string_t &id)
-{
-    memory_register_info_t *info = objects_list.get(id.hash);
-    if (info->active_count == 0)
-    {
-	deallocate_free_list(info->p, &object_allocator);
-    }
-    else
-    {
-	// error, cannot delete object yet
-    }
-}
-
-void decrease_shared_count(const constant_string_t &id)
-{
-    memory_register_info_t *ri = objects_list.get(id.hash);
-    --ri->active_count;
-}
-
-void increase_shared_count(const constant_string_t &id)
-{
-    memory_register_info_t *ri = objects_list.get(id.hash);
-    ++ri->active_count;
 }

@@ -1630,8 +1630,6 @@ player_state_t initialize_player_state(player_t *player)
     state.mouse_x_diff = player->camera.mouse_diff.x;
     state.mouse_y_diff = player->camera.mouse_diff.y;
 
-    //    output_to_debug_console("Mouse difference: ", player->camera.mouse_diff.x, player->camera.mouse_diff.y, "\n");
-
     state.is_entering = player->is_entering;
     state.rolling_mode = player->rolling_mode;
     state.ws_position = player->ws_p;
@@ -1797,47 +1795,59 @@ internal_function void update_camera_component(camera_component_t *camera_compon
 internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt)
 {
     player_t::animated_state_t previous_state = player->animated_state;
+    
     player_t::animated_state_t new_state;
-        
-    uint32_t moving = 0;
-        
-    if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
+
+    if (player->network.is_remote)
     {
-        if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
+        new_state = (player_t::animated_state_t)player->previous_action_flags;
+
+        output_to_debug_console("new animated state: ", (int32_t)new_state, "\n");
+    }
+    else
+    {
+        uint32_t moving = 0;
+        
+        if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
         {
-            new_state = player_t::animated_state_t::RUN; moving = 1;
+            if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
+            {
+                new_state = player_t::animated_state_t::RUN; moving = 1;
+            }
+            else
+            {
+                new_state = player_t::animated_state_t::WALK; moving = 1;
+            }
         }
-        else
-        {
-            new_state = player_t::animated_state_t::WALK; moving = 1;
-        }
-    }
-    if (player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
-    if (player->action_flags & (1 << action_flags_t::ACTION_DOWN));
-    if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
+        if (player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
+        if (player->action_flags & (1 << action_flags_t::ACTION_DOWN));
+        if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
         
-    if (!moving)
-    {
-        new_state = player_t::animated_state_t::IDLE;
-    }
+        if (!moving)
+        {
+            new_state = player_t::animated_state_t::IDLE;
+        }
 
-    if (player->is_sitting)
-    {
-        new_state = player_t::animated_state_t::SITTING;
-    }
+        if (player->is_sitting)
+        {
+            new_state = player_t::animated_state_t::SITTING;
+        }
 
-    if (player->is_in_air)
-    {
-        new_state = player_t::animated_state_t::HOVER;
-    }
+        if (player->is_in_air)
+        {
+            new_state = player_t::animated_state_t::HOVER;
+        }
 
-    if (player->is_sliding_not_rolling_mode)
-    {
-        new_state = player_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
+        if (player->is_sliding_not_rolling_mode)
+        {
+            new_state = player_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
+        }
     }
 
     if (new_state != previous_state)
     {
+        output_to_debug_console("SWITCHED!: ", (int32_t)previous_state, " -> ", (int32_t)new_state, "\n");
+        
         player->animated_state = new_state;
         switch_to_cycle(&animation->animation_instance, new_state);
     }
@@ -2176,8 +2186,6 @@ internal_function float32_t update_network_component(network_component_t *networ
             uint32_t next_snapshot_index = network->remote_player_states.tail;
             if (++next_snapshot_index == network->remote_player_states.buffer_size)
             {
-                output_to_debug_console("next_snapshot_index == network->remote_player_states.buffer_size\n");
-                
                 next_snapshot_index = 0;
             }
         
@@ -2186,8 +2194,6 @@ internal_function float32_t update_network_component(network_component_t *networ
 
             if (progression >= 1.0f)
             {
-                output_to_debug_console("Progression >= 1.0f\n");
-                
                 network->elapsed_time = network->elapsed_time - network->max_time;
                 network->remote_player_states.get_next_item();
 
@@ -2207,6 +2213,18 @@ internal_function float32_t update_network_component(network_component_t *networ
             player->ws_p = interpolate(previous_remote_snapshot->ws_position, next_remote_snapshot->ws_position, progression);
             player->ws_d = interpolate(previous_remote_snapshot->ws_direction, next_remote_snapshot->ws_direction, progression);
             player->ws_r = glm::mix(previous_remote_snapshot->ws_rotation, next_remote_snapshot->ws_rotation, progression);
+            player->camera.ws_next_vector = player->ws_up = interpolate(previous_remote_snapshot->ws_up_vector, next_remote_snapshot->ws_up_vector, progression);
+
+            if (true)
+            {
+                player->previous_action_flags = previous_remote_snapshot->action_flags;
+                player->rolling_mode = previous_remote_snapshot->rolling_mode;
+            }
+            else
+            {
+                player->previous_action_flags = next_remote_snapshot->action_flags;
+                player->rolling_mode = next_remote_snapshot->rolling_mode;
+            }
 
             player->rolling_rotation = glm::mat4_cast(player->ws_r);
         }
@@ -2226,6 +2244,7 @@ internal_function float32_t update_network_component(network_component_t *networ
             player_state_t *next_player_state = player_state;
 
             player->action_flags = next_player_state->action_flags;
+            player->previous_action_flags = player->action_flags;
             player->rolling_mode = next_player_state->rolling_mode;
 
             // Update view direction with mouse differences
@@ -2472,11 +2491,6 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 case application_type_t::WINDOW_APPLICATION_MODE:
                     {
                         float32_t client_local_dt = update_network_component(&player->network, player, 0.0f);
-
-                        if (player->action_flags)
-                        {
-                            //__debugbreak();
-                        }
                         update_physics_component(&player->physics, player, client_local_dt);
                         update_camera_component(&player->camera, player, client_local_dt);
                         update_rendering_component(&player->rendering, player, client_local_dt);
@@ -2507,13 +2521,14 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             update_terraform_power_component(&player->terraform_power, player, dt);
             update_shoot_component(&player->shoot, player, dt);
         }
-        // Local client (if entity is not controled by user) or server when there are no commands to flush
+        // Local client (if entity is not controlled by user) or server when there are no commands to flush
         else
         {
             if (player->network.is_remote)
             {
                 update_network_component(&player->network, player, dt);
             }
+            
             switch (app_type)
             {
             case application_type_t::WINDOW_APPLICATION_MODE:

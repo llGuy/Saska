@@ -220,7 +220,9 @@ struct remote_player_snapshot_t
 {
     vector3_t ws_position;
     vector3_t ws_direction;
+    vector3_t ws_up_vector;
     quaternion_t ws_rotation;
+    uint32_t action_flags;
 
     union
     {
@@ -307,6 +309,7 @@ struct player_t : entity_t
     matrix4_t rolling_rotation = matrix4_t(1.0f);
 
     uint32_t action_flags = 0;
+    uint32_t previous_action_flags = 0;
     
     // For animated rendering component
     enum animated_state_t { WALK, IDLE, RUN, HOVER, SLIDING_NOT_ROLLING_MODE, SITTING, JUMP } animated_state = animated_state_t::IDLE;

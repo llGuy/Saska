@@ -214,7 +214,10 @@ struct game_snapshot_player_state_packet_t
     vector3_t ws_position;
     vector3_t ws_direction;
     vector3_t ws_velocity;
+    vector3_t ws_up_vector;
     quaternion_t ws_rotation;
+    // Just fill these in so that the clients can interpolate between different action animations
+    uint32_t action_flags;
 
     union
     {
@@ -222,7 +225,7 @@ struct game_snapshot_player_state_packet_t
         {
             uint8_t need_to_do_correction: 1;
             uint8_t is_to_ignore: 1;
-            // Will have other flags
+            uint8_t is_rolling: 1;
         };
         uint8_t flags;
     };
@@ -389,6 +392,8 @@ constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeo
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_position) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_direction) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_velocity) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_up_vector) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_rotation) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::action_flags) +
                                                                            sizeof(game_snapshot_player_state_packet_t::flags)); }
 

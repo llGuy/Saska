@@ -537,6 +537,46 @@ void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, gam
 }
 
 
+void serialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->modified_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
+    {
+        serialize_uint16(serializer, packet->modified_chunks[chunk].chunk_index);
+        serialize_uint32(serializer, packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].previous_value);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].next_value);
+            serialize_uint16(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].index);
+        }
+    }
+}
+
+
+void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet)
+{
+    packet->modified_count = deserialize_uint32(serializer);
+
+    packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
+    {
+        packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
+
+        packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
+        packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            packet->modified_chunks[chunk].modified_voxels[voxel].previous_value = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].next_value = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].index = deserialize_uint16(serializer);
+        }
+    }
+}
+
+
 void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
 {
     deserialize_voxel_state_initialize_packet(serializer, &packet->voxels);
@@ -763,12 +803,35 @@ void dispatch_snapshot_to_clients(void)
     packet_header_t header = {};
     header.packet_mode = packet_mode_t::PM_SERVER_MODE;
     header.packet_type = server_packet_type_t::SPT_GAME_STATE_SNAPSHOT;
- 
-    game_snapshot_player_state_packet_t player_snapshots[MAX_CLIENTS] = {};
-    
-    serializer_t out_serializer = {};
-    initialize_serializer(&out_serializer, 2000);
 
+    // First game snapshot voxel deltas, then game snapshot players
+    game_snapshot_voxel_delta_packet_t voxel_packet = {};
+    game_snapshot_player_state_packet_t player_snapshots[MAX_CLIENTS] = {};
+
+    // Prepare voxel delta snapshot packets
+    uint32_t modified_chunks_count = 0;
+    voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+
+    voxel_packet.modified_count = modified_chunks_count;
+    voxel_packet.modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * modified_chunks_count);
+    
+    for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
+    {
+        voxel_chunk_t *chunk = chunks[chunk_index];
+        modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
+
+        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+        modified_chunk->modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * chunk->modified_voxels_list_count);
+        modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
+        for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+        {
+            uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
+            modified_chunk->modified_voxels[voxel].previous_value = chunk->voxel_history[voxel_index];
+            modified_chunk->modified_voxels[voxel].next_value = ((uint8_t *)(chunk->voxels))[voxel_index];
+            modified_chunk->modified_voxels[voxel].index = voxel_index;
+        }
+    }
+    
     // Prepare the player snapshot packets
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
     {
@@ -786,8 +849,29 @@ void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].is_rolling = player->rolling_mode;
     }
 
-    output_to_debug_console("\n");
+    serializer_t out_serializer = {};
+    initialize_serializer(&out_serializer,
+                          sizeof_packet_header() +
+                          sizeof(uint64_t) +
+                          sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
+                          sizeof_game_snapshot_player_state_packet() * g_network_state->client_count);
+
+    header.total_packet_size = sizeof_packet_header() +
+        sizeof(uint64_t) +
+        sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
+        sizeof_game_snapshot_player_state_packet() * g_network_state->client_count;
+        
+    serialize_packet_header(&out_serializer, &header);
+
+
+
+    serialize_game_snapshot_voxel_delta_packet(&out_serializer, &voxel_packet);
+
+
     
+    uint32_t player_snapshots_start = out_serializer.data_buffer_head;
+
+    // TODO: Find way so that sending packets to each client does not need packets to be reserialized
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
     {
         client_t *client = get_client(client_index);
@@ -797,13 +881,7 @@ void dispatch_snapshot_to_clients(void)
         {
             game_snapshot_player_state_packet_t *player_snapshot_packet = &player_snapshots[client_index];
 
-            out_serializer.data_buffer_head = 0;
-
-            header.total_packet_size = sizeof_packet_header() +
-                sizeof(uint64_t) +
-                sizeof_game_snapshot_player_state_packet() * g_network_state->client_count;
-        
-            serialize_packet_header(&out_serializer, &header);
+            out_serializer.data_buffer_head = player_snapshots_start;
 
             player_state_t *previous_received_player_state = &client->previous_received_player_state;
 
@@ -856,6 +934,8 @@ void dispatch_snapshot_to_clients(void)
             send_serialized_message(&out_serializer, client->network_address);
         }
     }
+
+    clear_chunk_history_for_server();
 }
 
 float32_t get_snapshot_server_rate(void)

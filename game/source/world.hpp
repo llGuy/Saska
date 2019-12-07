@@ -24,8 +24,8 @@ struct voxel_chunk_t
     uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
     
     uint8_t *voxel_history = nullptr; // Array size will be VOXEL_CHUNK_EDGE_LENGTH ^ 3
+    static constexpr uint32_t MAX_MODIFIED_VOXELS = (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4;
     uint32_t modified_voxels_list_count = 0;
-    static constexpr uint32_t MAX_MODIFIED_VOXELS = (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4
     uint16_t *list_of_modified_voxels = nullptr;
 
     uint32_t vertex_count;
@@ -507,6 +507,7 @@ void initialize_game_state_initialize_packet(struct game_state_initialize_packet
 // Will create packet for each chunk
 struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);
 void clear_chunk_history_for_server(void);
+voxel_chunk_t **get_modified_voxel_chunks(uint32_t *count);
 
 void clean_up_world_data(void);
 void make_world_data(void);
@@ -525,3 +526,8 @@ void handle_input_debug(input_state_t *input_state, float32_t dt);
 void initialize_world_translation_unit(struct game_memory_t *memory);
 
 uint64_t *get_current_tick(void);
+
+int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
+struct voxel_coordinate_t {uint8_t x, y, z;};
+voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length);
+uint32_t get_chunk_grid_size(void);

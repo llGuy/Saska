@@ -39,7 +39,8 @@ void deinitialize_chunk(voxel_chunk_t *chunk);
 internal_function vector3_t get_voxel_world_origin(void);
 internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length = VOXEL_CHUNK_EDGE_LENGTH);
 internal_function vector3_t ws_to_xs(const vector3_t &ws_position);
-internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
+int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
+voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length);
 
 // Voxel coordinate fetching / system
 voxel_chunk_t **get_voxel_chunk(int32_t index);
@@ -334,7 +335,7 @@ internal_function vector3_t ws_to_xs(const vector3_t &ws_position)
 }
 
 
-internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length)
+int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length)
 {
     if (is_voxel_coord_within_chunk(ivector3_t(x, y, z), edge_length))
     {
@@ -344,6 +345,20 @@ internal_function int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_
     {
         return -1;
     }
+}
+
+voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length)
+{
+    uint8_t x = index % edge_length;
+    uint8_t y = ((index - x) % (edge_length * edge_length)) / (edge_length);
+    uint8_t z = (index - x) / (edge_length * edge_length);
+
+    return{x, y, z};
+}
+
+uint32_t get_chunk_grid_size(void)
+{
+    return(g_voxel_chunks->grid_edge_size);
 }
 
 
@@ -1153,7 +1168,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     {
         chunk->voxel_history = (uint8_t *)allocate_free_list(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
         chunk->modified_voxels_list_count = 0;
-        chunk->list_of_modified_voxels = (uint16_t)allocate_free_list(sizeof(uint16_t) * (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4);
+        chunk->list_of_modified_voxels = (uint16_t *)allocate_free_list(sizeof(uint16_t) * (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4);
     }
 }
 
@@ -1169,7 +1184,7 @@ void deinitialize_chunk(voxel_chunk_t *chunk)
     }
     if (chunk->list_of_modified_voxels)
     {
-        deallocate_free_list(chunk->chunk->list_of_modified_voxels);
+        deallocate_free_list(chunk->list_of_modified_voxels);
     }
 }
 
@@ -2568,7 +2583,7 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
             vector3_t collision_position = collision.es_at * bullet->size;
             // EXPLODE !!!
             spawn_explosion(collision_position);
-            terraform(ws_to_xs(collision_position), 2, 1, 1, 100.0f);
+            terraform_client(ws_to_xs(collision_position), 2, 1, 1, 100.0f);
 
             extinguish_fire(&bullet->burnable);
             destroy_bullet(index);
@@ -3504,17 +3519,26 @@ void clear_chunk_history_for_server(void)
 {
     for (uint32_t i = 0; i < g_voxel_chunks->modified_chunks_count; ++i)
     {
-        voxel_chunk_t *chunk = &g_voxel_chunks->modified_chunks[i];
+        voxel_chunk_t *chunk = g_voxel_chunks->modified_chunks[i];
 
         for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
         {
-            
+            uint16_t index = chunk->list_of_modified_voxels[voxel];
+            chunk->voxel_history[index] = VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY /*255 - not been modified*/;
         }
 
         chunk->modified_voxels_list_count = 0;
+        chunk->added_to_history = 0;
     }
     
     g_voxel_chunks->modified_chunks_count = 0;
+}
+
+
+voxel_chunk_t **get_modified_voxel_chunks(uint32_t *count)
+{
+    *count = g_voxel_chunks->modified_chunks_count;
+    return(g_voxel_chunks->modified_chunks);
 }
 
 

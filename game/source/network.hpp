@@ -231,9 +231,23 @@ struct game_snapshot_player_state_packet_t
     };
 };
 
+struct modified_voxel_t
+{
+    uint8_t previous_value, next_value;
+    uint16_t index;
+};
+
+struct modified_chunk_t
+{
+    uint16_t chunk_index;
+    modified_voxel_t *modified_voxels;
+    uint32_t modified_voxel_count;
+};
+
 struct game_snapshot_voxel_delta_packet_t
 {
-    
+    uint32_t modified_count;
+    modified_chunk_t *modified_chunks;
 };
 
 struct client_prediction_error_correction_t
@@ -401,4 +415,18 @@ constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeo
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_rotation) +
                                                                            sizeof(game_snapshot_player_state_packet_t::action_flags) +
                                                                            sizeof(game_snapshot_player_state_packet_t::flags)); }
-
+constexpr uint32_t sizeof_modified_voxel(void) { return(sizeof(modified_voxel_t::previous_value) +
+                                                        sizeof(modified_voxel_t::next_value) +
+                                                        sizeof(modified_voxel_t::index)); };
+inline uint32_t sizeof_modified_chunk(uint32_t modified_chunk_count) { return(sizeof(modified_chunk_t::chunk_index) +
+                                                                       sizeof(modified_chunk_t::modified_voxel_count) +
+                                                                       sizeof_modified_voxel() * modified_chunk_count); };
+inline uint32_t sizeof_game_snapshot_voxel_delta_packet(uint32_t modified_chunk_count, modified_chunk_t *chunks)
+{
+    uint32_t size = sizeof(game_snapshot_voxel_delta_packet_t::modified_count);
+    for (uint32_t chunk = 0; chunk < modified_chunk_count; ++chunk)
+    {
+        size += sizeof_modified_chunk(chunks[chunk].modified_voxel_count);
+    }
+    return(size);
+}

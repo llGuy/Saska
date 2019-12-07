@@ -125,5 +125,5 @@ application_type_t get_app_type(void)
 
 application_mode_t get_app_mode(void)
 {
-    return g_game_memory->app_mode;
+    return g_game_memory->network_state.current_app_mode;
 }

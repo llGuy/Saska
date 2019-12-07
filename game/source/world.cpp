@@ -1797,57 +1797,46 @@ internal_function void update_animation_component(animation_component_t *animati
     player_t::animated_state_t previous_state = player->animated_state;
     
     player_t::animated_state_t new_state;
-
-    if (player->network.is_remote)
+        
+    uint32_t moving = 0;
+        
+    if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
     {
-        new_state = (player_t::animated_state_t)player->previous_action_flags;
-
-        output_to_debug_console("new animated state: ", (int32_t)new_state, "\n");
+        if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
+        {
+            new_state = player_t::animated_state_t::RUN; moving = 1;
+        }
+        else
+        {
+            new_state = player_t::animated_state_t::WALK; moving = 1;
+        }
     }
-    else
+    if (player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
+    if (player->action_flags & (1 << action_flags_t::ACTION_DOWN));
+    if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
+        
+    if (!moving)
     {
-        uint32_t moving = 0;
-        
-        if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
-        {
-            if (player->action_flags & (1 << action_flags_t::ACTION_RUN))
-            {
-                new_state = player_t::animated_state_t::RUN; moving = 1;
-            }
-            else
-            {
-                new_state = player_t::animated_state_t::WALK; moving = 1;
-            }
-        }
-        if (player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
-        if (player->action_flags & (1 << action_flags_t::ACTION_DOWN));
-        if (player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
-        
-        if (!moving)
-        {
-            new_state = player_t::animated_state_t::IDLE;
-        }
+        new_state = player_t::animated_state_t::IDLE;
+    }
 
-        if (player->is_sitting)
-        {
-            new_state = player_t::animated_state_t::SITTING;
-        }
+    if (player->is_sitting)
+    {
+        new_state = player_t::animated_state_t::SITTING;
+    }
 
-        if (player->is_in_air)
-        {
-            new_state = player_t::animated_state_t::HOVER;
-        }
+    if (player->is_in_air)
+    {
+        new_state = player_t::animated_state_t::HOVER;
+    }
 
-        if (player->is_sliding_not_rolling_mode)
-        {
-            new_state = player_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
-        }
+    if (player->is_sliding_not_rolling_mode)
+    {
+        new_state = player_t::animated_state_t::SLIDING_NOT_ROLLING_MODE;
     }
 
     if (new_state != previous_state)
     {
-        output_to_debug_console("SWITCHED!: ", (int32_t)previous_state, " -> ", (int32_t)new_state, "\n");
-        
         player->animated_state = new_state;
         switch_to_cycle(&animation->animation_instance, new_state);
     }
@@ -2217,12 +2206,12 @@ internal_function float32_t update_network_component(network_component_t *networ
 
             if (true)
             {
-                player->previous_action_flags = previous_remote_snapshot->action_flags;
+                player->action_flags = previous_remote_snapshot->action_flags;
                 player->rolling_mode = previous_remote_snapshot->rolling_mode;
             }
             else
             {
-                player->previous_action_flags = next_remote_snapshot->action_flags;
+                player->action_flags = next_remote_snapshot->action_flags;
                 player->rolling_mode = next_remote_snapshot->rolling_mode;
             }
 
@@ -2544,7 +2533,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
             buffer_player_state(dt);
         }
 
-        player->action_flags = 0;
+        if (!player->network.is_remote) player->action_flags = 0;
     }
 
     for (uint32_t bullet_index = 0; bullet_index < g_entities->bullet_count; ++bullet_index)

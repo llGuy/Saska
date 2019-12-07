@@ -781,10 +781,12 @@ void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].ws_velocity = player->ws_v;
         player_snapshots[client_index].ws_up_vector = player->camera.ws_current_up_vector;
         player_snapshots[client_index].ws_rotation = player->ws_r;
-        player_snapshots[client_index].action_flags = (uint32_t)player->animated_state;
-        
+        player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
+
         player_snapshots[client_index].is_rolling = player->rolling_mode;
     }
+
+    output_to_debug_console("\n");
     
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
     {

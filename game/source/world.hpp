@@ -19,8 +19,14 @@ struct voxel_chunk_t
 {
     ivector3_t xs_bottom_corner;
     ivector3_t chunk_coord;
-    
+
+    // Make the maximum voxel value be 254 (255 will be reserved for *not* modified in the second section of the 2-byte voxel value)
     uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
+    
+    uint8_t *voxel_history = nullptr; // Array size will be VOXEL_CHUNK_EDGE_LENGTH ^ 3
+    uint32_t modified_voxels_list_count = 0;
+    static constexpr uint32_t MAX_MODIFIED_VOXELS = (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4
+    uint16_t *list_of_modified_voxels = nullptr;
 
     uint32_t vertex_count;
     vector3_t mesh_vertices[MAX_VERTICES_PER_VOXEL_CHUNK];
@@ -36,6 +42,8 @@ struct voxel_chunk_t
     } push_k;
 
     bool should_do_gpu_sync = 0;
+
+    bool added_to_history = 0;
 };
 
 void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
@@ -44,7 +52,6 @@ void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
 voxel_chunk_t **get_voxel_chunk(int32_t index);
 voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z);
-
 
 struct voxel_chunks_t
 {
@@ -72,6 +79,14 @@ struct voxel_chunks_t
 
     uint32_t to_sync_count = 0;
     uint32_t chunks_to_gpu_sync[20];
+
+
+
+    // For the server: in between every game snapshot dispatch, server queues up all terraforming actions.
+    // TODO: MAKE IT SO THAT THIS ONLY GETS ALLOCATED FOR THE SERVER!!!
+    static constexpr uint32_t MAX_MODIFIED_CHUNKS = 32;
+    uint32_t modified_chunks_count = 0;
+    voxel_chunk_t *modified_chunks[MAX_MODIFIED_CHUNKS] = {};
 };
 
 using player_handle_t = int32_t;
@@ -491,6 +506,7 @@ void update_networked_player(uint32_t player_index);
 void initialize_game_state_initialize_packet(struct game_state_initialize_packet_t *packet, player_handle_t new_client_handle);
 // Will create packet for each chunk
 struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);
+void clear_chunk_history_for_server(void);
 
 void clean_up_world_data(void);
 void make_world_data(void);

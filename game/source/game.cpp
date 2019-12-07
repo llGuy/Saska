@@ -122,3 +122,8 @@ application_type_t get_app_type(void)
 {
     return g_game_memory->app_type;
 }
+
+application_mode_t get_app_mode(void)
+{
+    return g_game_memory->app_mode;
+}

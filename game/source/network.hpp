@@ -231,6 +231,11 @@ struct game_snapshot_player_state_packet_t
     };
 };
 
+struct game_snapshot_voxel_delta_packet_t
+{
+    
+};
+
 struct client_prediction_error_correction_t
 {
     uint64_t tick;

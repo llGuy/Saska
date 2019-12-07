@@ -18,7 +18,8 @@
 #define MAX_ENTITIES_UNDER_PLANET 150
 
 constexpr float32_t PI = 3.14159265359f;
-constexpr float32_t MAX_VOXEL_VALUE = 255.0f;
+constexpr uint8_t VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY = 255;
+constexpr float32_t MAX_VOXEL_VALUE = 254.0f;
 
 // To initialize with initialize translation unit function
 global_var struct entities_t *g_entities;
@@ -31,7 +32,7 @@ enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLAT
 
 // Initialization
 internal_function void hard_initialize_chunks(void);
-void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord);
+void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord, bool allocate_history);
 void deinitialize_chunk(voxel_chunk_t *chunk);
 
 // Vector space operations
@@ -47,7 +48,11 @@ internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position);
 internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position);
 
 // Modifications
-internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+// Does not keep track of history
+internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+// Keeps track of history
+internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+
 internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
 internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
 internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius);
@@ -368,7 +373,17 @@ internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position)
 }
 
 
-internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+internal_function void append_chunk_to_history_of_modified_chunks_if_not_already(voxel_chunk_t *chunk)
+{
+    if (!chunk->added_to_history)
+    {
+        chunk->added_to_history = 1;
+        g_voxel_chunks->modified_chunks[g_voxel_chunks->modified_chunks_count++] = chunk;
+    }
+}
+
+
+internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
@@ -426,6 +441,7 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                         if (new_chunk)
                         {
                             chunk = new_chunk;
+
                             ready_chunk_for_gpu_sync(chunk);
                             cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
                         
@@ -446,6 +462,119 @@ internal_function void terraform(const ivector3_t &xs_voxel_coord, uint32_t voxe
                             else
                             {
                                 *voxel = (uint8_t)new_value;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ready_chunk_for_gpu_sync(chunk);
+}
+
+
+internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+{
+    ivector3_t voxel_coord = xs_voxel_coord;
+    voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
+    uint8_t ***history = (uint8_t ***)chunk->voxel_history;
+    ready_chunk_for_gpu_sync(chunk);
+    
+    float32_t coefficient = (destructive ? -1.0f : 1.0f);
+    
+    float_t radius = (float32_t)voxel_radius;
+    
+    float32_t radius_squared = radius * radius;
+    
+    ivector3_t bottom_corner = voxel_coord - ivector3_t((uint32_t)radius);
+
+    uint32_t diameter = (uint32_t)radius * 2 + 1;
+
+    append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
+    
+    for (uint32_t z = 0; z < diameter; ++z)
+    {
+        for (uint32_t y = 0; y < diameter; ++y)
+        {
+            for (uint32_t x = 0; x < diameter; ++x)
+            {
+                vector3_t v_f = vector3_t(x, y, z) + vector3_t(bottom_corner);
+                vector3_t diff = v_f - vector3_t(voxel_coord);
+                float32_t real_distance_squared = glm::dot(diff, diff);
+                if (real_distance_squared <= radius_squared)
+                {
+                    ivector3_t cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+
+                    if (is_voxel_coord_within_chunk(cs_vcoord))
+                    {
+                        uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
+
+                        float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                        
+                        int32_t current_voxel_value = (int32_t)*voxel;
+                        int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
+
+                        if (new_value > MAX_VOXEL_VALUE)
+                        {
+                            *voxel = MAX_VOXEL_VALUE;
+                        }
+                        else if (new_value < 0)
+                        {
+                            *voxel = 0;
+                        }
+                        else
+                        {
+                            *voxel = (uint8_t)new_value;
+                        }
+
+                        uint8_t previous_voxel_value = (uint8_t)current_voxel_value;
+                        
+                        if (history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
+                        {
+                            history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = previous_voxel_value;
+                            chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
+                        }
+                    }
+                    else
+                    {
+                        voxel_chunk_t *new_chunk = get_chunk_encompassing_point(ivector3_t(v_f));
+                        
+                        if (new_chunk)
+                        {
+                            chunk = new_chunk;
+                            history = (uint8_t ***)chunk->voxel_history;
+
+                            append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
+                            
+                            ready_chunk_for_gpu_sync(chunk);
+                            cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
+                        
+                            uint8_t *voxel = &chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z];
+
+                            float32_t proportion = 1.0f - (real_distance_squared / radius_squared);
+                            int32_t current_voxel_value = (int32_t)*voxel;
+                            int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
+
+                            if (new_value > MAX_VOXEL_VALUE)
+                            {
+                                *voxel = MAX_VOXEL_VALUE;
+                            }
+                            else if (new_value < 0)
+                            {
+                                *voxel = 0;
+                            }
+                            else
+                            {
+                                *voxel = (uint8_t)new_value;
+                            }
+
+                            uint8_t previous_voxel_value = (uint8_t)current_voxel_value;
+                        
+                            if (history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
+                            {
+                                history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = previous_voxel_value;
+                                chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
                             }
                         }
                     }
@@ -625,7 +754,15 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
 
             if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
             {
-                terraform(ivector3_t(current_ray_position), 2, destructive, dt, speed);
+                if (get_app_mode() == application_mode_t::SERVER_MODE)
+                {
+                    terraform_server(ivector3_t(current_ray_position), 2, destructive, dt, speed);
+                }
+                else
+                {
+                    terraform_client(ivector3_t(current_ray_position), 2, destructive, dt, speed);
+                }
+                
                 break;
             }
         }
@@ -989,7 +1126,7 @@ internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 }
 
 
-void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord)
+void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord, bool allocate_history)
 {
     chunk->should_do_gpu_sync = 0;
     
@@ -1011,6 +1148,13 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
     chunk->push_k.color = vector4_t(122.0 / 255.0, 177.0 / 255.0, 213.0 / 255.0, 1.0f);
+
+    if (allocate_history)
+    {
+        chunk->voxel_history = (uint8_t *)allocate_free_list(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+        chunk->modified_voxels_list_count = 0;
+        chunk->list_of_modified_voxels = (uint16_t)allocate_free_list(sizeof(uint16_t) * (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4);
+    }
 }
 
 
@@ -1018,6 +1162,15 @@ void deinitialize_chunk(voxel_chunk_t *chunk)
 {
     chunk->chunk_mesh_gpu_buffer.destroy();
     deallocate_free_list(chunk->gpu_mesh.raw_buffer_list.buffer);
+
+    if (chunk->voxel_history)
+    {
+        deallocate_free_list(chunk->voxel_history);
+    }
+    if (chunk->list_of_modified_voxels)
+    {
+        deallocate_free_list(chunk->chunk->list_of_modified_voxels);
+    }
 }
 
 
@@ -3152,7 +3305,7 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
                 voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
                 *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
     
-                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z));
+                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), false);
 
                 ++i;
             }    
@@ -3187,7 +3340,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
                 voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
                 *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
     
-                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z));
+                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), app_mode == application_mode_t::SERVER_MODE);
 
                 ++i;
             }    
@@ -3196,7 +3349,6 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
 
     construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
     construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
-    //    construct_sphere(vector3_t(-220.0f, 70.0f, -120.0f), 60.0f);
 }
 
 void deinitialize_world(void)
@@ -3345,6 +3497,24 @@ void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t 
         handle_world_input(input_state, dt);
         handle_input_debug(input_state, dt);
     }
+}
+
+
+void clear_chunk_history_for_server(void)
+{
+    for (uint32_t i = 0; i < g_voxel_chunks->modified_chunks_count; ++i)
+    {
+        voxel_chunk_t *chunk = &g_voxel_chunks->modified_chunks[i];
+
+        for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+        {
+            
+        }
+
+        chunk->modified_voxels_list_count = 0;
+    }
+    
+    g_voxel_chunks->modified_chunks_count = 0;
 }
 
 

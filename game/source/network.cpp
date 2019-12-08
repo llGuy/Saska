@@ -1,4 +1,4 @@
-// BUG: WHY DO OTHER PLAYERS ROTATE WEIRDLY WHEN CLIENT MOVES?!??????! WTF
+// TODO: Make sure that packet header's total packet size member matches the actual amount of bytes received by the socket
 
 #include <cassert>
 #include <winsock2.h>
@@ -537,6 +537,49 @@ void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, gam
 }
 
 
+void serialize_client_modified_voxels_packet(serializer_t *serializer, client_modified_voxels_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->modified_chunk_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
+    {
+        serialize_uint16(serializer, packet->modified_chunks[chunk].chunk_index);
+        serialize_uint32(serializer, packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].x);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].y);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].z);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].value);
+        }
+    }
+}
+
+
+void deserialize_client_modified_voxels_packet(serializer_t *serializer, client_modified_voxels_packet_t *packet)
+{
+    packet->modified_chunk_count = deserialize_uint32(serializer);
+
+    packet->modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * packet->modified_chunk_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
+    {
+        packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
+
+        packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
+        
+        packet->modified_chunks[chunk].modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            packet->modified_chunks[chunk].modified_voxels[voxel].x = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].y = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].z = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].value = deserialize_uint8(serializer);
+        }
+    }
+}
+
+
 void serialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet)
 {
     serialize_uint32(serializer, packet->modified_count);
@@ -566,6 +609,7 @@ void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game
         packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
 
         packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
+        
         packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
         for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
         {
@@ -1079,11 +1123,6 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                         player_state.flags_byte = input_packet.flags_byte;
                                         player_state.dt = input_packet.dt;
 
-                                        if (player_state.action_flags)
-                                        {
-                                            //                                            __debugbreak();
-                                        }
-
                                         player->network.player_states_cbuffer.push_item(&player_state);
 
                                         last_player_state = player_state;
@@ -1096,6 +1135,24 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                     client->previous_received_player_state.ws_direction = deserialize_vector3(&in_serializer);
 
                                     player->network.commands_to_flush += player_state_count;
+
+                                    client_modified_voxels_packet_t voxel_packet = {};
+                                    deserialize_client_modified_voxels_packet(&in_serializer, &voxel_packet);
+
+                                    client->modified_chunks_count = voxel_packet.modified_chunk_count;
+                                    for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+                                    {
+                                        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i];
+                                        chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
+                                        chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
+                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count; ++voxel)
+                                        {
+                                            chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
+                                            chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
+                                            chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
+                                            chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
+                                        }
+                                    }
                                 }
                             } break;
                         case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
@@ -1137,8 +1194,36 @@ internal_function void send_client_action_flags(void)
     
         header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
         header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
-    
-        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * g_network_state->player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 /* These two vectors are the outputs of the commands */;
+
+        
+        uint32_t modified_chunks_count = 0;
+        voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+
+        client_modified_voxels_packet_t voxel_packet = {};
+        voxel_packet.modified_chunk_count = modified_chunks_count;
+        voxel_packet.modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * modified_chunks_count);
+
+        for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
+        {
+            voxel_chunk_t *chunk = chunks[chunk_index];
+            client_modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
+
+            modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+            modified_chunk->modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * chunk->modified_voxels_list_count);
+            modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
+            for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+            {
+                uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
+                voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+                modified_chunk->modified_voxels[voxel].x = coord.x;
+                modified_chunk->modified_voxels[voxel].y = coord.y;
+                modified_chunk->modified_voxels[voxel].z = coord.z;
+                modified_chunk->modified_voxels[voxel].value = chunk->voxels[coord.x][coord.y][coord.z];
+            }
+        }
+        
+        
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * g_network_state->player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 + sizeof_modified_voxels_packet(modified_chunks_count, voxel_packet.modified_chunks);
         header.client_id = user->network.client_state_index;
         header.current_tick = *get_current_tick();
 
@@ -1167,6 +1252,8 @@ internal_function void send_client_action_flags(void)
         serialize_vector3(&serializer, to_store.ws_position);
         serialize_vector3(&serializer, to_store.ws_direction);
 
+        serialize_client_modified_voxels_packet(&serializer, &voxel_packet);
+        
         send_serialized_message(&serializer, g_network_state->server_address);
 
         if (to_store.action_flags)
@@ -1174,6 +1261,8 @@ internal_function void send_client_action_flags(void)
             g_network_state->sent_active_action_flags = 1;
         }
     }
+
+    clear_chunk_history_for_server();
 }
 
 
@@ -1323,6 +1412,13 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                 } break;
             case server_packet_type_t::SPT_GAME_STATE_SNAPSHOT:
                 {
+                    // TODO: Test this
+                    game_snapshot_voxel_delta_packet_t voxel_delta_packet = {};
+                    deserialize_game_snapshot_voxel_delta_packet(&in_serializer, &voxel_delta_packet);
+
+                    // Put this in the history
+                    
+                    
                     uint64_t previous_tick = deserialize_uint64(&in_serializer);
 
                     for (uint32_t i = 0; i < g_network_state->client_count; ++i)

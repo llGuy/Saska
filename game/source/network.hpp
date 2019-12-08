@@ -193,6 +193,32 @@ struct client_input_state_packet_t
     float32_t dt;
 };
 
+// This will be received from the action flag packets (player state / command / update packets)
+struct local_client_modified_voxel_t
+{
+    uint8_t x, y, z, value;
+};
+
+struct client_modified_chunk_t
+{
+    uint16_t chunk_index;
+    uint32_t modified_voxel_count;
+    local_client_modified_voxel_t *modified_voxels;
+};
+
+struct client_modified_voxels_packet_t
+{
+    uint32_t modified_chunk_count = 0;
+    client_modified_chunk_t *modified_chunks;
+};
+
+struct client_modified_chunk_nl_t
+{
+    uint16_t chunk_index;
+    local_client_modified_voxel_t modified_voxels[40]; // max 40
+    uint32_t modified_voxel_count;
+};
+
 struct game_state_acknowledge_packet_t
 {
     uint64_t game_state_tick;
@@ -301,6 +327,10 @@ struct client_t
     // Tick id of the previously received client input packet
     uint64_t previous_client_tick;
     player_state_t previous_received_player_state;
+    
+    // Client will most likely only ever be able to terraform 4 chunks per action flag packet
+    uint32_t modified_chunks_count = 0;
+    client_modified_chunk_nl_t previous_received_voxel_modifications[5];
 
     bool received_input_commands = 0;
 
@@ -424,6 +454,24 @@ inline uint32_t sizeof_modified_chunk(uint32_t modified_chunk_count) { return(si
 inline uint32_t sizeof_game_snapshot_voxel_delta_packet(uint32_t modified_chunk_count, modified_chunk_t *chunks)
 {
     uint32_t size = sizeof(game_snapshot_voxel_delta_packet_t::modified_count);
+    for (uint32_t chunk = 0; chunk < modified_chunk_count; ++chunk)
+    {
+        size += sizeof_modified_chunk(chunks[chunk].modified_voxel_count);
+    }
+    return(size);
+}
+
+
+constexpr uint32_t sizeof_local_client_modified_voxel(void) { return(sizeof(local_client_modified_voxel_t::x) +
+                                                                     sizeof(local_client_modified_voxel_t::y) +
+                                                                     sizeof(local_client_modified_voxel_t::z) +
+                                                                     sizeof(local_client_modified_voxel_t::value)); };
+inline uint32_t sizeof_client_modified_chunk(uint32_t modified_chunk_count) { return(sizeof(client_modified_chunk_t::chunk_index) +
+                                                                                     sizeof(client_modified_chunk_t::modified_voxel_count) +
+                                                                                     sizeof_modified_voxel() * modified_chunk_count); };
+inline uint32_t sizeof_modified_voxels_packet(uint32_t modified_chunk_count, client_modified_chunk_t *chunks)
+{
+    uint32_t size = sizeof(client_modified_voxels_packet_t::modified_chunk_count);
     for (uint32_t chunk = 0; chunk < modified_chunk_count; ++chunk)
     {
         size += sizeof_modified_chunk(chunks[chunk].modified_voxel_count);

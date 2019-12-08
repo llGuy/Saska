@@ -52,7 +52,7 @@ internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position);
 // Does not keep track of history
 internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
 // Keeps track of history
-internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+internal_function void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
 
 internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
 internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
@@ -196,6 +196,7 @@ void update_network_world_state(void);
 void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t image_index);
 void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
+void update_chunks_from_network(float32_t dt, application_type_t app_type);
 void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
@@ -489,11 +490,11 @@ internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32
 }
 
 
-internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+internal_function void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
-    uint8_t ***history = (uint8_t ***)chunk->voxel_history;
+    uint8_t *history = chunk->voxel_history;
     ready_chunk_for_gpu_sync(chunk);
     
     float32_t coefficient = (destructive ? -1.0f : 1.0f);
@@ -544,11 +545,14 @@ internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32
                         }
 
                         uint8_t previous_voxel_value = (uint8_t)current_voxel_value;
+
+                        int32_t index = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
+                        voxel_coordinate_t coord = convert_1d_to_3d_coord(index, VOXEL_CHUNK_EDGE_LENGTH);
                         
-                        if (history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
+                        if (history[index] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
                         {
-                            history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = previous_voxel_value;
-                            chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
+                            history[index] = previous_voxel_value;
+                            chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = index;
                         }
                     }
                     else
@@ -558,7 +562,7 @@ internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32
                         if (new_chunk)
                         {
                             chunk = new_chunk;
-                            history = (uint8_t ***)chunk->voxel_history;
+                            history = (uint8_t *)chunk->voxel_history;
 
                             append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
                             
@@ -585,11 +589,13 @@ internal_function void terraform_server(const ivector3_t &xs_voxel_coord, uint32
                             }
 
                             uint8_t previous_voxel_value = (uint8_t)current_voxel_value;
+
+                            int32_t index = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
                         
-                            if (history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
+                            if (history[index] == VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY)
                             {
-                                history[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = previous_voxel_value;
-                                chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = convert_3d_to_1d_index((uint32_t)cs_vcoord.x, (uint32_t)cs_vcoord.y, (uint32_t)cs_vcoord.z, VOXEL_CHUNK_EDGE_LENGTH);
+                                history[index] = previous_voxel_value;
+                                chunk->list_of_modified_voxels[chunk->modified_voxels_list_count++] = index;
                             }
                         }
                     }
@@ -769,14 +775,7 @@ internal_function void ray_cast_terraform(const vector3_t &ws_position, const ve
 
             if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
             {
-                if (get_app_mode() == application_mode_t::SERVER_MODE)
-                {
-                    terraform_server(ivector3_t(current_ray_position), 2, destructive, dt, speed);
-                }
-                else
-                {
-                    terraform_client(ivector3_t(current_ray_position), 2, destructive, dt, speed);
-                }
+                terraform_with_history(ivector3_t(current_ray_position), 2, destructive, dt, speed);
                 
                 break;
             }
@@ -1167,6 +1166,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
     if (allocate_history)
     {
         chunk->voxel_history = (uint8_t *)allocate_free_list(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+        memset(chunk->voxel_history, 255, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
         chunk->modified_voxels_list_count = 0;
         chunk->list_of_modified_voxels = (uint16_t *)allocate_free_list(sizeof(uint16_t) * (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4);
     }
@@ -1184,6 +1184,7 @@ void deinitialize_chunk(voxel_chunk_t *chunk)
     }
     if (chunk->list_of_modified_voxels)
     {
+        chunk->modified_voxels_list_count = 0;
         deallocate_free_list(chunk->list_of_modified_voxels);
     }
 }
@@ -3320,7 +3321,7 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
                 voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
                 *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
     
-                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), false);
+                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), true);
 
                 ++i;
             }    
@@ -3355,7 +3356,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
                 voxel_chunk_t **chunk_ptr = get_voxel_chunk((int32_t)i);
                 *chunk_ptr = (voxel_chunk_t *)allocate_free_list(sizeof(voxel_chunk_t));
     
-                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), app_mode == application_mode_t::SERVER_MODE);
+                initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), true);
 
                 ++i;
             }    
@@ -3550,6 +3551,8 @@ void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, 
         {
             handle_all_input(input_state, dt, focus);
 
+            //update_chunks_from_network(dt, app_type);
+            
             clear_chunk_render_queue();
             {
                 update_entities(dt, app_type);

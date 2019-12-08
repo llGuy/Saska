@@ -11,6 +11,13 @@
 #define FORCEINLINE __forceinline
 #endif
 
+#ifdef _MSC_VER
+#  define PACKED_STRUCT(name) \
+    __pragma(pack(push, 1)) struct name __pragma(pack(pop))
+#elif defined(__GNUC__)
+#  define PACKED_STRUCT(name) struct __attribute__((packed)) name
+#endif
+
 #define persist_var static
 #define internal_function static
 #define global_var static

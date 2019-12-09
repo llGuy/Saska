@@ -598,11 +598,11 @@ void serialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_s
 }
 
 
-void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet)
+void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet, linear_allocator_t *allocator = nullptr)
 {
     packet->modified_count = deserialize_uint32(serializer);
 
-    packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count);
+    packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count, 1, "", allocator);
 
     for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
     {
@@ -610,7 +610,7 @@ void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game
 
         packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
         
-        packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
+        packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count, 1, "", allocator);
         for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
         {
             packet->modified_chunks[chunk].modified_voxels[voxel].previous_value = deserialize_uint8(serializer);
@@ -900,6 +900,7 @@ void dispatch_snapshot_to_clients(void)
                           sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
                           sizeof_game_snapshot_player_state_packet() * g_network_state->client_count);
 
+    // TODO: FIX THIS IS NOT THE ACTUAL PACKET SIZE: IT VARIES DEPENDING ON THE CLIENT
     header.total_packet_size = sizeof_packet_header() +
         sizeof(uint64_t) +
         sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
@@ -909,6 +910,7 @@ void dispatch_snapshot_to_clients(void)
 
 
 
+    // These are the actual current voxel values
     serialize_game_snapshot_voxel_delta_packet(&out_serializer, &voxel_packet);
 
 
@@ -931,6 +933,22 @@ void dispatch_snapshot_to_clients(void)
 
             uint64_t previous_received_tick = client->previous_client_tick;
             serialize_uint64(&out_serializer, previous_received_tick);
+
+            // Now need to serialize the chunks / voxels that the client has modified, so that the client can remember which voxels it modified so that it does not do interpolation for the "correct" voxels that it just calculated
+            serialize_uint32(&out_serializer, client->modified_chunks_count);
+
+            for (uint32_t chunk = 0; chunk < client->modified_chunks_count; ++chunk)
+            {
+                serialize_uint16(&out_serializer, client->previous_received_voxel_modifications[chunk].chunk_index);
+                serialize_uint32(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxel_count);
+                for (uint32_t voxel = 0; voxel < client->previous_received_voxel_modifications[chunk].modified_voxel_count; ++voxel)
+                {
+                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
+                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
+                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
+                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].value);
+                }
+            }
             
             for (uint32_t i = 0; i < g_network_state->client_count; ++i)
             {
@@ -976,7 +994,10 @@ void dispatch_snapshot_to_clients(void)
                                 uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel->x][voxel->y][voxel->z];
                                 if (actual_voxel_value != voxel->value)
                                 {
+                                    // TODO: TEST THIS: Does the client only correct the voxels that it calculated wrong? or all the voxels? (like a sync?)
                                     force_client_to_do_voxel_correction = 1;
+                                    client->needs_to_do_voxel_correction = 1;
+                                    client->needs_to_acknowledge_prediction_error = 1;
                                     break;
                                 }
                             }
@@ -1005,7 +1026,7 @@ void dispatch_snapshot_to_clients(void)
             }
         
             send_serialized_message(&out_serializer, client->network_address);
-        }
+       }
     }
 
     clear_chunk_history_for_server();
@@ -1212,6 +1233,15 @@ void update_as_server(input_state_t *input_state, float32_t dt)
     }
 }
 
+
+client_modified_chunk_nl_t *previous_client_modified_chunks(uint32_t *count)
+{
+    player_t *user = get_user_player();
+    client_t *client = get_client(user->network.client_state_index);
+    *count = client->modified_chunks_count;
+    return(client->previous_received_voxel_modifications);
+}
+
  
 internal_function void send_client_action_flags(void)
 {
@@ -1405,7 +1435,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                     // Existing players when client joined the game
                     for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
                     { 
-                       player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
+                        player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
                         player_t *player = get_player(player_packet->player_name);
 
                         client_t *client = get_client(player_packet->client_id);
@@ -1441,15 +1471,16 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                 } break;
             case server_packet_type_t::SPT_GAME_STATE_SNAPSHOT:
                 {
-                    // TODO: Test this
-                    game_snapshot_voxel_delta_packet_t voxel_delta_packet = {};
-                    deserialize_game_snapshot_voxel_delta_packet(&in_serializer, &voxel_delta_packet);
+                    linear_allocator_t *voxel_allocator = get_voxel_linear_allocator();
+                    reset_voxel_interpolation();
+                    deserialize_game_snapshot_voxel_delta_packet(&in_serializer, get_previous_voxel_delta_packet(), voxel_allocator);
 
                     // Put this in the history
-                    
-                    
                     uint64_t previous_tick = deserialize_uint64(&in_serializer);
 
+                    client_modified_voxels_packet_t modified_voxels = {};
+                    deserialize_client_modified_voxels_packet(&in_serializer, &modified_voxels);
+                    
                     for (uint32_t i = 0; i < g_network_state->client_count; ++i)
                     {
                         // This is the player state to compare with what the server sent
@@ -1467,13 +1498,36 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                             if (player_snapshot_packet.need_to_do_correction)
                             {                                        
                                 // Do correction here
+                                // TODO: THIS NEEDS TO HAPPEN IN UPDATE_NETWORK_COMPONENT() WHEN THE VOXEL CORRECTIONS HAPPEN
                                 player_t *player = get_user_player();
                                 player->ws_p = player_snapshot_packet.ws_position;
                                 player->ws_d = player_snapshot_packet.ws_direction;
                                 player->ws_v = player_snapshot_packet.ws_velocity;
+                            }
 
+                            if (player_snapshot_packet.need_to_do_correction || player_snapshot_packet.need_to_do_voxel_correction)
+                            {
                                 // Send a prediction error correction packet
                                 send_prediction_error_correction(previous_tick);
+
+                                // The correction of the voxels will happen later (deffered, but it will happen)
+                            }
+
+                            // Copy voxel data to client_t struct
+                            // Voxel correction gets deferred to update_chunks_from_network if the flag need to do voxel correction is 1
+                            client->modified_chunks_count = modified_voxels.modified_chunk_count;
+                            for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+                            {
+                                client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i];
+                                chunk->chunk_index = modified_voxels.modified_chunks[i].chunk_index;
+                                chunk->modified_voxel_count = modified_voxels.modified_chunks[i].modified_voxel_count;
+                                for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count; ++voxel)
+                                {
+                                    chunk->modified_voxels[voxel].x = modified_voxels.modified_chunks[i].modified_voxels[voxel].x;
+                                    chunk->modified_voxels[voxel].y = modified_voxels.modified_chunks[i].modified_voxels[voxel].y;
+                                    chunk->modified_voxels[voxel].z = modified_voxels.modified_chunks[i].modified_voxels[voxel].z;
+                                    chunk->modified_voxels[voxel].value = modified_voxels.modified_chunks[i].modified_voxels[voxel].value;
+                                }
                             }
                         }
                         // We are dealing with a remote client: we need to deal with entity interpolation stuff

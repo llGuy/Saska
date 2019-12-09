@@ -45,6 +45,17 @@ struct voxel_chunk_t
     bool should_do_gpu_sync = 0;
 
     bool added_to_history = 0;
+
+    union
+    {
+        // Flags and stuff
+        uint32_t flags;
+        struct
+        {
+            uint32_t was_previously_modified_by_client: 1;
+            uint32_t index_of_modified_chunk: 31;
+        };
+    };
 };
 
 void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
@@ -56,6 +67,8 @@ voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z);
 
 struct voxel_chunks_t
 {
+    uint8_t dummy_voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
+    
     // How many chunks on the x, y and z axis
     uint32_t grid_edge_size;
     float32_t size;
@@ -88,7 +101,18 @@ struct voxel_chunks_t
     static constexpr uint32_t MAX_MODIFIED_CHUNKS = 32;
     uint32_t modified_chunks_count = 0;
     voxel_chunk_t *modified_chunks[MAX_MODIFIED_CHUNKS] = {};
+    float32_t elapsed_interpolation_time = 0.0f;
+
+
+
+    // This is used for interpolating between snapshots (maximum size is 5000 bytes)
+    linear_allocator_t voxel_linear_allocator = {};
+    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet = nullptr;
 };
+
+void reset_voxel_interpolation(void);
+linear_allocator_t *get_voxel_linear_allocator(void);
+game_snapshot_voxel_delta_packet_t *&get_previous_voxel_delta_packet(void);
 
 using player_handle_t = int32_t;
 

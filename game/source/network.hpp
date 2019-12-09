@@ -339,7 +339,12 @@ struct client_t
 
     // Server will not take in input commands from client if this flag does not get set to false (gets set to false when server receives error correction packet)
     bool needs_to_acknowledge_prediction_error = 0;
+    bool needs_to_do_voxel_correction = 0;
+    bool did_voxel_correction = 0;
 };
+
+// Function that the client application is going to use when it comes to interpolating between voxel values
+client_modified_chunk_nl_t *previous_client_modified_chunks(uint32_t *count);
 
 #define MAX_CLIENTS 40
 

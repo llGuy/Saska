@@ -250,6 +250,7 @@ struct game_snapshot_player_state_packet_t
         struct
         {
             uint8_t need_to_do_correction: 1;
+            uint8_t need_to_do_voxel_correction: 1;
             uint8_t is_to_ignore: 1;
             uint8_t is_rolling: 1;
         };

@@ -964,6 +964,35 @@ void dispatch_snapshot_to_clients(void)
                             player_snapshot_packet->need_to_do_correction = 0;
                         }
 
+                        // Next, check if the submitted voxels that the client calculated are correct or not. If they are not, force voxel correction on the client
+                        bool force_client_to_do_voxel_correction = 0;
+                        for (uint32_t client_modified_chunk = 0; client_modified_chunk < client->modified_chunks_count; ++client_modified_chunk)
+                        {
+                            client_modified_chunk_nl_t *modified_chunk_data = &client->previous_received_voxel_modifications[client_modified_chunk];
+                            voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                            for (uint32_t modified_voxel = 0; modified_voxel < modified_chunk_data->modified_voxel_count; ++modified_voxel)
+                            {
+                                local_client_modified_voxel_t *voxel = &modified_chunk_data->modified_voxels[modified_voxel];
+                                uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel->x][voxel->y][voxel->z];
+                                if (actual_voxel_value != voxel->value)
+                                {
+                                    force_client_to_do_voxel_correction = 1;
+                                    break;
+                                }
+                            }
+
+                            if (force_client_to_do_voxel_correction)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (force_client_to_do_voxel_correction)
+                        {
+                            player_snapshot_packet->need_to_do_voxel_correction = 1;
+                            client->needs_to_acknowledge_prediction_error = 1;
+                        }
+                        
                         player_snapshot_packet->is_to_ignore = 0;
                     }
                     else

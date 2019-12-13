@@ -1600,6 +1600,10 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                 float32_t sphere_point_plane_distance = glm::dot(es_center - es_up_normal_of_triangle, es_up_normal_of_triangle) + plane_constant;
                 if (sphere_point_plane_distance < 0.0f && !closest->under_terrain)
                 {
+                    if (sphere_point_plane_distance > -0.00001f)
+                    {
+                        sphere_point_plane_distance = -0.0001f;
+                    }
                     // Adjust the sphere position, and call the function
                     vector3_t es_new_sphere_position = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
 
@@ -2329,7 +2333,6 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         }
         else
         {
-            output_to_debug_console("is under terrain\n");
             player->ws_p = collision.es_at * player->size;
         }
     }

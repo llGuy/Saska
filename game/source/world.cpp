@@ -100,6 +100,7 @@ struct collision_t
     // Detected a collision but now "slid" into the air
     uint8_t is_currently_in_air: 1;
     uint8_t under_terrain: 1;
+    float32_t es_distance_from_triangle;
 
     vector3_t es_velocity;
     vector3_t es_contact_point;
@@ -1605,6 +1606,7 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                     closest->under_terrain = 1;
                     closest->es_at = es_new_sphere_position;
                     closest->es_normal = es_up_normal_of_triangle;
+                    closest->es_distance_from_triangle = sphere_point_plane_distance;
                     
                     return;
                 }
@@ -2199,6 +2201,11 @@ internal_function void update_standing_player_physics(physics_component_t *compo
         player->ws_up = ws_normal;
         
         component->state = entity_physics_state_t::ON_GROUND;
+
+        if (collision.under_terrain)
+        {
+            player->ws_p = collision.es_at * player->size;
+        }
     }
     else
     {
@@ -2319,6 +2326,11 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             }
             
             player->current_rotation_speed = ((velocity_length) / calculate_sphere_circumference(player->size.x)) * 360.0f;
+        }
+        else
+        {
+            output_to_debug_console("is under terrain\n");
+            player->ws_p = collision.es_at * player->size;
         }
     }
     else
@@ -2721,14 +2733,14 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                 update_network_component(&player->network, player, dt);
             }
             
-            switch (app_type)
+            /*switch (app_type)
             {
             case application_type_t::WINDOW_APPLICATION_MODE:
-                {
+            {*/
                     update_rendering_component(&player->rendering, player, dt);
                     update_animation_component(&player->animation, player, dt);
-                } break;
-            }
+                    //} break;
+                    //}
         }
 
         if (player_index == g_entities->main_player)

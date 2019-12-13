@@ -874,13 +874,6 @@ void dispatch_snapshot_to_clients(void)
             voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
             modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
             modified_chunk->modified_voxels[voxel].index = voxel_index;
-
-
-            if (modified_chunk->modified_voxels[voxel].previous_value > modified_chunk->modified_voxels[voxel].next_value)
-            {
-                // There is a real problem here
-                __debugbreak();
-            }
         }
     }
     

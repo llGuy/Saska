@@ -182,6 +182,17 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
     client_rect.bottom = bottom_right.y;
 
     ClipCursor(&client_rect);
+
+    POINT top_left_corner = {};
+    ClientToScreen(g_window, &top_left_corner);
+    top_left_corner.x += client_rect.right / 2;
+    top_left_corner.y += client_rect.bottom / 2;
+    SetCursorPos(top_left_corner.x, top_left_corner.y);
+
+    ScreenToClient(g_window, &top_left_corner);
+    
+    true_prev_x = top_left_corner.x;
+    true_prev_y = top_left_corner.y;
 }
 
 enum key_action_t { KEY_ACTION_DOWN, KEY_ACTION_UP };
@@ -509,8 +520,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     
         SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
         ShowWindow(g_window, showcmd);
-        // TODO: ReleaseCapture(void) when alt tab / alt f4
-        //SetCapture(g_window);
+        
         disable_cursor_display();
     }
 

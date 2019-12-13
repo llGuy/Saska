@@ -198,6 +198,7 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
 void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
 void update_chunks_from_network(float32_t dt);
+internal_function void ready_chunks_for_voxel_interpolation_reset(void);
 void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
@@ -1217,6 +1218,9 @@ linear_allocator_t *get_voxel_linear_allocator(void)
 
 void reset_voxel_interpolation(void)
 {
+    // Run interpolating one more time, except this time, force set all the "next values"
+    ready_chunks_for_voxel_interpolation_reset();
+    
     clear_linear(&g_voxel_chunks->voxel_linear_allocator_front);
     if (get_previous_voxel_delta_packet())
     {
@@ -3620,6 +3624,79 @@ static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk)
     {
         local_client_modified_voxel_t *voxel = &chunk->modified_voxels[modified_voxel];
         g_voxel_chunks->dummy_voxels[voxel->x][voxel->y][voxel->z] = 255;
+    }
+}
+
+
+
+internal_function void ready_chunks_for_voxel_interpolation_reset(void)
+{
+    if (g_voxel_chunks->previous_voxel_delta_packet_front)
+    {
+        player_t *user = get_user_player();
+        client_t *user_client = get_client(user->network.client_state_index);
+
+        // Flag chunks that have been modified by the client
+        flag_chunks_previously_modified_by_client(user_client);
+        {
+            game_snapshot_voxel_delta_packet_t *voxel_delta = get_previous_voxel_delta_packet();
+        
+            // Loop through the chunks seen as modified by the server (will probably also be chunks modified by other clients)
+            for (uint32_t modified_chunk_index = 0; modified_chunk_index < voxel_delta->modified_count; ++modified_chunk_index)
+            {
+                voxel_chunk_t *modified_chunk_ptr = *get_voxel_chunk(voxel_delta->modified_chunks[modified_chunk_index].chunk_index);
+            
+                // Check if chunk was modified previously by this client (by checking the flags we just modified - or not modified)
+                if (modified_chunk_ptr->was_previously_modified_by_client)
+                {
+                    // If was modified, fill dummy voxels with the modified voxels of the client
+                    client_modified_chunk_nl_t *local_chunk_modifications = &user_client->previous_received_voxel_modifications[modified_chunk_ptr->index_of_modified_chunk /* Was filled in by flag_chunks_modified_by_client() */];
+                
+                    // Fill dummy voxels (temporarily)
+                    fill_dummy_voxels(local_chunk_modifications);
+                    {
+                        for (uint32_t sm_voxel = 0; sm_voxel < voxel_delta->modified_chunks[modified_chunk_index].modified_voxel_count; ++sm_voxel)
+                        {
+                            modified_voxel_t *sm_voxel_ptr = &voxel_delta->modified_chunks[modified_chunk_index].modified_voxels[sm_voxel];
+
+                            voxel_coordinate_t coord = convert_1d_to_3d_coord(sm_voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
+                            if (g_voxel_chunks->dummy_voxels[coord.x][coord.y][coord.z] != 255)
+                            {
+                                // Voxel has been modified
+                                if (user_client->needs_to_do_voxel_correction)
+                                {
+                                    if (g_voxel_chunks->dummy_voxels[coord.x][coord.y][coord.z] != sm_voxel_ptr->next_value)
+                                    {
+                                        // DO CORRECTION
+                                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = sm_voxel_ptr->next_value;
+                                    
+                                        // Set appropriate flags
+                                        user_client->needs_to_do_voxel_correction = 0;
+                                        user_client->did_voxel_correction = 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Unfill dummy voxels
+                    unfill_dummy_voxels(local_chunk_modifications);
+                }
+                else
+                {
+                    // Just interpolate voxel values (simple)
+                    for (uint32_t sm_voxel = 0; sm_voxel < voxel_delta->modified_chunks[modified_chunk_index].modified_voxel_count; ++sm_voxel)
+                    {
+                        modified_voxel_t *voxel_ptr = &voxel_delta->modified_chunks[modified_chunk_index].modified_voxels[sm_voxel];
+                        voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
+                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
+                    }
+                }
+
+                ready_chunk_for_gpu_sync(modified_chunk_ptr);
+            }
+        }
+        // Unflag chunks that have been modified by the client
+        unflag_chunks_previously_modified_by_client(user_client);
     }
 }
 

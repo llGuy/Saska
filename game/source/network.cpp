@@ -871,8 +871,16 @@ void dispatch_snapshot_to_clients(void)
         {
             uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
             modified_chunk->modified_voxels[voxel].previous_value = chunk->voxel_history[voxel_index];
-            modified_chunk->modified_voxels[voxel].next_value = ((uint8_t *)(chunk->voxels))[voxel_index];
+            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+            modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
             modified_chunk->modified_voxels[voxel].index = voxel_index;
+
+
+            if (modified_chunk->modified_voxels[voxel].previous_value > modified_chunk->modified_voxels[voxel].next_value)
+            {
+                // There is a real problem here
+                __debugbreak();
+            }
         }
     }
     

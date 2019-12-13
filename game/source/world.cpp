@@ -76,6 +76,7 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
 // Math
 internal_function float32_t lerp(float32_t a, float32_t b, float32_t x);
 internal_function vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x);
+internal_function float32_t interpolate(float32_t a, float32_t b, float32_t x);
 internal_function float32_t squared(float32_t f);
 internal_function float32_t distance_squared(const vector3_t &dir);
 internal_function float32_t calculate_sphere_circumference(float32_t radius);
@@ -805,6 +806,11 @@ internal_function inline vector3_t interpolate(const vector3_t &a, const vector3
     return(a + x * (b - a));
 }
 
+internal_function float32_t interpolate(float32_t a, float32_t b, float32_t x)
+{
+    return(a + x * (b - a));
+}
+
 
 internal_function void clear_chunk_render_queue(void)
 {
@@ -1212,7 +1218,10 @@ linear_allocator_t *get_voxel_linear_allocator(void)
 void reset_voxel_interpolation(void)
 {
     clear_linear(&g_voxel_chunks->voxel_linear_allocator);
-    get_previous_voxel_delta_packet()->modified_count = 0;
+    if (get_previous_voxel_delta_packet())
+    {
+        get_previous_voxel_delta_packet()->modified_count = 0;
+    }
 
     g_voxel_chunks->elapsed_interpolation_time = 0.0f;
 }
@@ -3677,7 +3686,7 @@ void update_chunks_from_network(float32_t dt)
                     for (uint32_t sm_voxel = 0; sm_voxel < voxel_delta->modified_chunks[modified_chunk_index].modified_voxel_count; ++sm_voxel)
                     {
                         modified_voxel_t *voxel_ptr = &voxel_delta->modified_chunks[modified_chunk_index].modified_voxels[sm_voxel];
-                        float32_t interpolated_value_f = lerp((float32_t)voxel_ptr->previous_value, (float32_t)voxel_ptr->next_value, progression);
+                        float32_t interpolated_value_f = interpolate((float32_t)voxel_ptr->previous_value, (float32_t)voxel_ptr->next_value, progression);
                         uint8_t interpolated_value = (uint8_t)interpolated_value_f;
                         voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
                         modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = interpolated_value;
@@ -3692,7 +3701,7 @@ void update_chunks_from_network(float32_t dt)
     }
     else
     {
-        g_voxel_chunks->previous_voxel_delta_packet = nullptr;
+        //g_voxel_chunks->previous_voxel_delta_packet = nullptr;
     };
 }
 

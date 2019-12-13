@@ -1211,13 +1211,13 @@ voxel_chunk_t **get_voxel_chunk(int32_t index)
 
 linear_allocator_t *get_voxel_linear_allocator(void)
 {
-    return(&g_voxel_chunks->voxel_linear_allocator);
+    return(&g_voxel_chunks->voxel_linear_allocator_front);
 }
 
 
 void reset_voxel_interpolation(void)
 {
-    clear_linear(&g_voxel_chunks->voxel_linear_allocator);
+    clear_linear(&g_voxel_chunks->voxel_linear_allocator_front);
     if (get_previous_voxel_delta_packet())
     {
         get_previous_voxel_delta_packet()->modified_count = 0;
@@ -1229,7 +1229,7 @@ void reset_voxel_interpolation(void)
 
 game_snapshot_voxel_delta_packet_t *&get_previous_voxel_delta_packet(void)
 {
-    return(g_voxel_chunks->previous_voxel_delta_packet);
+    return(g_voxel_chunks->previous_voxel_delta_packet_front);
 }
 
 
@@ -3321,11 +3321,11 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
     // For server mode
     update_spectator_camera(glm::lookAt(vector3_t(-140.0f, 140.0f, -140.0f), glm::normalize(vector3_t(1.0f, -1.0f, 1.0f)) + vector3_t(-140.0f, 140.0f, -140.0f), vector3_t(0.0f, 1.0f, 0.0f)));
 
-    g_voxel_chunks->voxel_linear_allocator.current = g_voxel_chunks->voxel_linear_allocator.start = allocate_free_list(sizeof(uint8_t) * 5000);
-    g_voxel_chunks->voxel_linear_allocator.capacity = sizeof(uint8_t) * 5000;
+    g_voxel_chunks->voxel_linear_allocator_front.current = g_voxel_chunks->voxel_linear_allocator_front.start = allocate_free_list(sizeof(uint8_t) * 5000);
+    g_voxel_chunks->voxel_linear_allocator_front.capacity = sizeof(uint8_t) * 5000;
 
     memset(g_voxel_chunks->dummy_voxels, 255, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
-    g_voxel_chunks->previous_voxel_delta_packet = (game_snapshot_voxel_delta_packet_t *)allocate_free_list(sizeof(game_snapshot_voxel_delta_packet_t));
+    g_voxel_chunks->previous_voxel_delta_packet_front = (game_snapshot_voxel_delta_packet_t *)allocate_free_list(sizeof(game_snapshot_voxel_delta_packet_t));
 }
 
 
@@ -3399,8 +3399,10 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
-    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
+    //construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
+    //construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
+
+    construct_plane(vector3_t(0.0f), 100.0f);
 }
 
 void deinitialize_world(void)
@@ -3627,7 +3629,7 @@ void update_chunks_from_network(float32_t dt)
     // This is the maximum interpolation time
     float32_t server_snapshot_rate = get_snapshot_server_rate();
 
-    if (g_voxel_chunks->elapsed_interpolation_time < server_snapshot_rate - dt && g_voxel_chunks->previous_voxel_delta_packet)
+    if (g_voxel_chunks->elapsed_interpolation_time < server_snapshot_rate - dt && g_voxel_chunks->previous_voxel_delta_packet_front)
     {
         g_voxel_chunks->elapsed_interpolation_time += dt;
         float32_t progression = g_voxel_chunks->elapsed_interpolation_time / server_snapshot_rate;

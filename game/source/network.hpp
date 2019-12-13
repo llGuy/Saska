@@ -215,7 +215,8 @@ struct client_modified_voxels_packet_t
 struct client_modified_chunk_nl_t
 {
     uint16_t chunk_index;
-    local_client_modified_voxel_t modified_voxels[40]; // max 40
+    // TODO: Find way to vary this: maybe have its own linear allocator or something
+    local_client_modified_voxel_t modified_voxels[80]; // max 40
     uint32_t modified_voxel_count;
 };
 

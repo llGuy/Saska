@@ -1195,7 +1195,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                         client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i];
                                         chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
                                         chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
-                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count; ++voxel)
+                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
                                         {
                                             chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
                                             chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;

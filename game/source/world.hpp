@@ -106,8 +106,11 @@ struct voxel_chunks_t
 
 
     // This is used for interpolating between snapshots (maximum size is 5000 bytes)
-    linear_allocator_t voxel_linear_allocator = {};
-    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet = nullptr;
+    linear_allocator_t voxel_linear_allocator_front = {};
+    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_front = nullptr;
+
+    linear_allocator_t voxel_linear_allocator_back = {};
+    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_back = nullptr;
 };
 
 void reset_voxel_interpolation(void);

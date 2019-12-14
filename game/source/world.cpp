@@ -985,6 +985,12 @@ internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x
 }
 
 
+void update_chunk_mesh_edges(voxel_chunk_t *chunk, uint8_t surface_level)
+{
+    
+}
+
+
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level)
 {
     chunk->vertex_count = 0;
@@ -1125,26 +1131,29 @@ void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk)
 
 internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 {
-    for (uint32_t i = 0; i < g_voxel_chunks->to_sync_count; ++i)
+    if (get_voxel_chunks_flags()->should_update_chunk_meshes_from_now)
     {
-        voxel_chunk_t *chunk = *get_voxel_chunk((int32_t)g_voxel_chunks->chunks_to_gpu_sync[i]);
+        for (uint32_t i = 0; i < g_voxel_chunks->to_sync_count; ++i)
+        {
+            voxel_chunk_t *chunk = *get_voxel_chunk((int32_t)g_voxel_chunks->chunks_to_gpu_sync[i]);
 
-        update_chunk_mesh(chunk, 60);
-        update_chunk_mesh_struct_vertex_count(chunk);
+            update_chunk_mesh(chunk, 60);
+            update_chunk_mesh_struct_vertex_count(chunk);
 
-        // Apparently the access flag doesn't match the stage
-        update_gpu_buffer(&chunk->chunk_mesh_gpu_buffer,
-                          chunk->mesh_vertices,
-                          sizeof(vector3_t) * chunk->vertex_count,
-                          0,
-                          VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                          VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-                          &queue->q);
+            // Apparently the access flag doesn't match the stage
+            update_gpu_buffer(&chunk->chunk_mesh_gpu_buffer,
+                              chunk->mesh_vertices,
+                              sizeof(vector3_t) * chunk->vertex_count,
+                              0,
+                              VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+                              VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+                              &queue->q);
 
-        chunk->should_do_gpu_sync = 0;
+            chunk->should_do_gpu_sync = 0;
+        }
+
+        g_voxel_chunks->to_sync_count = 0;
     }
-
-    g_voxel_chunks->to_sync_count = 0;
 }
 
 
@@ -1195,6 +1204,12 @@ void deinitialize_chunk(voxel_chunk_t *chunk)
         chunk->modified_voxels_list_count = 0;
         deallocate_free_list(chunk->list_of_modified_voxels);
     }
+}
+
+
+voxel_chunks_flags_t *get_voxel_chunks_flags(void)
+{
+    return(&g_voxel_chunks->flags);
 }
 
 
@@ -3345,6 +3360,8 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 
     memset(g_voxel_chunks->dummy_voxels, 255, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
     g_voxel_chunks->previous_voxel_delta_packet_front = (game_snapshot_voxel_delta_packet_t *)allocate_free_list(sizeof(game_snapshot_voxel_delta_packet_t));
+
+    get_voxel_chunks_flags()->should_update_chunk_meshes_from_now = 1;
 }
 
 
@@ -3379,8 +3396,8 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
                 initialize_chunk(*chunk_ptr, vector3_t(x, y, z) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) - vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH), ivector3_t(x, y, z), true);
 
                 ++i;
-            }    
-        }    
+            }
+        }
     }
 }
 

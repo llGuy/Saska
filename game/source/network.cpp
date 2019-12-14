@@ -760,7 +760,7 @@ global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
 void send_chunks_hard_update_packets(network_address_t address)
 {
     serializer_t chunks_serializer = {};
-    initialize_serializer(&chunks_serializer, (sizeof(uint8_t) * 3 + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
+    initialize_serializer(&chunks_serializer, sizeof(uint32_t) + (sizeof(uint8_t) * 3 + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
 
     packet_header_t header = {};
     header.packet_mode = packet_mode_t::PM_SERVER_MODE;
@@ -771,6 +771,19 @@ void send_chunks_hard_update_packets(network_address_t address)
     uint32_t hard_update_count = 0;
     voxel_chunk_values_packet_t *voxel_update_packets = initialize_chunk_values_packets(&hard_update_count);
 
+    union
+    {
+        struct
+        {
+            uint32_t is_first: 1;
+            uint32_t count: 31;
+        };
+        uint32_t to_update_count;
+    } chunks_count;
+
+    chunks_count.is_first = 0;
+    chunks_count.count = hard_update_count;
+    
     uint32_t loop_count = (hard_update_count / 8);
     for (uint32_t packet = 0; packet < loop_count; ++packet)
     {
@@ -778,6 +791,18 @@ void send_chunks_hard_update_packets(network_address_t address)
 
         header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
         serialize_packet_header(&chunks_serializer, &header);
+
+        if (packet == 0)
+        {
+            chunks_count.is_first = 1;
+            // This is the total amount of chunks that the client is waiting for
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+            chunks_count.is_first = 0;
+        }
+        else
+        {
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+        }
 
         serialize_uint32(&chunks_serializer, 8);
         
@@ -799,6 +824,17 @@ void send_chunks_hard_update_packets(network_address_t address)
         header.total_packet_size = sizeof_packet_header() + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
         serialize_packet_header(&chunks_serializer, &header);
 
+        if (loop_count == 0)
+        {
+            chunks_count.is_first = 1;
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+            chunks_count.is_first = 0;
+        }
+        else
+        {
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+        }
+        
         serialize_uint32(&chunks_serializer, hard_update_count);
         
         for (uint32_t chunk = 0; chunk < hard_update_count; ++chunk)
@@ -1456,6 +1492,27 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                 } break;
             case server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE:
                 {
+
+                    union
+                    {
+                        struct
+                        {
+                            uint32_t is_first: 1;
+                            uint32_t count: 31;
+                        };
+                        uint32_t to_update_count;
+                    } chunks_count;
+
+                    voxel_chunks_flags_t *flags = get_voxel_chunks_flags();
+                    
+                    chunks_count.to_update_count = deserialize_uint32(&in_serializer);
+                    if (chunks_count.is_first)
+                    {
+                        flags->should_update_chunk_meshes_from_now = 0;
+                        flags->chunks_received_to_update_count = 0;
+                        // Don't update chunks meshes until voxels were received entirely
+                        flags->chunks_to_be_received = chunks_count.count;
+                    }
                     
                     uint32_t chunks_to_update = deserialize_uint32(&in_serializer);
                     for (uint32_t i = 0; i < chunks_to_update; ++i)
@@ -1467,6 +1524,13 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
 
                         ready_chunk_for_gpu_sync(chunk);
+                    }
+
+                    flags->chunks_received_to_update_count += chunks_to_update;
+
+                    if (flags->chunks_received_to_update_count == flags->chunks_to_be_received)
+                    {
+                        flags->should_update_chunk_meshes_from_now = 1;
                     }
                     
                 } break;

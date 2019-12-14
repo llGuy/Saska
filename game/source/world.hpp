@@ -65,6 +65,16 @@ void push_chunk_to_render_queue(voxel_chunk_t *chunk);
 voxel_chunk_t **get_voxel_chunk(int32_t index);
 voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z);
 
+struct voxel_chunks_flags_t
+{
+    // Should not be updating if 
+    uint32_t should_update_chunk_meshes_from_now: 1;
+    // Number of chunks to update received from server
+    uint32_t chunks_received_to_update_count: 7;
+    // Number that the client is waiting for
+    uint32_t chunks_to_be_received: 8;
+};
+
 struct voxel_chunks_t
 {
     uint8_t dummy_voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
@@ -104,6 +114,9 @@ struct voxel_chunks_t
     float32_t elapsed_interpolation_time = 0.0f;
 
 
+    // Flags
+    voxel_chunks_flags_t flags;
+    
 
     // This is used for interpolating between snapshots (maximum size is 5000 bytes)
     linear_allocator_t voxel_linear_allocator_front = {};
@@ -112,6 +125,8 @@ struct voxel_chunks_t
     linear_allocator_t voxel_linear_allocator_back = {};
     struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_back = nullptr;
 };
+
+voxel_chunks_flags_t *get_voxel_chunks_flags(void);
 
 void reset_voxel_interpolation(void);
 linear_allocator_t *get_voxel_linear_allocator(void);

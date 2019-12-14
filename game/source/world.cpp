@@ -3435,10 +3435,8 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    //construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
-    //construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
-
-    construct_plane(vector3_t(0.0f), 100.0f);
+    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
+    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
 }
 
 void deinitialize_world(void)

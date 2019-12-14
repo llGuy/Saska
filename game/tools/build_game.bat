@@ -26,10 +26,12 @@ REM --------------------------------------------
 set INC=%GLM_INC_DIR% %VULKAN_INC_DIR% %LUA_INC_DIR% %VML_INC_DIR% %STB_INC_DIR%
  
 set CLIENT_BIN=Saska.exe
+set VULKAN_DLL=vulkan.dll
 set SERVER_BIN=Server.exe
 set DLL_NAME=Saska.dll
 
 set SRC=../source/win32_core.cpp
+set VULKAN_SRC=../source/renderer/vulkan.cpp
 set DLL_SRC=game.cpp
 
 REM Don't need GLFW for now: C:/dependencies/glfw-3.2.1.bin.WIN64/lib-vc2015/glfw3.lib
@@ -38,18 +40,45 @@ set LIBS=ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.1
 
 pushd ..\binaries
 
+If "%1" == "all" goto all
 If "%1" == "compile" goto compile
+If "%1" == "debug" goto debug
 If "%1" == "clean" goto clean
+If "%1" == "run" goto run
 If "%1" == "help" goto help
+
+:all
+
+%CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
+%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%
+popd
+
+pushd ..\assets\shaders
+build.bat all
+popd
+
+pushd ..\binaries
 
 :compile
 %CC% %CFLAGS% /DCLIENT_APPLICATION %DEF% %INC% /Fe%CLIENT_BIN% %SRC% %LIBS%
+%CC% %CFLAGS% /DSERVER_APPLICATION %DEF% %INC% /Fe%SERVER_BIN% %SRC% %LIBS%
+
 popd
 
 goto :eof
 
+:debug
+%DB% %CLIENT_BIN%
+goto :eof
+
 :clean
 rm *.exe *.obj *.ilk *.pdb TAGS
+popd
+goto :eof
+
+:run
+%CLIENT_BIN%
+
 popd
 goto :eof
 

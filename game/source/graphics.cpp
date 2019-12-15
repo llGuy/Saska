@@ -932,8 +932,8 @@ internal_function void make_sun_data(void)
                                  shader_module_info_t{"shaders/SPV/sun.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         uniform_layout_handle_t camera_transforms_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
-        shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, single_tx_layout_hdl);
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_uniform_layouts_t layouts(camera_transforms_layout_hdl, single_tx_layout_hdl, g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT};
         shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::ADDITIVE_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
@@ -945,7 +945,7 @@ internal_function void make_sun_data(void)
 
     // Make sun texture
     {
-        file_handle_t sun_png_handle = create_file("textures/sun/sun.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+        file_handle_t sun_png_handle = create_file("textures/sun/sun_test.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
         external_image_data_t image_data = read_image(sun_png_handle);
 
         make_texture(&g_lighting->sun.sun_texture, image_data.width, image_data.height,
@@ -1246,13 +1246,14 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     auto *sun_pipeline = g_pipeline_manager->get(g_lighting->sun.sun_ppln);
     command_buffer_bind_pipeline(&sun_pipeline->pipeline, &queue->q);
 
-    uniform_group_t groups[2] = {*camera_transforms, g_lighting->sun.sun_group};
+    uniform_group_t groups[3] = {*camera_transforms, g_lighting->sun.sun_group, *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group)};
     
-    command_buffer_bind_descriptor_sets(&sun_pipeline->layout, {2, groups}, &queue->q);
+    command_buffer_bind_descriptor_sets(&sun_pipeline->layout, {3, groups}, &queue->q);
 
     struct sun_push_constant_t
     {
 	matrix4_t model_matrix;
+        vector3_t ws_light_direction;
     } push_k;
 
     vector3_t light_pos = vector3_t(g_lighting->ws_light_position[0] * 1000.0f);
@@ -1260,7 +1261,9 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     light_pos.z *= -1.0f;
     push_k.model_matrix = glm::translate(light_pos) * glm::scale(vector3_t(20.0f));
 
-    command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT, sun_pipeline->layout, &queue->q);
+    push_k.ws_light_direction = -glm::normalize(g_lighting->ws_light_position[0]);
+
+    command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sun_pipeline->layout, &queue->q);
 
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
 
@@ -2232,9 +2235,9 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *
     make_dfr_rendering_data();
     make_camera_data(g_uniform_pool);
     make_shadow_data();
-    make_sun_data();
     make_cube_model(pool);
     make_atmosphere_data(g_uniform_pool, pool);
+    make_sun_data();
     initialize_particle_rendering();
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);

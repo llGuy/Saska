@@ -19,6 +19,7 @@ layout(set = 0, binding = 0) uniform camera_information_t
 layout(push_constant) uniform push_constant_t
 {
     mat4 model;
+    vec3 ws_light_direction;
 } push_k;
 
 const vec3 QUAD_POSITIONS[4] = vec3[4](vec3(-1, -1, 0),
@@ -59,7 +60,7 @@ void main(void)
     view_matrix_no_translation[3][1] = 0;
     view_matrix_no_translation[3][2] = 0;
 
-    gl_Position = camera_transforms.proj * view_matrix_no_translation * model_transpose_rotation * scale * vec4(vertex_position * 100, 1.0);
+    gl_Position = camera_transforms.proj * view_matrix_no_translation * model_transpose_rotation * scale * vec4(vertex_position * 80, 1.0);
 
     vs_out.uvs = uvs;
 }

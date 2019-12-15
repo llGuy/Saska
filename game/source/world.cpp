@@ -1179,7 +1179,7 @@ void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t
 
     chunk->push_k.model_matrix = glm::scale(vector3_t(g_voxel_chunks->size)) * glm::translate(chunk_position);
     //chunk->push_k.color = vector4_t(122.0 / 255.0, 177.0 / 255.0, 213.0 / 255.0, 1.0f);
-    chunk->push_k.color = vector4_t(1.0f);
+    chunk->push_k.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1.0f);
 
     if (allocate_history)
     {
@@ -2691,7 +2691,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::ORANGE;
+    player_create_info.color = player_color_t::GRAY;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -3169,7 +3169,7 @@ player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_cl
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::ORANGE;
+    player_create_info.color = player_color_t::GRAY;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -3230,9 +3230,8 @@ internal_function void initialize_players(input_state_t *input_state, applicatio
     main_player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     main_player_create_info.ws_size = vector3_t(2);
     main_player_create_info.starting_velocity = 15.0f;
-    main_player_create_info.color = player_color_t::ORANGE;
-    // DISABLED FOR TESTING
-    main_player_create_info.physics_info.enabled = 0;
+    main_player_create_info.color = player_color_t::GRAY;
+    main_player_create_info.physics_info.enabled = 1;
     main_player_create_info.terraform_power_info.speed = 300.0f;
     main_player_create_info.terraform_power_info.terraform_radius = 20.0f;
     main_player_create_info.camera_info.camera_index = main_camera;

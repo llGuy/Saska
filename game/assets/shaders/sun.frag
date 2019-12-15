@@ -12,8 +12,15 @@ layout(location = 3) out vec4 out_normal;
 layout(location = 4) out vec4 out_sun;
 
 layout(set = 1, binding = 0) uniform sampler2D sun_texture;
+layout(set = 2, binding = 0) uniform samplerCube atmosphere;
+
+layout(push_constant) uniform push_constant_t
+{
+    mat4 model;
+    vec3 ws_light_direction;
+} push_k;
 
 void main(void)
 {
-    out_sun = texture(sun_texture, fs_in.uvs);
+    out_sun = texture(sun_texture, fs_in.uvs) * texture(atmosphere, push_k.ws_light_direction);
 }

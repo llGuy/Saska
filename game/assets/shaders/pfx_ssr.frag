@@ -293,7 +293,7 @@ void main(void)
     //final_color = 
     final_color.a = 1.0;
 
-    /*const int SAMPLES = 50;
+    const int SAMPLES = 50;
     const float DENSITY = 1.0;
     const float DECAY = 0.9;
     const float WEIGHT = 0.9;
@@ -314,6 +314,6 @@ void main(void)
         final_color += current_color;
 
         illumination_decay *= DECAY;
-    }*/
+    }
 
 }

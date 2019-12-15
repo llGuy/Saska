@@ -9,7 +9,8 @@ layout(location = 0) out vec4 out_color;
 layout(push_constant) uniform Push_K
 {
     mat4 inverse_projection;
-    vec4 ws_light_direction;
+    vec4 ws_light_direction[2];
+    vec4 light_color[2];
     vec2 viewport;
 } push_k;
 
@@ -54,8 +55,8 @@ phase(float difference_light_dir_view_dir, const float G)
     return left * right;	
 }
 
-const float RAYLEIGH_G	= -0.01;
-const float MIE_G	= -0.8;
+const float RAYLEIGH_G	= -0.00001;
+const float MIE_G	= -0.98;
 
 float
 calculate_atmosphere_depth_at_dir(vec3 ws_camera_position, vec3 ws_camera_view_dir)
@@ -70,12 +71,12 @@ calculate_atmosphere_depth_at_dir(vec3 ws_camera_position, vec3 ws_camera_view_d
     return t1;
 }
 
-const float SURFACE_HEIGHT = 0.8;
+const float SURFACE_HEIGHT = 0.0;
 const uint SAMPLE_COUNT = 14;
-const vec3 AIR_COLOR = vec3(0.18867780, 0.4616065, 0.49784429);
+//const vec3 AIR_COLOR = vec3(0.18867780, 0.4616065, 0.49784429);
+vec3 AIR_COLOR = vec3(0.18867780, 0.4616065, 0.49784429);
 
-vec3
-absorb_light_from_sun_at_ray_position(float ray_distance,
+vec3 absorb_light_from_sun_at_ray_position(float ray_distance,
 				      vec3 intensity,
 				      float absorb_factor)
 {
@@ -83,8 +84,7 @@ absorb_light_from_sun_at_ray_position(float ray_distance,
     return(intensity - intensity * pow(AIR_COLOR, vec3(absorb_factor / ray_distance)));
 }
 
-void
-main(void)
+vec4 calculate_atmosphere_color_for_sun(vec4 light_direction)
 {
     mat3 inverse_view_rotate = inverse(mat3(look_at(vec3(0.0f),
 						    in_cube_face_direction,
@@ -103,7 +103,7 @@ main(void)
     
     vec3 ws_view_dir = normalize(mat3(inverse_view_rotate) * vs_view_dir);
 
-    float difference_light_dir_view_dir = dot(ws_view_dir, push_k.ws_light_direction.xyz);
+    float difference_light_dir_view_dir = dot(ws_view_dir, light_direction.xyz);
     float mie_scattering_factor		= phase(difference_light_dir_view_dir, MIE_G);
     float rayleigh_scattering_factor	= phase(difference_light_dir_view_dir, RAYLEIGH_G);
 
@@ -119,7 +119,7 @@ main(void)
 	float distance = (float(i) * step_distance) * 0.54f;
 	vec3 ws_ray_position = distance * ws_view_dir;
 	float ray_atmosphere_depth = calculate_atmosphere_depth_at_dir(ws_ray_position
-								       , push_k.ws_light_direction.xyz);
+								       , light_direction.xyz);
 	vec3 light_amount = absorb_light_from_sun_at_ray_position(ray_atmosphere_depth
 								  , vec3(4)
 								  , 0.7);
@@ -135,7 +135,7 @@ main(void)
     total_rayleigh = (total_rayleigh * pow(atmosphere_depth_at_dir, 0.5)) / float(SAMPLE_COUNT);
     total_mie = (total_mie * pow(atmosphere_depth_at_dir, 2.7)) / float(SAMPLE_COUNT);
 
-    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*0.1;
+    float spotlight = smoothstep(0.0, 15.0, phase(-difference_light_dir_view_dir, 0.9995))*1.0;
 
     float gray_out_bottom = 0.0;
     float p_dot_d = dot(ws_view_dir, -ws_camera_position);
@@ -152,7 +152,19 @@ main(void)
 
     float test = 1 - clamp(dot(normalize(-ws_camera_position), normalize(ws_view_dir)), 0, 1);
     
-    out_color = (vec4(total_mie.xyzz) * spotlight * 0.8 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.75 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor) * test;
+    //out_color = (vec4(total_mie.xyzz) * spotlight * 0.8 + vec4(total_mie.xyzz) * mie_scattering_factor * 0.75 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor) * test;
 
-    out_color = pow(out_color, vec4(1.0 / 2.2));
+    out_color = (vec4(total_mie.xyzz) * mie_scattering_factor * 0.4 + vec4(total_rayleigh.xyzz) * rayleigh_scattering_factor * 0.4) * test;
+
+    return pow(out_color, vec4(1.0 / 2.2));
+}
+
+void main(void)
+{
+    AIR_COLOR = push_k.light_color[0].rgb;
+    vec4 color_light0 = calculate_atmosphere_color_for_sun(push_k.ws_light_direction[0]);
+    AIR_COLOR = push_k.light_color[1].rgb;
+    vec4 color_light1 = calculate_atmosphere_color_for_sun(push_k.ws_light_direction[1]);
+    
+    out_color = (color_light0 + color_light1) / 2.0;
 }

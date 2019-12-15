@@ -835,7 +835,9 @@ struct deferred_rendering_t
 struct lighting_t
 {
     // Default value
-    vector3_t ws_light_position {10.0000001f, 10.0000000001f, 10.00000001f};
+    vector3_t ws_light_position[2] { vector3_t(10.0000001f, 10.0000000001f, 10.00000001f), -vector3_t(12.0000001f, 10.0000000001f, -5.00000001f) };
+
+    vector3_t light_color[2] { vector3_t(0.18867780, 0.49784429, 0.6216065), vector3_t(0.18867780, 0.3784429, 0.4916065) };
 
     // Later, need to add PSSM
     struct shadows_t
@@ -878,17 +880,25 @@ struct lighting_t
 struct atmosphere_t
 {
     persist_var constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
-    
+    persist_var constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
+
     // gpu_t objects needed to create the atmosphere skybox cubemap
     render_pass_handle_t make_render_pass;
     framebuffer_handle_t make_fbo;
     pipeline_handle_t make_pipeline;
 
+    render_pass_handle_t generate_irradiance_pass;
+    framebuffer_handle_t generate_irradiance_fbo;
+    pipeline_handle_t generate_irradiance_pipeline;
+
     // pipeline needed to render the cubemap to the screen
     pipeline_handle_t render_pipeline;
 
+    image_handle_t cubemap_handle;
+    
     // Descriptor set that will be used to sample (should not be used in world.cpp)
     uniform_group_handle_t cubemap_uniform_group;
+    uniform_group_handle_t atmosphere_irradiance_uniform_group;
 
     model_handle_t cube_handle;
 };

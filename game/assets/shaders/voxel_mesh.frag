@@ -91,6 +91,6 @@ void main(void)
     out_normal = vec4(fs_in.ws_normal, 1.0);
     out_sun = vec4(0, 0, 0, 1);
 
-    set_roughness(0.6);
+    set_roughness(0.8);
     set_metalness(0.3);
 }

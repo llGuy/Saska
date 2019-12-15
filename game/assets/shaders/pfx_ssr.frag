@@ -226,7 +226,7 @@ void main(void)
 
     if (view_normal.x > -10.0 && view_normal.y > -10.0 && view_normal.z > -10.0)
     {
-	bool hit = false;
+	/*bool hit = false;
 
 	vec3 F0 = vec3(0.04);
 
@@ -246,7 +246,7 @@ void main(void)
 
 	ray_dir = jitt + ray_dir * max(0.1, -view_position.z);
 	
-	float placeholder;
+	float placeholder;*/
 	// ray cast
         // Dont need the below
         /*vec4 coords = ray_cast(ray_dir, view_position, ddepth, hit, placeholder);
@@ -259,7 +259,7 @@ void main(void)
         // Dont need the aboe
 
         // Need to keep these below
-        pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt), view_normal, pixel_color, fresnel);
+        //pixel_color = apply_cube_map_reflection(-normalize(original_position + jitt), view_normal, pixel_color, fresnel);
 
         final_color = pixel_color;
         
@@ -290,9 +290,10 @@ void main(void)
     }
     else final_color = pixel_color;
 
+    //final_color = 
     final_color.a = 1.0;
 
-    const int SAMPLES = 50;
+    /*const int SAMPLES = 50;
     const float DENSITY = 1.0;
     const float DECAY = 0.9;
     const float WEIGHT = 0.9;
@@ -313,6 +314,6 @@ void main(void)
         final_color += current_color;
 
         illumination_decay *= DECAY;
-    }
+    }*/
 
 }

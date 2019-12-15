@@ -13,18 +13,20 @@ layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput g_
 layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput g_buffer_position;
 layout(input_attachment_index = 2, set = 0, binding = 2) uniform subpassInput g_buffer_normal;
 
+layout(set = 1, binding = 0) uniform samplerCube irradiance_cubemap;
+
 //layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
 layout(push_constant) uniform Push_K
 {
     vec4 light_direction;
     mat4 view_matrix;
+    mat4 inverse_view_matrix;
 } push_k;
 
 const float PI = 3.14159265359;
 
-float
-normal_distribution_ggx(vec3 vs_normal, vec3 halfway, float roughness)
+float normal_distribution_ggx(vec3 vs_normal, vec3 halfway, float roughness)
 {
     float a = roughness * roughness;
     float a2 = a * a;
@@ -38,8 +40,7 @@ normal_distribution_ggx(vec3 vs_normal, vec3 halfway, float roughness)
     return num / den;
 }
 
-float
-geometry_schlick_ggx(float ndotv, float roughness)
+float geometry_schlick_ggx(float ndotv, float roughness)
 {
     float r = (roughness + 1);
     float k = (r * r) / 8;
@@ -50,8 +51,7 @@ geometry_schlick_ggx(float ndotv, float roughness)
     return num / den;
 }
 
-float
-geometry_smith(vec3 n, vec3 v, vec3 l, float roughness)
+float geometry_smith(vec3 n, vec3 v, vec3 l, float roughness)
 {
     float ndotv = max(dot(n, v), 0.0);
     float ndotl = max(dot(n, l), 0.0);
@@ -59,16 +59,14 @@ geometry_smith(vec3 n, vec3 v, vec3 l, float roughness)
     return geometry_schlick_ggx(ndotv, roughness) * geometry_schlick_ggx(ndotl, roughness);
 }
 
-vec3
-fresnel_schlick(float cos_theta, vec3 F0)
+vec3 fresnel_schlick(float cos_theta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(1.0 - cos_theta, 5.0);
 }
 
 
 // roughness of the material controlled in normal.a and the metalness in the position.a
-vec4
-pbr(void)
+vec4 pbr(void)
 {
     vec4 albedo = subpassLoad(g_buffer_albedo);
     float shadow_factor = albedo.a;
@@ -77,6 +75,7 @@ pbr(void)
     vec3 vs_position = gposition.xyz;
     vec4 gnormal = -subpassLoad(g_buffer_normal);
     vec3 vs_normal = gnormal.xyz;
+    vec3 ws_normal = vec3(push_k.inverse_view_matrix * vec4(vs_normal, 0.0));
     float roughness = gnormal.a;
     float metallic = gposition.a;
 
@@ -94,6 +93,9 @@ pbr(void)
 
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo.xyz, metallic);
+    
+    vec3 irradiance = texture(irradiance_cubemap, ws_normal).rgb;
+    
     vec3 F = fresnel_schlick(max(dot(vs_normal, to_camera), 0.0), F0);
     float D = normal_distribution_ggx(vs_normal, halfway, roughness);
     float G = geometry_smith(vs_normal, to_camera, light_vector, roughness);
@@ -102,7 +104,8 @@ pbr(void)
     float den = 4 * max(dot(vs_normal, to_camera), 0.0) * max(dot(vs_normal, light_vector), 0.1);
     vec3 spec = num / max(den, 0.001);
 
-    vec3 ks = F * 0.5;
+    
+    vec3 ks = F;
     vec3 kd = vec3(1.0) - ks;
     kd *= 1.0 - metallic;
 
@@ -111,7 +114,10 @@ pbr(void)
     
     vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * radiance * n_dot_l;
 
-    vec3 ambient = vec3(0.03) * vec3(albedo);
+    vec3 diffuse = irradiance * albedo.rgb;
+    vec3 ambient = (kd * diffuse);
+    //vec3 ambient = vec3(0.03);
+    
     result += ambient;
 
     ambient = pow(ambient, vec3(1.0 / 2.2));

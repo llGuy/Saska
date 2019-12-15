@@ -473,7 +473,7 @@ struct camera_t
     vector3_t d; // direction
     vector3_t u; // up
 
-    float32_t fov;
+    float32_t fov, current_fov;
     float32_t asp; // aspect ratio
     float32_t n, f; // near and far planes
     
@@ -498,7 +498,7 @@ struct camera_t
     
     void compute_projection(void)
     {
-	p_m = glm::perspective(fov, asp, n, f);
+	p_m = glm::perspective(current_fov, asp, n, f);
     } 
 };
 

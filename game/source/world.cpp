@@ -115,7 +115,7 @@ internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, 
 internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal);
 internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision);
 internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision);
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest);
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size);
 internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision);
 
 // Entities
@@ -1549,7 +1549,97 @@ internal_function void check_collision_with_edge(const vector3_t &es_sphere_velo
 }
 
 
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest)
+internal_function vector3_t adjust_player_position_to_not_be_under_terrain(vector3_t *triangle_vertices, vector3_t es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
+{
+    output_to_debug_console("Adjusting so that player is on terrain: ");
+    
+    bool under_terrain = 1;
+    while (under_terrain)
+    {
+        bool found_collision = 0;
+        float32_t first_resting_instance;
+    
+        vector3_t es_fa = triangle_vertices[0];
+        vector3_t es_fb = triangle_vertices[1];
+        vector3_t es_fc = triangle_vertices[2];
+
+        vector3_t es_up_normal_of_triangle = glm::normalize(glm::cross(es_fb - es_fa, es_fc - es_fa));
+    
+        float32_t velocity_dot_normal = glm::dot(glm::normalize(es_velocity), es_up_normal_of_triangle);
+    
+        if (velocity_dot_normal > 0.0f)
+        {
+            return es_center;
+        }
+
+        float32_t plane_constant = -( (es_fa.x * es_up_normal_of_triangle.x) + (es_fa.y * es_up_normal_of_triangle.y) + (es_fa.z * es_up_normal_of_triangle.z) );
+
+        bool32_t must_check_only_for_edges_and_vertices = 0;
+        float32_t normal_dot_velocity = glm::dot(es_velocity, es_up_normal_of_triangle);
+        float32_t sphere_plane_distance = glm::dot(es_center, es_up_normal_of_triangle) + plane_constant;
+    
+        if (normal_dot_velocity == 0.0f)
+        {
+            if (glm::abs(sphere_plane_distance) >= 1.0f)
+            {
+                return es_center;
+            }
+            else
+            {
+                must_check_only_for_edges_and_vertices = 1;
+            }
+        }
+
+        // Check collision with triangle face
+        first_resting_instance = (1.0f - sphere_plane_distance) / normal_dot_velocity;
+        float32_t second_resting_instance = (-1.0f - sphere_plane_distance) / normal_dot_velocity;
+
+        if (first_resting_instance > second_resting_instance)
+        {
+            float32_t f = first_resting_instance;
+            first_resting_instance = second_resting_instance;
+            second_resting_instance = f;
+        }
+        if (first_resting_instance > 1.0f || second_resting_instance < 0.0f)
+        {
+            return es_center;
+        }
+        if (first_resting_instance < 0.0f) first_resting_instance = 0.0f;
+        if (second_resting_instance < 1.0f) second_resting_instance = 1.0f;
+
+        vector3_t es_contact_point = es_center + (first_resting_instance * es_velocity) - es_up_normal_of_triangle;
+
+        if (is_point_in_triangle(es_contact_point, es_fa, es_fb, es_fc))
+        {
+            float32_t sphere_point_plane_distance = glm::dot(es_center - es_up_normal_of_triangle, es_up_normal_of_triangle) + plane_constant;
+            if (sphere_point_plane_distance < 0.0f)
+            {
+                if (sphere_point_plane_distance > -0.00001f)
+                {
+                    // Do some sort of recursive loop until the player is out of the terrain
+                    sphere_point_plane_distance = -0.5f;
+                }
+                // Adjust the sphere position, and call the function
+                es_center = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
+
+                output_to_debug_console(".");
+
+                under_terrain = 1;
+            }
+            else
+            {
+                under_terrain = 0;
+            }
+        }
+    }
+
+    output_to_debug_console("\n");
+
+    return es_center;
+}
+
+
+internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
 {
     bool found_collision = 0;
     float32_t first_resting_instance;
@@ -1617,12 +1707,14 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
                 {
                     if (sphere_point_plane_distance > -0.00001f)
                     {
-                        sphere_point_plane_distance = -0.0001f;
+                        // Do some sort of recursive loop until the player is out of the terrain
+                        sphere_point_plane_distance = -0.01f;
                     }
                     // Adjust the sphere position, and call the function
                     vector3_t es_new_sphere_position = es_center - es_up_normal_of_triangle * sphere_point_plane_distance;
 
                     closest->under_terrain = 1;
+                    //closest->es_at = adjust_player_position_to_not_be_under_terrain(triangle_vertices, es_new_sphere_position, es_velocity, closest, size);
                     closest->es_at = es_new_sphere_position;
                     closest->es_normal = es_up_normal_of_triangle;
                     closest->es_distance_from_triangle = sphere_point_plane_distance;
@@ -1744,7 +1836,7 @@ internal_function collision_t collide(const vector3_t &ws_center, const vector3_
             triangle_ptr[i] /= ws_size;
         }
 
-        collide_with_triangle(triangle_ptr, es_center, es_velocity, &closest_collision);
+        collide_with_triangle(triangle_ptr, es_center, es_velocity, &closest_collision, ws_size);
     }
 
     const float32_t es_very_close_distance_from_terrain = .01f;
@@ -1978,8 +2070,25 @@ internal_function void update_camera_component(camera_component_t *camera_compon
     vector3_t camera_position = player->ws_p + player->size.x * up;
     if (player->camera.is_third_person)
     {
+        static bool was_entering = 1;
+
+        camera_component->camera_distance.animate(dt);
+        camera_component->fov.animate(dt);
+        
+        if (was_entering && !player->is_entering)
+        {
+            // Swap the animation
+            camera_component->camera_distance.destination = camera_component->distance_from_player;
+            camera_component->camera_distance.in_animation = 1;
+
+            camera_component->fov.destination = 1.0f;
+            camera_component->fov.in_animation = 1;
+        }
+
+        was_entering = player->is_entering;
+        
         vector3_t right = glm::cross(player->ws_d, up);
-        camera_position += right * player->size.x + -camera_component->distance_from_player * player->ws_d;
+        camera_position += right * player->size.x + -camera_component->camera_distance.current * player->ws_d;
 
         if (camera_component->initialized_previous_position)
         {
@@ -2004,7 +2113,8 @@ internal_function void update_camera_component(camera_component_t *camera_compon
             camera_component->initialized_previous_position = 1;
         }
     }
-        
+
+    camera->current_fov = camera->fov * camera_component->fov.current;
     camera->v_m = glm::lookAt(camera_position, player->ws_p + up + player->ws_d, up);
 
     // TODO: Don't need to calculate this every frame, just when parameters change
@@ -2348,7 +2458,24 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         }
         else
         {
+            // Player is under the terrain
             player->ws_p = collision.es_at * player->size;
+
+            /*collision_t new_collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+            uint32_t loop_count = 0;
+            while (new_collision.under_terrain && loop_count < 10)
+            {
+                output_to_debug_console("Waiting for player to no longer be under the terrain\n");
+                player->ws_p += collision.es_normal * player->size;
+                new_collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+
+                ++loop_count;
+            }
+
+            if (loop_count)
+            {
+                output_to_debug_console("Player no longer under terrain after: ", (int32_t)loop_count, " collision calculations\n");
+            }*/
         }
     }
     else
@@ -2997,6 +3124,21 @@ internal_function void construct_player(player_t *player, player_create_info_t *
     player->camera.is_third_person = info->camera_info.is_third_person;
     player->camera.distance_from_player = info->camera_info.distance_from_player;
     player->camera.initialized_previous_position = 0;
+
+    // When game starts, camera distance is going from normal to far, when player lands, camera distance will go from far to normal
+    player->camera.camera_distance.in_animation = 1;
+    player->camera.camera_distance.destination = player->camera.distance_from_player * 1.3f;
+    player->camera.camera_distance.current = player->camera.distance_from_player;
+    player->camera.camera_distance.compare = &smooth_exponential_interpolation_compare_float;
+    player->camera.camera_distance.speed = 3.0f;
+
+    player->camera.fov.in_animation = 1;
+    player->camera.fov.destination = 1.3f;
+    player->camera.fov.current = 1.0f;
+    player->camera.fov.compare = &smooth_exponential_interpolation_compare_float;
+    player->camera.fov.speed = 3.0f;
+    
+    
     player->physics.enabled = info->physics_info.enabled;
     player->animation.cycles = info->animation_info.cycles;
     player->animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
@@ -3408,8 +3550,12 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
     
     g_voxel_chunks->size = 9.0f;
     g_voxel_chunks->grid_edge_size = 5;
+
+
+    // REMOVE THIS - JUST TESTING REMOTE LEVEL STUFF
+    initialize_players(input_state, app_type);
+
     
-    //initialize_players(input_state, app_type);
     
     g_voxel_chunks->max_chunks = 20 * 20 * 20;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -3720,6 +3866,8 @@ internal_function void ready_chunks_for_voxel_interpolation_reset(void)
                         voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
                         modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
                     }
+
+                    output_to_debug_console("Hard set voxel values for chunk\n");
                 }
 
                 ready_chunk_for_gpu_sync(modified_chunk_ptr);
@@ -3781,6 +3929,8 @@ void update_chunks_from_network(float32_t dt)
                                         // Set appropriate flags
                                         user_client->needs_to_do_voxel_correction = 0;
                                         user_client->did_voxel_correction = 1;
+
+                                        output_to_debug_console("Client did correction\n\n");
                                     }
                                 }
                             }
@@ -4164,6 +4314,13 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
 
 internal_function int32_t lua_reinitialize(lua_State *state)
 {
+    return(0);
+}
+
+internal_function int32_t lua_print_surrounding_voxel_values(lua_State *state)
+{
+    
+
     return(0);
 }
 

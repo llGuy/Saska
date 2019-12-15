@@ -618,7 +618,7 @@ camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution)
 
 void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far)
 {
-    camera->fov = fov;
+    camera->fov = camera->current_fov = fov;
     camera->asp = asp;
     camera->n = near;
     camera->f = far;

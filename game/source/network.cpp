@@ -1047,6 +1047,8 @@ void dispatch_snapshot_to_clients(void)
 
                         if (force_client_to_do_voxel_correction)
                         {
+                            output_to_debug_console("Client needs to do voxel correction: waiting for correction\n\n");
+                            
                             player_snapshot_packet->need_to_do_voxel_correction = 1;
                             client->needs_to_acknowledge_prediction_error = 1;
                         }

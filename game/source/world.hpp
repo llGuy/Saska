@@ -183,6 +183,68 @@ struct camera_component_create_info_t
     float32_t distance_from_player;
 };
 
+// Linear interpolation (constant speed)
+template <typename T> struct smooth_linear_interpolation_t
+{
+    bool in_animation;
+
+    T current;
+    T prev;
+    T next;
+    float32_t current_time;
+    float32_t max_time;
+
+    void animate(float32_t dt)
+    {
+        if (in_animation)
+        {
+            current_time += dt;
+            float32_t progression = current_time / max_time;
+        
+            if (progression >= 1.0f)
+            {
+                in_animation = 0;
+                current = next;
+            }
+            else
+            {
+                current = prev + progression * (next - prev);
+            }
+        }
+    }
+};
+
+typedef bool (*smooth_exponential_interpolation_compare_float_t)(float32_t current, float32_t destination);
+inline bool smooth_exponential_interpolation_compare_float(float32_t current, float32_t destination)
+{
+    return(abs(destination - current) < 0.001f);
+}
+
+// Starts fast, then slows down
+template <typename T, typename Compare> struct smooth_exponential_interpolation_t
+{
+    bool in_animation;
+    
+    T destination;
+    T current;
+    float32_t speed = 1.0f;
+
+    Compare compare;
+
+    void animate(float32_t dt)
+    {
+        if (in_animation)
+        {
+            current += (destination - current) * dt * speed;
+            if (compare(current, destination))
+            {
+                in_animation = 0;
+                current = destination;
+            }
+        }
+    }
+};
+
 struct camera_component_t
 {
     // Can be set to -1, in that case, there is no camera bound
@@ -200,11 +262,16 @@ struct camera_component_t
     uint8_t is_third_person: 1;
     uint8_t initialized_previous_position: 1;
     
-    float32_t distance_from_player = 40.0f;
+    float32_t distance_from_player = 15.0f;
 
     vector3_t previous_position = vector3_t(0.0f);
     
     vector2_t mouse_diff = vector2_t(0.0f);
+
+    
+
+    smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> fov;
+    smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> camera_distance;
 };
 
 struct animation_component_create_info_t

@@ -136,7 +136,7 @@ struct ui_text_t
 
 struct console_t
 {
-    bool render_console = true;
+    bool render_console = false;
     bool receive_input;
 
     ui_box_t back_box;

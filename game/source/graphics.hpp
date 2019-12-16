@@ -557,7 +557,8 @@ void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_que
 shadow_matrices_t get_shadow_matrices(void);
 shadow_debug_t get_shadow_debug(void);
 shadow_display_t get_shadow_display(void);
-void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up);
+
+void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, struct shadow_box_t *shadow_box);
 
 void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue);
 void end_shadow_offscreen(gpu_command_queue_t *queue);
@@ -832,49 +833,61 @@ struct deferred_rendering_t
     uniform_group_handle_t dfr_g_buffer_group;
 };
 
+#define SHADOW_BOX_COUNT 4
+
+struct shadow_box_t
+{
+    matrix4_t light_view_matrix;
+    matrix4_t projection_matrix;
+    matrix4_t inverse_light_view;
+
+    vector4_t ls_corners[8];
+    union
+    {
+        struct {float32_t x_min, x_max, y_min, y_max, z_min, z_max;};
+        float32_t corner_values[6];
+    };
+};
+
+struct sun_t
+{
+    vector3_t ws_position;
+    vector3_t color;
+
+    vector2_t ss_light_pos;
+
+    // Shadow data for each sun
+    image_handle_t shadow_map;
+    uniform_group_handle_t uniform;
+
+    shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
+};
+
 struct lighting_t
 {
-    // Default value
-    vector3_t ws_light_position[2] { vector3_t(10.0000001f, 10.0000000001f, 10.00000001f), -vector3_t(12.0000001f, 10.0000000001f, -5.00000001f) };
-
-    vector3_t light_color[2] { vector3_t(0.18867780, 0.49784429, 0.6216065), vector3_t(0.18867780, 0.3784429, 0.4916065) };
-
     // Later, need to add PSSM
     struct shadows_t
     {
-        persist_var constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+        persist_var constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
+        persist_var constexpr uint32_t SHADOWMAP_W = 1500, SHADOWMAP_H = 1500;
         
         framebuffer_handle_t fbo;
         render_pass_handle_t pass;
         image_handle_t map;
         uniform_group_handle_t set;
         uniform_layout_handle_t ulayout;
-    
-        pipeline_handle_t debug_frustum_ppln;
-    
-        matrix4_t light_view_matrix;
-        matrix4_t projection_matrix;
-        matrix4_t inverse_light_view;
-
-        vector4_t ls_corners[8];
 
         graphics_pipeline_t dbg_shadow_tx_quad_ppln;
-        
-        union
-        {
-            struct {float32_t x_min, x_max, y_min, y_max, z_min, z_max;};
-            float32_t corner_values[6];
-        };
+        pipeline_handle_t debug_frustum_ppln;
+    
+        shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
     } shadows;
 
-    struct sun_t
-    {
-        // Screen space
-        vector2_t ss_light_pos;
-        pipeline_handle_t sun_ppln;
-        image2d_t sun_texture;
-        uniform_group_t sun_group;
-    } sun;
+    pipeline_handle_t sun_ppln;
+    image2d_t sun_texture;
+    uniform_group_t sun_group;
+
+    sun_t suns[2];
 };
 
 struct atmosphere_t

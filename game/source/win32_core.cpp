@@ -616,17 +616,18 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
+        
         // Disable this for debugging
-        /*if (dt > TICK_TIME)
+        if (dt > TICK_TIME)
         {
             g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
         }
-        else*/
+        else
         {
             // Set game tick period by sleeping
-            while (dt < TICK_TIME)
+            /*while (dt < TICK_TIME)
             {
                 DWORD to_wait = DWORD( (TICK_TIME - dt) * 1000 );
                 if (to_wait > 0)
@@ -637,9 +638,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 LARGE_INTEGER now;
                 QueryPerformanceCounter(&now);
                 dt = measure_time_difference(tick_start, now, clock_frequency);
-            }
+                }*/
 
-            g_dt = TICK_TIME;
+            g_dt = dt;
             g_game_time += g_dt;
             g_input_state.dt = g_dt;
         }

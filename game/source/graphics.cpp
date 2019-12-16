@@ -587,7 +587,7 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    update_shadows(100.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u);
+    update_shadows(500.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u, &g_lighting->shadows.shadow_boxes[0]);
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
@@ -682,11 +682,11 @@ void update_atmosphere_cubemap(gpu_command_queue_t *queue)
     k.inverse_projection = glm::inverse(atmos_proj);
     k.viewport = vector2_t(1000.0f, 1000.0f);
 
-    k.light_dir[0] = vector4_t(glm::normalize(-g_lighting->ws_light_position[0]), 1.0f);
-    k.light_dir[1] = vector4_t(glm::normalize(-g_lighting->ws_light_position[1]), 1.0f);
+    k.light_dir[0] = vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 1.0f);
+    k.light_dir[1] = vector4_t(glm::normalize(-g_lighting->suns[1].ws_position), 1.0f);
 
-    k.light_color[0] = vector4_t(vector3_t(g_lighting->light_color[0]), 1.0f);
-    k.light_color[1] = vector4_t(vector3_t(g_lighting->light_color[1]), 1.0f);
+    k.light_color[0] = vector4_t(vector3_t(g_lighting->suns[0].color), 1.0f);
+    k.light_color[1] = vector4_t(vector3_t(g_lighting->suns[1].color), 1.0f);
     
     command_buffer_push_constant(&k, sizeof(k), 0, VK_SHADER_STAGE_FRAGMENT_BIT, make_ppln->layout, &queue->q);
     command_buffer_draw(&queue->q, 1, 1, 0, 0);
@@ -923,8 +923,8 @@ internal_function void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPoo
 
 internal_function void make_sun_data(void)
 {
-    g_lighting->sun.sun_ppln = g_pipeline_manager->add("pipeline.sun"_hash);
-    auto *sun_ppln = g_pipeline_manager->get(g_lighting->sun.sun_ppln);
+    g_lighting->sun_ppln = g_pipeline_manager->add("pipeline.sun"_hash);
+    auto *sun_ppln = g_pipeline_manager->get(g_lighting->sun_ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
         resolution_t backbuffer_res = g_dfr_rendering->backbuffer_res;
@@ -948,19 +948,19 @@ internal_function void make_sun_data(void)
         file_handle_t sun_png_handle = create_file("textures/sun/sun_test.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
         external_image_data_t image_data = read_image(sun_png_handle);
 
-        make_texture(&g_lighting->sun.sun_texture, image_data.width, image_data.height,
+        make_texture(&g_lighting->sun_texture, image_data.width, image_data.height,
                      VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                      VK_FILTER_LINEAR);
-        transition_image_layout(&g_lighting->sun.sun_texture.image, VK_FORMAT_R8G8B8A8_UNORM,
+        transition_image_layout(&g_lighting->sun_texture.image, VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 get_global_command_pool());
         invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
                                                      get_global_command_pool(),
-                                                     &g_lighting->sun.sun_texture,
+                                                     &g_lighting->sun_texture,
                                                      (uint32_t)image_data.width,
                                                      (uint32_t)image_data.height);
-        transition_image_layout(&g_lighting->sun.sun_texture.image,
+        transition_image_layout(&g_lighting->sun_texture.image,
                                 VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -971,22 +971,30 @@ internal_function void make_sun_data(void)
 
     // Make sun uniform group
     uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
-    g_lighting->sun.sun_group = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
+    g_lighting->sun_group = make_uniform_group(g_uniform_layout_manager->get(single_tx_layout_hdl), g_uniform_pool);
     {
-        update_uniform_group(&g_lighting->sun.sun_group,
-                             update_binding_t{ TEXTURE, &g_lighting->sun.sun_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+        update_uniform_group(&g_lighting->sun_group,
+                             update_binding_t{ TEXTURE, &g_lighting->sun_texture, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
     }
 }
 
 internal_function void make_shadow_data(void)
 {
-    vector3_t light_pos_normalized = glm::normalize(g_lighting->ws_light_position[0]);
+    g_lighting->suns[0].ws_position = vector3_t(10.0000001f, 10.0000000001f, 10.00000001f);
+    g_lighting->suns[0].color = vector3_t(0.68867780, 0.29784429, 0.3216065);
+    
+    g_lighting->suns[1].ws_position = -vector3_t(30.0000001f, -10.0000000001f, 10.00000001f);
+    g_lighting->suns[1].color = vector3_t(0.18867780, 0.5784429, 0.6916065);
+
+    
+    
+    vector3_t light_pos_normalized = glm::normalize(g_lighting->suns[0].ws_position);
     light_pos_normalized.x *= -1.0f;
     light_pos_normalized.z *= -1.0f;
 
-    g_lighting->shadows.light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    g_lighting->shadows.shadow_boxes[0].light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
     
-    g_lighting->shadows.inverse_light_view = glm::inverse(g_lighting->shadows.light_view_matrix);
+    g_lighting->shadows.shadow_boxes[0].inverse_light_view = glm::inverse(g_lighting->shadows.shadow_boxes[0].light_view_matrix);
 
     // ---- Make shadow render pass ----
     g_lighting->shadows.pass = g_render_pass_manager->add("render_pass.shadow_render_pass"_hash);
@@ -1010,9 +1018,9 @@ internal_function void make_shadow_data(void)
     {
         image_handle_t shadowmap_handle = g_image_manager->add("image2D.shadow_map"_hash);
         auto *shadowmap_texture = g_image_manager->get(shadowmap_handle);
-        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, get_device_supported_depth_format(), 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, get_device_supported_depth_format(), 4, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
         
-        make_framebuffer(shadow_fbo, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, 1, shadow_pass, null_buffer<image2d_t>(), shadowmap_texture);
+        make_framebuffer(shadow_fbo, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, 4, shadow_pass, null_buffer<image2d_t>(), shadowmap_texture);
     }
     
     uniform_layout_handle_t sampler2D_layout_hdl = g_uniform_layout_manager->add("descriptor_set_layout.2D_sampler_layout"_hash);
@@ -1139,9 +1147,9 @@ void dbg_render_shadow_map_quad(gpu_command_queue_t *queue)
 shadow_matrices_t get_shadow_matrices(void)
 {
     shadow_matrices_t ret;
-    ret.projection_matrix = g_lighting->shadows.projection_matrix;
-    ret.light_view_matrix = g_lighting->shadows.light_view_matrix;
-    ret.inverse_light_view = g_lighting->shadows.inverse_light_view;
+    ret.projection_matrix = g_lighting->shadows.shadow_boxes[0].projection_matrix;
+    ret.light_view_matrix = g_lighting->shadows.shadow_boxes[0].light_view_matrix;
+    ret.inverse_light_view = g_lighting->shadows.shadow_boxes[0].inverse_light_view;
     return(ret);
 }
 
@@ -1150,11 +1158,11 @@ shadow_debug_t get_shadow_debug(void)
     shadow_debug_t ret;    
     for (uint32_t i = 0; i < 6; ++i)
     {
-        ret.corner_values[i] = g_lighting->shadows.corner_values[i];
+        ret.corner_values[i] = g_lighting->shadows.shadow_boxes[0].corner_values[i];
     }
     for (uint32_t i = 0; i < 8; ++i)
     {
-        ret.frustum_corners[i] = g_lighting->shadows.ls_corners[i];
+        ret.frustum_corners[i] = g_lighting->shadows.shadow_boxes[0].ls_corners[i];
     }
     return(ret);
 }
@@ -1166,7 +1174,7 @@ shadow_display_t get_shadow_display(void)
     return(ret);
 }
 
-void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up)
+void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, shadow_box_t *shadow_box)
 {
     float32_t far_width, near_width, far_height, near_height;
     
@@ -1196,46 +1204,46 @@ void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspe
     };    
 
     // Light space
-    g_lighting->shadows.ls_corners[flt] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    g_lighting->shadows.ls_corners[flb] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    shadow_box->ls_corners[flt] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    shadow_box->ls_corners[flb] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * far - right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    g_lighting->shadows.ls_corners[frt] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
-    g_lighting->shadows.ls_corners[frb] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
+    shadow_box->ls_corners[frt] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half + up_view_ax * far_height_half, 1.0f);
+    shadow_box->ls_corners[frb] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * far + right_view_ax * far_width_half - up_view_ax * far_height_half, 1.0f);
     
-    g_lighting->shadows.ls_corners[nlt] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    g_lighting->shadows.ls_corners[nlb] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    shadow_box->ls_corners[nlt] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    shadow_box->ls_corners[nlb] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * near - right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
     
-    g_lighting->shadows.ls_corners[nrt] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
-    g_lighting->shadows.ls_corners[nrb] = g_lighting->shadows.light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
+    shadow_box->ls_corners[nrt] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half + up_view_ax * near_height_half, 1.0f);
+    shadow_box->ls_corners[nrb] = shadow_box->light_view_matrix * vector4_t(ws_p + ws_d * near + right_view_ax * near_width_half - up_view_ax * near_height_half, 1.0f);
 
     float32_t x_min, x_max, y_min, y_max, z_min, z_max;
 
-    x_min = x_max = g_lighting->shadows.ls_corners[0].x;
-    y_min = y_max = g_lighting->shadows.ls_corners[0].y;
-    z_min = z_max = g_lighting->shadows.ls_corners[0].z;
+    x_min = x_max = shadow_box->ls_corners[0].x;
+    y_min = y_max = shadow_box->ls_corners[0].y;
+    z_min = z_max = shadow_box->ls_corners[0].z;
 
     for (uint32_t i = 1; i < 8; ++i)
     {
-	if (x_min > g_lighting->shadows.ls_corners[i].x) x_min = g_lighting->shadows.ls_corners[i].x;
-	if (x_max < g_lighting->shadows.ls_corners[i].x) x_max = g_lighting->shadows.ls_corners[i].x;
+	if (x_min > shadow_box->ls_corners[i].x) x_min = shadow_box->ls_corners[i].x;
+	if (x_max < shadow_box->ls_corners[i].x) x_max = shadow_box->ls_corners[i].x;
 
-	if (y_min > g_lighting->shadows.ls_corners[i].y) y_min = g_lighting->shadows.ls_corners[i].y;
-	if (y_max < g_lighting->shadows.ls_corners[i].y) y_max = g_lighting->shadows.ls_corners[i].y;
+	if (y_min > shadow_box->ls_corners[i].y) y_min = shadow_box->ls_corners[i].y;
+	if (y_max < shadow_box->ls_corners[i].y) y_max = shadow_box->ls_corners[i].y;
 
-	if (z_min > g_lighting->shadows.ls_corners[i].z) z_min = g_lighting->shadows.ls_corners[i].z;
-	if (z_max < g_lighting->shadows.ls_corners[i].z) z_max = g_lighting->shadows.ls_corners[i].z;
+	if (z_min > shadow_box->ls_corners[i].z) z_min = shadow_box->ls_corners[i].z;
+	if (z_max < shadow_box->ls_corners[i].z) z_max = shadow_box->ls_corners[i].z;
     }
     
-    g_lighting->shadows.x_min = x_min = x_min;
-    g_lighting->shadows.x_max = x_max = x_max;
-    g_lighting->shadows.y_min = y_min = y_min;
-    g_lighting->shadows.y_max = y_max = y_max;
-    g_lighting->shadows.z_min = z_min = z_min;
-    g_lighting->shadows.z_max = z_max = z_max;
+    shadow_box->x_min = x_min = x_min;
+    shadow_box->x_max = x_max = x_max;
+    shadow_box->y_min = y_min = y_min;
+    shadow_box->y_max = y_max = y_max;
+    shadow_box->z_min = z_min = z_min;
+    shadow_box->z_max = z_max = z_max;
 
     z_min = z_min - (z_max - z_min);
 
-    g_lighting->shadows.projection_matrix = glm::transpose(matrix4_t(2.0f / (x_max - x_min), 0.0f, 0.0f, -(x_max + x_min) / (x_max - x_min),
+    shadow_box->projection_matrix = glm::transpose(matrix4_t(2.0f / (x_max - x_min), 0.0f, 0.0f, -(x_max + x_min) / (x_max - x_min),
                                                                      0.0f, 2.0f / (y_max - y_min), 0.0f, -(y_max + y_min) / (y_max - y_min),
                                                                      0.0f, 0.0f, 2.0f / (z_max - z_min), -(z_max + z_min) / (z_max - z_min),
                                                                      0.0f, 0.0f, 0.0f, 1.0f));
@@ -1243,10 +1251,10 @@ void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspe
 
 void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
 {
-    auto *sun_pipeline = g_pipeline_manager->get(g_lighting->sun.sun_ppln);
+    auto *sun_pipeline = g_pipeline_manager->get(g_lighting->sun_ppln);
     command_buffer_bind_pipeline(&sun_pipeline->pipeline, &queue->q);
 
-    uniform_group_t groups[3] = {*camera_transforms, g_lighting->sun.sun_group, *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group)};
+    uniform_group_t groups[3] = {*camera_transforms, g_lighting->sun_group, *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group)};
     
     command_buffer_bind_descriptor_sets(&sun_pipeline->layout, {3, groups}, &queue->q);
 
@@ -1256,12 +1264,12 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
         vector3_t ws_light_direction;
     } push_k;
 
-    vector3_t light_pos = vector3_t(g_lighting->ws_light_position[0] * 1000.0f);
+    vector3_t light_pos = vector3_t(g_lighting->suns[0].ws_position * 1000.0f);
     light_pos.x *= -1.0f;
     light_pos.z *= -1.0f;
     push_k.model_matrix = glm::translate(light_pos) * glm::scale(vector3_t(20.0f));
 
-    push_k.ws_light_direction = -glm::normalize(g_lighting->ws_light_position[0]);
+    push_k.ws_light_direction = -glm::normalize(g_lighting->suns[0].ws_position);
 
     command_buffer_push_constant(&push_k, sizeof(push_k), 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sun_pipeline->layout, &queue->q);
 
@@ -1290,8 +1298,8 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     vector4_t sun_ndc = camera->p_m * view_matrix_no_translation * push_k.model_matrix * vector4_t(vector3_t(0, 0, 0), 1.0);
 
     sun_ndc /= sun_ndc.w;
-    g_lighting->sun.ss_light_pos = (vector2_t(sun_ndc) + vector2_t(1.0f)) / 2.0f;
-    g_lighting->sun.ss_light_pos.y = 1.0f - g_lighting->sun.ss_light_pos.y;
+    g_lighting->suns[0].ss_light_pos = (vector2_t(sun_ndc) + vector2_t(1.0f)) / 2.0f;
+    g_lighting->suns[0].ss_light_pos.y = 1.0f - g_lighting->suns[0].ss_light_pos.y;
 }
 
 void make_dfr_rendering_data(void)
@@ -1524,7 +1532,7 @@ void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix,
         matrix4_t inverse_view_matrix;
     } deferred_push_k;
     
-    deferred_push_k.light_position = vector4_t(glm::normalize(-g_lighting->ws_light_position[0]), 1.0f);
+    deferred_push_k.light_position = vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 1.0f);
     deferred_push_k.view_matrix = view_matrix;
     deferred_push_k.inverse_view_matrix = glm::inverse(view_matrix);
     
@@ -1962,11 +1970,11 @@ inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_gr
             vector2_t ss_light_position;
         } ssr_pk;
 
-        ssr_pk.ws_light_position = view_matrix * vector4_t(glm::normalize(-g_lighting->ws_light_position[0]), 0.0f);
+        ssr_pk.ws_light_position = view_matrix * vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 0.0f);
         ssr_pk.view = view_matrix;
         ssr_pk.proj = projection_matrix;
         ssr_pk.proj[1][1] *= -1.0f;
-        ssr_pk.ss_light_position = g_lighting->sun.ss_light_pos;
+        ssr_pk.ss_light_position = g_lighting->suns[0].ss_light_pos;
         
         command_buffer_push_constant(&ssr_pk, sizeof(ssr_pk), 0, VK_SHADER_STAGE_FRAGMENT_BIT, pfx_ssr_ppln->layout, &queue->q);
         command_buffer_draw(&queue->q, 4, 1, 0, 0);
@@ -2399,7 +2407,7 @@ vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uv
 {
     glsl::pk_t pk;
 
-    vector4_t n_light_dir = camera->v_m * vector4_t(glm::normalize(-g_lighting->ws_light_position[0]), 0.0f);
+    vector4_t n_light_dir = camera->v_m * vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 0.0f);
     
     pk.ws_light_direction = vec4(n_light_dir.x, n_light_dir.y, n_light_dir.z, n_light_dir.w);
     for (uint32_t x = 0; x < 4; ++x)

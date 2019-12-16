@@ -3378,7 +3378,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
     camera_t *camera = get_camera_bound_to_3d_output();
 
     // Rendering to the shadow map
-    begin_shadow_offscreen(4000, 4000, queue);
+    begin_shadow_offscreen(lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, queue);
     {
         auto *model_ppln = g_pipeline_manager->get(g_entities->player_shadow_ppln);
         g_entities->player_submission_queue.submit_queued_materials({1, &transforms_ubo_uniform_groups[image_index]}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);

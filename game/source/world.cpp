@@ -2418,7 +2418,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
 
         player->ws_up = ws_normal;
-        player->camera.ws_next_vector = ws_normal;
+        player->camera.ws_next_vector = player->ws_up;
 
         component->state = entity_physics_state_t::ON_GROUND;
 
@@ -2827,14 +2827,23 @@ void update_networked_player(uint32_t player_index)
 
 
 internal_function void update_entities(float32_t dt, application_type_t app_type)
-{       
-    for (uint32_t player_index = 0; player_index < g_entities->player_count; ++player_index)
-    {
-        player_t *player = &g_entities->player_list[player_index];
+{
+    // TODO: Change the structure of this loop
+    // Make it so that it loops through each player_state one at a time, executing every player's player states "synchronously
+    // Instead of crunching through each player's player_states in one go (this should fix a couple bugs to do with terraforming)
+    // TODO: FIND OUT WHY SOMETIMES TERRAFORMING ISN'T THE SAME FOR SERVER AND CLIENT (THEY DON'T AMOUNT TO THE SAME RESULTS!)
+    bool still_have_commands_to_go_through = 1;
 
-        if (player->network.commands_to_flush > 0)
+    while (still_have_commands_to_go_through)
+    {
+        still_have_commands_to_go_through = 0;
+        
+        for (uint32_t player_index = 0; player_index < g_entities->player_count; ++player_index)
         {
-            for (uint32_t i = 0; i < player->network.commands_to_flush; ++i)
+            player_t *player = &g_entities->player_list[player_index];
+
+            // Commands to flush basically equals the amount of player_states that the player has left
+            if (player->network.commands_to_flush > 0)
             {
                 switch (app_type)
                 {
@@ -2856,45 +2865,46 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
                         update_shoot_component(&player->shoot, player, client_local_dt);
                     } break;
                 }
-            }
 
-            player->network.commands_to_flush = 0;
-        }
-        // Basically if it is the client program running
-        else if (player_index == g_entities->main_player)
-        {
-            update_network_component(&player->network, player, 0.0f);
-            update_physics_component(&player->physics, player, dt);
-            update_camera_component(&player->camera, player, dt);
-            update_rendering_component(&player->rendering, player, dt);
-            update_animation_component(&player->animation, player, dt);
-            update_terraform_power_component(&player->terraform_power, player, dt);
-            update_shoot_component(&player->shoot, player, dt);
-        }
-        // Local client (if entity is not controlled by user) or server when there are no commands to flush
-        else
-        {
-            if (player->network.is_remote)
-            {
-                update_network_component(&player->network, player, dt);
+                --player->network.commands_to_flush;
+                still_have_commands_to_go_through |= (player->network.commands_to_flush > 0);
             }
+            // Basically if it is the client program running
+            else if (player_index == g_entities->main_player)
+            {
+                update_network_component(&player->network, player, 0.0f);
+                update_physics_component(&player->physics, player, dt);
+                update_camera_component(&player->camera, player, dt);
+                update_rendering_component(&player->rendering, player, dt);
+                update_animation_component(&player->animation, player, dt);
+                update_terraform_power_component(&player->terraform_power, player, dt);
+                update_shoot_component(&player->shoot, player, dt);
+            }
+            // Local client (if entity is not controlled by user) or server when there are no commands to flush
+            else
+            {
+                if (player->network.is_remote)
+                {
+                    update_network_component(&player->network, player, dt);
+                }
             
-            /*switch (app_type)
+                /*switch (app_type)
+                  {
+                  case application_type_t::WINDOW_APPLICATION_MODE:
+                  {*/
+                update_rendering_component(&player->rendering, player, dt);
+                update_animation_component(&player->animation, player, dt);
+                //} break;
+                //}
+            }
+
+            if (player_index == g_entities->main_player)
             {
-            case application_type_t::WINDOW_APPLICATION_MODE:
-            {*/
-                    update_rendering_component(&player->rendering, player, dt);
-                    update_animation_component(&player->animation, player, dt);
-                    //} break;
-                    //}
-        }
+                buffer_player_state(dt);
+            }
 
-        if (player_index == g_entities->main_player)
-        {
-            buffer_player_state(dt);
+            if (!player->network.is_remote) player->action_flags = 0;
         }
-
-        if (!player->network.is_remote) player->action_flags = 0;
     }
 
     for (uint32_t bullet_index = 0; bullet_index < g_entities->bullet_count; ++bullet_index)
@@ -3554,7 +3564,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
 
 
     // REMOVE THIS - JUST TESTING REMOTE LEVEL STUFF
-    initialize_players(input_state, app_type);
+    //initialize_players(input_state, app_type);
 
     
     
@@ -3582,8 +3592,9 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
         }    
     }
 
-    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
-    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
+    //construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
+    //construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
+    construct_plane(vector3_t(0.0f), 200.0f);
 }
 
 void deinitialize_world(void)
@@ -3764,6 +3775,11 @@ voxel_chunk_t **get_modified_voxel_chunks(uint32_t *count)
 
 static void flag_chunks_previously_modified_by_client(client_t *user_client)
 {
+    if (user_client->modified_chunks_count == 0)
+    {
+        //output_to_debug_console("Client modified no chunks\n");
+    }
+    
     for (uint32_t previously_modified_chunk = 0; previously_modified_chunk < user_client->modified_chunks_count; ++previously_modified_chunk)
     {
         voxel_chunk_t *chunk = *get_voxel_chunk(user_client->previous_received_voxel_modifications[previously_modified_chunk].chunk_index);
@@ -3790,7 +3806,7 @@ static void fill_dummy_voxels(client_modified_chunk_nl_t *chunk)
     for (uint32_t modified_voxel = 0; modified_voxel < chunk->modified_voxel_count; ++modified_voxel)
     {
         local_client_modified_voxel_t *voxel = &chunk->modified_voxels[modified_voxel];
-        g_voxel_chunks->dummy_voxels[voxel->x][voxel->y][voxel->z] = voxel->value;
+        g_voxel_chunks->dummy_voxels[voxel->x][voxel->y][voxel->z] = 100;
     }
 }
 
@@ -3808,8 +3824,12 @@ static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk)
 
 internal_function void ready_chunks_for_voxel_interpolation_reset(void)
 {
+    bool did_correction = 0;
+    
     if (g_voxel_chunks->previous_voxel_delta_packet_front)
     {
+        g_voxel_chunks->elapsed_interpolation_time = 0.0f;
+        
         player_t *user = get_user_player();
         client_t *user_client = get_client(user->network.client_state_index);
 
@@ -3845,13 +3865,17 @@ internal_function void ready_chunks_for_voxel_interpolation_reset(void)
                                     if (g_voxel_chunks->dummy_voxels[coord.x][coord.y][coord.z] != sm_voxel_ptr->next_value)
                                     {
                                         // DO CORRECTION
-                                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = sm_voxel_ptr->next_value;
-                                    
-                                        // Set appropriate flags
-                                        user_client->needs_to_do_voxel_correction = 0;
-                                        user_client->did_voxel_correction = 1;
+                                        //modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = sm_voxel_ptr->next_value;
+
+                                        //did_correction = 1;
                                     }
                                 }
+                            }
+                            else
+                            {
+                                modified_voxel_t *voxel_ptr = sm_voxel_ptr;
+                                voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
+                                modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
                             }
                         }
                     }
@@ -3867,8 +3891,6 @@ internal_function void ready_chunks_for_voxel_interpolation_reset(void)
                         voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
                         modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
                     }
-
-                    output_to_debug_console("Hard set voxel values for chunk\n");
                 }
 
                 ready_chunk_for_gpu_sync(modified_chunk_ptr);
@@ -3876,6 +3898,23 @@ internal_function void ready_chunks_for_voxel_interpolation_reset(void)
         }
         // Unflag chunks that have been modified by the client
         unflag_chunks_previously_modified_by_client(user_client);
+    }
+    else
+    {
+        //g_voxel_chunks->previous_voxel_delta_packet = nullptr;
+    };
+
+    if (did_correction)
+    {
+        player_t *player = get_user_player();
+        client_t *client = get_client(player->network.client_state_index);
+
+        // Set appropriate flags
+        client->needs_to_do_voxel_correction = 0;
+        client->did_voxel_correction = 1;
+        
+        output_to_debug_console("Client did correction on voxels!\n");
+        send_prediction_error_correction(client->previous_client_tick);
     }
 }
 
@@ -3885,10 +3924,17 @@ void update_chunks_from_network(float32_t dt)
     // This is the maximum interpolation time
     float32_t server_snapshot_rate = get_snapshot_server_rate();
 
+    bool did_correction = 0;
+    
     if (g_voxel_chunks->elapsed_interpolation_time < server_snapshot_rate - dt && g_voxel_chunks->previous_voxel_delta_packet_front)
     {
         g_voxel_chunks->elapsed_interpolation_time += dt;
         float32_t progression = g_voxel_chunks->elapsed_interpolation_time / server_snapshot_rate;
+
+        if (progression > 1.0f)
+        {
+            progression = 1.0f;
+        }
         
         player_t *user = get_user_player();
         client_t *user_client = get_client(user->network.client_state_index);
@@ -3897,7 +3943,7 @@ void update_chunks_from_network(float32_t dt)
         flag_chunks_previously_modified_by_client(user_client);
         {
             game_snapshot_voxel_delta_packet_t *voxel_delta = get_previous_voxel_delta_packet();
-        
+
             // Loop through the chunks seen as modified by the server (will probably also be chunks modified by other clients)
             for (uint32_t modified_chunk_index = 0; modified_chunk_index < voxel_delta->modified_count; ++modified_chunk_index)
             {
@@ -3925,15 +3971,20 @@ void update_chunks_from_network(float32_t dt)
                                     if (g_voxel_chunks->dummy_voxels[coord.x][coord.y][coord.z] != sm_voxel_ptr->next_value)
                                     {
                                         // DO CORRECTION
-                                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = sm_voxel_ptr->next_value;
-                                    
-                                        // Set appropriate flags
-                                        user_client->needs_to_do_voxel_correction = 0;
-                                        user_client->did_voxel_correction = 1;
+                                        //modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = sm_voxel_ptr->next_value;
 
-                                        output_to_debug_console("Client did correction\n\n");
+                                        //did_correction = 1;                                        
                                     }
                                 }
+                            }
+                            else
+                            {
+                                modified_voxel_t *voxel_ptr = sm_voxel_ptr;
+                                float32_t interpolated_value_f = interpolate((float32_t)voxel_ptr->previous_value, (float32_t)voxel_ptr->next_value, progression);
+                                //uint8_t interpolated_value = (uint8_t)interpolated_value_f;
+                                voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
+                                //modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = interpolated_value;
+                                modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
                             }
                         }
                     }
@@ -3947,9 +3998,10 @@ void update_chunks_from_network(float32_t dt)
                     {
                         modified_voxel_t *voxel_ptr = &voxel_delta->modified_chunks[modified_chunk_index].modified_voxels[sm_voxel];
                         float32_t interpolated_value_f = interpolate((float32_t)voxel_ptr->previous_value, (float32_t)voxel_ptr->next_value, progression);
-                        uint8_t interpolated_value = (uint8_t)interpolated_value_f;
+                        //uint8_t interpolated_value = (uint8_t)interpolated_value_f;
                         voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_ptr->index, VOXEL_CHUNK_EDGE_LENGTH);
-                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = interpolated_value;
+                        //modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = interpolated_value;
+                        modified_chunk_ptr->voxels[coord.x][coord.y][coord.z] = voxel_ptr->next_value;
                     }
                 }
 
@@ -3963,6 +4015,19 @@ void update_chunks_from_network(float32_t dt)
     {
         //g_voxel_chunks->previous_voxel_delta_packet = nullptr;
     };
+
+    if (did_correction)
+    {
+        player_t *player = get_user_player();
+        client_t *client = get_client(player->network.client_state_index);
+
+        // Set appropriate flags
+        client->needs_to_do_voxel_correction = 0;
+        client->did_voxel_correction = 1;
+        
+        output_to_debug_console("Client did correction on voxels!\n");
+        send_prediction_error_correction(client->previous_client_tick);
+    }
 }
 
 

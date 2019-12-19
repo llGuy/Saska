@@ -21,48 +21,14 @@
 #define SOURCE_RENDERER
 #define MEMORY_API static
 
-using byte_t = uint8_t;
 
+// Just for testing, making sure this all compiles
+#include "../core.hpp"
+#include "../utils.hpp"
+#include "../allocators.hpp"
+#include "../allocators.cpp"
 #include "../memory.cpp"
 
-#define VK_CHECK(f) f
-#define ALLOCA_T(t, c) (t *)alloca(sizeof(t) * c)
-
-template <typename T> struct memory_buffer_view_t
-{
-    uint32_t count;
-    T *buffer;
-    inline void zero(void) { memset(buffer, 0, count * sizeof(T)); }
-    inline T &operator[](uint32_t i) { return(buffer[i]); }
-    inline const T &operator[](uint32_t i) const { return(buffer[i]); }
-};
-template <typename T> void allocate_memory_buffer(memory_buffer_view_t<T> &view, uint32_t count)
-{
-    view.count = count;
-    view.buffer = (T *)allocate_free_list(count * sizeof(T));
-}
-
-#ifndef __GNUC__
-#include <intrin.h>
-#endif
-
-inline constexpr uint32_t left_shift(uint32_t n) { return 1 << n; }
-struct bitset32_t
-{
-    uint32_t bitset = 0;
-
-    inline uint32_t pop_count(void)
-    {
-#ifndef __GNUC__
-	return __popcnt(bitset);
-#else
-	return __builtin_popcount(bitset);  
-#endif
-    }
-    inline void set1(uint32_t bit) { bitset |= left_shift(bit); }
-    inline void set0(uint32_t bit) { bitset &= ~(left_shift(bit)); }
-    inline bool get(uint32_t bit) { return bitset & left_shift(bit); }
-};
 
 struct queue_families_t
 {
@@ -107,89 +73,42 @@ struct gpu_t
 
     swapchain_details_t swapchain_support;
     VkFormat supported_depth_format;
-
-    void find_queue_families(VkSurfaceKHR *surface)
-    {
-        // TODO: Implement
-    }
 };
+
+#define PRIMARY_COMMAND_BUFFER_COUNT 3
+#define SYNCHRONIZATION_PRIMITIVE_COUNT 2
 
 struct vulkan_context_t
 {
     VkInstance instance;
-    debug_callback_t callback;
+    g3d_debug_callback_t callback;
     VkDebugUtilsMessengerEXT debug_messenger;
     gpu_t gpu;
     VkSurfaceKHR surface;
     swapchain_t swapchain;
-    VkSemaphore img_ready [2];
-    VkSemaphore render_finish [2];
-    VkFence cpu_wait [2];
+    VkSemaphore img_ready[SYNCHRONIZATION_PRIMITIVE_COUNT];
+    VkSemaphore render_finish[SYNCHRONIZATION_PRIMITIVE_COUNT];
+    VkFence cpu_wait[SYNCHRONIZATION_PRIMITIVE_COUNT];
     VkCommandPool command_pool;
-    VkCommandBuffer command_buffer[3];
+    g3d_command_buffer_t command_buffers[PRIMARY_COMMAND_BUFFER_COUNT];
     uint32_t image_index;
     uint32_t current_frame;
-
-
-
-    // Pointers to allocators
-    linear_allocator_t *linear_allocator;
-    stack_allocator_t *stack_allocator;
-    free_list_allocator_t *free_list_allocator;
 };
 
 
-
-
-// Global
+// Globals
 static vulkan_context_t graphics_context;
+static stack_dynamic_container_t<VkCommandBuffer, 20, g3d_command_buffer_t> command_buffers;
+
+// Declarations: Vulkan specific code
+static void vk_allocate_command_buffers(VkCommandBuffer *command_buffers, uint32_t count, VkCommandBufferLevel level);
+static void vk_begin_command_buffer(VkCommandBuffer command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance);
+static void vk_submit_command_buffer(VkCommandBuffer command_buffer, VkSemaphore *wait_semaphores, uint32_t wait_semaphore_count, VkSemaphore *signal_semaphores, uint32_t signal_semaphore_count, VkFence fence, VkPipelineStageFlags *pipeline_wait_stages, VkQueue queue);
+static void vk_end_command_buffer(VkCommandBuffer command_buffer);
+static VkSemaphore vk_create_semaphore(void);
+static VkFence vk_create_fence(VkFenceCreateFlags fence_flags);
 
 
-
-
-
-// Memory operations
-static inline void *allocate_linear(uint32_t alloc_size, alignment_t alignment = 1, const char *name = "", linear_allocator_t *allocator = graphics_context.linear_allocator)
-{
-    return(allocate_linear_impl(alloc_size, alignment, name, allocator));
-}
-
-static inline void clear_linear(linear_allocator_t *allocator = graphics_context.linear_allocator)
-{
-    clear_linear_impl(allocator);
-}
-
-static inline void *allocate_stack(uint32_t allocation_size, alignment_t alignment = 1, const char *name = "", stack_allocator_t *allocator = graphics_context.stack_allocator)
-{
-    return(allocate_stack_impl(allocation_size, alignment, name, allocator));
-}
-
-// only applies to the allocation at the top of the stack
-static inline void extend_stack_top(uint32_t extension_size, stack_allocator_t *allocator = graphics_context.stack_allocator)
-{
-    extend_stack_top_impl(extension_size, allocator);
-}
-
-// contents in the allocation must be destroyed by the user
-static inline void pop_stack(stack_allocator_t *allocator = graphics_context.stack_allocator)
-{
-    pop_stack_impl(allocator);
-}
-
-static inline void *allocate_free_list(uint32_t allocation_size, alignment_t alignment = 1, const char *name = "", free_list_allocator_t *allocator = graphics_context.free_list_allocator)
-{
-    return(allocate_free_list_impl(allocation_size, alignment, name, allocator));
-}
-
-static inline void deallocate_free_list(void *pointer, free_list_allocator_t *allocator = graphics_context.free_list_allocator)
-{
-    deallocate_free_list_impl(pointer, allocator);
-}
-
-
-
-// Renderer methods
-#define IMPLEMENT_RENDERER_METHOD(return_type, name, ...) return_type name##__dllimpl(__VA_ARGS__)
 
 static void initialize_vulkan_instance(uint32_t requested_layer_count, const char **requested_layer_names)
 {
@@ -254,7 +173,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSever
 }
 
 
-static void initialize_debug_messenger(debug_callback_t callback)
+static void initialize_debug_messenger(g3d_debug_callback_t callback)
 {
     VkDebugUtilsMessengerCreateInfoEXT debug_info = {};
     debug_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -341,6 +260,39 @@ static void find_depth_format(void)
 }
 
 
+static void find_queue_families(queue_families_t *families, VkPhysicalDevice hardware, VkSurfaceKHR *surface)
+{
+    uint32_t queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(hardware, &queue_family_count, nullptr);
+
+    VkQueueFamilyProperties *queue_properties = (VkQueueFamilyProperties *)allocate_stack(sizeof(VkQueueFamilyProperties) * queue_family_count, alignment_t(1), "queue_family_list_allocation");
+    vkGetPhysicalDeviceQueueFamilyProperties(hardware, &queue_family_count, queue_properties);
+
+    for (uint32_t i = 0; i < queue_family_count; ++i)
+    {
+        if (queue_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && queue_properties[i].queueCount > 0)
+        {
+            families->graphics_family = i;
+        }
+
+        VkBool32 present_support = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(hardware, i, *surface, &present_support);
+	
+        if (queue_properties[i].queueCount > 0 && present_support)
+        {
+            families->present_family = i;
+        }
+	
+        if (families->complete())
+        {
+            break;
+        }
+    }
+
+    pop_stack();
+}
+
+
 static void initialize_gpu(uint32_t requested_layer_count, const char **requested_layer_names)
 {
     // Find GPU
@@ -356,8 +308,8 @@ static void initialize_gpu(uint32_t requested_layer_count, const char **requeste
     for (uint32_t i = 0; i < device_count; ++i)
     {
         graphics_context.gpu.hardware = devices[i];
-
-        graphics_context.gpu.find_queue_families(&graphics_context.surface);
+        
+        find_queue_families(&graphics_context.gpu.queue_families, graphics_context.gpu.hardware, &graphics_context.surface);
 
         VkPhysicalDeviceProperties device_properties;
         vkGetPhysicalDeviceProperties(graphics_context.gpu.hardware, &device_properties);
@@ -513,7 +465,7 @@ static VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *avai
 }
 
 
-static VkExtent2D choose_swapchain_extent(display_window_info_t window_info, const VkSurfaceCapabilitiesKHR *capabilities)
+static VkExtent2D choose_swapchain_extent(g3d_display_window_info_t window_info, const VkSurfaceCapabilitiesKHR *capabilities)
 {
     if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
     {
@@ -532,7 +484,7 @@ static VkExtent2D choose_swapchain_extent(display_window_info_t window_info, con
 }
 
 
-static void initialize_swapchain(display_window_info_t window_info)
+static void initialize_swapchain(g3d_display_window_info_t window_info)
 {
     swapchain_details_t *swapchain_details = &graphics_context.gpu.swapchain_support;
     
@@ -616,13 +568,40 @@ static void initialize_swapchain(display_window_info_t window_info)
 }
 
 
-IMPLEMENT_RENDERER_METHOD(void, initialize_renderer, void *platform_specific, debug_callback_t callback, allocators_t allocators, display_window_info_t window_info)
+static void initialize_command_pool(uint32_t queue_family_index)
 {
-    // Initialize allocator pointers
-    graphics_context.linear_allocator = allocators.linear_allocator;
-    graphics_context.stack_allocator = allocators.stack_allocator;
-    graphics_context.free_list_allocator = allocators.free_list_allocator;
+    VkCommandPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.queueFamilyIndex = queue_family_index;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
+    VK_CHECK(vkCreateCommandPool(graphics_context.gpu.logical_device, &pool_info, nullptr, &graphics_context.command_pool));
+}
+
+
+static void initialize_command_buffers(void)
+{
+    for (uint32_t i = 0; i < PRIMARY_COMMAND_BUFFER_COUNT; ++i)
+    {
+        graphics_context.command_buffers[i] = command_buffers.add();
+        vk_allocate_command_buffers(command_buffers.get(graphics_context.command_buffers[i]), 1, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    }
+}
+
+
+static void initialize_synchronization_primitives(void)
+{
+    for (uint32_t i = 0; i < SYNCHRONIZATION_PRIMITIVE_COUNT; ++i)
+    {
+        graphics_context.cpu_wait[i] = vk_create_fence(VK_FENCE_CREATE_SIGNALED_BIT);
+        graphics_context.img_ready[i] = vk_create_semaphore();
+        graphics_context.render_finish[i] = vk_create_semaphore();
+    }
+}
+
+
+void g3d_initialize_renderer(void *platform_specific, g3d_debug_callback_t callback, g3d_display_window_info_t window_info)
+{
     const uint32_t requested_layer_count = 1;
     const char *requested_layer_names[requested_layer_count] = { "VK_LAYER_LUNARG_standard_validation" };
     
@@ -631,4 +610,142 @@ IMPLEMENT_RENDERER_METHOD(void, initialize_renderer, void *platform_specific, de
     initialize_surface(platform_specific);
     initialize_gpu(requested_layer_count, requested_layer_names);
     initialize_swapchain(window_info);
+    initialize_command_pool(graphics_context.gpu.queue_families.graphics_family);
+    initialize_command_buffers();
+    initialize_synchronization_primitives();
+}
+
+
+struct next_image_return_t {VkResult result; uint32_t image_index;};
+next_image_return_t acquire_next_image(VkSemaphore semaphore, VkFence fence)
+{
+    uint32_t image_index = 0;
+    
+    VkResult result = vkAcquireNextImageKHR(graphics_context.gpu.logical_device, graphics_context.swapchain.swapchain, std::numeric_limits<uint64_t>::max(), semaphore, fence, &image_index);
+    
+    return(next_image_return_t{result, image_index});
+}
+
+
+void g3d_begin_frame_rendering(void)
+{
+    static uint32_t current_frame = 0;
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
+    graphics_context.current_frame = 0;
+    
+    VkFence null_fence = VK_NULL_HANDLE;
+    
+    next_image_return_t next_image_data = acquire_next_image(graphics_context.img_ready[graphics_context.current_frame], null_fence);
+    
+    if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        //recreate_swapchain(input_state);
+	return {};
+    }
+    else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
+    {
+    }
+
+    vkWaitForFences(graphics_context.gpu.logical_device, 1, &graphics_context.cpu_wait[graphics_context.current_frame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+
+    vkResetFences(graphics_context.gpu.logical_device, 1, &graphics_context.cpu_wait[graphics_context.current_frame]);
+
+    graphics_context.image_index = next_image_data.image_index;
+
+    // Begin command buffer for any kind of rendering operations
+    vk_begin_command_buffer(*command_buffers.get(graphics_context.command_buffer[graphics_context.current_frame]), 0, nullptr);
+}
+
+
+static void g3d_end_frame_rendering_and_refresh(void)
+{
+    end_command_buffer(*command_buffers.get(g_context->command_buffer[g_context->current_frame]));
+
+    VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
+
+    submit(memory_buffer_view_t<VkCommandBuffer>{1, &g_context->command_buffer[g_context->current_frame]},
+           memory_buffer_view_t<VkSemaphore>{1, &g_context->img_ready[g_context->current_frame]},
+           memory_buffer_view_t<VkSemaphore>{1, &g_context->render_finish[g_context->current_frame]},
+           memory_buffer_view_t<VkPipelineStageFlags>{1, &wait_stages},
+           &g_context->cpu_wait[g_context->current_frame],
+           &g_context->gpu.graphics_queue);
+    
+    VkSemaphore signal_semaphores[] = {g_context->render_finish[g_context->current_frame]};
+
+    VkResult result = present(memory_buffer_view_t<VkSemaphore>{1, &g_context->render_finish[g_context->current_frame]},
+                              &g_context->image_index,
+                              &g_context->gpu.present_queue);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+    {
+        //recreate_swapchain(input_state);
+    }
+    else if (result != VK_SUCCESS)
+    {
+	OUTPUT_DEBUG_LOG("%s\n", "failed to present swapchain image");
+    }
+}
+
+
+// Definitions: Vulkan specific code
+static void vk_allocate_command_buffers(VkCommandBuffer *command_buffers, uint32_t count, VkCommandBufferLevel level)
+{
+    VkCommandBufferAllocateInfo allocate_info = {};
+    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_info.level = level;
+    allocate_info.commandPool = graphics_context.command_pool;
+    allocate_info.commandBufferCount = count;
+
+    vkAllocateCommandBuffers(graphics_context.gpu.logical_device, &allocate_info, command_buffers);
+}
+
+
+static VkSemaphore vk_create_semaphore(void)
+{
+    VkSempahore semaphore;
+    
+    VkSemaphoreCreateInfo semaphore_info = {};
+    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	
+    VK_CHECK(vkCreateSemaphore(graphics_context.gpu.logical_device, &semaphore_info, nullptr, &semaphore));
+
+    return(semaphore);
+}
+
+
+static VkFence vk_create_fence(VkFenceCreateFlags fence_flags)
+{
+    VkFence fence;
+    
+    VkFenceCreateInfo fence_info = {};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fence_info.flags = fence_flags;
+
+    VK_CHECK(vkCreateFence(graphics_context.gpu.logical_device, &fence_info, nullptr, &fence));
+
+    return(fence);
+}
+
+
+static void vk_begin_command_buffer(VkCommandBuffer command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance)
+{
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = usage_flags;
+    begin_info.pInheritanceInfo = inheritance;
+
+    vkBeginCommandBuffer(command_buffer, &begin_info);
+}
+
+
+static void vk_end_command_buffer(VkCommandBuffer command_buffer)
+{
+    vkEndCommandBuffer(command_buffer);
+}
+
+
+static void vk_submit_command_buffer(VkCommandBuffer command_buffer, VkSemaphore *wait_semaphores, uint32_t wait_semaphore_count, VkSemaphore *signal_semaphores, uint32_t signal_semaphore_count, VkFence fence, VkPipelineStageFlags *pipeline_wait_stages, VkQueue queue)
+{
+    
 }

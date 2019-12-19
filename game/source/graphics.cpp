@@ -587,7 +587,7 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    update_shadows(500.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u, &g_lighting->shadows.shadow_boxes[0]);
+    update_shadows(150.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u, &g_lighting->shadows.shadow_boxes[0]);
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 

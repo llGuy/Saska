@@ -1,3 +1,5 @@
+// TODO: Find out why the hell the "next_value" of the voxels sent to the client not match the seemingly actual value of the voxels!!!
+
 // TODO: Make sure that packet header's total packet size member matches the actual amount of bytes received by the socket
 
 #include <cassert>
@@ -604,6 +606,8 @@ void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game
 
     packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count, 1, "", allocator);
 
+    uint32_t output_count = 0;
+    
     for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
     {
         packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
@@ -616,7 +620,15 @@ void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game
             packet->modified_chunks[chunk].modified_voxels[voxel].previous_value = deserialize_uint8(serializer);
             packet->modified_chunks[chunk].modified_voxels[voxel].next_value = deserialize_uint8(serializer);
             packet->modified_chunks[chunk].modified_voxels[voxel].index = deserialize_uint16(serializer);
+
+            ++output_count;
+            output_to_debug_console((int32_t)(packet->modified_chunks[chunk].modified_voxels[voxel].next_value), " ");
         }
+    }
+
+    if (output_count)
+    {
+        output_to_debug_console("\n");
     }
 }
 
@@ -657,7 +669,38 @@ void join_server(const char *ip_address, const char *client_name)
     g_network_state->server_address = server_address;
 }
 
+
+void join_loop_back(uint32_t client_index /* will be the client name */)
+{
+    const char *ip_address = "127.0.0.1";
+    
+    char client_name[10];
+    sprintf(client_name, "%d", client_index);
+    
+    packet_header_t header = {};
+    client_join_packet_t packet = {};
+    {
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_CLIENT_JOIN;
+        packet.client_name = client_name;
+    }
+    header.total_packet_size = sizeof_packet_header();
+    header.total_packet_size += strlen(packet.client_name) + 1;
+
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, header.total_packet_size);
+    serialize_packet_header(&serializer, &header);
+    serialize_client_join_packet(&serializer, &packet);
+    
+    network_address_t server_address { (uint16_t)host_to_network_byte_order(g_network_state->GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
+    send_serialized_message(&serializer, server_address);
+
+    g_network_state->server_address = server_address;
+}
+
+
 internal_function int32_t lua_join_server(lua_State *state);
+internal_function int32_t lua_join_loop_back(lua_State *state);
 internal_function int32_t lua_toggle_freeze_receiver_thread(lua_State *state);
 internal_function int32_t lua_toggle_freeze_client_after_input(lua_State *state);
 
@@ -670,6 +713,7 @@ void initialize_as_client(void)
     bind_network_socket_to_port(&g_network_state->main_network_socket, address);
     set_socket_to_non_blocking_mode(&g_network_state->main_network_socket);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "lb", &lua_join_loop_back);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_freeze_receiver_thread", &lua_toggle_freeze_receiver_thread);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "freeze_after_input_packet_sent", &lua_toggle_freeze_client_after_input);
 
@@ -894,6 +938,9 @@ void dispatch_snapshot_to_clients(void)
 
     voxel_packet.modified_count = modified_chunks_count;
     voxel_packet.modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * modified_chunks_count);
+
+    // FOR DEBUGGING
+    uint32_t output_count = 0;
     
     for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
     {
@@ -910,8 +957,13 @@ void dispatch_snapshot_to_clients(void)
             voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
             modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
             modified_chunk->modified_voxels[voxel].index = voxel_index;
+
+            ++output_count;
+            output_to_debug_console((int32_t)(modified_chunk->modified_voxels[voxel].next_value), " ");
         }
     }
+
+    output_to_debug_console(" -> ");
     
     // Prepare the player snapshot packets
     for (uint32_t client_index = 0; client_index < g_network_state->client_count; ++client_index)
@@ -974,17 +1026,50 @@ void dispatch_snapshot_to_clients(void)
             // Now need to serialize the chunks / voxels that the client has modified, so that the client can remember which voxels it modified so that it does not do interpolation for the "correct" voxels that it just calculated
             serialize_uint32(&out_serializer, client->modified_chunks_count);
 
+            bool force_client_to_do_voxel_correction = 0;
             for (uint32_t chunk = 0; chunk < client->modified_chunks_count; ++chunk)
             {
                 serialize_uint16(&out_serializer, client->previous_received_voxel_modifications[chunk].chunk_index);
                 serialize_uint32(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxel_count);
+
+                client_modified_chunk_nl_t *modified_chunk_data = &client->previous_received_voxel_modifications[chunk];
+                voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                
                 for (uint32_t voxel = 0; voxel < client->previous_received_voxel_modifications[chunk].modified_voxel_count; ++voxel)
                 {
-                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
-                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
-                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
-                    serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].value);
+                    local_client_modified_voxel_t *voxel_ptr = &modified_chunk_data->modified_voxels[voxel];
+                    uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z];
+
+                    if (actual_voxel_value != voxel_ptr->value)
+                    {
+                        force_client_to_do_voxel_correction = 1;
+
+                        client->needs_to_do_voxel_correction = 1;
+                        client->needs_to_acknowledge_prediction_error = 1;
+                        
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
+                        serialize_uint8(&out_serializer, actual_voxel_value);
+                    }
+                    // If the prediction was correct, do not force client to do the correction
+                    else
+                    {
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
+                        serialize_uint8(&out_serializer, 255);
+                    }
                 }
+            }
+
+            if (force_client_to_do_voxel_correction)
+            {
+                output_to_debug_console("Client needs to do voxel correction: waiting for correction\n"); 
+                            
+                player_snapshot_packet->need_to_do_voxel_correction = 1;
+                player_snapshot_packet->need_to_do_correction = 1;
+                client->needs_to_acknowledge_prediction_error = 1;
             }
             
             for (uint32_t i = 0; i < g_network_state->client_count; ++i)
@@ -997,13 +1082,29 @@ void dispatch_snapshot_to_clients(void)
                         float32_t precision = 0.1f;
                         vector3_t ws_position_difference = glm::abs(previous_received_player_state->ws_position - player_snapshot_packet->ws_position);
                         vector3_t ws_direction_difference = glm::abs(previous_received_player_state->ws_direction - player_snapshot_packet->ws_direction);
-                        if (ws_position_difference.x > precision ||
-                            ws_position_difference.y > precision ||
-                            ws_position_difference.z > precision ||
-                            ws_direction_difference.x > precision ||
-                            ws_direction_difference.y > precision ||
-                            ws_direction_difference.z > precision)
+
+                        bool position_is_different = (ws_position_difference.x > precision ||
+                                                      ws_position_difference.y > precision ||
+                                                      ws_position_difference.z > precision);
+
+                        bool direction_is_different = (ws_direction_difference.x > precision ||
+                                                       ws_direction_difference.y > precision ||
+                                                       ws_direction_difference.z > precision);
+
+                        if (position_is_different)
                         {
+                            output_to_debug_console("pos-");
+                        }
+
+                        if (direction_is_different)
+                        {
+                            output_to_debug_console("dir-");
+                        }
+                        
+                        if (position_is_different || direction_is_different)
+                        {
+                            output_to_debug_console("correction-");
+                            
                             // Make sure that server invalidates all packets previously sent by the client
                             player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
                             player->network.player_states_cbuffer.head_tail_difference = 0;
@@ -1012,44 +1113,6 @@ void dispatch_snapshot_to_clients(void)
                             player_snapshot_packet->need_to_do_correction = 1;
 
                             // Server will now wait until reception of a prediction error packet
-                            client->needs_to_acknowledge_prediction_error = 1;
-                        }
-                        else
-                        {
-                            player_snapshot_packet->need_to_do_correction = 0;
-                        }
-
-                        // Next, check if the submitted voxels that the client calculated are correct or not. If they are not, force voxel correction on the client
-                        bool force_client_to_do_voxel_correction = 0;
-                        for (uint32_t client_modified_chunk = 0; client_modified_chunk < client->modified_chunks_count; ++client_modified_chunk)
-                        {
-                            client_modified_chunk_nl_t *modified_chunk_data = &client->previous_received_voxel_modifications[client_modified_chunk];
-                            voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
-                            for (uint32_t modified_voxel = 0; modified_voxel < modified_chunk_data->modified_voxel_count; ++modified_voxel)
-                            {
-                                local_client_modified_voxel_t *voxel = &modified_chunk_data->modified_voxels[modified_voxel];
-                                uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel->x][voxel->y][voxel->z];
-                                if (actual_voxel_value != voxel->value)
-                                {
-                                    // TODO: TEST THIS: Does the client only correct the voxels that it calculated wrong? or all the voxels? (like a sync?)
-                                    force_client_to_do_voxel_correction = 1;
-                                    client->needs_to_do_voxel_correction = 1;
-                                    client->needs_to_acknowledge_prediction_error = 1;
-                                    break;
-                                }
-                            }
-
-                            if (force_client_to_do_voxel_correction)
-                            {
-                                break;
-                            }
-                        }
-
-                        if (force_client_to_do_voxel_correction)
-                        {
-                            output_to_debug_console("Client needs to do voxel correction: waiting for correction\n\n");
-                            
-                            player_snapshot_packet->need_to_do_voxel_correction = 1;
                             client->needs_to_acknowledge_prediction_error = 1;
                         }
                         
@@ -1063,10 +1126,14 @@ void dispatch_snapshot_to_clients(void)
 
                 serialize_game_snapshot_player_state_packet(&out_serializer, &player_snapshots[i]);
             }
-        
+
+            client->modified_chunks_count = 0;
             send_serialized_message(&out_serializer, client->network_address);
+            output_to_debug_console(client->name, " ");
        }
     }
+
+    output_to_debug_console("\n");
 
     clear_chunk_history_for_server();
 }
@@ -1228,10 +1295,9 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                     client_modified_voxels_packet_t voxel_packet = {};
                                     deserialize_client_modified_voxels_packet(&in_serializer, &voxel_packet);
 
-                                    client->modified_chunks_count = voxel_packet.modified_chunk_count;
-                                    for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+                                    for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
                                     {
-                                        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i];
+                                        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
                                         chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
                                         chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
                                         for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
@@ -1242,6 +1308,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                             chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
                                         }
                                     }
+                                    client->modified_chunks_count += voxel_packet.modified_chunk_count;
                                 }
                             } break;
                         case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
@@ -1252,7 +1319,7 @@ void update_as_server(input_state_t *input_state, float32_t dt)
                                 player_t *player = get_player(client->player_handle);
 
                                 client->previous_client_tick = deserialize_uint64(&in_serializer);
-                                client->received_input_commands = 0;
+                                //client->received_input_commands = 0;
                             } break;
                         case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
                             {
@@ -1398,7 +1465,7 @@ void fill_last_player_state_if_needed(player_t *player)
 }
 
 
-internal_function void send_prediction_error_correction(uint64_t tick)
+void send_prediction_error_correction(uint64_t tick)
 {
     serializer_t serializer = {};
     initialize_serializer(&serializer, sizeof_packet_header() + sizeof(uint64_t));
@@ -1547,7 +1614,7 @@ void update_as_client(input_state_t *input_state, float32_t dt)
 
                     client_modified_voxels_packet_t modified_voxels = {};
                     deserialize_client_modified_voxels_packet(&in_serializer, &modified_voxels);
-                    
+
                     for (uint32_t i = 0; i < g_network_state->client_count; ++i)
                     {
                         // This is the player state to compare with what the server sent
@@ -1562,20 +1629,50 @@ void update_as_client(input_state_t *input_state, float32_t dt)
                         // We are dealing with the local client: we need to deal with the correction stuff
                         if (local_user->network.client_state_index == player_snapshot_packet.client_id && !player_snapshot_packet.is_to_ignore)
                         {
+                            client->previous_client_tick = previous_tick;
+                            
                             if (player_snapshot_packet.need_to_do_correction)
-                            {                                        
+                            {
                                 // Do correction here
                                 // TODO: THIS NEEDS TO HAPPEN IN UPDATE_NETWORK_COMPONENT() WHEN THE VOXEL CORRECTIONS HAPPEN
                                 player_t *player = get_user_player();
                                 player->ws_p = player_snapshot_packet.ws_position;
                                 player->ws_d = player_snapshot_packet.ws_direction;
                                 player->ws_v = player_snapshot_packet.ws_velocity;
+                                player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
                             }
 
-                            if (player_snapshot_packet.need_to_do_correction || player_snapshot_packet.need_to_do_voxel_correction)
+                            if (player_snapshot_packet.need_to_do_correction)
                             {
-                                // Send a prediction error correction packet
-                                send_prediction_error_correction(previous_tick);
+                                if (player_snapshot_packet.need_to_do_voxel_correction)
+                                {
+                                    // Do voxel correction
+                                    for (uint32_t chunk = 0; chunk < modified_voxels.modified_chunk_count; ++chunk)
+                                    {
+                                        client_modified_chunk_t *modified_chunk_data = &modified_voxels.modified_chunks[chunk];
+                                        voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                
+                                        for (uint32_t voxel = 0; voxel < modified_chunk_data->modified_voxel_count; ++voxel)
+                                        {
+                                            local_client_modified_voxel_t *voxel_ptr = &modified_chunk_data->modified_voxels[voxel];
+                                            uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z];
+
+                                            // Needs to be corrected
+                                            if (voxel_ptr->value != 255)
+                                            {
+                                                // voxel_ptr->value contains the real value that the server has
+                                                actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z] = voxel_ptr->value;
+                                            }
+                                        }
+                                    }
+                                    
+                                    send_prediction_error_correction(previous_tick);
+                                }
+                                else
+                                {
+                                    // Send a prediction error correction packet
+                                    send_prediction_error_correction(previous_tick);
+                                }
 
                                 // The correction of the voxels will happen later (deffered, but it will happen)
                             }
@@ -1673,6 +1770,15 @@ internal_function int32_t lua_join_server(lua_State *state)
     const char *user_name = lua_tostring(state, -1);
 
     join_server(ip_address, user_name);
+
+    return(0);
+}
+
+internal_function int32_t lua_join_loop_back(lua_State *state)
+{
+    int32_t index = lua_tonumber(state, -1);
+    
+    join_loop_back(index);
 
     return(0);
 }

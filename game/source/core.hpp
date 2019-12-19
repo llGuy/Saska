@@ -185,15 +185,15 @@ input_state_t *get_input_state(void);
 void enable_cursor_display(void);
 void disable_cursor_display(void);
 
-template <typename T, uint32_t Max> struct stack_dynamic_container_t
+template <typename T, uint32_t Max, typename Index_Type = uint32_t> struct stack_dynamic_container_t
 {
     uint32_t data_count = 0;
     T data[Max];
 
     uint32_t removed_count = 0;
-    uint32_t removed[Max];
+    Index_Type removed[Max];
 
-    uint32_t add(void)
+    Index_Type add(void)
     {
         if (removed_count)
         {
@@ -205,12 +205,12 @@ template <typename T, uint32_t Max> struct stack_dynamic_container_t
         }
     }
 
-    T *get(uint32_t index)
+    T *get(Index_Type index)
     {
         return &data[index];
     }
 
-    void remove(uint32_t index)
+    void remove(Index_Type index)
     {
         removed[removed_count++] = index;
     }

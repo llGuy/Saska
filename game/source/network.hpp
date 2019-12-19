@@ -332,7 +332,8 @@ struct client_t
     
     // Client will most likely only ever be able to terraform 4 chunks per action flag packet
     uint32_t modified_chunks_count = 0;
-    client_modified_chunk_nl_t previous_received_voxel_modifications[5];
+    // Accumulates for every action flag packet
+    client_modified_chunk_nl_t previous_received_voxel_modifications[30];
 
     bool received_input_commands = 0;
 
@@ -417,6 +418,8 @@ struct network_state_t
     bool client_will_freeze_after_input = 0;
     bool sent_active_action_flags = 0;
 };
+
+void send_prediction_error_correction(uint64_t tick);
 
 void fill_last_player_state_if_needed(player_t *player);
 

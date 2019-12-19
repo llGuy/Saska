@@ -490,7 +490,7 @@ struct camera_t
 	d = vector3_t(+1, 0.0f, +1);
 	u = vector3_t(0, 1, 0);
 
-	fov = glm::radians(60.0f);
+	fov = current_fov = glm::radians(60.0f);
 	asp = w / h;
 	n = 1.0f;
 	f = 10000000.0f;
@@ -869,7 +869,7 @@ struct lighting_t
     struct shadows_t
     {
         persist_var constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
-        persist_var constexpr uint32_t SHADOWMAP_W = 1500, SHADOWMAP_H = 1500;
+        persist_var constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
         
         framebuffer_handle_t fbo;
         render_pass_handle_t pass;

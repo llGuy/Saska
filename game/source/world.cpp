@@ -22,65 +22,65 @@ constexpr uint8_t VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY = 255;
 constexpr float32_t MAX_VOXEL_VALUE = 254.0f;
 
 // To initialize with initialize translation unit function
-global_var struct entities_t *g_entities;
-global_var struct voxel_chunks_t *g_voxel_chunks;
-global_var struct particles_t *g_particles;
-global_var bool *g_initialized_world;
-global_var uint64_t *g_current_tick;
+static struct entities_t *g_entities;
+static struct voxel_chunks_t *g_voxel_chunks;
+static struct particles_t *g_particles;
+static bool *g_initialized_world;
+static uint64_t *g_current_tick;
 
 enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
 
 // Initialization
-internal_function void hard_initialize_chunks(void);
+static void hard_initialize_chunks(void);
 void initialize_chunk(voxel_chunk_t *chunk, vector3_t chunk_position, ivector3_t chunk_coord, bool allocate_history);
 void deinitialize_chunk(voxel_chunk_t *chunk);
 
 // Vector space operations
-internal_function vector3_t get_voxel_world_origin(void);
-internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length = VOXEL_CHUNK_EDGE_LENGTH);
-internal_function vector3_t ws_to_xs(const vector3_t &ws_position);
+static vector3_t get_voxel_world_origin(void);
+static bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length = VOXEL_CHUNK_EDGE_LENGTH);
+static vector3_t ws_to_xs(const vector3_t &ws_position);
 int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
 voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length);
 
 // Voxel coordinate fetching / system
 voxel_chunk_t **get_voxel_chunk(int32_t index);
-internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position);
-internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position);
-internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position);
+static voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position);
+static ivector3_t get_voxel_coord(const vector3_t &xs_position);
+static ivector3_t get_voxel_coord(const ivector3_t &xs_position);
 
 // Modifications
 // Does not keep track of history
-internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+static void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
 // Keeps track of history
-internal_function void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
+static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt);
 
-internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
-internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
-internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius);
-internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive);
+static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
+static void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
+static void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius);
+static void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive);
 
 // Rendering / Mesh / GPU operations
-internal_function void clear_chunk_render_queue(void);
-internal_function void push_chunks_with_active_vertices(void);
+static void clear_chunk_render_queue(void);
+static void push_chunks_with_active_vertices(void);
 // TODO: Function that only pushes chunks that are in player sight
-internal_function void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level);
-internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist);
-internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk);
-internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level);
+static void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level);
+static uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist);
+static void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk);
+static void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level);
 void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
 void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
 void push_chunk_to_render_queue(voxel_chunk_t *chunk);
-internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue);
-internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo);
+static void sync_gpu_with_chunk_state(gpu_command_queue_t *queue);
+static void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo);
 
 // Math
-internal_function float32_t lerp(float32_t a, float32_t b, float32_t x);
-internal_function vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x);
-internal_function float32_t interpolate(float32_t a, float32_t b, float32_t x);
-internal_function float32_t squared(float32_t f);
-internal_function float32_t distance_squared(const vector3_t &dir);
-internal_function float32_t calculate_sphere_circumference(float32_t radius);
-internal_function vector4_t hex_to_v4_color(uint32_t hex_value);
+static float32_t lerp(float32_t a, float32_t b, float32_t x);
+static vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x);
+static float32_t interpolate(float32_t a, float32_t b, float32_t x);
+static float32_t squared(float32_t f);
+static float32_t distance_squared(const vector3_t &dir);
+static float32_t calculate_sphere_circumference(float32_t radius);
+static vector4_t hex_to_v4_color(uint32_t hex_value);
 
 // Collision
 struct movement_axes_t
@@ -90,7 +90,7 @@ struct movement_axes_t
     vector3_t forward;
 };
 
-internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up);
+static movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up);
 enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
 struct collision_t
 {
@@ -108,90 +108,90 @@ struct collision_t
     vector3_t es_normal;
     float32_t es_distance;
 };
-internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count);
-internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max);
-internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c);
-internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root);
-internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal);
-internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision);
-internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision);
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size);
-internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision);
+static void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count);
+static void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max);
+static bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c);
+static bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root);
+static float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal);
+static void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision);
+static void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision);
+static void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size);
+static collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision);
 
 // Entities
-internal_function player_t *get_main_player(void);
-internal_function player_t *get_player(const constant_string_t &name);
+static player_t *get_main_player(void);
+static player_t *get_player(const constant_string_t &name);
 player_t *get_player(player_handle_t v);
 
-internal_function void push_bullet_to_queue(bullet_t *bullet);
-internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
-internal_function void push_player_to_animated_queue(player_t *player);
-internal_function void push_player_to_rolling_queue(player_t *player);
-internal_function void push_bullet_to_rolling_queue(bullet_t *b);
-internal_function void update_animation_gpu_data(gpu_command_queue_t *queue);
+static void push_bullet_to_queue(bullet_t *bullet);
+static void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue);
+static void push_player_to_animated_queue(player_t *player);
+static void push_player_to_rolling_queue(player_t *player);
+static void push_bullet_to_rolling_queue(bullet_t *b);
+static void update_animation_gpu_data(gpu_command_queue_t *queue);
 
-internal_function void destroy_bullet(uint32_t index);
-internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *info);
-internal_function void construct_player(player_t *player, player_create_info_t *info);
-internal_function player_handle_t add_player(const player_t &e);
-internal_function void make_player_main(player_handle_t player_handle);
+static void destroy_bullet(uint32_t index);
+static void construct_bullet(bullet_t *bullet, bullet_create_info_t *info);
+static void construct_player(player_t *player, player_create_info_t *info);
+static player_handle_t add_player(const player_t &e);
+static void make_player_main(player_handle_t player_handle);
 
-internal_function void update_camera_component(camera_component_t *camera, player_t *player, float32_t dt);
-internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt);
-internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *player, float32_t dt, uint32_t index);
-internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt);
-internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt);
-internal_function void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
-internal_function void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
-internal_function float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt);
-internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
-internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
-internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
-internal_function void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index);
-internal_function void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position);
-internal_function void extinguish_fire(burnable_component_t *burnable_component);
-internal_function void update_entities(float32_t dt, application_type_t app_type);
+static void update_camera_component(camera_component_t *camera, player_t *player, float32_t dt);
+static void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt);
+static void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *player, float32_t dt, uint32_t index);
+static void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt);
+static void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt);
+static void update_standing_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+static void update_rolling_player_physics(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+static void update_not_physically_affected_player(physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt);
+static float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt);
+static void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt);
+static void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt);
+static void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index);
+static void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index);
+static void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position);
+static void extinguish_fire(burnable_component_t *burnable_component);
+static void update_entities(float32_t dt, application_type_t app_type);
 
-internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
-internal_function void initialize_players(input_state_t *input_state, application_type_t app_type);
-internal_function void initialize_players(game_state_initialize_packet_t *packet);
-internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
+static void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
+static void initialize_players(input_state_t *input_state, application_type_t app_type);
+static void initialize_players(game_state_initialize_packet_t *packet);
+static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
 
-internal_function void hard_initialize_particles(void);
-internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt);
-internal_function void particle_effect_fire(particle_spawner_t *spawner, float32_t dt);
-internal_function void update_particles(float32_t dt);
-internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue);
+static void hard_initialize_particles(void);
+static void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt);
+static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt);
+static void update_particles(float32_t dt);
+static void sync_gpu_with_particle_state(gpu_command_queue_t *queue);
 
-internal_function int32_t lua_get_player_position(lua_State *state);
-internal_function int32_t lua_set_player_position(lua_State *state);
-internal_function int32_t lua_toggle_collision_box_render(lua_State *state);
-internal_function int32_t lua_toggle_collision_edge_render(lua_State *state);
-internal_function int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
-internal_function int32_t lua_render_player_direction_information(lua_State *state);
-internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state);
-internal_function int32_t lua_get_player_ts_view_direction(lua_State *state);
-internal_function int32_t lua_enable_physics(lua_State *state);
-internal_function int32_t lua_disable_physics(lua_State *state);
-internal_function int32_t lua_load_mesh(lua_State *state);
-internal_function int32_t lua_load_model_information_for_mesh(lua_State *state);
-internal_function int32_t lua_load_skeleton(lua_State *state);
-internal_function int32_t lua_load_animations(lua_State *state);
-internal_function int32_t lua_initialize_player(lua_State *state);
-internal_function int32_t lua_attach_rendering_component(lua_State *state);
-internal_function int32_t lua_attach_animation_component(lua_State *state);
-internal_function int32_t lua_attach_physics_component(lua_State *state);
-internal_function int32_t lua_attach_camera_component(lua_State *state);
-internal_function int32_t lua_bind_player_to_3d_output(lua_State *state);
-internal_function int32_t lua_go_down(lua_State *state);
-internal_function int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
-internal_function int32_t lua_reinitialize(lua_State *state);
+static int32_t lua_get_player_position(lua_State *state);
+static int32_t lua_set_player_position(lua_State *state);
+static int32_t lua_toggle_collision_box_render(lua_State *state);
+static int32_t lua_toggle_collision_edge_render(lua_State *state);
+static int32_t lua_toggle_sphere_collision_triangles_render(lua_State *state);
+static int32_t lua_render_player_direction_information(lua_State *state);
+static int32_t lua_set_veclocity_in_view_direction(lua_State *state);
+static int32_t lua_get_player_ts_view_direction(lua_State *state);
+static int32_t lua_enable_physics(lua_State *state);
+static int32_t lua_disable_physics(lua_State *state);
+static int32_t lua_load_mesh(lua_State *state);
+static int32_t lua_load_model_information_for_mesh(lua_State *state);
+static int32_t lua_load_skeleton(lua_State *state);
+static int32_t lua_load_animations(lua_State *state);
+static int32_t lua_initialize_player(lua_State *state);
+static int32_t lua_attach_rendering_component(lua_State *state);
+static int32_t lua_attach_animation_component(lua_State *state);
+static int32_t lua_attach_physics_component(lua_State *state);
+static int32_t lua_attach_camera_component(lua_State *state);
+static int32_t lua_bind_player_to_3d_output(lua_State *state);
+static int32_t lua_go_down(lua_State *state);
+static int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
+static int32_t lua_reinitialize(lua_State *state);
 
-internal_function void entry_point(void);
+static void entry_point(void);
 void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
 void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
-internal_function void clean_up_entities(void);
+static void clean_up_entities(void);
 void clean_up_world_data(void);
 void make_world_data(void /* Some kind of state */);
 void update_network_world_state(void);
@@ -199,7 +199,7 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
 void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
 void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
 void update_chunks_from_network(float32_t dt);
-internal_function void ready_chunks_for_voxel_interpolation_reset(void);
+static void ready_chunks_for_voxel_interpolation_reset(void);
 void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
 void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
@@ -219,7 +219,7 @@ uint64_t *get_current_tick(void)
 // ******************************** Voxel code ********************************
 
 // Initialize rendering data, stuff that should only be initialize at the beginning of the game running in general
-internal_function void hard_initialize_chunks(void)
+static void hard_initialize_chunks(void)
 {        
     g_voxel_chunks->chunk_model.attribute_count = 1;
     g_voxel_chunks->chunk_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
@@ -314,13 +314,13 @@ internal_function void hard_initialize_chunks(void)
 }
 
 
-internal_function vector3_t get_voxel_world_origin(void)
+static vector3_t get_voxel_world_origin(void)
 {
     return -vector3_t((float32_t)g_voxel_chunks->grid_edge_size / 2.0f) * (float32_t)(VOXEL_CHUNK_EDGE_LENGTH) * g_voxel_chunks->size;
 }
 
 
-internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length)
+static bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint32_t edge_length)
 {
     return(coord.x >= 0 && coord.x < edge_length &&
            coord.y >= 0 && coord.y < edge_length &&
@@ -329,7 +329,7 @@ internal_function bool is_voxel_coord_within_chunk(const ivector3_t &coord, uint
 
 
 // XS = voxel space (VS is view space)
-internal_function vector3_t ws_to_xs(const vector3_t &ws_position)
+static vector3_t ws_to_xs(const vector3_t &ws_position)
 {
     vector3_t from_origin = ws_position - get_voxel_world_origin();
 
@@ -367,7 +367,7 @@ uint32_t get_chunk_grid_size(void)
 
 
 // CS = chunk space
-internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position)
+static voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &xs_position)
 {
     ivector3_t rounded = ivector3_t(glm::round(xs_position));
 
@@ -377,7 +377,7 @@ internal_function voxel_chunk_t *get_chunk_encompassing_point(const vector3_t &x
 }
 
 
-internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position)
+static ivector3_t get_voxel_coord(const vector3_t &xs_position)
 {
     ivector3_t rounded = ivector3_t(glm::round(xs_position));
     ivector3_t cs_voxel_coord = ivector3_t(rounded.x % VOXEL_CHUNK_EDGE_LENGTH, rounded.y % (VOXEL_CHUNK_EDGE_LENGTH), rounded.z % (VOXEL_CHUNK_EDGE_LENGTH));
@@ -385,14 +385,14 @@ internal_function ivector3_t get_voxel_coord(const vector3_t &xs_position)
 }
 
 
-internal_function ivector3_t get_voxel_coord(const ivector3_t &xs_position)
+static ivector3_t get_voxel_coord(const ivector3_t &xs_position)
 {
     ivector3_t cs_voxel_coord = ivector3_t(xs_position.x % VOXEL_CHUNK_EDGE_LENGTH, xs_position.y % (VOXEL_CHUNK_EDGE_LENGTH), xs_position.z % (VOXEL_CHUNK_EDGE_LENGTH));
     return(cs_voxel_coord);
 }
 
 
-internal_function void append_chunk_to_history_of_modified_chunks_if_not_already(voxel_chunk_t *chunk)
+static void append_chunk_to_history_of_modified_chunks_if_not_already(voxel_chunk_t *chunk)
 {
     if (!chunk->added_to_history)
     {
@@ -402,7 +402,7 @@ internal_function void append_chunk_to_history_of_modified_chunks_if_not_already
 }
 
 
-internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+static void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
@@ -493,7 +493,7 @@ internal_function void terraform_client(const ivector3_t &xs_voxel_coord, uint32
 }
 
 
-internal_function void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     voxel_chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
@@ -611,7 +611,7 @@ internal_function void terraform_with_history(const ivector3_t &xs_voxel_coord, 
 }
 
 
-internal_function void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
+static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
 {
     vector3_t xs_plane_origin = ws_to_xs(ws_plane_origin);
 
@@ -653,7 +653,7 @@ internal_function void construct_plane(const vector3_t &ws_plane_origin, float32
 }
 
 
-internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius)
+static void construct_hollow_sphere(const vector3_t &ws_sphere_position, float32_t radius)
 {
     vector3_t xs_sphere_position = ws_to_xs(ws_sphere_position);
     
@@ -706,7 +706,7 @@ internal_function void construct_hollow_sphere(const vector3_t &ws_sphere_positi
 }
 
 
-internal_function void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
+static void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
 {
     vector3_t xs_sphere_position = ws_to_xs(ws_sphere_position);
     
@@ -759,7 +759,7 @@ internal_function void construct_sphere(const vector3_t &ws_sphere_position, flo
 }
 
 
-internal_function void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive, float32_t speed)
+static void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direction, float32_t max_reach_distance, float32_t dt, uint32_t surface_level, bool destructive, float32_t speed)
 {
     vector3_t ray_start_position = ws_to_xs(ws_position);
     vector3_t current_ray_position = ray_start_position;
@@ -797,31 +797,31 @@ void push_chunk_to_render_queue(voxel_chunk_t *chunk)
 #include "ttable.inc"
 
 
-internal_function inline float32_t lerp(float32_t a, float32_t b, float32_t x)
+static inline float32_t lerp(float32_t a, float32_t b, float32_t x)
 {
     return((x - a) / (b - a));
 }
 
 
-internal_function inline vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x)
+static inline vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x)
 {
     return(a + x * (b - a));
 }
 
-internal_function float32_t interpolate(float32_t a, float32_t b, float32_t x)
+static float32_t interpolate(float32_t a, float32_t b, float32_t x)
 {
     return(a + x * (b - a));
 }
 
 
-internal_function void clear_chunk_render_queue(void)
+static void clear_chunk_render_queue(void)
 {
     g_voxel_chunks->gpu_queue.flush_queue();
     g_voxel_chunks->chunks_to_render_count = 0;
 }
 
 
-internal_function void push_chunks_with_active_vertices(void)
+static void push_chunks_with_active_vertices(void)
 {
     for (uint32_t z = 0; z < g_voxel_chunks->grid_edge_size; ++z)
     {
@@ -840,7 +840,7 @@ internal_function void push_chunks_with_active_vertices(void)
 }
 
 
-internal_function inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level)
+static inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, voxel_chunk_t *chunk, uint8_t *voxel_values, uint8_t surface_level)
 {
     float32_t surface_level_f = (float32_t)surface_level;
     float32_t voxel_value0 = (float32_t)voxel_values[v0];
@@ -865,13 +865,13 @@ internal_function inline void push_vertex_to_triangle_array(uint8_t v0, uint8_t 
 }
 
 
-internal_function void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk)
+static void update_chunk_mesh_struct_vertex_count(voxel_chunk_t *chunk)
 {
     chunk->gpu_mesh.indexed_data.index_count = chunk->vertex_count;
 }
 
 
-global_var constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, -0.5f, -0.5f),
+static constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, -0.5f, -0.5f),
                                                                vector3_t(+0.5f, -0.5f, -0.5f),
                                                                vector3_t(+0.5f, -0.5f, +0.5f),
                                                                vector3_t(-0.5f, -0.5f, +0.5f),
@@ -880,7 +880,7 @@ global_var constexpr vector3_t NORMALIZED_CUBE_VERTICES[8] = { vector3_t(-0.5f, 
                                                                vector3_t(+0.5f, +0.5f, +0.5f),
                                                                vector3_t(-0.5f, +0.5f, +0.5f) };
 
-global_var constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t(0, 0, 0),
+static constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t(0, 0, 0),
                                                                       ivector3_t(1, 0, 0),
                                                                       ivector3_t(1, 0, 1),
                                                                       ivector3_t(0, 0, 1),
@@ -891,7 +891,7 @@ global_var constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t
 
 
 // Voxel pair is like a cube: 8 voxels
-internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level)
+static void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level)
 {    
     uint8_t bit_combination = 0;
     for (uint32_t i = 0; i < 8; ++i)
@@ -944,7 +944,7 @@ internal_function void update_chunk_mesh_voxel_pair(uint8_t *voxel_values, voxel
 }
 
 
-internal_function uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist)
+static uint8_t chunk_edge_voxel_value(voxel_chunk_t *chunk, int32_t x, int32_t y, int32_t z, bool *doesnt_exist)
 {
     if (x < 0 || y < 0 || z < 0)
     {
@@ -1129,7 +1129,7 @@ void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk)
 }
 
 
-internal_function void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
+static void sync_gpu_with_chunk_state(gpu_command_queue_t *queue)
 {
     if (get_voxel_chunks_flags()->should_update_chunk_meshes_from_now)
     {
@@ -1216,7 +1216,7 @@ voxel_chunks_flags_t *get_voxel_chunks_flags(void)
 
 voxel_chunk_t **get_voxel_chunk(int32_t index)
 {
-    persist_var voxel_chunk_t *nul = nullptr;
+    static voxel_chunk_t *nul = nullptr;
     
     if (index == -1)
     {
@@ -1258,7 +1258,7 @@ voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z)
 {
     int32_t index = convert_3d_to_1d_index(x, y, z, g_voxel_chunks->grid_edge_size);
     
-    persist_var voxel_chunk_t *nul = nullptr;
+    static voxel_chunk_t *nul = nullptr;
     
     if (index == -1)
     {
@@ -1269,7 +1269,7 @@ voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z)
 }
 
 
-internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo)
+static void dbg_render_chunk_edges(gpu_command_queue_t *queue, uniform_group_t *transforms_ubo)
 {
     graphics_pipeline_t *dbg_chunk_render_ppln = g_pipeline_manager->get(g_voxel_chunks->dbg_chunk_edge_pipeline);
     command_buffer_bind_pipeline(&dbg_chunk_render_ppln->pipeline, &queue->q);
@@ -1314,7 +1314,7 @@ internal_function void dbg_render_chunk_edges(gpu_command_queue_t *queue, unifor
 }
 
 
-internal_function movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up)
+static movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up)
 {
     vector3_t right = glm::normalize(glm::cross(view_direction, up));
     vector3_t forward = glm::normalize(glm::cross(up, right));
@@ -1323,7 +1323,7 @@ internal_function movement_axes_t compute_movement_axes(const vector3_t &view_di
 }
 
 
-internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
+static void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level, vector3_t *dst_array, uint32_t *count)
 {
     float32_t surface_level_f = (float32_t)surface_level;
     float32_t voxel_value0 = (float32_t)voxel_values[v0];
@@ -1348,7 +1348,7 @@ internal_function void push_collision_vertex(uint8_t v0, uint8_t v1, vector3_t *
 }
 
 
-internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max)
+static void push_collision_triangles_vertices(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level, vector3_t *dst_array, uint32_t *count, uint32_t max)
 {
     uint8_t bit_combination = 0;
     for (uint32_t i = 0; i < 8; ++i)
@@ -1406,7 +1406,7 @@ internal_function void push_collision_triangles_vertices(uint8_t *voxel_values, 
 }
 
 
-internal_function bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
+static bool32_t is_point_in_triangle(const vector3_t &point, const vector3_t &tri_point_a, const vector3_t &tri_point_b, const vector3_t &tri_point_c)
 {
     vector3_t cross11 = glm::cross((tri_point_c - tri_point_b), (point - tri_point_b));
     vector3_t cross12 = glm::cross((tri_point_c - tri_point_b), (tri_point_a - tri_point_b));
@@ -1432,7 +1432,7 @@ internal_function bool32_t is_point_in_triangle(const vector3_t &point, const ve
 
 
 // This function solves the quadratic eqation "At^2 + Bt + C = 0" and is found in Kasper Fauerby's paper on collision detection and response
-internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root) 
+static bool get_smallest_root(float32_t a, float32_t b, float32_t c, float32_t max_r, float32_t *root) 
 {
     // Check if a solution exists
     float determinant = b * b - 4.0f * a *c;
@@ -1469,31 +1469,31 @@ internal_function bool get_smallest_root(float32_t a, float32_t b, float32_t c, 
 }
 
 
-internal_function float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal)
+static float32_t get_plane_constant(const vector3_t &plane_point, const vector3_t &plane_normal)
 {
     return -( (plane_point.x * plane_normal.x) + (plane_point.y * plane_normal.y) + (plane_point.z * plane_normal.z) );
 }
 
 
-internal_function float32_t squared(float32_t f)
+static float32_t squared(float32_t f)
 {
     return(f * f);
 }
 
 
-internal_function float32_t distance_squared(const vector3_t &dir)
+static float32_t distance_squared(const vector3_t &dir)
 {
     return glm::dot(dir, dir);
 }
 
 
-internal_function float32_t calculate_sphere_circumference(float32_t radius)
+static float32_t calculate_sphere_circumference(float32_t radius)
 {
     return(2.0f * 3.1415f * radius);
 }
 
 
-internal_function void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision)
+static void check_collision_with_vertex(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex, const vector3_t &es_surface_normal, collision_t *collision)
 {
     float32_t a = distance_squared(es_sphere_velocity);
     float32_t b = 2.0f * glm::dot(es_sphere_velocity, es_sphere_position - es_vertex);
@@ -1517,7 +1517,7 @@ internal_function void check_collision_with_vertex(const vector3_t &es_sphere_ve
 }
 
 
-internal_function void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision)
+static void check_collision_with_edge(const vector3_t &es_sphere_velocity, const vector3_t &es_sphere_position, const vector3_t &es_vertex_a, const vector3_t &es_vertex_b, const vector3_t &es_surface_normal, collision_t *collision)
 {
     vector3_t es_edge_diff = es_vertex_b - es_vertex_a;
     vector3_t es_sphere_pos_to_vertex = es_vertex_a - es_sphere_position;
@@ -1550,7 +1550,7 @@ internal_function void check_collision_with_edge(const vector3_t &es_sphere_velo
 }
 
 
-internal_function vector3_t adjust_player_position_to_not_be_under_terrain(vector3_t *triangle_vertices, vector3_t es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
+static vector3_t adjust_player_position_to_not_be_under_terrain(vector3_t *triangle_vertices, vector3_t es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
 {
     output_to_debug_console("Adjusting so that player is on terrain: ");
     
@@ -1640,7 +1640,7 @@ internal_function vector3_t adjust_player_position_to_not_be_under_terrain(vecto
 }
 
 
-internal_function void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
+static void collide_with_triangle(vector3_t *triangle_vertices, const vector3_t &es_center, const vector3_t &es_velocity, collision_t *closest, const vector3_t &size)
 {
     bool found_collision = 0;
     float32_t first_resting_instance;
@@ -1748,7 +1748,7 @@ internal_function void collide_with_triangle(vector3_t *triangle_vertices, const
 }
 
 
-internal_function collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision)
+static collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision)
 {
     vector3_t es_center = ws_center / ws_size;
     vector3_t es_velocity = ws_velocity / ws_size;
@@ -1956,7 +1956,7 @@ player_state_t initialize_player_state(player_t *player)
 }
 
 
-internal_function player_t *get_main_player(void)
+static player_t *get_main_player(void)
 {
     if (g_entities->main_player == -1)
     {
@@ -1969,7 +1969,7 @@ internal_function player_t *get_main_player(void)
 }
 
 
-internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
+static void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_material_submission_queue_t *queue)
 {
     rendering_component_t *rendering = &e_ptr->rendering;
     animation_component_t *animation = &e_ptr->animation;
@@ -1983,13 +1983,13 @@ internal_function void push_player_to_queue(player_t *e_ptr, mesh_t *mesh, gpu_m
 }
 
 
-internal_function void push_player_to_animated_queue(player_t *e)
+static void push_player_to_animated_queue(player_t *e)
 {
     push_player_to_queue(e, &g_entities->player_mesh, &g_entities->player_submission_queue);
 }
 
 
-internal_function void push_bullet_to_queue(bullet_t *bullet)
+static void push_bullet_to_queue(bullet_t *bullet)
 {
     rendering_component_t *component = &bullet->rendering;
 
@@ -2002,7 +2002,7 @@ internal_function void push_bullet_to_queue(bullet_t *bullet)
 }
 
 
-internal_function void push_bullet_to_rolling_queue(bullet_t *b)
+static void push_bullet_to_rolling_queue(bullet_t *b)
 {
     rendering_component_t *component = &b->rendering;
 
@@ -2015,7 +2015,7 @@ internal_function void push_bullet_to_rolling_queue(bullet_t *b)
 }    
 
 
-internal_function void push_player_to_rolling_queue(player_t *e)
+static void push_player_to_rolling_queue(player_t *e)
 {
     rendering_component_t *component = &e->rendering;
 
@@ -2035,7 +2035,7 @@ player_t *get_user_player(void)
 
 
 
-internal_function player_t *get_player(const constant_string_t &name)
+static player_t *get_player(const constant_string_t &name)
 {
     player_handle_t v = *g_entities->name_map.get(name.hash);
     return(&g_entities->player_list[v]);
@@ -2055,7 +2055,7 @@ player_t *get_player(player_handle_t v)
 
 
 // TODO: Implement camera orientation interpolation when changing surface normals
-internal_function void update_camera_component(camera_component_t *camera_component, player_t *player, float32_t dt)
+static void update_camera_component(camera_component_t *camera_component, player_t *player, float32_t dt)
 {
     camera_t *camera = get_camera(camera_component->camera);
 
@@ -2127,7 +2127,7 @@ internal_function void update_camera_component(camera_component_t *camera_compon
 }
 
 
-internal_function void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt)
+static void update_animation_component(animation_component_t *animation, player_t *player, float32_t dt)
 {
     player_t::animated_state_t previous_state = player->animated_state;
     
@@ -2180,7 +2180,7 @@ internal_function void update_animation_component(animation_component_t *animati
 }
 
 
-internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
+static void update_animation_gpu_data(gpu_command_queue_t *queue)
 {
     for (uint32_t i = 0; i < g_entities->player_count; ++i)
     {
@@ -2192,7 +2192,7 @@ internal_function void update_animation_gpu_data(gpu_command_queue_t *queue)
 }
 
 
-internal_function void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt, uint32_t index)
+static void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt, uint32_t index)
 {
     rendering->push_k.ws_t = glm::translate(bullet->ws_p) * glm::scale(bullet->size);
 
@@ -2200,9 +2200,9 @@ internal_function void update_bullet_rendering_component(rendering_component_t *
 }
 
 
-internal_function void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt)
+static void update_rendering_component(rendering_component_t *rendering, player_t *player, float32_t dt)
 {
-    persist_var const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(180.0f), vector3_t(0.0f, 1.0f, 0.0f));
+    static const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(180.0f), vector3_t(0.0f, 1.0f, 0.0f));
 
     movement_axes_t axes = compute_movement_axes(player->ws_d, player->camera.ws_next_vector);
     matrix3_t normal_rotation_matrix3 = (matrix3_t(glm::normalize(axes.right), glm::normalize(axes.up), glm::normalize(-axes.forward)));
@@ -2241,7 +2241,7 @@ internal_function void update_rendering_component(rendering_component_t *renderi
 }
 
 
-internal_function void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt)
+static void update_terraform_power_component(terraform_power_component_t *terraform_power, player_t *player, float32_t dt)
 {
     uint32_t *action_flags = &player->action_flags;
 
@@ -2257,7 +2257,7 @@ internal_function void update_terraform_power_component(terraform_power_componen
 }
 
 
-internal_function void update_standing_player_physics(physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
+static void update_standing_player_physics(physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
 {
     if (component->state == entity_physics_state_t::IN_AIR)
     {
@@ -2305,7 +2305,7 @@ internal_function void update_standing_player_physics(physics_component_t *compo
         player->ws_v = current_velocity - player->ws_up * 9.81f * dt;
 
         // Friction
-        /*persist_var constexpr float32_t TERRAIN_ROUGHNESS = .5f;
+        /*static constexpr float32_t TERRAIN_ROUGHNESS = .5f;
         float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
         vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
         player->ws_v += friction * dt;*/
@@ -2347,7 +2347,7 @@ internal_function void update_standing_player_physics(physics_component_t *compo
     }
 }
 
-internal_function void update_rolling_player_physics(struct physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
+static void update_rolling_player_physics(struct physics_component_t *component, player_t *player, uint32_t *action_flags, float32_t dt)
 {
     // Only happens at the beginning of the game
     if (player->is_entering)
@@ -2389,7 +2389,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
             player->ws_v -= player->ws_up * 9.81f * dt;
 
             // Friction
-            persist_var constexpr float32_t TERRAIN_ROUGHNESS = .5f;
+            static constexpr float32_t TERRAIN_ROUGHNESS = .5f;
             float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
             vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
             player->ws_v += friction * dt;
@@ -2425,7 +2425,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
         // Update rolling rotation speed
         if (!collision.under_terrain)
         {
-            persist_var vector3_t previous_velocity;
+            static vector3_t previous_velocity;
 
             /*vector3_t velocity = player->ws_v;
             
@@ -2505,7 +2505,7 @@ internal_function void update_rolling_player_physics(struct physics_component_t 
 }
 
 
-internal_function void update_not_physically_affected_player(struct physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt)
+static void update_not_physically_affected_player(struct physics_component_t *component, player_t *e, uint32_t *action_flags, float32_t dt)
 {
     vector3_t result_force = vector3_t(0.0f);
 
@@ -2526,7 +2526,7 @@ internal_function void update_not_physically_affected_player(struct physics_comp
 }
 
 
-internal_function float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt)
+static float32_t update_network_component(network_component_t *network, player_t *player, float32_t dt)
 {
     if (network->is_remote)
     {
@@ -2605,7 +2605,7 @@ internal_function float32_t update_network_component(network_component_t *networ
 
             player->camera.mouse_diff = d;
 
-            persist_var constexpr uint32_t SENSITIVITY = 15.0f;
+            static constexpr uint32_t SENSITIVITY = 15.0f;
         
             float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
             float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;
@@ -2637,7 +2637,7 @@ internal_function float32_t update_network_component(network_component_t *networ
 }
 
 
-internal_function void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt)
+static void update_physics_component(physics_component_t *physics, player_t *player, float32_t dt)
 {
     uint32_t *action_flags = &player->action_flags;
         
@@ -2659,7 +2659,7 @@ internal_function void update_physics_component(physics_component_t *physics, pl
 }
 
 
-internal_function void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt)
+static void update_shoot_component(shoot_component_t *shoot, player_t *player, float32_t dt)
 {
     uint32_t *action_flags = &player->action_flags;
 
@@ -2725,14 +2725,14 @@ uint32_t spawn_fire(const vector3_t &position)
 }
 
 
-internal_function void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position)
+static void set_on_fire(burnable_component_t *burnable_component, const vector3_t &position)
 {
     burnable_component->burning = 1;
     burnable_component->particle_index = spawn_fire(position);
 }
 
 
-internal_function void extinguish_fire(burnable_component_t *burnable_component)
+static void extinguish_fire(burnable_component_t *burnable_component)
 {
     burnable_component->burning = 0;
     g_particles->fire_particle_spawner.declare_dead(burnable_component->particle_index);
@@ -2740,7 +2740,7 @@ internal_function void extinguish_fire(burnable_component_t *burnable_component)
 }
 
 
-internal_function void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index)
+static void update_burnable_component(burnable_component_t *burnable_component, entity_t *entity, float32_t dt, uint32_t index)
 {
     if (burnable_component->burning)
     {
@@ -2751,7 +2751,7 @@ internal_function void update_burnable_component(burnable_component_t *burnable_
 }
 
 
-internal_function void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index)
+static void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index)
 {
     bullet->ws_v -= bullet->ws_up * 14.81f * dt;
 
@@ -2789,7 +2789,7 @@ internal_function void update_bounce_physics_component(bounce_physics_component_
 }
 
 
-internal_function player_handle_t add_player(const player_t &e)
+static player_handle_t add_player(const player_t &e)
 {
     player_handle_t view;
     view = g_entities->player_count;
@@ -2826,7 +2826,7 @@ void update_networked_player(uint32_t player_index)
 }
 
 
-internal_function void update_entities(float32_t dt, application_type_t app_type)
+static void update_entities(float32_t dt, application_type_t app_type)
 {
     // TODO: Change the structure of this loop
     // Make it so that it loops through each player_state one at a time, executing every player's player states "synchronously
@@ -2900,7 +2900,7 @@ internal_function void update_entities(float32_t dt, application_type_t app_type
 
             if (player_index == g_entities->main_player)
             {
-                buffer_player_state(dt);
+                cache_player_state(dt);
             }
 
             if (!player->network.is_remote) player->action_flags = 0;
@@ -2938,7 +2938,7 @@ void make_player_main(player_handle_t player_handle)
 }
 
 
-internal_function void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
+static void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
 {
     g_entities->rolling_player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
     g_entities->rolling_player_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_player_mesh);
@@ -3085,16 +3085,16 @@ void spawn_bullet(player_t *shooter)
 }
 
 
-internal_function void destroy_bullet(uint32_t index)
+static void destroy_bullet(uint32_t index)
 {
     g_entities->bullet_list[index].dead = 1;
     g_entities->removed_bullets_stack[g_entities->removed_bullets_stack_head++] = index;
 }
 
 
-internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *info)
+static void construct_bullet(bullet_t *bullet, bullet_create_info_t *info)
 {
-    persist_var vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
+    static vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
                                                                     vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
                                                                     vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
                                                                     vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
@@ -3111,9 +3111,9 @@ internal_function void construct_bullet(bullet_t *bullet, bullet_create_info_t *
 }
 
 
-internal_function void construct_player(player_t *player, player_create_info_t *info)
+static void construct_player(player_t *player, player_create_info_t *info)
 {
-    persist_var vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
+    static vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
                                                                     vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
                                                                     vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
                                                                     vector4_t(0.1f, 0.1f, 0.1f, 1.0f),
@@ -3212,7 +3212,7 @@ player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_cl
 }
 
 
-internal_function void initialize_players(game_state_initialize_packet_t *packet, input_state_t *input_state)
+static void initialize_players(game_state_initialize_packet_t *packet, input_state_t *input_state)
 {
     camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
     bind_camera_to_3d_scene_output(main_camera);
@@ -3226,7 +3226,7 @@ internal_function void initialize_players(game_state_initialize_packet_t *packet
 }
 
 
-internal_function void initialize_players(input_state_t *input_state, application_type_t app_type)
+static void initialize_players(input_state_t *input_state, application_type_t app_type)
 {
     // This makes the this player the "main" player of the game, that the user is going to control with mouse and keyboard
     camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
@@ -3273,7 +3273,7 @@ void spawn_explosion(const vector3_t &position)
 }
 
 
-internal_function void particle_effect_fire(particle_spawner_t *spawner, float32_t dt)
+static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt)
 {
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
@@ -3311,7 +3311,7 @@ internal_function void particle_effect_fire(particle_spawner_t *spawner, float32
 }
 
 
-internal_function void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
+static void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
 {
     for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
     {
@@ -3340,7 +3340,7 @@ internal_function void particle_effect_explosion(particle_spawner_t *spawner, fl
 }
 
 
-internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
+static void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
 {
     update_gpu_buffer(&g_particles->explosion_particle_spawner.gpu_particles_buffer, g_particles->explosion_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * g_particles->explosion_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 
@@ -3348,7 +3348,7 @@ internal_function void sync_gpu_with_particle_state(gpu_command_queue_t *queue)
 }
 
 
-internal_function void update_particles(float32_t dt)
+static void update_particles(float32_t dt)
 {
     g_particles->explosion_particle_spawner.clear();
     {
@@ -3364,7 +3364,7 @@ internal_function void update_particles(float32_t dt)
 }
 
 
-internal_function void hard_initialize_particles(void)
+static void hard_initialize_particles(void)
 {
     uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
     
@@ -3377,7 +3377,7 @@ internal_function void hard_initialize_particles(void)
 }
 
 
-internal_function void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue)
+static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue)
 {
     // Fetch some data needed to render
     auto transforms_ubo_uniform_groups = get_camera_transform_uniform_groups();
@@ -3450,7 +3450,7 @@ internal_function void render_world(uint32_t image_index, uint32_t current_frame
 }
 
 
-internal_function void entry_point(void)
+static void entry_point(void)
 {
     // Load globals
     execute_lua("globals = require \"scripts/globals/globals\"");
@@ -3648,7 +3648,7 @@ void deinitialize_world(void)
 }
 
 
-internal_function void clean_up_entities(void)
+static void clean_up_entities(void)
 {
     // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
     g_entities->player_count = 0;
@@ -3822,7 +3822,7 @@ static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk)
 
 
 
-internal_function void ready_chunks_for_voxel_interpolation_reset(void)
+static void ready_chunks_for_voxel_interpolation_reset(void)
 {
     bool did_correction = 0;
     
@@ -4072,7 +4072,7 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
         vector3_t up = e->camera.ws_current_up_vector;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
-        persist_var constexpr uint32_t SENSITIVITY = 15.0f;
+        static constexpr uint32_t SENSITIVITY = 15.0f;
     
         vector2_t prev_mp = vector2_t(input_state->previous_cursor_pos_x, input_state->previous_cursor_pos_y);
         vector2_t curr_mp = vector2_t(input_state->cursor_pos_x, input_state->cursor_pos_y);
@@ -4262,7 +4262,7 @@ void destroy_world(void)
 }
 
 
-internal_function int32_t lua_get_player_position(lua_State *state)
+static int32_t lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
     player_t *main_player = &g_entities->player_list[g_entities->main_player];
@@ -4273,7 +4273,7 @@ internal_function int32_t lua_get_player_position(lua_State *state)
 }
 
 
-internal_function int32_t lua_set_player_position(lua_State *state)
+static int32_t lua_set_player_position(lua_State *state)
 {
     float32_t x = lua_tonumber(state, -3);
     float32_t y = lua_tonumber(state, -2);
@@ -4286,21 +4286,21 @@ internal_function int32_t lua_set_player_position(lua_State *state)
 }
 
 
-internal_function int32_t lua_toggle_collision_box_render(lua_State *state)
+static int32_t lua_toggle_collision_box_render(lua_State *state)
 {
     g_entities->dbg.hit_box_display ^= true;
     return(0);
 }
 
 
-internal_function int32_t lua_render_player_direction_information(lua_State *state)
+static int32_t lua_render_player_direction_information(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
 
     g_entities->dbg.render_sliding_vector_player = get_player(kname);
 
-    persist_var char buffer[50];
+    static char buffer[50];
     sprintf(buffer, "rendering for player: %s", name);
     console_out(buffer);
     
@@ -4308,7 +4308,7 @@ internal_function int32_t lua_render_player_direction_information(lua_State *sta
 }
 
 
-internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
+static int32_t lua_set_veclocity_in_view_direction(lua_State *state)
 {
     const char *name = lua_tostring(state, -2);
     float32_t velocity = lua_tonumber(state, -1);
@@ -4319,7 +4319,7 @@ internal_function int32_t lua_set_veclocity_in_view_direction(lua_State *state)
 }
 
 
-internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
+static int32_t lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
     player_t *main_player = &g_entities->player_list[g_entities->main_player];
@@ -4331,7 +4331,7 @@ internal_function int32_t lua_get_player_ts_view_direction(lua_State *state)
 }
 
 
-internal_function int32_t lua_enable_physics(lua_State *state)
+static int32_t lua_enable_physics(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4344,7 +4344,7 @@ internal_function int32_t lua_enable_physics(lua_State *state)
 }
 
 
-internal_function int32_t lua_disable_physics(lua_State *state)
+static int32_t lua_disable_physics(lua_State *state)
 {
     const char *name = lua_tostring(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
@@ -4358,7 +4358,7 @@ internal_function int32_t lua_disable_physics(lua_State *state)
 }
 
 
-internal_function int32_t lua_go_down(lua_State *state)
+static int32_t lua_go_down(lua_State *state)
 {
     player_t *main = get_main_player();
     auto *istate = get_input_state();
@@ -4378,12 +4378,12 @@ void initialize_world_translation_unit(struct game_memory_t *memory)
 }
 
 
-internal_function int32_t lua_reinitialize(lua_State *state)
+static int32_t lua_reinitialize(lua_State *state)
 {
     return(0);
 }
 
-internal_function int32_t lua_print_surrounding_voxel_values(lua_State *state)
+static int32_t lua_print_surrounding_voxel_values(lua_State *state)
 {
     
 

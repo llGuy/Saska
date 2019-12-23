@@ -2,6 +2,7 @@
 #include "file_system.hpp"
 #include <string.h>
 #include "memory.hpp"
+#include "containers.hpp"
 #include "allocators.hpp"
 #include <Windows.h>
 
@@ -80,7 +81,7 @@ void initialize_filetime(file_object_t *object)
 
 #define MAX_FILES 50
 
-global_var struct file_manager_t
+static struct file_manager_t
 {
 
     typedef stack_dynamic_container_t<file_object_t, 50> file_stack_dynamic_container_t;
@@ -88,7 +89,7 @@ global_var struct file_manager_t
 
 } g_files;
 
-internal_function const char *create_asset_path(const char *file)
+const char *create_asset_path(const char *file)
 {
     const char *asset_base_path = "../assets/";
         

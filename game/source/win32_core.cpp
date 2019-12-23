@@ -22,15 +22,15 @@
 #include <Windows.h>
 #include <Windowsx.h>
 
-global_var bool g_running;
-global_var bool g_hasfocus;
-global_var bool g_toggled_fullscreen = 0;
-global_var bool g_in_fullscreen = 0;
-global_var double g_game_time = 0.0f;
-global_var double g_dt = 0.0f;
-global_var HWND g_window;
-global_var HCURSOR g_cursor;
-global_var input_state_t g_input_state = {};
+static bool g_running;
+static bool g_hasfocus;
+static bool g_toggled_fullscreen = 0;
+static bool g_in_fullscreen = 0;
+static double g_game_time = 0.0f;
+static double g_dt = 0.0f;
+static HWND g_window;
+static HCURSOR g_cursor;
+static input_state_t g_input_state = {};
 
 input_state_t *get_input_state(void)
 {
@@ -91,10 +91,10 @@ void disable_cursor_display(void)
     ShowCursor(0);
 }
 
-internal_function void handle_mouse_move_event(LPARAM lparam)
+static void handle_mouse_move_event(LPARAM lparam)
 {
-    persist_var int32_t true_prev_x = 0;
-    persist_var int32_t true_prev_y = 0;
+    static int32_t true_prev_x = 0;
+    static int32_t true_prev_y = 0;
  
     RECT client_rect = {};
     GetClientRect(g_window, &client_rect);
@@ -178,7 +178,7 @@ internal_function void handle_mouse_move_event(LPARAM lparam)
 
 enum key_action_t { KEY_ACTION_DOWN, KEY_ACTION_UP };
 
-internal_function void set_key_state(input_state_t *input_state, keyboard_button_type_t button, int32_t action)
+static void set_key_state(input_state_t *input_state, keyboard_button_type_t button, int32_t action)
 {
     if (action == key_action_t::KEY_ACTION_DOWN)
     {
@@ -198,7 +198,7 @@ internal_function void set_key_state(input_state_t *input_state, keyboard_button
     }
 }
 
-internal_function void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
+static void set_mouse_button_state(input_state_t *input_state, mouse_button_type_t button, int32_t action)
 {
     if (action == key_action_t::KEY_ACTION_DOWN)
     {
@@ -269,7 +269,7 @@ void toggle_fullscreen(void)
     }
 }
 
-internal_function void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
+static void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
 {
     switch(wparam)
     {
@@ -376,21 +376,21 @@ struct create_vulkan_surface_win32 : create_vulkan_surface
     }
 };
 
-internal_function float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
+static float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
 {
     return float32_t(end_time.QuadPart - begin_time.QuadPart) / float32_t(frequency.QuadPart);
 }
 
-internal_function void init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
+static void init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global)
 {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
 
 // Actual game memory
-global_var game_memory_t g_game;
+static game_memory_t g_game;
 // Game code
-/*global_var struct game_code_t
+/*static struct game_code_t
 {
     HMODULE game_code;
     const char *original_dir;
@@ -437,6 +437,46 @@ void print_text_to_console(const char *string)
     WriteConsole(GetStdHandle(STD_OUTPUT_HANDLE), string, strlen(string), NULL, NULL);
 }
 
+// For server: sv; For client: cl
+void parse_command_line_args(LPSTR cmdline, application_type_t *app_type, application_mode_t *app_mode, const char **application_name)
+{
+    uint32_t parameter_start = 0;
+    bool parsing_parameter = 1;
+
+    char parameter[3];
+
+    uint32_t i = 0;
+    for (char *c = cmdline; *c; ++c)
+    {
+        if (parsing_parameter && i < 2)
+        {
+            parameter[i++] = *c;
+        }
+        
+        /*if (*c == ' ')
+        {
+            parsing_parameter = 1;
+            }*/
+    }
+
+    parameter[2] = 0;
+
+    if (strcmp("sv", parameter) == 0)
+    {
+        *app_type = application_type_t::WINDOW_APPLICATION_MODE;
+        *app_mode = application_mode_t::SERVER_MODE;
+
+        *application_name = "Server";
+    }
+    else if (strcmp("cl", parameter) == 0)
+    {
+        *app_type = application_type_t::WINDOW_APPLICATION_MODE;
+        *app_mode = application_mode_t::CLIENT_MODE;
+
+        *application_name = "Saska";
+    }
+}
+
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
     // Initialize game's dynamic memory
@@ -450,15 +490,12 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
 
-#if defined (SERVER_APPLICATION)
-    application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
-    application_mode_t app_mode = application_mode_t::SERVER_MODE;
-    const char *application_name = "Server";    
-#elif defined (CLIENT_APPLICATION)
-    application_type_t app_type = application_type_t::WINDOW_APPLICATION_MODE;
-    application_mode_t app_mode = application_mode_t::CLIENT_MODE;
-    const char *application_name = "Saska";
-#endif
+
+    application_type_t app_type;
+    application_mode_t app_mode;
+    const char *application_name;
+    parse_command_line_args(cmdline, &app_type, &app_mode, &application_name);
+
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
     {

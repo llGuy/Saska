@@ -8,7 +8,7 @@
 #include "network.hpp"
 #include <ctime>
 
-global_var game_memory_t *g_game_memory;
+static game_memory_t *g_game_memory;
 
 void load_game(game_memory_t *memory)
 {
@@ -62,7 +62,7 @@ void destroy_game(game_memory_t *memory)
 }
 
 // Decides which element gets input focus
-internal_function void handle_global_game_input(game_memory_t *memory, input_state_t *input_state)
+static void handle_global_game_input(game_memory_t *memory, input_state_t *input_state)
 {
     if (input_state->char_stack[0] == 't' && memory->screen_focus != element_focus_t::UI_ELEMENT_CONSOLE)
     {

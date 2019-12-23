@@ -7,18 +7,18 @@
 
 #include "file_system.hpp"
 
-internal_function inline vector2_t convert_glsl_to_normalized(const vector2_t &position)
+static inline vector2_t convert_glsl_to_normalized(const vector2_t &position)
 {
     return(position * 2.0f - 1.0f);
 }
 
-internal_function inline ui_vector2_t glsl_to_pixel_coord(const ui_vector2_t &position, const resolution_t &resolution)
+static inline ui_vector2_t glsl_to_pixel_coord(const ui_vector2_t &position, const resolution_t &resolution)
 {
     ui_vector2_t ret((int32_t)(position.fx * (float32_t)resolution.width), (int32_t)(position.fy * (float32_t)resolution.height));
     return(ret);
 }
 
-internal_function inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &position, const resolution_t &resolution)
+static inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &position, const resolution_t &resolution)
 {
     ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width,
                      (float32_t)position.iy / (float32_t)resolution.height);
@@ -26,12 +26,12 @@ internal_function inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &po
 }
 
 // for_t now, doesn't support the relative to function (need to add in the fufure)
-global_var constexpr vector2_t RELATIVE_TO_ADD_VALUES[] { vector2_t(0.0f, 0.0f),
+static constexpr vector2_t RELATIVE_TO_ADD_VALUES[] { vector2_t(0.0f, 0.0f),
         vector2_t(0.0f, 1.0f),
         vector2_t(0.5f, 0.5f),
         vector2_t(1.0f, 0.0f),
         vector2_t(1.0f, 1.0f)};
-global_var constexpr vector2_t RELATIVE_TO_FACTORS[] { vector2_t(0.0f, 0.0f),
+static constexpr vector2_t RELATIVE_TO_FACTORS[] { vector2_t(0.0f, 0.0f),
         vector2_t(0.0f, -1.0f),
         vector2_t(-0.5f, -0.5f),
         vector2_t(-1.0f, 0.0f),
@@ -50,7 +50,7 @@ uint32_t vec4_color_to_ui32b(const vector4_t &color)
     return (xui << 24) | (yui << 16) | (zui << 8) | wui;
 }
 
-internal_function void update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
+static void update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
 {
     ui_vector2_t px_max_values;
     if (box->parent)
@@ -90,7 +90,7 @@ internal_function void update_ui_box_size(ui_box_t *box, const resolution_t &bac
     }
 }
 
-internal_function void update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
+static void update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
 {
     vector2_t gls_size = box->gls_relative_size.to_fvec2();
     vector2_t gls_relative_position;
@@ -120,7 +120,7 @@ internal_function void update_ui_box_position(ui_box_t *box, const resolution_t 
     box->px_position = glsl_to_pixel_coord(box->gls_position, backbuffer_resolution);
 }
 
-internal_function ui_box_t make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
+static ui_box_t make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
                                        ui_vector2_t position /* coord_t space agnostic */,
                                        ui_vector2_t gls_max_values /* max_t X and Y size */,
                                        ui_box_t *parent,
@@ -145,7 +145,7 @@ internal_function ui_box_t make_ui_box(relative_to_t relative_to, float32_t aspe
     return(box);
 }
 
-internal_function void make_text(ui_box_t *box,
+static void make_text(ui_box_t *box,
                                  font_t *font,
                                  ui_text_t::font_stream_box_relative_to_t relative_to,
                                  float32_t px_x_start,
@@ -165,7 +165,7 @@ internal_function void make_text(ui_box_t *box,
 
 struct fonts_t
 {
-    persist_var constexpr uint32_t MAX_FONTS = 5;
+    static constexpr uint32_t MAX_FONTS = 5;
     font_t fonts[MAX_FONTS];
     uint32_t font_count;
 
@@ -181,7 +181,7 @@ struct fnt_word_t
 };
 
 // Except new line
-internal_function char *fnt_skip_break_characters(char *pointer)
+static char *fnt_skip_break_characters(char *pointer)
 {
     for(;;)
     {
@@ -194,7 +194,7 @@ internal_function char *fnt_skip_break_characters(char *pointer)
     return nullptr;
 }
 
-internal_function char *fnt_goto_next_break_character(char *pointer)
+static char *fnt_goto_next_break_character(char *pointer)
 {
     for(;;)
     {
@@ -207,7 +207,7 @@ internal_function char *fnt_goto_next_break_character(char *pointer)
     return nullptr;
 }
 
-internal_function char *fnt_skip_line(char *pointer)
+static char *fnt_skip_line(char *pointer)
 {
     for(;;)
     {
@@ -220,7 +220,7 @@ internal_function char *fnt_skip_line(char *pointer)
     return nullptr;
 }
 
-internal_function char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
+static char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
 {
     char *new_pointer = fnt_goto_next_break_character(pointer);
     if (dst_word)
@@ -231,7 +231,7 @@ internal_function char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_wor
     return(new_pointer);
 }
 
-internal_function char *fnt_skip_until_digit(char *pointer)
+static char *fnt_skip_until_digit(char *pointer)
 {
     for(;;)
     {
@@ -251,7 +251,7 @@ struct fnt_string_number_t
     char characters[10];
 };
 
-internal_function int32_t fnt_atoi(fnt_word_t word)
+static int32_t fnt_atoi(fnt_word_t word)
 {
     fnt_string_number_t number;
     memcpy(number.characters, word.pointer, sizeof(char) * word.size);
@@ -259,7 +259,7 @@ internal_function int32_t fnt_atoi(fnt_word_t word)
     return(atoi(number.characters));
 }
 
-internal_function char *fnt_get_char_count(char *pointer, int32_t *count)
+static char *fnt_get_char_count(char *pointer, int32_t *count)
 {
     for(;;)
     {
@@ -302,7 +302,7 @@ font_t *get_font(font_handle_t handle)
 font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
 {
     // TODO : Make sure this is parameterised, not fixed!
-    persist_var constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
+    static constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
     
     font_handle_t hdl = add_font(font_name);
     font_t *font_ptr = get_font(hdl);
@@ -365,13 +365,13 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
     return(font_ptr);
 }
 
-internal_function void draw_char(ui_text_t *text, char character, uint32_t color)
+static void draw_char(ui_text_t *text, char character, uint32_t color)
 {
     text->colors[text->char_count] = color;
     text->characters[text->char_count++] = character;
 }
 
-internal_function void draw_string(ui_text_t *text, const char *string, uint32_t color)
+static void draw_string(ui_text_t *text, const char *string, uint32_t color)
 {
     uint32_t string_length = strlen(string);
     memcpy(text->characters + text->char_count, string, sizeof(char) * string_length);
@@ -383,16 +383,16 @@ internal_function void draw_string(ui_text_t *text, const char *string, uint32_t
 }
 
 // TODO: Make a textured quad renderer
-global_var dbg_ui_utils_t *dbg_ui_utils;
+static dbg_ui_utils_t *dbg_ui_utils;
 
-internal_function void initialize_debug_ui_utils(void)
+static void initialize_debug_ui_utils(void)
 {
     
 }
 
-global_var ui_state_t *g_ui;
+static ui_state_t *g_ui;
 
-internal_function ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
+static ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
 {
     uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
     uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
@@ -418,7 +418,7 @@ internal_function ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *te
     return(px_cursor_position);
 }
 
-internal_function void push_text(ui_text_t *text, const resolution_t &resolution)
+static void push_text(ui_text_t *text, const resolution_t &resolution)
 {
     ui_box_t *box = text->dst_box;
 
@@ -501,7 +501,7 @@ internal_function void push_text(ui_text_t *text, const resolution_t &resolution
     }
 }
 
-internal_function void push_box_to_render(ui_box_t *box)
+static void push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
@@ -513,7 +513,7 @@ internal_function void push_box_to_render(ui_box_t *box)
     g_ui->cpu_vertex_pool[g_ui->cpu_vertex_count++] = {normalized_base_position + normalized_size, box->color};
 }
 
-internal_function void push_font_character_to_render(ui_box_t *box)
+static void push_font_character_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
@@ -525,28 +525,28 @@ internal_function void push_font_character_to_render(ui_box_t *box)
     g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, vector2_t(1.0f)};
 }
 
-global_var console_t *g_console;
+static console_t *g_console;
 
 // Lua function declarations
-internal_function int32_t lua_console_out(lua_State *state);
-internal_function int32_t lua_console_clear(lua_State *state);
-internal_function int32_t lua_get_fps(lua_State *state);
-internal_function int32_t lua_print_fps(lua_State *state);
-internal_function int32_t lua_break(lua_State *state);
-internal_function int32_t lua_quit(lua_State *state);
+static int32_t lua_console_out(lua_State *state);
+static int32_t lua_console_clear(lua_State *state);
+static int32_t lua_get_fps(lua_State *state);
+static int32_t lua_print_fps(lua_State *state);
+static int32_t lua_break(lua_State *state);
+static int32_t lua_quit(lua_State *state);
 
 bool console_is_receiving_input(void)
 {
     return(g_console->receive_input);
 }
 
-internal_function void output_to_input_section(const char *string, uint32_t color)
+static void output_to_input_section(const char *string, uint32_t color)
 {
     g_console->cursor_position += strlen(string);
     draw_string(&g_console->console_input, string, color);
 }
 
-internal_function void output_to_output_section(const char *string, uint32_t color)
+static void output_to_output_section(const char *string, uint32_t color)
 {
     draw_string(&g_console->console_output, string, color);
 }
@@ -598,12 +598,12 @@ void console_out_color_override(const char *string, uint32_t color)
     draw_string(&g_console->console_output, string, color);
 }
 
-internal_function void output_char_to_output_section(char character)
+static void output_char_to_output_section(char character)
 {
     draw_char(&g_console->console_output, character, 0x00000000);
 }
 
-internal_function void clear_input_section(void)
+static void clear_input_section(void)
 {
     g_console->input_character_count = 0;
     g_console->console_input.char_count = 0;
@@ -611,7 +611,7 @@ internal_function void clear_input_section(void)
     output_to_input_section("> ", g_console->input_color);
 }
 
-internal_function void initialize_console(void)
+static void initialize_console(void)
 {
     g_console->cursor_color = 0x00ee00ff;
     g_console->cursor_fade = 0xff;
@@ -652,7 +652,7 @@ internal_function void initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
 }
 
-internal_function void handle_console_input(input_state_t *input_state, element_focus_t focus)
+static void handle_console_input(input_state_t *input_state, element_focus_t focus)
 {
     if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
@@ -702,7 +702,7 @@ internal_function void handle_console_input(input_state_t *input_state, element_
     }
 }
 
-internal_function void push_console_to_render(input_state_t *input_state)
+static void push_console_to_render(input_state_t *input_state)
 {
     if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
     {
@@ -784,7 +784,7 @@ internal_function void push_console_to_render(input_state_t *input_state)
     // Push output text
 }    
 
-internal_function void initialize_ui_elements(const resolution_t &backbuffer_resolution)
+static void initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
     initialize_console();
 }
@@ -1092,7 +1092,7 @@ void render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_
 }
 
 // All console-and-ui-linked commands (e.g. printing, ui stuff)
-internal_function int32_t lua_console_out(lua_State *state)
+static int32_t lua_console_out(lua_State *state)
 {
     int32_t type = lua_type(state, -1);
     switch(type)
@@ -1116,20 +1116,20 @@ internal_function int32_t lua_console_out(lua_State *state)
     return(0);
 }
 
-internal_function int32_t lua_console_clear(lua_State *state)
+static int32_t lua_console_clear(lua_State *state)
 {
     g_console->console_output.char_count = 0;
     return(0);
 }
 
-internal_function int32_t lua_get_fps(lua_State *state)
+static int32_t lua_get_fps(lua_State *state)
 {
     //    inpus_state_t *win = get_window_data();
     //    lua_pushnumber(state, 1.0f / win->dt);
     return(0);
 }
 
-internal_function int32_t lua_print_fps(lua_State *state)
+static int32_t lua_print_fps(lua_State *state)
 {
     input_state_t *is = get_input_state();
     
@@ -1138,7 +1138,7 @@ internal_function int32_t lua_print_fps(lua_State *state)
     return(0);
 }
 
-internal_function int32_t lua_break(lua_State *state)
+static int32_t lua_break(lua_State *state)
 {
     __debugbreak();
     return(0);
@@ -1151,7 +1151,7 @@ void initialize_ui_translation_unit(struct game_memory_t *memory)
     dbg_ui_utils = &memory->user_interface_state.dbg_ui_utils;
 }
 
-internal_function int32_t lua_quit(lua_State *state)
+static int32_t lua_quit(lua_State *state)
 {
     request_quit();
     return(0);

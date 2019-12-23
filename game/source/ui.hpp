@@ -60,7 +60,7 @@ struct ui_state_t
         vector2_t position;
         uint32_t color;
     };
-    persist_var constexpr uint32_t MAX_QUADS = 10;
+    static constexpr uint32_t MAX_QUADS = 10;
     gui_vertex_t cpu_vertex_pool[ MAX_QUADS * 6 ];
     uint32_t cpu_vertex_count = 0;
     model_handle_t ui_quads_model;
@@ -73,7 +73,7 @@ struct ui_state_t
         vector2_t uvs;
         uint32_t color;
     };
-    persist_var constexpr uint32_t MAX_TX_QUADS = 1000;
+    static constexpr uint32_t MAX_TX_QUADS = 1000;
     textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
     uint32_t cpu_tx_vertex_count = 0;    
     model_handle_t tx_quads_model;
@@ -145,7 +145,7 @@ struct console_t
     char input_characters[60] = {};
     uint32_t input_character_count = 0;
 
-    persist_var constexpr float32_t BLINK_SPEED = 2.0f;
+    static constexpr float32_t BLINK_SPEED = 2.0f;
     enum fade_t { FADE_IN = false, FADE_OUT = true };
     bool fade_in_or_out = FADE_OUT;
     uint32_t cursor_position = 0;

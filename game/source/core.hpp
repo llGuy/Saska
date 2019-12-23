@@ -7,7 +7,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 
-#include "utils.hpp"
+#include "utility.hpp"
 #include "memory.hpp"
 #include <vulkan/vulkan.h>
 
@@ -100,34 +100,16 @@ struct bitset32_t
     }
 };
 
-template <typename T> internal_function constexpr memory_buffer_view_t<T> null_buffer(void) {return(memory_buffer_view_t<T>{0, nullptr});}
-template <typename T> internal_function constexpr memory_buffer_view_t<T> single_buffer(T *address) {return(memory_buffer_view_t<T>{1, address});}
-template <typename T> void allocate_memory_buffer(memory_buffer_view_t<T> &view, uint32_t count)
-{
-    view.count = count;
-    view.buffer = (T *)allocate_free_list(count * sizeof(T));
-}
 
-template <typename T> void allocate_memory_buffer_tmp(memory_buffer_view_t<T> &view, uint32_t count)
-{
-    view.count = count;
-    view.buffer = (T *)allocate_linear(count * sizeof(T));
-}
-
-struct memory_byte_buffer_t
-{
-    uint32_t size;
-    void *ptr;
-};
 
 // predicate needs as param T &
-template <typename T, typename Pred> void loop_through_memory(memory_buffer_view_t<T> &memory, Pred &&predicate)
+/*template <typename T, typename Pred> void loop_through_memory(memory_buffer_view_t<T> &memory, Pred &&predicate)
 {
     for (uint32_t i = 0; i < memory.count; ++i)
     {
 	predicate(i);
     }
-}
+}*/
 
 #include <glm/glm.hpp>
 
@@ -181,34 +163,3 @@ struct input_state_t
 input_state_t *get_input_state(void);
 void enable_cursor_display(void);
 void disable_cursor_display(void);
-
-template <typename T, uint32_t Max, typename Index_Type = uint32_t> struct stack_dynamic_container_t
-{
-    uint32_t data_count = 0;
-    T data[Max];
-
-    uint32_t removed_count = 0;
-    Index_Type removed[Max];
-
-    Index_Type add(void)
-    {
-        if (removed_count)
-        {
-            return removed[removed_count-- - 1];
-        }
-        else
-        {
-            return data_count++;
-        }
-    }
-
-    T *get(Index_Type index)
-    {
-        return &data[index];
-    }
-
-    void remove(Index_Type index)
-    {
-        removed[removed_count++] = index;
-    }
-};

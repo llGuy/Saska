@@ -11,7 +11,7 @@
 //#include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-global_var vulkan_context_t *g_context;
+static vulkan_context_t *g_context;
 
 void mapped_gpu_memory_t::begin(void)
 {
@@ -138,7 +138,7 @@ void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_bu
     vkFreeCommandBuffers(g_context->gpu.logical_device, *pool, command_buffers.count, command_buffers.buffer);
 }
 
-internal_function uint32_t find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements)
+static uint32_t find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements)
 {
     VkPhysicalDeviceMemoryProperties mem_properties;
     vkGetPhysicalDeviceMemoryProperties(g_context->gpu.hardware, &mem_properties);
@@ -152,7 +152,7 @@ internal_function uint32_t find_memory_type_according_to_requirements(VkMemoryPr
         }
     }
 	    
-    OUTPUT_DEBUG_LOG("%s\n", "failed to find suitable memory type");
+    //OUTPUT_DEBUG_LOG("%s\n", "failed to find suitable memory type");
     assert(false);
     return(0);
 }
@@ -252,7 +252,7 @@ struct instance_create_extension_params_t
     const char **r_extension_names;
 };
 
-internal_function void init_instance(VkApplicationInfo *app_info, instance_create_validation_layer_params_t *validation_params, instance_create_extension_params_t *extension_params)
+static void init_instance(VkApplicationInfo *app_info, instance_create_validation_layer_params_t *validation_params, instance_create_extension_params_t *extension_params)
 {
     VkInstanceCreateInfo instance_info = {};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -289,14 +289,14 @@ internal_function void init_instance(VkApplicationInfo *app_info, instance_creat
     pop_stack();
 }
 
-internal_function VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT *message_data, void *user_data)
+static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT *message_data, void *user_data)
 {
     //output_to_debug_console("Vulkan> ", message_data->pMessage, "\n");
 
     return(VK_FALSE);
 }
 
-internal_function void init_debug_messenger(void)
+static void init_debug_messenger(void)
 {
     // setup debugger
     VkDebugUtilsMessengerCreateInfoEXT debug_info = {};
@@ -315,7 +315,7 @@ internal_function void init_debug_messenger(void)
     VK_CHECK(vk_create_debug_utils_messenger(g_context->instance, &debug_info, nullptr, &g_context->debug_messenger));
 }
 
-internal_function void get_swapchain_support(VkSurfaceKHR *surface)
+static void get_swapchain_support(VkSurfaceKHR *surface)
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.capabilities);
     vkGetPhysicalDeviceSurfaceFormatsKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.available_formats_count, nullptr);
@@ -340,7 +340,7 @@ struct physical_device_extensions_params_t
     const char **r_extension_names;
 };
 
-internal_function bool check_if_physical_device_supports_extensions(physical_device_extensions_params_t *extension_params, VkPhysicalDevice gpu)
+static bool check_if_physical_device_supports_extensions(physical_device_extensions_params_t *extension_params, VkPhysicalDevice gpu)
 {
     uint32_t extension_count;
     vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, nullptr);
@@ -364,7 +364,7 @@ internal_function bool check_if_physical_device_supports_extensions(physical_dev
     return(!required_extensions_left);
 }
     
-internal_function bool check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params, VkSurfaceKHR *surface)
+static bool check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params, VkSurfaceKHR *surface)
 {
     g_context->gpu.find_queue_families(surface);
 
@@ -393,7 +393,7 @@ internal_function bool check_if_physical_device_is_suitable(physical_device_exte
            && device_features.fillModeNonSolid);
 }
 
-internal_function void choose_gpu(physical_device_extensions_params_t *extension_params)
+static void choose_gpu(physical_device_extensions_params_t *extension_params)
 {
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(g_context->instance, &device_count, nullptr);
@@ -401,7 +401,7 @@ internal_function void choose_gpu(physical_device_extensions_params_t *extension
     VkPhysicalDevice *devices = (VkPhysicalDevice *)allocate_stack(sizeof(VkPhysicalDevice) * device_count, alignment_t(1), "physical_device_list_allocation");
     vkEnumeratePhysicalDevices(g_context->instance, &device_count, devices);
 
-    OUTPUT_DEBUG_LOG("available physical hardware devices count : %d\n", device_count);
+    //OUTPUT_DEBUG_LOG("available physical hardware devices count : %d\n", device_count);
 
     for (uint32_t i = 0
              ; i < device_count
@@ -419,10 +419,10 @@ internal_function void choose_gpu(physical_device_extensions_params_t *extension
     }
 
     assert(g_context->gpu.hardware != VK_NULL_HANDLE);
-    OUTPUT_DEBUG_LOG("%s\n", "found gpu compatible with application");
+    //OUTPUT_DEBUG_LOG("%s\n", "found gpu compatible with application");
 }
 
-internal_function void init_device(physical_device_extensions_params_t *gpu_extensions, instance_create_validation_layer_params_t *validation_layers)
+static void init_device(physical_device_extensions_params_t *gpu_extensions, instance_create_validation_layer_params_t *validation_layers)
 {
     // create the logical device
     queue_families_t *indices = &g_context->gpu.queue_families;
@@ -486,7 +486,7 @@ internal_function void init_device(physical_device_extensions_params_t *gpu_exte
     vkGetDeviceQueue(g_context->gpu.logical_device, g_context->gpu.queue_families.present_family, 0, &g_context->gpu.present_queue);
 }
 
-internal_function VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *available_formats, uint32_t format_count)
+static VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *available_formats, uint32_t format_count)
 {
     if (format_count == 1 && available_formats[0].format == VK_FORMAT_UNDEFINED)
     {
@@ -507,7 +507,7 @@ internal_function VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *a
     return(available_formats[0]);
 }
 
-internal_function VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *available_present_modes, uint32_t present_modes_count)
+static VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *available_present_modes, uint32_t present_modes_count)
 {
     // supported by most hardware
     VkPresentModeKHR best_mode = VK_PRESENT_MODE_FIFO_KHR;
@@ -527,7 +527,7 @@ internal_function VkPresentModeKHR choose_surface_present_mode(const VkPresentMo
     return(best_mode);
 }
 
-internal_function VkExtent2D choose_swapchain_extent(input_state_t *input_state, const VkSurfaceCapabilitiesKHR *capabilities)
+static VkExtent2D choose_swapchain_extent(input_state_t *input_state, const VkSurfaceCapabilitiesKHR *capabilities)
 {
     if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
     {
@@ -660,7 +660,7 @@ void submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, const 
     vkQueueSubmit(*queue, 1, &submit_info, *fence);
 }
 
-internal_function bool has_stencil_component(VkFormat format)
+static bool has_stencil_component(VkFormat format)
 {
     return(format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT);
 }
@@ -770,7 +770,7 @@ void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_
     }
     else
     {
-        OUTPUT_DEBUG_LOG("%s\n", "unsupported layout transition");
+        //OUTPUT_DEBUG_LOG("%s\n", "unsupported layout transition");
         assert(false);
     }
 
@@ -981,7 +981,7 @@ void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, V
     vkFreeMemory(g_context->gpu.logical_device, staging_buffer.memory, nullptr);
 }
     
-internal_function void init_swapchain(input_state_t *input_state)
+static void init_swapchain(input_state_t *input_state)
 {
     swapchain_details_t *swapchain_details = &g_context->gpu.swapchain_support;
     VkSurfaceFormatKHR surface_format = choose_surface_format(swapchain_details->available_formats, swapchain_details->available_formats_count);
@@ -1066,7 +1066,7 @@ void init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attac
 }
 
 // find gpu supported depth format
-internal_function VkFormat find_supported_format(const VkFormat *candidates, uint32_t candidate_size, VkImageTiling tiling, VkFormatFeatureFlags features)
+static VkFormat find_supported_format(const VkFormat *candidates, uint32_t candidate_size, VkImageTiling tiling, VkFormatFeatureFlags features)
 {
     for (uint32_t i = 0
              ; i < candidate_size
@@ -1083,13 +1083,13 @@ internal_function VkFormat find_supported_format(const VkFormat *candidates, uin
             return(candidates[i]);
         }
     }
-    OUTPUT_DEBUG_LOG("%s\n", "failed to find supported format");
+    //OUTPUT_DEBUG_LOG("%s\n", "failed to find supported format");
     assert(false);
 
     return VkFormat{};
 }
 
-internal_function void find_depth_format(void)
+static void find_depth_format(void)
 {
     VkFormat formats[] = 
         {
@@ -1370,7 +1370,7 @@ VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uin
 graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
 {
     // initialize instance
-    persist_var constexpr uint32_t layer_count = 1;
+    static constexpr uint32_t layer_count = 1;
     const char *layer_names[layer_count] = { "VK_LAYER_LUNARG_standard_validation" };
 
     instance_create_validation_layer_params_t validation_params = {};
@@ -1420,7 +1420,7 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
     VK_CHECK(create_surface_proc->create_proc());
 
     // choose hardware and create device
-    persist_var constexpr uint32_t gpu_extension_count = 1;
+    static constexpr uint32_t gpu_extension_count = 1;
     const char *gpu_extension_names[gpu_extension_count] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
     physical_device_extensions_params_t gpu_extensions = {};
     gpu_extensions.r_extension_count = gpu_extension_count;
@@ -1458,8 +1458,8 @@ void recreate_swapchain(input_state_t *input_state)
 
 frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
 {
-    persist_var uint32_t current_frame = 0;
-    persist_var constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+    static uint32_t current_frame = 0;
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
     g_context->current_frame = 0;
     
@@ -1474,7 +1474,7 @@ frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
     }
     else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
     {
-	OUTPUT_DEBUG_LOG("Failed to acquire swapchain image");
+	//OUTPUT_DEBUG_LOG("Failed to acquire swapchain image");
     }
     
     wait_fences(memory_buffer_view_t<VkFence>{1, &g_context->cpu_wait[g_context->current_frame]});
@@ -1512,7 +1512,7 @@ void end_frame_rendering_and_refresh(input_state_t *input_state)
     }
     else if (result != VK_SUCCESS)
     {
-	OUTPUT_DEBUG_LOG("%s\n", "failed to present swapchain image");
+	//OUTPUT_DEBUG_LOG("%s\n", "failed to present swapchain image");
     }
 }
 

@@ -2,13 +2,13 @@ CC := cl
 CFLAGS := -Zi /EHsc /std:c++latest /DEBUG:FULL
 LIBS := ws2_32.lib winmm.lib user32.lib gdi32.lib msvcrt.lib C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib C:/dependencies/Lua/lib/lua5.1.lib
 
-DEF := /DGLM_ENABLE_EXPERIMENTAL /DSTB_IMAGE_IMPLEMENTATION /D_MBCS /DDEVELOPMENT_MODE /DCLIENT_APPLICATION
+DEF := /DGLM_ENABLE_EXPERIMENTAL /DSTB_IMAGE_IMPLEMENTATION /D_MBCS /DDEVELOPMENT_MODE
 INCS := /I C:/dependencies/ /I C:/VulkanSDK/1.1.108.0/Include /I C:/dependencies/stb-master/ /I C:/dependencies/Lua/include/
 GCCINC := 
 
 SRCDIR := .
-OBJDIR := ../bin
-BINDIR := ../bin
+OBJDIR := ../binaries
+BINDIR := ../binaries
 CPPS := $(wildcard *.cpp)
 OBJS := $(CPPS:.cpp=.obj)
 DEPFILES := $(CPPS:.cpp=.dep)

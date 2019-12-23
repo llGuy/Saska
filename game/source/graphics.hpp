@@ -5,7 +5,9 @@
 #include "core.hpp"
 #include "vulkan.hpp"
 #include <glm/glm.hpp>
-#include "utils.hpp"
+#include "utility.hpp"
+#include "string.hpp"
+#include "containers.hpp"
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -280,7 +282,7 @@ uniform_binding_t make_uniform_binding_s(uint32_t count, uint32_t binding, VkDes
 // Separate Uniform_Layout_Info (list of binding structs) from Uniform_Layout (API struct) for optimisation reasons
 struct uniform_layout_info_t // --> VkDescriptorSetLayout
 {
-    persist_var constexpr uint32_t MAX_BINDINGS = 15;
+    static constexpr uint32_t MAX_BINDINGS = 15;
     uniform_binding_t bindings_buffer[MAX_BINDINGS] = {};
     uint32_t binding_count = 0;
     
@@ -608,7 +610,7 @@ struct mesh_buffer_t
 // TODO: Refactor the model system to use mesh_t for instances of model_t
 struct mesh_t
 {
-    persist_var constexpr uint32_t MAX_BUFFERS = 6;
+    static constexpr uint32_t MAX_BUFFERS = 6;
     mesh_buffer_t buffers[buffer_type_t::INVALID_BUFFER_TYPE];
     uint32_t buffer_count = 0;
     buffer_type_t buffer_types_stack[MAX_BUFFERS];
@@ -632,7 +634,7 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh);
 
 struct joint_t
 {
-    persist_var constexpr uint32_t MAX_CHILD_JOINTS = 4;
+    static constexpr uint32_t MAX_CHILD_JOINTS = 4;
     
     uint32_t joint_id = 0;
     uint32_t parent_joint_id = 0;
@@ -675,7 +677,7 @@ struct animation_cycle_t
 
 struct animation_cycles_t
 {
-    persist_var constexpr uint32_t MAX_ANIMATIONS = 10;
+    static constexpr uint32_t MAX_ANIMATIONS = 10;
     animation_cycle_t cycles[MAX_ANIMATIONS];
     uint32_t cycle_count;
 
@@ -798,7 +800,7 @@ void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transf
 
 struct gpu_material_submission_queue_manager_t // maybe in the future this will be called multi-threaded rendering manager
 {
-    persist_var constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
+    static constexpr uint32_t MAX_ACTIVE_QUEUES = 10;
 
     uint32_t active_queue_ptr {0};
     gpu_command_queue_t active_queues[MAX_ACTIVE_QUEUES];
@@ -807,7 +809,7 @@ struct gpu_material_submission_queue_manager_t // maybe in the future this will 
 
 struct cameras_t
 {
-    persist_var constexpr uint32_t MAX_CAMERAS = 10;
+    static constexpr uint32_t MAX_CAMERAS = 10;
     uint32_t camera_count = 0;
     camera_t cameras[MAX_CAMERAS] = {};
     camera_handle_t camera_bound_to_3d_output = -1;
@@ -868,8 +870,8 @@ struct lighting_t
     // Later, need to add PSSM
     struct shadows_t
     {
-        persist_var constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
-        persist_var constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+        static constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
+        static constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
         
         framebuffer_handle_t fbo;
         render_pass_handle_t pass;
@@ -892,8 +894,8 @@ struct lighting_t
 
 struct atmosphere_t
 {
-    persist_var constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
-    persist_var constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
+    static constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
+    static constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
 
     // gpu_t objects needed to create the atmosphere skybox cubemap
     render_pass_handle_t make_render_pass;

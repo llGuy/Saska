@@ -1,6 +1,8 @@
+#include <stb_image.h>
 #include "file_system.hpp"
 #include <string.h>
 #include "memory.hpp"
+#include "allocators.hpp"
 #include <Windows.h>
 
 // For each platform, there will be something different

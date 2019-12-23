@@ -41,7 +41,7 @@
      * Start working on networking
      * Refactor code: separate the stuff a bit better
 
-  ------------------------------------------------------------ */
+  ------------------------------------------------------------ 
 
 #define GLFW_INCLUDE_VULKAN
 
@@ -435,7 +435,7 @@ int32_t main(int32_t argc, char * argv[])
         g_game_time += g_dt;
         input_state.dt = g_dt;
 
-        now = new_now;*/
+        now = new_now;
     }
 
     OUTPUT_DEBUG_LOG("stack allocator start address is : %p\n", stack_allocator_global.current);
@@ -461,3 +461,4 @@ int32_t main(int32_t argc, char * argv[])
 
     return(0);
 }
+*/

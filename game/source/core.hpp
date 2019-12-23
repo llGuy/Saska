@@ -23,9 +23,6 @@
 
 #define VK_CHECK(f, ...) f
 
-enum platform_t { AGNOSTIC, WINDOWS, LINUX, INVALID };
-extern const platform_t PLATFORM = INVALID;
-
 void request_quit(void);
 
 float32_t get_dt(void);

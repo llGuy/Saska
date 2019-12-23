@@ -22,8 +22,6 @@ struct game_memory_t
     struct graphics_context_t graphics_context;
     // User interface stuff
     struct user_interface_t user_interface_state;
-    // Script stuff
-    struct game_scripts_t script_state;
     // Network stuff: client name, server address, etc...
     struct network_state_t network_state;
 

@@ -3,40 +3,21 @@
 
 #define NOMINMAX
 
-#include <stb_image.h>
-
 #define VK_USE_PLATFORM_WIN32_KHR
 // Empty
 #define MEMORY_API
 #define SOURCE_GAME
 
-#if defined(UNITY_BUILD)
-#include "network.cpp"
-#include "thread_pool.cpp"
-#include <vulkan/vulkan.h>
-#include "memory.cpp"
-#include "allocators.cpp"
-#include "ui.cpp"
-#include "game.cpp"
-#include "world.cpp"
-#include "script.cpp"
-#include "vulkan.cpp"
-#include "graphics.cpp"
-#include "file_system.cpp"
-#else
+#define _WINSOCKAPI_ 
 
 #include "thread_pool.hpp"
 #include "memory.hpp"
 #include "vulkan.hpp"
-#include "core.hpp"
 #include "world.hpp"
 #include <stdlib.h>
 
 #include "game.hpp"
 #include "vulkan.hpp"
-
-#include <windows.h>
-#endif
 
 #include <Windows.h>
 #include <Windowsx.h>

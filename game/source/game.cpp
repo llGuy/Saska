@@ -1,4 +1,5 @@
 #include "world.hpp"
+#include "game.hpp"
 #include "vulkan.hpp"
 #include "graphics.hpp"
 

@@ -1,8 +1,9 @@
+#include "utils.hpp"
 #include "memory.hpp"
 #include <stdlib.h>
 #include <cassert>
 
-MEMORY_API inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
+inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
 {
     byte_t *byte_cast_ptr = (byte_t *)ptr;
     uint8_t adjustment = alignment - reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1);
@@ -11,7 +12,7 @@ MEMORY_API inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
     return(adjustment);
 }
 
-MEMORY_API void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
+void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
 {
     void *prev = allocator->current;
     void *new_crnt = (byte_t *)allocator->current + alloc_size;
@@ -22,12 +23,12 @@ MEMORY_API void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment
     return(prev);
 }
 
-MEMORY_API void clear_linear_impl(linear_allocator_t *allocator)
+void clear_linear_impl(linear_allocator_t *allocator)
 {
     allocator->current = allocator->start;
 }
 
-MEMORY_API void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
+void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
 {
     byte_t *would_be_address;
 
@@ -60,13 +61,13 @@ MEMORY_API void *allocate_stack_impl(uint32_t allocation_size, alignment_t align
     return(start_address + sizeof(stack_allocation_header_t));
 }
 
-MEMORY_API void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator)
+void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     current_header->size += extension_size;
 }
 
-MEMORY_API void pop_stack_impl(stack_allocator_t *allocator)
+void pop_stack_impl(stack_allocator_t *allocator)
 {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     
@@ -91,7 +92,7 @@ MEMORY_API void pop_stack_impl(stack_allocator_t *allocator)
     --(allocator->allocation_count);
 }
 
-MEMORY_API void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
+void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
 {
     uint32_t total_allocation_size = allocation_size + sizeof(free_list_allocation_header_t);
 
@@ -138,7 +139,7 @@ MEMORY_API void *allocate_free_list_impl(uint32_t allocation_size, alignment_t a
 }
 
 // TODO(luc) : optimize free list allocator so that all the blocks are stored in order
-MEMORY_API void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
+void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 {
     free_list_allocation_header_t *allocation_header = (free_list_allocation_header_t *)((byte_t *)pointer - sizeof(free_list_allocation_header_t));
     free_block_header_t *new_free_block_header = (free_block_header_t *)allocation_header;

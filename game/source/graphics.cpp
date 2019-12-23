@@ -2,8 +2,6 @@
 
 // TODO: Big refactor after animations are loaded
 
-#include <Windows.h>
-
 #include "core.hpp"
 #include "vulkan.hpp"
 
@@ -405,8 +403,8 @@ void fill_graphics_pipeline_info(const shader_modules_t &modules,
 
 void graphics_pipeline_t::destroy(void)
 {
-    vkDestroyPipelineLayout(g_context->gpu.logical_device, layout, nullptr);
-    vkDestroyPipeline(g_context->gpu.logical_device, pipeline, nullptr);
+    //vkDestroyPipelineLayout(g_context->gpu.logical_device, layout, nullptr);
+    //vkDestroyPipeline(g_context->gpu.logical_device, pipeline, nullptr);
 }
 
 void make_graphics_pipeline(graphics_pipeline_t *ppln)
@@ -2340,7 +2338,7 @@ internal_function int32_t lua_end_frame_capture(lua_State *state)
 
 // ====================== Debugging for SSR =========================
 
-#include <matrix.h>
+/*#include <matrix.h>
 #include <vector.h>
 #include <vector_functions.h>
 
@@ -2402,10 +2400,10 @@ internal_function vec4 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 #define PUSH_CONSTANT(name, push_k_data) glsl::##name = push_k_data
 #define SET_UNIFORM(name, uni) glsl::##name = uni
 #define SET_VS_DATA(name, data) glsl::##name = data
-
+*/
 vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera)
 {
-    glsl::pk_t pk;
+    /*    glsl::pk_t pk;
 
     vector4_t n_light_dir = camera->v_m * vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 0.0f);
     
@@ -2444,7 +2442,8 @@ vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uv
     capture->end_memory_maps();
 
     vector4_t final_color = vector4_t(glsl::final_color.x, glsl::final_color.y, glsl::final_color.z, 1.0f);
-    return(final_color);
+    return(final_color);*/
+    return{};
 }
 
 

@@ -1,7 +1,10 @@
 #pragma once
 
-#include "core.hpp"
+#include "utils.hpp"
 #include "world.hpp"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define _WINSOCKAPI_ 
 #include "thread_pool.hpp"
 
 // Send, receive, etc...

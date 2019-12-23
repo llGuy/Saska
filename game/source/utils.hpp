@@ -23,6 +23,7 @@
 #define global_var static
 
 #include <glm/glm.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 typedef glm::vec2 vector2_t;
 typedef glm::vec3 vector3_t;
@@ -285,4 +286,4 @@ template <typename T, cbhtdt_t CBHTDT = cbhtdt_t::TRACKING> struct circular_buff
     }
 };
 
-void do_nothing(void) {}
+inline void do_nothing(void) {}

@@ -1,3 +1,4 @@
+#include "game.hpp"
 /* vulkan.cpp */
 
 // TODO: Big refactor after animations are loaded
@@ -97,6 +98,8 @@ void init_fence(VkFenceCreateFlags flags, VkFence *fence)
 
     VK_CHECK(vkCreateFence(g_context->gpu.logical_device, &fence_info, nullptr, fence));
 }
+
+#undef max
 
 void wait_fences(const memory_buffer_view_t<VkFence> &fences)
 {

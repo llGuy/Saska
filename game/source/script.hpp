@@ -10,10 +10,7 @@ extern "C"
     #include <lualib.h>
 }
 
-struct game_scripts_t
-{
-    struct lua_State *script_state;
-};
+extern lua_State *g_lua_state;
 
 void initialize_scripting(void);
 void cleanup_lua_scripting(void);

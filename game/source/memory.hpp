@@ -2,12 +2,12 @@
 
 #include <stdint.h>
 
-MEMORY_API inline constexpr uint64_t kilobytes(uint32_t kb)
+inline constexpr uint64_t kilobytes(uint32_t kb)
 {
     return(kb * 1024);
 }
 
-MEMORY_API inline constexpr uint64_t megabytes(uint32_t mb)
+inline constexpr uint64_t megabytes(uint32_t mb)
 {
     return(kilobytes(mb * 1024));
 }
@@ -24,8 +24,8 @@ struct linear_allocator_t
     uint32_t used_capacity = 0;
 };
 
-MEMORY_API void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator);
-MEMORY_API void clear_linear_impl(linear_allocator_t *allocator);
+void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator);
+void clear_linear_impl(linear_allocator_t *allocator);
 
 struct stack_allocation_header_t
 {
@@ -46,12 +46,12 @@ struct stack_allocator_t
     uint32_t capacity;
 };
 
-MEMORY_API void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator);
+void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator);
 
 // only applies to the allocation at the top of the stack
-MEMORY_API void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator);
+void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator);
 // contents in the allocation must be destroyed by the user
-MEMORY_API void pop_stack_impl(stack_allocator_t *allocator);
+void pop_stack_impl(stack_allocator_t *allocator);
 
 struct free_block_header_t
 {
@@ -79,5 +79,5 @@ struct free_list_allocator_t
     uint32_t used_memory = 0;
 };
 
-MEMORY_API void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator);
-MEMORY_API void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator);
+void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator);
+void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator);

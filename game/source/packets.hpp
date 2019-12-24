@@ -1,6 +1,7 @@
 #pragma once
 
-#include "utils.hpp"
+#include "utility.hpp"
+#include "client.hpp"
 
 enum packet_mode_t { PM_CLIENT_MODE, PM_SERVER_MODE };
 enum client_packet_type_t { CPT_CLIENT_JOIN, CPT_INPUT_STATE, CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION, CPT_PREDICTION_ERROR_CORRECTION };
@@ -201,3 +202,55 @@ struct client_prediction_error_correction_t
 {
     uint64_t tick;
 };
+
+
+
+constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) +
+                                                       sizeof(packet_header_t::current_tick) +
+                                                       sizeof(packet_header_t::client_id)); }
+constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client_input_state_packet_t::action_flags) +
+                                                                   sizeof(client_input_state_packet_t::mouse_x_diff) +
+                                                                   sizeof(client_input_state_packet_t::mouse_y_diff) +
+                                                                   sizeof(client_input_state_packet_t::flags_byte) +
+                                                                   sizeof(client_input_state_packet_t::dt)); }
+constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::client_id) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_position) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_direction) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_velocity) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_up_vector) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_rotation) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::action_flags) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::flags)); }
+constexpr uint32_t sizeof_modified_voxel(void) { return(sizeof(modified_voxel_t::previous_value) +
+                                                        sizeof(modified_voxel_t::next_value) +
+                                                        sizeof(modified_voxel_t::index)); };
+inline uint32_t sizeof_modified_chunk(uint32_t modified_chunk_count) { return(sizeof(modified_chunk_t::chunk_index) +
+                                                                       sizeof(modified_chunk_t::modified_voxel_count) +
+                                                                       sizeof_modified_voxel() * modified_chunk_count); };
+inline uint32_t sizeof_game_snapshot_voxel_delta_packet(uint32_t modified_chunk_count, modified_chunk_t *chunks)
+{
+    uint32_t size = sizeof(game_snapshot_voxel_delta_packet_t::modified_count);
+    for (uint32_t chunk = 0; chunk < modified_chunk_count; ++chunk)
+    {
+        size += sizeof_modified_chunk(chunks[chunk].modified_voxel_count);
+    }
+    return(size);
+}
+
+
+constexpr uint32_t sizeof_local_client_modified_voxel(void) { return(sizeof(local_client_modified_voxel_t::x) +
+                                                                     sizeof(local_client_modified_voxel_t::y) +
+                                                                     sizeof(local_client_modified_voxel_t::z) +
+                                                                     sizeof(local_client_modified_voxel_t::value)); };
+inline uint32_t sizeof_client_modified_chunk(uint32_t modified_chunk_count) { return(sizeof(client_modified_chunk_t::chunk_index) +
+                                                                                     sizeof(client_modified_chunk_t::modified_voxel_count) +
+                                                                                     sizeof_modified_voxel() * modified_chunk_count); };
+inline uint32_t sizeof_modified_voxels_packet(uint32_t modified_chunk_count, client_modified_chunk_t *chunks)
+{
+    uint32_t size = sizeof(client_modified_voxels_packet_t::modified_chunk_count);
+    for (uint32_t chunk = 0; chunk < modified_chunk_count; ++chunk)
+    {
+        size += sizeof_modified_chunk(chunks[chunk].modified_voxel_count);
+    }
+    return(size);
+}

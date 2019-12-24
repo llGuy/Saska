@@ -24,7 +24,6 @@ static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_addr
 static uint16_t client_id_stack[MAX_CLIENTS] = {};
 static client_t user_client;
 static circular_buffer_t<player_state_t> player_state_cbuffer;
-static float32_t client_input_snapshot_rate = 25.0f;
 static char *message_buffer = nullptr;
 static struct
 {
@@ -70,7 +69,7 @@ void tick_client(input_state_t *input_state, float32_t dt)
     if (is_connected_to_server)
     {
         time_since_last_input_state += dt;
-        float32_t max_time = 1.0f / client_input_snapshot_rate;
+        float32_t max_time = 1.0f / get_snapshot_client_rate();
         
         if (time_since_last_input_state > max_time)
         {

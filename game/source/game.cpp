@@ -16,7 +16,6 @@ void load_game(game_memory_t *memory)
     
     g_game_memory = memory;
 
-    initialize_network_translation_unit(memory);
     initialize_world_translation_unit(memory);
     initialize_vulkan_translation_unit(memory);
     initialize_graphics_translation_unit(memory);
@@ -35,7 +34,7 @@ void initialize_game(game_memory_t *memory, input_state_t *input_state, create_v
         {
             // Initialize graphics api, atmosphere, shadow, skeletal animation...
             initialize_scripting();
-            initialize_network_state(memory, app_mode);
+            initialize_net(memory, app_mode);
             graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, input_state);
             initialize_game_3d_graphics(graphics.command_pool, input_state);
             initialize_game_2d_graphics(graphics.command_pool);
@@ -44,7 +43,7 @@ void initialize_game(game_memory_t *memory, input_state_t *input_state, create_v
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            initialize_network_state(memory, app_mode);
+            initialize_net(memory, app_mode);
             initialize_scripting();
             initialize_world(input_state, VK_NULL_HANDLE, app_type, app_mode);
         } break;
@@ -93,7 +92,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             handle_global_game_input(memory, input_state);
-            update_network_state(input_state, dt);
+            tick_net(input_state, dt);
             hotreload_assets_if_changed();
             
             // ---- begin recording instructions into the command buffers ----
@@ -114,7 +113,7 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             tick_world(input_state, dt, 0, 0 /* Don't need this argument */, nullptr, memory->app_type, memory->screen_focus);
-            update_network_state(input_state, dt);
+            tick_net(input_state, dt);
         } break;
     }
 }
@@ -122,9 +121,4 @@ void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt)
 application_type_t get_app_type(void)
 {
     return g_game_memory->app_type;
-}
-
-application_mode_t get_app_mode(void)
-{
-    return g_game_memory->network_state.current_app_mode;
 }

@@ -3831,7 +3831,7 @@ static void ready_chunks_for_voxel_interpolation_reset(void)
         g_voxel_chunks->elapsed_interpolation_time = 0.0f;
         
         player_t *user = get_user_player();
-        client_t *user_client = get_client(user->network.client_state_index);
+        client_t *user_client = get_user_client();
 
         // Flag chunks that have been modified by the client
         flag_chunks_previously_modified_by_client(user_client);
@@ -3907,7 +3907,7 @@ static void ready_chunks_for_voxel_interpolation_reset(void)
     if (did_correction)
     {
         player_t *player = get_user_player();
-        client_t *client = get_client(player->network.client_state_index);
+        client_t *client = get_user_client();
 
         // Set appropriate flags
         client->needs_to_do_voxel_correction = 0;
@@ -3937,7 +3937,7 @@ void update_chunks_from_network(float32_t dt)
         }
         
         player_t *user = get_user_player();
-        client_t *user_client = get_client(user->network.client_state_index);
+        client_t *user_client = get_user_client();
 
         // Flag chunks that have been modified by the client
         flag_chunks_previously_modified_by_client(user_client);
@@ -4019,7 +4019,7 @@ void update_chunks_from_network(float32_t dt)
     if (did_correction)
     {
         player_t *player = get_user_player();
-        client_t *client = get_client(player->network.client_state_index);
+        client_t *client = get_user_client();
 
         // Set appropriate flags
         client->needs_to_do_voxel_correction = 0;

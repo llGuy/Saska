@@ -9,7 +9,8 @@
 
 struct remote_client_t
 {
-    
+    uint32_t client_id, player_handle;
+    const char *name;
 };
 
 
@@ -17,10 +18,11 @@ struct remote_client_t
 static bool is_connected_to_server = 0;
 static network_address_t server_address;
 static uint32_t client_count = 0;
-static client_t clients[MAX_CLIENTS];
+static remote_client_t clients[MAX_CLIENTS];
 static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_name;
 static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_address;
 static uint16_t client_id_stack[MAX_CLIENTS] = {};
+static client_t user_client;
 static circular_buffer_t<player_state_t> player_state_cbuffer;
 static float32_t client_input_snapshot_rate = 25.0f;
 static char *message_buffer = nullptr;
@@ -43,8 +45,10 @@ static void send_commands(void);
 
 
 // "Public" function definitions
-void initialize_client(void)
+void initialize_client(char *msg_buffer)
 {
+    message_buffer = msg_buffer;
+    
     initialize_socket_api(GAME_OUTPUT_PORT_CLIENT);
     
     add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
@@ -77,7 +81,7 @@ void tick_client(input_state_t *input_state, float32_t dt)
     }
 
     network_address_t received_address = {};
-    bool received = receive_from(message_buffer, sizeof(message_buffer), &received_address);
+    bool received = receive_from(message_buffer, sizeof(char) * MAX_MESSAGE_BUFFER_SIZE, &received_address);
 
     if (received)
     {
@@ -113,7 +117,7 @@ void tick_client(input_state_t *input_state, float32_t dt)
                         player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
                         player_t *player = get_player(player_packet->player_name);
 
-                        client_t *client = &clients[player_packet->client_id];
+                        remote_client_t *client = &clients[player_packet->client_id];
                         client->name = player->id.str;
                         client->client_id = player_packet->client_id;
                         client->player_handle = player->index;
@@ -122,6 +126,12 @@ void tick_client(input_state_t *input_state, float32_t dt)
                         {
                             player->network.is_remote = 1;
                             player->network.max_time = 1.0f / get_snapshot_server_rate();
+                        }
+                        else
+                        {
+                            user_client.name = player->id.str;
+                            user_client.client_id = player_packet->client_id;
+                            user_client.player_handle = player->index;
                         }
                     }
 
@@ -190,14 +200,16 @@ void tick_client(input_state_t *input_state, float32_t dt)
                         game_snapshot_player_state_packet_t player_snapshot_packet = {};
                         deserialize_game_snapshot_player_state_packet(&in_serializer, &player_snapshot_packet);
 
-                        client_t *client = get_client(player_snapshot_packet.client_id);
-                        player_t *current_player = get_player(client->player_handle);
+                        remote_client_t *rclient = &clients[player_snapshot_packet.client_id];
+                        player_t *current_player = get_player(rclient->player_handle);
 
                         player_t *local_user = get_user_player();
 
                         // We are dealing with the local client: we need to deal with the correction stuff
                         if (local_user->network.client_state_index == player_snapshot_packet.client_id && !player_snapshot_packet.is_to_ignore)
                         {
+                            client_t *client = &user_client;
+                            
                             client->previous_client_tick = previous_tick;
                             
                             if (player_snapshot_packet.need_to_do_correction)
@@ -296,15 +308,15 @@ void tick_client(input_state_t *input_state, float32_t dt)
                         player_t *player = get_player(new_player_handle);
 
                         // Sync the network.cpp's client data with the world.cpp's player data
-                        client_t *client = get_client(new_client_init_packet.client_id);
-                        client->name = player->id.str;
-                        client->client_id = new_client_init_packet.client_id;
-                        client->player_handle = player->index;
+                        remote_client_t *rclient = &clients[new_client_init_packet.client_id];
+                        rclient->name = player->id.str;
+                        rclient->client_id = new_client_init_packet.client_id;
+                        rclient->player_handle = player->index;
 
                         player->network.is_remote = 1;
                         player->network.max_time = 1.0f / get_snapshot_server_rate();
 
-                        console_out(client->name, " joined the game!\n");
+                        console_out(rclient->name, " joined the game!\n");
                     }
                 } break;
             }
@@ -343,6 +355,12 @@ void send_prediction_error_correction(uint64_t tick)
     send_serialized_message(&serializer, server_address);
 
     *get_current_tick() = tick;
+}
+
+
+client_t *get_user_client(void)
+{
+    return &user_client;
 }
 
 

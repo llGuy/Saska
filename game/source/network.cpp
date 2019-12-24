@@ -645,7 +645,7 @@ void initialize_network_state(game_memory_t *memory, application_mode_t app_mode
 
     switch(g_network_state->current_app_mode)
     {
-    case application_mode_t::CLIENT_MODE: { initialize_client(); } break;
+    case application_mode_t::CLIENT_MODE: { initialize_client(message_buffer); } break;
     case application_mode_t::SERVER_MODE: { initialize_as_server(); } break;
     }
 }

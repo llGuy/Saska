@@ -9,6 +9,7 @@
 void initialize_socket_api(uint16_t output_port);
 
 
+// Easier to use this in Vulkan-style handle instead of a class because of different platform implementations of sockets API
 struct network_socket_t
 {
     int32_t socket;

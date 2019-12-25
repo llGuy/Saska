@@ -6,7 +6,7 @@
 #include "graphics.hpp"
 #include "ui.hpp"
 #include "script.hpp"
-#include "network.hpp"
+#include "net.hpp"
 
 // This just decides whether the game should be run with a console, or with graphics. For servers, it would be better (if not debugging, to use console instead of having to initialize a vulkan context, graphics state, ui, etc...)
 // The client will always use WINDOW_APPLICATION_MODE

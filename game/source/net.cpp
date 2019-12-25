@@ -6,7 +6,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <Windows.h>
-#include "network.hpp"
+#include "net.hpp"
 #include "game.hpp"
 #include "ui.hpp"
 #include "script.hpp"
@@ -51,7 +51,7 @@ void tick_net(raw_input_t *raw_input, float32_t dt)
     }
 }
 
-void initialize_net(game_memory_t *memory, application_mode_t app_mode)
+void initialize_net(application_mode_t app_mode)
 {
     current_app_mode = app_mode;
 

@@ -97,9 +97,11 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
     {
+        SetProcessDPIAware();
+        
         const char *window_class_name = "saska_window_class";
         const char *window_name = application_name;
-
+        
         g_cursor = LoadCursor(0, IDC_ARROW);
     
         WNDCLASS window_class = {};
@@ -597,6 +599,7 @@ static void get_gamepad_state(void)
     // Get gamepad input state and active controller
     int32_t active_controller = -1;
     XINPUT_STATE gamepad_state = {};
+    ZeroMemory(&gamepad_state, sizeof(gamepad_state));
                 
     for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i)
     {

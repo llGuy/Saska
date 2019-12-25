@@ -1,9 +1,9 @@
 #include "ui.hpp"
+#include "net.hpp"
 #include "script.hpp"
 #include "sockets.hpp"
 #include "client.hpp"
 #include "packets.hpp"
-#include "network.hpp"
 #include "serializer.hpp"
 
 
@@ -89,7 +89,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
         in_serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
 
         packet_header_t header = {};
-        deserialize_packet_header(&in_serializer, &header);
+        in_serializer.deserialize_packet_header(&header);
 
         if (header.packet_mode == packet_mode_t::PM_SERVER_MODE)
         {
@@ -101,7 +101,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                     *get_current_tick() = header.current_tick;
                     
                     game_state_initialize_packet_t game_state_init_packet = {};
-                    deserialize_game_state_initialize_packet(&in_serializer, &game_state_init_packet);
+                    in_serializer.deserialize_game_state_initialize_packet(&game_state_init_packet);
                     
                     deinitialize_world();
                     
@@ -152,7 +152,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
 
                     voxel_chunks_flags_t *flags = get_voxel_chunks_flags();
                     
-                    chunks_count.to_update_count = deserialize_uint32(&in_serializer);
+                    chunks_count.to_update_count = in_serializer.deserialize_uint32();
                     if (chunks_count.is_first)
                     {
                         flags->should_update_chunk_meshes_from_now = 0;
@@ -161,11 +161,11 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                         flags->chunks_to_be_received = chunks_count.count;
                     }
                     
-                    uint32_t chunks_to_update = deserialize_uint32(&in_serializer);
+                    uint32_t chunks_to_update = in_serializer.deserialize_uint32();
                     for (uint32_t i = 0; i < chunks_to_update; ++i)
                     {
                         voxel_chunk_values_packet_t packet = {};
-                        deserialize_voxel_chunk_values_packet(&in_serializer, &packet);
+                        in_serializer.deserialize_voxel_chunk_values_packet(&packet);
                         
                         voxel_chunk_t *chunk = *get_voxel_chunk(packet.chunk_coord_x, packet.chunk_coord_y, packet.chunk_coord_z);
                         memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
@@ -185,19 +185,19 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                 {
                     linear_allocator_t *voxel_allocator = get_voxel_linear_allocator();
                     reset_voxel_interpolation();
-                    deserialize_game_snapshot_voxel_delta_packet(&in_serializer, get_previous_voxel_delta_packet(), voxel_allocator);
+                    in_serializer.deserialize_game_snapshot_voxel_delta_packet(get_previous_voxel_delta_packet(), voxel_allocator);
 
                     // Put this in the history
-                    uint64_t previous_tick = deserialize_uint64(&in_serializer);
+                    uint64_t previous_tick = in_serializer.deserialize_uint64();
 
                     client_modified_voxels_packet_t modified_voxels = {};
-                    deserialize_client_modified_voxels_packet(&in_serializer, &modified_voxels);
+                    in_serializer.deserialize_client_modified_voxels_packet(&modified_voxels);
 
                     for (uint32_t i = 0; i < client_count; ++i)
                     {
                         // This is the player state to compare with what the server sent
                         game_snapshot_player_state_packet_t player_snapshot_packet = {};
-                        deserialize_game_snapshot_player_state_packet(&in_serializer, &player_snapshot_packet);
+                        in_serializer.deserialize_game_snapshot_player_state_packet(&player_snapshot_packet);
 
                         remote_client_t *rclient = &clients[player_snapshot_packet.client_id];
                         player_t *current_player = get_player(rclient->player_handle);
@@ -216,9 +216,9 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                 // Do correction here
                                 // TODO: THIS NEEDS TO HAPPEN IN UPDATE_NETWORK_COMPONENT() WHEN THE VOXEL CORRECTIONS HAPPEN
                                 player_t *player = get_user_player();
-                                player->ws_p = player_snapshot_packet.ws_position;
-                                player->ws_d = player_snapshot_packet.ws_direction;
-                                player->ws_v = player_snapshot_packet.ws_velocity;
+                                player->ws_position = player_snapshot_packet.ws_position;
+                                player->ws_direction = player_snapshot_packet.ws_direction;
+                                player->ws_velocity = player_snapshot_packet.ws_velocity;
                                 player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
                             }
 
@@ -292,7 +292,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
             case server_packet_type_t::SPT_CLIENT_JOINED:
                 {
                     player_state_initialize_packet_t new_client_init_packet = {};
-                    deserialize_player_state_initialize_packet(&in_serializer, &new_client_init_packet);
+                    in_serializer.deserialize_player_state_initialize_packet(&new_client_init_packet);
 
                     player_t *user = get_user_player();
 
@@ -327,7 +327,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
 void cache_player_state(float32_t dt)
 {
     player_t *user = get_user_player();
-    player_state_t player_state = initialize_player_state(user);
+    player_state_t player_state = user->create_player_state();
     player_state.dt = dt;
 
     player_state_cbuffer.push_item(&player_state);
@@ -337,7 +337,7 @@ void cache_player_state(float32_t dt)
 void send_prediction_error_correction(uint64_t tick)
 {
     serializer_t serializer = {};
-    initialize_serializer(&serializer, sizeof_packet_header() + sizeof(uint64_t));
+    serializer.initialize(sizeof_packet_header() + sizeof(uint64_t));
 
     player_t *user = get_user_player();
     
@@ -348,10 +348,10 @@ void send_prediction_error_correction(uint64_t tick)
     header.current_tick = tick;
     header.client_id = user->network.client_state_index;
     
-    serialize_packet_header(&serializer, &header);
-    serialize_uint64(&serializer, tick);
+    serializer.serialize_packet_header(&header);
+    serializer.serialize_uint64(tick);
 
-    send_serialized_message(&serializer, server_address);
+    serializer.send_serialized_message(server_address);
 
     *get_current_tick() = tick;
 }
@@ -383,12 +383,12 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
     header.total_packet_size += strlen(packet.client_name) + 1;
 
     serializer_t serializer = {};
-    initialize_serializer(&serializer, header.total_packet_size);
-    serialize_packet_header(&serializer, &header);
-    serialize_client_join_packet(&serializer, &packet);
+    serializer.initialize(header.total_packet_size);
+    serializer.serialize_packet_header(&header);
+    serializer.serialize_client_join_packet(&packet);
     
     server_address = network_address_t{ (uint16_t)host_to_network_byte_order(GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
-    send_serialized_message(&serializer, server_address);
+    serializer.send_serialized_message(server_address);
 }
 
 
@@ -405,12 +405,12 @@ static void join_server(const char *ip_address, const char *client_name)
     header.total_packet_size += strlen(packet.client_name) + 1;
 
     serializer_t serializer = {};
-    initialize_serializer(&serializer, header.total_packet_size);
-    serialize_packet_header(&serializer, &header);
-    serialize_client_join_packet(&serializer, &packet);
+    serializer.initialize(header.total_packet_size);
+    serializer.serialize_packet_header(&header);
+    serializer.serialize_client_join_packet(&packet);
     
     server_address = network_address_t{ (uint16_t)host_to_network_byte_order(GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
-    send_serialized_message(&serializer, server_address);
+    serializer.send_serialized_message(server_address);
 }
 
 
@@ -456,11 +456,11 @@ static void send_commands(void)
     header.current_tick = *get_current_tick();
 
     serializer_t serializer = {};
-    initialize_serializer(&serializer, header.total_packet_size);
+    serializer.initialize(header.total_packet_size);
     
-    serialize_packet_header(&serializer, &header);
+    serializer.serialize_packet_header(&header);
 
-    serialize_uint32(&serializer, player_state_cbuffer.head_tail_difference);
+    serializer.serialize_uint32(player_state_cbuffer.head_tail_difference);
 
     uint32_t player_states_to_send = player_state_cbuffer.head_tail_difference;
 
@@ -468,20 +468,20 @@ static void send_commands(void)
     for (uint32_t i = 0; i < player_states_to_send; ++i)
     {
         state = player_state_cbuffer.get_next_item();
-        serialize_client_input_state_packet(&serializer, state);
+        serializer.serialize_client_input_state_packet(state);
     }
 
     player_state_t to_store = *state;
-    to_store.ws_position = user->ws_p;
-    to_store.ws_direction = user->ws_d;
+    to_store.ws_position = user->ws_position;
+    to_store.ws_direction = user->ws_direction;
     to_store.tick = header.current_tick;
 
-    serialize_vector3(&serializer, to_store.ws_position);
-    serialize_vector3(&serializer, to_store.ws_direction);
+    serializer.serialize_vector3(to_store.ws_position);
+    serializer.serialize_vector3(to_store.ws_direction);
 
-    serialize_client_modified_voxels_packet(&serializer, &voxel_packet);
+    serializer.serialize_client_modified_voxels_packet(&voxel_packet);
         
-    send_serialized_message(&serializer, server_address);
+    serializer.send_serialized_message(server_address);
 
     // 
     if (to_store.action_flags)

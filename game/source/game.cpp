@@ -5,7 +5,7 @@
 
 #include "script.hpp"
 #include "ui.hpp"
-#include "network.hpp"
+#include "net.hpp"
 #include "game_input.hpp"
 #include <ctime>
 
@@ -35,7 +35,7 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
         {
             // Initialize graphics api, atmosphere, shadow, skeletal animation...
             initialize_scripting();
-            initialize_net(memory, app_mode);
+            initialize_net(app_mode);
             graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, raw_input);
             initialize_game_3d_graphics(graphics.command_pool, raw_input);
             initialize_game_2d_graphics(graphics.command_pool);
@@ -44,7 +44,7 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            initialize_net(memory, app_mode);
+            initialize_net(app_mode);
             initialize_scripting();
             initialize_world(raw_input, VK_NULL_HANDLE, app_type, app_mode);
         } break;

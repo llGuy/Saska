@@ -1948,9 +1948,9 @@ player_state_t initialize_player_state(player_t *player)
 
     state.is_entering = player->is_entering;
     state.rolling_mode = player->rolling_mode;
-    state.ws_position = player->ws_p;
-    state.ws_direction = player->ws_d;
-    state.ws_velocity = player->ws_v;
+    state.ws_position = player->ws_position;
+    state.ws_direction = player->ws_direction;
+    state.ws_velocity = player->ws_velocity;
     return(state);
 }
 
@@ -2067,7 +2067,7 @@ static void update_camera_component(camera_component_t *camera_component, player
         player->camera.ws_current_up_vector = up;
     }
         
-    vector3_t camera_position = player->ws_p + player->size.x * up;
+    vector3_t camera_position = player->ws_position + player->size.x * up;
     if (player->camera.is_third_person)
     {
         static bool was_entering = 1;
@@ -2087,8 +2087,8 @@ static void update_camera_component(camera_component_t *camera_component, player
 
         was_entering = player->is_entering;
         
-        vector3_t right = glm::cross(player->ws_d, up);
-        camera_position += right * player->size.x + -camera_component->camera_distance.current * player->ws_d;
+        vector3_t right = glm::cross(player->ws_direction, up);
+        camera_position += right * player->size.x + -camera_component->camera_distance.current * player->ws_direction;
 
         if (camera_component->initialized_previous_position)
         {
@@ -2115,13 +2115,13 @@ static void update_camera_component(camera_component_t *camera_component, player
     }
 
     camera->current_fov = camera->fov * camera_component->fov.current;
-    camera->v_m = glm::lookAt(camera_position, player->ws_p + up + player->ws_d, up);
+    camera->v_m = glm::lookAt(camera_position, player->ws_position + up + player->ws_direction, up);
 
     // TODO: Don't need to calculate this every frame, just when parameters change
     camera->compute_projection();
 
     camera->p = camera_position;
-    camera->d = player->ws_d;
+    camera->d = player->ws_direction;
     camera->u = up;
 }
 
@@ -2193,7 +2193,7 @@ static void update_animation_gpu_data(gpu_command_queue_t *queue)
 
 static void update_bullet_rendering_component(rendering_component_t *rendering, bullet_t *bullet, float32_t dt, uint32_t index)
 {
-    rendering->push_k.ws_t = glm::translate(bullet->ws_p) * glm::scale(bullet->size);
+    rendering->push_k.ws_t = glm::translate(bullet->ws_position) * glm::scale(bullet->size);
 
     push_bullet_to_rolling_queue(bullet);
 }
@@ -2203,12 +2203,12 @@ static void update_rendering_component(rendering_component_t *rendering, player_
 {
     static const matrix4_t CORRECTION_90 = glm::rotate(glm::radians(180.0f), vector3_t(0.0f, 1.0f, 0.0f));
 
-    movement_axes_t axes = compute_movement_axes(player->ws_d, player->camera.ws_next_vector);
+    movement_axes_t axes = compute_movement_axes(player->ws_direction, player->camera.ws_next_vector);
     matrix3_t normal_rotation_matrix3 = (matrix3_t(glm::normalize(axes.right), glm::normalize(axes.up), glm::normalize(-axes.forward)));
     matrix4_t normal_rotation_matrix4 = matrix4_t(normal_rotation_matrix3);
     normal_rotation_matrix4[3][3] = 1;
     
-    vector3_t view_dir = glm::normalize(player->ws_d);
+    vector3_t view_dir = glm::normalize(player->ws_direction);
     float32_t dir_x = view_dir.x;
     float32_t dir_z = view_dir.z;
     float32_t rotation_angle = atan2(dir_z, dir_x);
@@ -2222,7 +2222,7 @@ static void update_rendering_component(rendering_component_t *rendering, player_
             normal_rotation_matrix4 = player->rolling_rotation;
         }
         
-        rendering->push_k.ws_t = glm::translate(player->ws_p) * normal_rotation_matrix4 * CORRECTION_90 * /*rot_matrix * */glm::scale(player->size);
+        rendering->push_k.ws_t = glm::translate(player->ws_position) * normal_rotation_matrix4 * CORRECTION_90 * /*rot_matrix * */glm::scale(player->size);
     }
     else
     {
@@ -2246,12 +2246,12 @@ static void update_terraform_power_component(terraform_power_component_t *terraf
 
     if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_DESTROY))
     {
-        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 1, terraform_power->speed);
+        ray_cast_terraform(player->ws_position, player->ws_direction, 70.0f, dt, 60, 1, terraform_power->speed);
     }
 
     if (*action_flags & (1 << action_flags_t::ACTION_TERRAFORM_ADD))
     {
-        ray_cast_terraform(player->ws_p, player->ws_d, 70.0f, dt, 60, 0, terraform_power->speed);
+        ray_cast_terraform(player->ws_position, player->ws_direction, 70.0f, dt, 60, 0, terraform_power->speed);
     }
 }
 
@@ -2260,7 +2260,7 @@ static void update_standing_player_physics(physics_component_t *component, playe
 {
     if (component->state == entity_physics_state_t::IN_AIR)
     {
-        player->ws_v += -player->ws_up * 9.81f * dt;
+        player->ws_velocity += -player->ws_up * 9.81f * dt;
     }
     else if (component->state == entity_physics_state_t::ON_GROUND)
     {
@@ -2268,7 +2268,7 @@ static void update_standing_player_physics(physics_component_t *component, playe
         
         bool moved = 1;
 
-        movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+        movement_axes_t axes = compute_movement_axes(player->ws_direction, player->ws_up);
 
         component->axes = vector3_t(0);
         if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
@@ -2301,16 +2301,16 @@ static void update_standing_player_physics(physics_component_t *component, playe
 
         vector3_t current_velocity = result_acceleration_vector * speed;
         
-        player->ws_v = current_velocity - player->ws_up * 9.81f * dt;
+        player->ws_velocity = current_velocity - player->ws_up * 9.81f * dt;
 
         // Friction
         /*static constexpr float32_t TERRAIN_ROUGHNESS = .5f;
         float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
-        vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
-        player->ws_v += friction * dt;*/
+        vector3_t friction = -player->ws_velocity * TERRAIN_ROUGHNESS * 9.81f * .5f;
+        player->ws_velocity += friction * dt;*/
     }
 
-    collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+    collision_t collision = collide(player->ws_position, player->size, player->ws_velocity * dt, 0, {});
     if (collision.detected)
     {
         if (player->is_entering)
@@ -2320,11 +2320,11 @@ static void update_standing_player_physics(physics_component_t *component, playe
 
         if (component->state == entity_physics_state_t::IN_AIR)
         {
-            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
-            player->ws_v = glm::normalize(glm::proj(player->ws_v, axes.forward));
+            movement_axes_t axes = compute_movement_axes(player->ws_direction, player->ws_up);
+            player->ws_velocity = glm::normalize(glm::proj(player->ws_velocity, axes.forward));
         }
 
-        player->ws_p = collision.es_at * player->size;
+        player->ws_position = collision.es_at * player->size;
 
         vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
         player->ws_up = ws_normal;
@@ -2333,14 +2333,14 @@ static void update_standing_player_physics(physics_component_t *component, playe
 
         if (collision.under_terrain)
         {
-            player->ws_p = collision.es_at * player->size;
+            player->ws_position = collision.es_at * player->size;
         }
     }
     else
     {
         // If there was no collision, update position (velocity should be the same)
-        player->ws_p = collision.es_at * player->size;
-        player->ws_v = (collision.es_velocity * player->size) / dt;
+        player->ws_position = collision.es_at * player->size;
+        player->ws_velocity = (collision.es_velocity * player->size) / dt;
 
         component->state = entity_physics_state_t::IN_AIR;
     }
@@ -2353,17 +2353,17 @@ static void update_rolling_player_physics(struct physics_component_t *component,
     {
         player->entering_acceleration += dt * 2.0f;
         // Go in the direction that the player is facing
-        player->ws_v = player->entering_acceleration * player->ws_d;
+        player->ws_velocity = player->entering_acceleration * player->ws_direction;
     }
     else
     {
         if (component->state == entity_physics_state_t::IN_AIR)
         {
-            player->ws_v += -player->ws_up * 9.81f * dt;
+            player->ws_velocity += -player->ws_up * 9.81f * dt;
         }
         else if (component->state == entity_physics_state_t::ON_GROUND)
         {
-            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
+            movement_axes_t axes = compute_movement_axes(player->ws_direction, player->ws_up);
 
             component->axes = vector3_t(0);
             if (player->action_flags & (1 << action_flags_t::ACTION_FORWARD))
@@ -2384,20 +2384,20 @@ static void update_rolling_player_physics(struct physics_component_t *component,
             }
             vector3_t result_acceleration_vector = component->axes.x * axes.right + component->axes.y * axes.up + component->axes.z * axes.forward;
 
-            player->ws_v += result_acceleration_vector * dt * 20.0f;
-            player->ws_v -= player->ws_up * 9.81f * dt;
+            player->ws_velocity += result_acceleration_vector * dt * 20.0f;
+            player->ws_velocity -= player->ws_up * 9.81f * dt;
 
             // Friction
             static constexpr float32_t TERRAIN_ROUGHNESS = .5f;
             float32_t cos_theta = glm::dot(-player->ws_up, -player->ws_up);
-            vector3_t friction = -player->ws_v * TERRAIN_ROUGHNESS * 9.81f * .5f;
-            player->ws_v += friction * dt;
+            vector3_t friction = -player->ws_velocity * TERRAIN_ROUGHNESS * 9.81f * .5f;
+            player->ws_velocity += friction * dt;
         }
     }
 
-    vector3_t previous_position = player->ws_p;
+    vector3_t previous_position = player->ws_position;
     
-    collision_t collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+    collision_t collision = collide(player->ws_position, player->size, player->ws_velocity * dt, 0, {});
     if (collision.detected)
     {
         if (player->is_entering)
@@ -2407,11 +2407,11 @@ static void update_rolling_player_physics(struct physics_component_t *component,
 
         if (component->state == entity_physics_state_t::IN_AIR)
         {
-            movement_axes_t axes = compute_movement_axes(player->ws_d, player->ws_up);
-            player->ws_v = glm::normalize(glm::proj(player->ws_v, axes.forward));
+            movement_axes_t axes = compute_movement_axes(player->ws_direction, player->ws_up);
+            player->ws_velocity = glm::normalize(glm::proj(player->ws_velocity, axes.forward));
         }
 
-        player->ws_p = collision.es_at * player->size;
+        player->ws_position = collision.es_at * player->size;
         
         // If there "was" a collision (may not be on the ground right now as might have "slid" off) player's gravity pull direction changed
         vector3_t ws_normal = glm::normalize((collision.es_normal * player->size));
@@ -2426,9 +2426,9 @@ static void update_rolling_player_physics(struct physics_component_t *component,
         {
             static vector3_t previous_velocity;
 
-            /*vector3_t velocity = player->ws_v;
+            /*vector3_t velocity = player->ws_velocity;
             
-            if (glm::dot(player->ws_v, player->ws_v) < 0.001f)
+            if (glm::dot(player->ws_velocity, player->ws_velocity) < 0.001f)
             {
                 velocity = p
             }*/
@@ -2436,7 +2436,7 @@ static void update_rolling_player_physics(struct physics_component_t *component,
             // TODO: FIX SO THAT WS_V IS EQUAL TO THE ACTUAL VELOCITY OF THE PLAYER
 
 
-            vector3_t actual_player_v = player->ws_p - previous_position;
+            vector3_t actual_player_v = player->ws_position - previous_position;
             float32_t velocity_length = glm::length(actual_player_v);
 
             if (glm::dot(actual_player_v, actual_player_v) < 0.0001f)
@@ -2459,15 +2459,15 @@ static void update_rolling_player_physics(struct physics_component_t *component,
         else
         {
             // Player is under the terrain
-            player->ws_p = collision.es_at * player->size;
+            player->ws_position = collision.es_at * player->size;
 
-            /*collision_t new_collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+            /*collision_t new_collision = collide(player->ws_position, player->size, player->ws_velocity * dt, 0, {});
             uint32_t loop_count = 0;
             while (new_collision.under_terrain && loop_count < 10)
             {
                 output_to_debug_console("Waiting for player to no longer be under the terrain\n");
-                player->ws_p += collision.es_normal * player->size;
-                new_collision = collide(player->ws_p, player->size, player->ws_v * dt, 0, {});
+                player->ws_position += collision.es_normal * player->size;
+                new_collision = collide(player->ws_position, player->size, player->ws_velocity * dt, 0, {});
 
                 ++loop_count;
             }
@@ -2481,8 +2481,8 @@ static void update_rolling_player_physics(struct physics_component_t *component,
     else
     {
         // If there was no collision, update position (velocity should be the same)
-        player->ws_p = collision.es_at * player->size;
-        player->ws_v = (collision.es_velocity * player->size) / dt;
+        player->ws_position = collision.es_at * player->size;
+        player->ws_velocity = (collision.es_velocity * player->size) / dt;
 
         component->state = entity_physics_state_t::IN_AIR;
     }
@@ -2498,9 +2498,9 @@ static void update_rolling_player_physics(struct physics_component_t *component,
         player->rolling_rotation = glm::rotate(glm::radians(player->current_rolling_rotation_angle), -player->rolling_rotation_axis);
     }
 
-    player->ws_r = glm::quat_cast(player->rolling_rotation);
+    player->ws_rotation = glm::quat_cast(player->rolling_rotation);
 
-    //output_to_debug_console("Rotation: ", player->ws_r[0], " ; ", player->ws_r[1], " ; ", player->ws_r[2], " ; ", player->ws_r[3], "\n");
+    //output_to_debug_console("Rotation: ", player->ws_rotation[0], " ; ", player->ws_rotation[1], " ; ", player->ws_rotation[2], " ; ", player->ws_rotation[3], "\n");
 }
 
 
@@ -2508,7 +2508,7 @@ static void update_not_physically_affected_player(struct physics_component_t *co
 {
     vector3_t result_force = vector3_t(0.0f);
 
-    vector3_t right = glm::normalize(glm::cross(e->ws_d, e->ws_up));
+    vector3_t right = glm::normalize(glm::cross(e->ws_direction, e->ws_up));
     vector3_t forward = glm::normalize(glm::cross(vector3_t(0.0f, 1.0f, 0.0f), right));
 
     if (*action_flags & (1 << action_flags_t::ACTION_FORWARD)) result_force += forward;
@@ -2520,8 +2520,8 @@ static void update_not_physically_affected_player(struct physics_component_t *co
 
     result_force *= 20.0f * e->size.x;
     
-    collision_t collision = collide(e->ws_p, e->size, result_force * dt, 0, {});
-    e->ws_p = collision.es_at * e->size;
+    collision_t collision = collide(e->ws_position, e->size, result_force * dt, 0, {});
+    e->ws_position = collision.es_at * e->size;
 }
 
 
@@ -2559,9 +2559,9 @@ static float32_t update_network_component(network_component_t *network, player_t
             remote_player_snapshot_t *previous_remote_snapshot = &network->remote_player_states.buffer[previous_snapshot_index],
                                      *next_remote_snapshot = &network->remote_player_states.buffer[next_snapshot_index];
 
-            player->ws_p = interpolate(previous_remote_snapshot->ws_position, next_remote_snapshot->ws_position, progression);
-            player->ws_d = interpolate(previous_remote_snapshot->ws_direction, next_remote_snapshot->ws_direction, progression);
-            player->ws_r = glm::mix(previous_remote_snapshot->ws_rotation, next_remote_snapshot->ws_rotation, progression);
+            player->ws_position = interpolate(previous_remote_snapshot->ws_position, next_remote_snapshot->ws_position, progression);
+            player->ws_direction = interpolate(previous_remote_snapshot->ws_direction, next_remote_snapshot->ws_direction, progression);
+            player->ws_rotation = glm::mix(previous_remote_snapshot->ws_rotation, next_remote_snapshot->ws_rotation, progression);
             player->camera.ws_next_vector = player->ws_up = interpolate(previous_remote_snapshot->ws_up_vector, next_remote_snapshot->ws_up_vector, progression);
 
             if (true)
@@ -2575,7 +2575,7 @@ static float32_t update_network_component(network_component_t *network, player_t
                 player->rolling_mode = next_remote_snapshot->rolling_mode;
             }
 
-            player->rolling_rotation = glm::mat4_cast(player->ws_r);
+            player->rolling_rotation = glm::mat4_cast(player->ws_rotation);
         }
     }
     else
@@ -2599,7 +2599,7 @@ static float32_t update_network_component(network_component_t *network, player_t
             // Update view direction with mouse differences
             vector3_t up = player->camera.ws_current_up_vector;
         
-            vector3_t res = player->ws_d;
+            vector3_t res = player->ws_direction;
             vector2_t d = vector2_t(next_player_state->mouse_x_diff, next_player_state->mouse_y_diff);
 
             player->camera.mouse_diff = d;
@@ -2615,7 +2615,7 @@ static float32_t update_network_component(network_component_t *network, player_t
 
             res = glm::normalize(res);
             
-            player->ws_d = res;
+            player->ws_direction = res;
                 
             /*float32_t up_dot_view = glm::dot(up, res);
             float32_t minus_up_dot_view = glm::dot(-up, res);
@@ -2745,17 +2745,17 @@ static void update_burnable_component(burnable_component_t *burnable_component, 
     {
         particle_t *fire_particle = &g_particles->fire_particle_spawner.particles[burnable_component->particle_index];
 
-        fire_particle->ws_position = entity->ws_p;
+        fire_particle->ws_position = entity->ws_position;
     }
 }
 
 
 static void update_bounce_physics_component(bounce_physics_component_t *bounce_physics, bullet_t *bullet, float32_t dt, uint32_t index)
 {
-    bullet->ws_v -= bullet->ws_up * 14.81f * dt;
+    bullet->ws_velocity -= bullet->ws_up * 14.81f * dt;
 
     // Project and test if is going to be within chunk zone
-    vector3_t projected_limit = bullet->ws_p + bullet->ws_v * dt + bullet->ws_v * bullet->size;
+    vector3_t projected_limit = bullet->ws_position + bullet->ws_velocity * dt + bullet->ws_velocity * bullet->size;
     if (get_chunk_encompassing_point(ws_to_xs(projected_limit)) == nullptr)
     {
         extinguish_fire(&bullet->burnable);
@@ -2764,13 +2764,13 @@ static void update_bounce_physics_component(bounce_physics_component_t *bounce_p
     }
     else
     {
-        collision_t collision = collide(bullet->ws_p, bullet->size, bullet->ws_v * dt, 0, {});
+        collision_t collision = collide(bullet->ws_position, bullet->size, bullet->ws_velocity * dt, 0, {});
 
         if (collision.detected)
         {
             //vector3_t normal = glm::normalize(collision.es_normal * bullet->size);
             // Reflect velocity vector
-            //bullet->ws_v = glm::reflect(bullet->ws_v, normal);
+            //bullet->ws_velocity = glm::reflect(bullet->ws_velocity, normal);
 
             vector3_t collision_position = collision.es_at * bullet->size;
             // EXPLODE !!!
@@ -2782,7 +2782,7 @@ static void update_bounce_physics_component(bounce_physics_component_t *bounce_p
         }
         else
         {
-            bullet->ws_p = collision.es_at * bullet->size;
+            bullet->ws_position = collision.es_at * bullet->size;
         }
     }
 }
@@ -3070,17 +3070,17 @@ void spawn_bullet(player_t *shooter)
         new_bullet = &g_entities->bullet_list[g_entities->bullet_count++];
     }
     bullet_create_info_t info = {};
-    info.ws_position = shooter->ws_p;
-    info.ws_direction = glm::normalize(shooter->ws_d);
+    info.ws_position = shooter->ws_position;
+    info.ws_direction = glm::normalize(shooter->ws_direction);
     info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     info.ws_size = vector3_t(0.7f);
     info.color = player_color_t::DARK_GRAY;
     construct_bullet(new_bullet, &info);
 
-    new_bullet->ws_v = shooter->ws_d * 50.0f;
+    new_bullet->ws_velocity = shooter->ws_direction * 50.0f;
     new_bullet->ws_up = shooter->ws_up;
 
-    set_on_fire(&new_bullet->burnable, new_bullet->ws_p);
+    set_on_fire(&new_bullet->burnable, new_bullet->ws_position);
 }
 
 
@@ -3100,10 +3100,10 @@ static void construct_bullet(bullet_t *bullet, bullet_create_info_t *info)
                                                                     vector4_t(0.0f, 0.7f, 0.0f, 1.0f),
                                                                     vector4_t(246.0f, 177.0f, 38.0f, 256.0f) / 256.0f };
     
-    bullet->ws_p = info->ws_position;
-    bullet->ws_d = info->ws_direction;
+    bullet->ws_position = info->ws_position;
+    bullet->ws_direction = info->ws_direction;
     bullet->size = info->ws_size;
-    bullet->ws_r = info->ws_rotation;
+    bullet->ws_rotation = info->ws_rotation;
     bullet->rendering.push_k.color = colors[info->color];
     bullet->rendering.push_k.roughness = 0.8f;
     bullet->rendering.push_k.metalness = 0.6f;
@@ -3120,11 +3120,11 @@ static void construct_player(player_t *player, player_create_info_t *info)
                                                                     vector4_t(222.0f, 88.0f, 36.0f, 256.0f) / 256.0f };
     
     player->id = info->name;
-    player->ws_p = info->ws_position;
-    player->ws_d = info->ws_direction;
+    player->ws_position = info->ws_position;
+    player->ws_direction = info->ws_direction;
     player->entering_acceleration = info->starting_velocity;
     player->size = info->ws_size;
-    player->ws_r = info->ws_rotation;
+    player->ws_rotation = info->ws_rotation;
     player->is_entering = 1;
     player->is_sitting = 0;
     player->is_in_air = 0;
@@ -3694,13 +3694,13 @@ void initialize_game_state_initialize_packet(game_state_initialize_packet_t *pac
         packet->player[player].client_id = p_player->network.client_state_index;
         packet->player[player].player_name = p_player->id.str;
 
-        packet->player[player].ws_position_x = p_player->ws_p.x;
-        packet->player[player].ws_position_y = p_player->ws_p.y;
-        packet->player[player].ws_position_z = p_player->ws_p.z;
+        packet->player[player].ws_position_x = p_player->ws_position.x;
+        packet->player[player].ws_position_y = p_player->ws_position.y;
+        packet->player[player].ws_position_z = p_player->ws_position.z;
 
-        packet->player[player].ws_view_direction_x = p_player->ws_d.x;
-        packet->player[player].ws_view_direction_y = p_player->ws_d.y;
-        packet->player[player].ws_view_direction_z = p_player->ws_d.z;
+        packet->player[player].ws_view_direction_x = p_player->ws_direction.x;
+        packet->player[player].ws_view_direction_y = p_player->ws_direction.y;
+        packet->player[player].ws_view_direction_z = p_player->ws_direction.z;
 
         // TODO: Also need to set the rolling mode and other flags here
     }
@@ -4079,7 +4079,7 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, game
         //vector2_t prev_mp = vector2_t(raw_input->previous_cursor_pos_x, raw_input->previous_cursor_pos_y);
         //vector2_t curr_mp = vector2_t(raw_input->cursor_pos_x, raw_input->cursor_pos_y);
 
-        vector3_t res = e->ws_d;
+        vector3_t res = e->ws_direction;
 	    
         vector2_t d;
         d.x = game_input->actions[game_input_action_type_t::LOOK_RIGHT].value + game_input->actions[game_input_action_type_t::LOOK_LEFT].value;
@@ -4096,7 +4096,7 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, game
 
         res = glm::normalize(res);
                 
-        e->ws_d = res;
+        e->ws_direction = res;
             
         /*float32_t up_dot_view = glm::dot(up, res);
         float32_t minus_up_dot_view = glm::dot(-up, res);
@@ -4143,9 +4143,9 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
     
     auto acc_v = [&movements, &accelerate](const vector3_t &d, vector3_t &dst){ ++movements; dst += d * accelerate; };
 
-    vector3_t d = glm::normalize(vector3_t(e->ws_d.x,
-                                           e->ws_d.y,
-                                           e->ws_d.z));
+    vector3_t d = glm::normalize(vector3_t(e->ws_direction.x,
+                                           e->ws_direction.y,
+                                           e->ws_direction.z));
 
     vector3_t res = {};
 
@@ -4187,11 +4187,11 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
     {
         res = res * 15.0f;
 
-        e->ws_input_v = res;
+        e->ws_input_velocity = res;
     }
     else
     {
-        e->ws_input_v = vector3_t(0.0f);
+        e->ws_input_velocity = vector3_t(0.0f);
     }
 }
 
@@ -4270,9 +4270,9 @@ static int32_t lua_get_player_position(lua_State *state)
 {
     // For now, just sets the main player's position
     player_t *main_player = &g_entities->player_list[g_entities->main_player];
-    lua_pushnumber(state, main_player->ws_p.x);
-    lua_pushnumber(state, main_player->ws_p.y);
-    lua_pushnumber(state, main_player->ws_p.z);
+    lua_pushnumber(state, main_player->ws_position.x);
+    lua_pushnumber(state, main_player->ws_position.y);
+    lua_pushnumber(state, main_player->ws_position.z);
     return(3);
 }
 
@@ -4283,9 +4283,9 @@ static int32_t lua_set_player_position(lua_State *state)
     float32_t y = lua_tonumber(state, -2);
     float32_t z = lua_tonumber(state, -1);
     player_t *main_player = &g_entities->player_list[g_entities->main_player];
-    main_player->ws_p.x = x;
-    main_player->ws_p.y = y;
-    main_player->ws_p.z = z;
+    main_player->ws_position.x = x;
+    main_player->ws_position.y = y;
+    main_player->ws_position.z = z;
     return(0);
 }
 
@@ -4318,7 +4318,7 @@ static int32_t lua_set_veclocity_in_view_direction(lua_State *state)
     float32_t velocity = lua_tonumber(state, -1);
     constant_string_t kname = make_constant_string(name, strlen(name));
     player_t *player = get_player(kname);
-    player->ws_v += player->ws_d * velocity;
+    player->ws_velocity += player->ws_direction * velocity;
     return(0);
 }
 
@@ -4327,10 +4327,10 @@ static int32_t lua_get_player_ts_view_direction(lua_State *state)
 {
     // For now, just sets the main player's position
     player_t *main_player = &g_entities->player_list[g_entities->main_player];
-    //    vector4_t dir = glm::scale(main_player->on_t->size) * main_player->on_t->inverse_transform * vector4_t(main_player->ws_d, 0.0f);
-    lua_pushnumber(state, main_player->ws_d.x);
-    lua_pushnumber(state, main_player->ws_d.y);
-    lua_pushnumber(state, main_player->ws_d.z);
+    //    vector4_t dir = glm::scale(main_player->on_t->size) * main_player->on_t->inverse_transform * vector4_t(main_player->ws_direction, 0.0f);
+    lua_pushnumber(state, main_player->ws_direction.x);
+    lua_pushnumber(state, main_player->ws_direction.y);
+    lua_pushnumber(state, main_player->ws_direction.z);
     return(3);
 }
 

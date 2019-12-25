@@ -145,11 +145,11 @@ struct graphics_pipeline_info_t
     shader_pk_data_t pk;
     VkExtent2D viewport;
     shader_blend_states_t blends;
-    model_t *model;
+    struct model_t *model;
     bool enable_depth;
     float32_t depth_bias;
     dynamic_states_t dynamic_states;
-    render_pass_t *compatible;
+    struct render_pass_t *compatible;
     uint32_t subpass;
 };
 
@@ -160,11 +160,11 @@ void fill_graphics_pipeline_info(const shader_modules_t &modules,
                                  const shader_pk_data_t &pk,
                                  VkExtent2D viewport,
                                  const shader_blend_states_t &blends,
-                                 model_t *model,
+                                 struct model_t *model,
                                  bool enable_depth,
                                  float32_t depth_bias,
                                  const dynamic_states_t &dynamic_states,
-                                 render_pass_t *compatible,
+                                 struct render_pass_t *compatible,
                                  uint32_t subpass,
                                  graphics_pipeline_info_t *info);
 
@@ -507,7 +507,7 @@ struct camera_t
 using camera_handle_t = int32_t;
 enum { CAMERA_BOUND_TO_3D_OUTPUT = -1 };
 
-camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution);
+camera_handle_t add_camera(raw_input_t *raw_input, resolution_t resolution);
 void remove_all_cameras(void);
 void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far);
 camera_t *get_camera(camera_handle_t handle);
@@ -578,14 +578,14 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue);
 void make_postfx_data(swapchain_t *swapchain);
 framebuffer_handle_t get_pfx_framebuffer_hdl(void);
 
-void dbg_handle_input(input_state_t *input_state);
+void dbg_handle_input(raw_input_t *raw_input);
 void dbg_render_shadow_map_quad(gpu_command_queue_t *queue);
 
 void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix);
 
 void render_final_output(uint32_t image_index, gpu_command_queue_t *queue);
 
-void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *input_state);
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *raw_input);
 void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool);
 
 void hotreload_assets_if_changed(void);
@@ -1033,4 +1033,4 @@ struct graphics_t
 
 void initialize_graphics_translation_unit(struct game_memory_t *memory);
 
-void handle_window_resize(input_state_t *input_state);
+void handle_window_resize(raw_input_t *raw_input);

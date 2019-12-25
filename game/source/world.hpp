@@ -9,6 +9,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
+#include "game_input.hpp"
+
 #define MAX_PLAYERS 30
 #define MAX_BULLETS 100
 #define VOXEL_CHUNK_EDGE_LENGTH 16
@@ -609,7 +611,7 @@ void spawn_bullet(player_t *shooter);
 player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id);
 player_handle_t spawn_player_at(const char *player_name, player_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
 void make_player_renderable(player_handle_t player_handle, player_color_t color);
-void make_player_main(player_handle_t player_handle, input_state_t *input_state);
+void make_player_main(player_handle_t player_handle, raw_input_t *raw_input);
 
 void update_network_world_state(void);
 void update_networked_player(uint32_t player_index);
@@ -625,14 +627,14 @@ void make_world_data(void);
 void set_focus_for_world(void);
 void remove_focus_for_world(void);
 
-void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
-void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state);
+void hard_initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, enum application_type_t app_type, enum application_mode_t app_mode);
+void initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, enum application_type_t type, enum application_mode_t mode);
+void initialize_world(game_state_initialize_packet_t *packet, raw_input_t *raw_input);
 void deinitialize_world(void);
 void destroy_world(void);
-void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
-void handle_world_input(input_state_t *input_state, float32_t dt);
-void handle_input_debug(input_state_t *input_state, float32_t dt);
+void tick_world(game_input_t *game_input, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue, enum application_type_t type, enum element_focus_t focus);
+void handle_world_input(raw_input_t *raw_input, float32_t dt);
+void handle_input_debug(raw_input_t *raw_input, float32_t dt);
 void initialize_world_translation_unit(struct game_memory_t *memory);
 
 uint64_t *get_current_tick(void);

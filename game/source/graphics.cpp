@@ -603,10 +603,10 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 }
 
 
-camera_handle_t add_camera(input_state_t *input_state, resolution_t resolution)
+camera_handle_t add_camera(raw_input_t *raw_input, resolution_t resolution)
 {
     uint32_t index = g_cameras->camera_count;
-    g_cameras->cameras[index].set_default(resolution.width, resolution.height, input_state->cursor_pos_x, input_state->cursor_pos_y);
+    g_cameras->cameras[index].set_default(resolution.width, resolution.height, raw_input->cursor_pos_x, raw_input->cursor_pos_y);
     ++g_cameras->camera_count;
     return(index);
 }
@@ -1651,9 +1651,9 @@ static uint32_t get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, f
 
 vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera);
 
-void dbg_handle_input(input_state_t *input_state)
+void dbg_handle_input(raw_input_t *raw_input)
 {
-    /*if (input_state->keyboard[keyboard_button_type_t::P].is_down)
+    /*if (raw_input->keyboard[keyboard_button_type_t::P].is_down)
     {
         camera_t *camera = get_camera_bound_to_3d_output();
 
@@ -1668,11 +1668,11 @@ void dbg_handle_input(input_state_t *input_state)
     
     if (g_postfx->dbg_in_frame_capture_mode)
     {
-        if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
+        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state)
         {
             // Isn't normalized
-            g_postfx->dbg_capture.window_cursor_position = input_state->normalized_cursor_position;
-            g_postfx->dbg_capture.window_cursor_position.y = input_state->window_height - g_postfx->dbg_capture.window_cursor_position.y;
+            g_postfx->dbg_capture.window_cursor_position = raw_input->normalized_cursor_position;
+            g_postfx->dbg_capture.window_cursor_position.y = raw_input->window_height - g_postfx->dbg_capture.window_cursor_position.y;
 
             g_postfx->dbg_capture.backbuffer_cursor_position = g_postfx->dbg_capture.window_cursor_position -
                 vector2_t(g_postfx->render_rect2D.offset.x, g_postfx->render_rect2D.offset.y);
@@ -1703,7 +1703,7 @@ void dbg_handle_input(input_state_t *input_state)
             sprintf(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
             console_out(buffer);
 
-            input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down = is_down_t::NOT_DOWN;
+            raw_input->buttons[button_type_t::MOUSE_LEFT].state = button_state_t::NOT_DOWN;
         }
     }
 }
@@ -2230,9 +2230,9 @@ void make_cubemap_uniform_layout(void)
     }
 }
 
-void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, input_state_t *input_state)
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *raw_input)
 {
-    g_dfr_rendering->backbuffer_res = {(uint32_t)input_state->window_width, (uint32_t)input_state->window_height};
+    g_dfr_rendering->backbuffer_res = {(uint32_t)raw_input->window_width, (uint32_t)raw_input->window_height};
     g_dfr_rendering->backbuffer_res = {2500, 1400};
 
     make_cubemap_uniform_layout();
@@ -3223,7 +3223,7 @@ void initialize_graphics_translation_unit(game_memory_t *memory)
     g_particle_rendering = &memory->graphics_state.particle_rendering;
 }
 
-void handle_window_resize(input_state_t *input_state)
+void handle_window_resize(raw_input_t *raw_input)
 {
     idle_gpu();
     
@@ -3239,7 +3239,7 @@ void handle_window_resize(input_state_t *input_state)
 
     destroy_render_pass(&final_render_pass->render_pass);
     
-    recreate_swapchain(input_state);
+    recreate_swapchain(raw_input);
 
     VkFormat swapchain_format = get_swapchain_format();
     {

@@ -1,4 +1,4 @@
-// TODO: Remove all geometry shaders for performance
+// TODO all geometry shaders for performance
 
 #include "ui.hpp"
 #include "script.hpp"
@@ -153,8 +153,8 @@ static void set_on_fire(burnable_component_t *burnable_component, const vector3_
 static void extinguish_fire(burnable_component_t *burnable_component);
 static void update_entities(float32_t dt, application_type_t app_type);
 
-static void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state);
-static void initialize_players(input_state_t *input_state, application_type_t app_type);
+static void initialize_entities_graphics_data(VkCommandPool *cmdpool, raw_input_t *raw_input);
+static void initialize_players(raw_input_t *raw_input, application_type_t app_type);
 static void initialize_players(game_state_initialize_packet_t *packet);
 static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
 
@@ -189,23 +189,22 @@ static int32_t lua_placeholder_c_out(lua_State *state) { return(0); }
 static int32_t lua_reinitialize(lua_State *state);
 
 static void entry_point(void);
-void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
+void hard_initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
+void initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode);
 static void clean_up_entities(void);
 void clean_up_world_data(void);
 void make_world_data(void /* Some kind of state */);
 void update_network_world_state(void);
 void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t image_index);
-void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus);
-void update_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus);
+void handle_all_input(game_input_t *game_input, float32_t dt, element_focus_t focus);
 void update_chunks_from_network(float32_t dt);
 static void ready_chunks_for_voxel_interpolation_reset(void);
-void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
-void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt);
-void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt);
-void handle_main_player_action(input_state_t *input_state, float32_t dt);
-void handle_world_input(input_state_t *input_state, float32_t dt);
-void handle_input_debug(input_state_t *input_state, float32_t dt);
+void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, game_input_t *game_input, float32_t dt);
+void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, game_input_t *game_input, float32_t dt);
+void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, game_input_t *game_input, float32_t dt);
+void handle_main_player_action(game_input_t *game_input, float32_t dt);
+void handle_world_input(game_input_t *game_input, float32_t dt);
+//void handle_input_debug(raw_input_t *raw_input, float32_t dt);
 void destroy_world(void);
 
 
@@ -2938,7 +2937,7 @@ void make_player_main(player_handle_t player_handle)
 }
 
 
-static void initialize_entities_graphics_data(VkCommandPool *cmdpool, input_state_t *input_state)
+static void initialize_entities_graphics_data(VkCommandPool *cmdpool, raw_input_t *raw_input)
 {
     g_entities->rolling_player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
     g_entities->rolling_player_model = make_mesh_attribute_and_binding_information(&g_entities->rolling_player_mesh);
@@ -3212,9 +3211,9 @@ player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_cl
 }
 
 
-static void initialize_players(game_state_initialize_packet_t *packet, input_state_t *input_state)
+static void initialize_players(game_state_initialize_packet_t *packet, raw_input_t *raw_input)
 {
-    camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
+    camera_handle_t main_camera = add_camera(raw_input, get_backbuffer_resolution());
     bind_camera_to_3d_scene_output(main_camera);
     
     for (uint32_t i = 0; i < packet->player_count; ++i)
@@ -3226,10 +3225,10 @@ static void initialize_players(game_state_initialize_packet_t *packet, input_sta
 }
 
 
-static void initialize_players(input_state_t *input_state, application_type_t app_type)
+static void initialize_players(raw_input_t *raw_input, application_type_t app_type)
 {
     // This makes the this player the "main" player of the game, that the user is going to control with mouse and keyboard
-    camera_handle_t main_camera = add_camera(input_state, get_backbuffer_resolution());
+    camera_handle_t main_camera = add_camera(raw_input, get_backbuffer_resolution());
     bind_camera_to_3d_scene_output(main_camera);
     // -
 
@@ -3467,7 +3466,7 @@ static void entry_point(void)
 }
 
 
-void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
+void hard_initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     add_global_to_lua(script_primitive_type_t::FUNCTION, "get_player_position", &lua_get_player_position);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "set_player_position", &lua_set_player_position);
@@ -3491,15 +3490,15 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 
     if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
     {
-        initialize_entities_graphics_data(cmdpool, input_state);
+        initialize_entities_graphics_data(cmdpool, raw_input);
     }
 
     hard_initialize_chunks();
     hard_initialize_particles();
 
-    initialize_world(input_state, cmdpool, app_type, app_mode);
+    initialize_world(raw_input, cmdpool, app_type, app_mode);
     //deinitialize_world();
-    //initialize_world(input_state, cmdpool, app_type, app_mode);
+    //initialize_world(raw_input, cmdpool, app_type, app_mode);
         
     clear_linear();
 
@@ -3518,7 +3517,7 @@ void hard_initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, a
 }
 
 
-void initialize_world(game_state_initialize_packet_t *packet, input_state_t *input_state)
+void initialize_world(game_state_initialize_packet_t *packet, raw_input_t *raw_input)
 {
     *g_current_tick = 0;
     
@@ -3529,7 +3528,7 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
     g_voxel_chunks->chunks_to_update = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->grid_edge_size * g_voxel_chunks->grid_edge_size * g_voxel_chunks->grid_edge_size);
 
     // Initialize players
-    initialize_players(packet, input_state);
+    initialize_players(packet, raw_input);
     
     g_voxel_chunks->max_chunks = packet->voxels.max_chunks;
     g_voxel_chunks->chunks = (voxel_chunk_t **)allocate_free_list(sizeof(voxel_chunk_t *) * g_voxel_chunks->max_chunks);
@@ -3555,7 +3554,7 @@ void initialize_world(game_state_initialize_packet_t *packet, input_state_t *inp
 }
 
 
-void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
+void initialize_world(raw_input_t *raw_input, VkCommandPool *cmdpool, application_type_t app_type, application_mode_t app_mode)
 {
     *g_current_tick = 0;
     
@@ -3564,7 +3563,7 @@ void initialize_world(input_state_t *input_state, VkCommandPool *cmdpool, applic
 
 
     // REMOVE THIS - JUST TESTING REMOTE LEVEL STUFF
-    //initialize_players(input_state, app_type);
+    //initialize_players(raw_input, app_type);
 
     
     
@@ -3735,13 +3734,13 @@ void sync_gpu_memory_with_world_state(gpu_command_queue_t *cmdbuf, uint32_t imag
 }
 
 
-void handle_all_input(input_state_t *input_state, float32_t dt, element_focus_t focus)
+void handle_all_input(game_input_t *game_input, float32_t dt, element_focus_t focus)
 {
     // If world has focus
     if (focus == WORLD_3D_ELEMENT_FOCUS)
     {
-        handle_world_input(input_state, dt);
-        handle_input_debug(input_state, dt);
+        handle_world_input(game_input, dt);
+        //handle_input_debug(raw_input, dt);
     }
 }
 
@@ -4031,13 +4030,13 @@ void update_chunks_from_network(float32_t dt)
 }
 
 
-void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus)
+void tick_world(game_input_t *game_input, float32_t dt, uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *cmdbuf, application_type_t app_type, element_focus_t focus)
 {    
     switch (app_type)
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
-            handle_all_input(input_state, dt, focus);
+            handle_all_input(game_input, dt, focus);
 
             clear_chunk_render_queue();
             {
@@ -4065,21 +4064,26 @@ void tick_world(input_state_t *input_state, float32_t dt, uint32_t image_index, 
 #include <glm/gtx/string_cast.hpp>
 
 
-void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
+void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, game_input_t *game_input, float32_t dt)
 {
-    if (input_state->cursor_moved)
+    if (game_input->actions[game_input_action_type_t::LOOK_RIGHT].state ||
+        game_input->actions[game_input_action_type_t::LOOK_LEFT].state ||
+        game_input->actions[game_input_action_type_t::LOOK_UP].state ||
+        game_input->actions[game_input_action_type_t::LOOK_DOWN].state)
     {
         vector3_t up = e->camera.ws_current_up_vector;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
         static constexpr uint32_t SENSITIVITY = 15.0f;
     
-        vector2_t prev_mp = vector2_t(input_state->previous_cursor_pos_x, input_state->previous_cursor_pos_y);
-        vector2_t curr_mp = vector2_t(input_state->cursor_pos_x, input_state->cursor_pos_y);
+        //vector2_t prev_mp = vector2_t(raw_input->previous_cursor_pos_x, raw_input->previous_cursor_pos_y);
+        //vector2_t curr_mp = vector2_t(raw_input->cursor_pos_x, raw_input->cursor_pos_y);
 
         vector3_t res = e->ws_d;
 	    
-        vector2_t d = (curr_mp - prev_mp);
+        vector2_t d;
+        d.x = game_input->actions[game_input_action_type_t::LOOK_RIGHT].value + game_input->actions[game_input_action_type_t::LOOK_LEFT].value;
+        d.y = game_input->actions[game_input_action_type_t::LOOK_UP].value + game_input->actions[game_input_action_type_t::LOOK_DOWN].value;
 
         e->camera.mouse_diff = d;
 
@@ -4113,14 +4117,14 @@ void handle_main_player_mouse_movement(player_t *e, uint32_t *action_flags, inpu
 }
 
 
-void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, input_state_t *input_state, float32_t dt)
+void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, game_input_t *game_input, float32_t dt)
 {
-    if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_RIGHT].is_down)
+    if (game_input->actions[game_input_action_type_t::TRIGGER2].state)
     {
         *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_ADD);
     }
 
-    if (input_state->mouse_buttons[mouse_button_type_t::MOUSE_LEFT].is_down)
+    if (game_input->actions[game_input_action_type_t::TRIGGER1].state)
     {
         //        *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
 
@@ -4130,7 +4134,7 @@ void handle_main_player_mouse_button_input(player_t *e, uint32_t *action_flags, 
 }
 
 
-void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, input_state_t *input_state, float32_t dt)
+void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, physics_component_t *e_physics, game_input_t *game_input, float32_t dt)
 {
     vector3_t up = e->ws_up;
     
@@ -4146,24 +4150,24 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
     vector3_t res = {};
 
     *action_flags = 0;
-    if (input_state->keyboard[keyboard_button_type_t::R].is_down) {accelerate = 6.0f; *action_flags |= (1 << action_flags_t::ACTION_RUN);}
-    if (input_state->keyboard[keyboard_button_type_t::W].is_down) {acc_v(d, res); *action_flags |= (1 << action_flags_t::ACTION_FORWARD);}
-    if (input_state->keyboard[keyboard_button_type_t::A].is_down) {acc_v(-glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_LEFT);}
-    if (input_state->keyboard[keyboard_button_type_t::S].is_down) {acc_v(-d, res); *action_flags |= (1 << action_flags_t::ACTION_BACK);} 
-    if (input_state->keyboard[keyboard_button_type_t::D].is_down) {acc_v(glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_RIGHT);}
+    if (game_input->actions[game_input_action_type_t::TRIGGER3].state) {accelerate = 6.0f; *action_flags |= (1 << action_flags_t::ACTION_RUN);}
+    if (game_input->actions[game_input_action_type_t::MOVE_FORWARD].state) {acc_v(d, res); *action_flags |= (1 << action_flags_t::ACTION_FORWARD);}
+    if (game_input->actions[game_input_action_type_t::MOVE_LEFT].state) {acc_v(-glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_LEFT);}
+    if (game_input->actions[game_input_action_type_t::MOVE_BACK].state) {acc_v(-d, res); *action_flags |= (1 << action_flags_t::ACTION_BACK);} 
+    if (game_input->actions[game_input_action_type_t::MOVE_RIGHT].state) {acc_v(glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_RIGHT);}
     
-    if (input_state->keyboard[keyboard_button_type_t::SPACE].is_down)
+    if (game_input->actions[game_input_action_type_t::TRIGGER4].state)
     {
         *action_flags |= (1 << action_flags_t::ACTION_UP);
     }
     
-    if (input_state->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down)
+    /*if (raw_input->buttons[button_type_t::LEFT_SHIFT].state)
     {
         acc_v(-up, res);
         *action_flags |= (1 << action_flags_t::ACTION_DOWN);
-    }
+        }*/
 
-    if (input_state->keyboard[keyboard_button_type_t::E].is_down && !e->toggled_rolling_previous_frame)
+    if (game_input->actions[game_input_action_type_t::TRIGGER5].state && !e->toggled_rolling_previous_frame)
     {
         e->toggled_rolling_previous_frame = 1;
         e->rolling_mode ^= 1;
@@ -4173,7 +4177,7 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
             e->current_rolling_rotation_angle = 0.0f;
         }
     }
-    else if (!input_state->keyboard[keyboard_button_type_t::E].is_down)
+    else if (!game_input->actions[game_input_action_type_t::TRIGGER5].state)
     {
         e->toggled_rolling_previous_frame = 0;
     }
@@ -4192,7 +4196,7 @@ void handle_main_player_keyboard_input(player_t *e, uint32_t *action_flags, phys
 }
 
 
-void handle_main_player_action(input_state_t *input_state, float32_t dt)
+void handle_main_player_action(game_input_t *game_input, float32_t dt)
 {
     player_t *main_player = get_main_player();
     if (main_player)
@@ -4200,21 +4204,21 @@ void handle_main_player_action(input_state_t *input_state, float32_t dt)
         player_t *e = main_player;
         physics_component_t *e_physics = &e->physics;
 
-        handle_main_player_keyboard_input(e, &e->action_flags, e_physics, input_state, dt);
-        handle_main_player_mouse_movement(e, &e->action_flags, input_state, dt);
-        handle_main_player_mouse_button_input(e, &e->action_flags, input_state, dt);
+        handle_main_player_keyboard_input(e, &e->action_flags, e_physics, game_input, dt);
+        handle_main_player_mouse_movement(e, &e->action_flags, game_input, dt);
+        handle_main_player_mouse_button_input(e, &e->action_flags, game_input, dt);
     }
 }
 
 
-void handle_world_input(input_state_t *input_state, float32_t dt)
+void handle_world_input(game_input_t *game_input, float32_t dt)
 {
-    handle_main_player_action(input_state, dt);
+    handle_main_player_action(game_input, dt);
 }
 
 
 // Not to do with moving the player, just debug stuff : will be used later for stuff like opening menus
-void handle_input_debug(input_state_t *input_state, float32_t dt)
+void handle_input_debug(raw_input_t *raw_input, float32_t dt)
 {
     // ---- get bound player ----
     // TODO make sure to check if main_player < 0
@@ -4229,7 +4233,7 @@ void handle_input_debug(input_state_t *input_state, float32_t dt)
     
       //    shadow_data.light_view_matrix = glm::lookAt(vector3_t(0.0f), -glm::normalize(light_pos), vector3_t(0.0f, 1.0f, 0.0f));
 
-      if (input_state->keyboard[keyboard_button_type_t::P].is_down)
+      if (raw_input->keyboard[button_type_t::P].state)
       {
       for (uint32_t i = 0; i < 8; ++i)
       {
@@ -4361,9 +4365,9 @@ static int32_t lua_disable_physics(lua_State *state)
 static int32_t lua_go_down(lua_State *state)
 {
     player_t *main = get_main_player();
-    auto *istate = get_input_state();
-    istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].is_down = is_down_t::REPEAT;
-    istate->keyboard[keyboard_button_type_t::LEFT_SHIFT].down_amount += 1.0f / 60.0f;
+    auto *istate = get_raw_input();
+    istate->buttons[button_type_t::LEFT_SHIFT].state = button_state_t::REPEAT;
+    istate->buttons[button_type_t::LEFT_SHIFT].down_amount += 1.0f / 60.0f;
     return(0);
 }
 

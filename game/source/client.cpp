@@ -60,7 +60,7 @@ void initialize_client(char *msg_buffer)
 #define MAX_MESSAGE_BUFFER_SIZE 40000
 
 
-void tick_client(input_state_t *input_state, float32_t dt)
+void tick_client(raw_input_t *raw_input, float32_t dt)
 {
     static float32_t time_since_last_input_state = 0.0f;
 
@@ -105,7 +105,7 @@ void tick_client(input_state_t *input_state, float32_t dt)
                     
                     deinitialize_world();
                     
-                    initialize_world(&game_state_init_packet, input_state);
+                    initialize_world(&game_state_init_packet, raw_input);
 
                     // Add client structs (indices of the structs on the server will be the same as on the client)
                     client_count = game_state_init_packet.player_count;

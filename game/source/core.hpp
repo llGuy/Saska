@@ -67,39 +67,6 @@ template <typename T> inline void destroy(T *ptr, uint32_t size = 1)
     }
 }
 
-#ifndef __GNUC__
-#include <intrin.h>
-#endif
-
-struct bitset32_t
-{
-    uint32_t bitset = 0;
-
-    inline uint32_t pop_count(void)
-    {
-#ifndef __GNUC__
-	return __popcnt(bitset);
-#else
-	return __builtin_popcount(bitset);  
-#endif
-    }
-
-    inline void set1(uint32_t bit)
-    {
-	bitset |= left_shift(bit);
-    }
-
-    inline void set0(uint32_t bit)
-    {
-	bitset &= ~(left_shift(bit));
-    }
-
-    inline bool get(uint32_t bit)
-    {
-	return bitset & left_shift(bit);
-    }
-};
-
 
 
 // predicate needs as param T &
@@ -115,51 +82,10 @@ struct bitset32_t
 
 const matrix4_t IDENTITY_MAT4X4 = matrix4_t(1.0f);
 
-extern float32_t barry_centric(const vector3_t &p1, const vector3_t &p2, const vector3_t &p3, const vector2_t &pos);
 
-enum keyboard_button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-                              ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, UP, LEFT, DOWN, RIGHT,
-                              SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE, INVALID_KEY };
+void request_quit(void);
 
-enum is_down_t : bool { NOT_DOWN, INSTANT, REPEAT, RELEASE };
-
-struct keyboard_button_input_t
-{
-    is_down_t is_down = is_down_t::NOT_DOWN;
-    float32_t down_amount = 0.0f;
-};
-
-enum mouse_button_type_t { MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE, INVALID_MOUSE_BUTTON };
-
-struct mouse_button_input_t
-{
-    is_down_t is_down = is_down_t::NOT_DOWN;
-    float32_t down_amount = 0.0f;
-};
-
-#define MAX_CHARS 10
-
-struct input_state_t
-{
-    keyboard_button_input_t keyboard[keyboard_button_type_t::INVALID_KEY];
-    mouse_button_input_t mouse_buttons[mouse_button_type_t::INVALID_MOUSE_BUTTON];
-
-    uint32_t char_count;
-    char char_stack[10] = {};
-
-    bool cursor_moved = 0;
-    float32_t cursor_pos_x = 0.0f, cursor_pos_y = 0.0f;
-    float32_t previous_cursor_pos_x = 0.0f, previous_cursor_pos_y = 0.0f;
-
-    bool resized = 0;
-    int32_t window_width, window_height;
-
-    vector2_t normalized_cursor_position;
-
-    float32_t dt;
-};
 
 // TODO: Remove when not debugging
-input_state_t *get_input_state(void);
 void enable_cursor_display(void);
 void disable_cursor_display(void);

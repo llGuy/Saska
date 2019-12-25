@@ -652,22 +652,22 @@ static void initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
 }
 
-static void handle_console_input(input_state_t *input_state, element_focus_t focus)
+static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
 {
     if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
-        for (uint32_t i = 0; i < input_state->char_count; ++i)
+        for (uint32_t i = 0; i < raw_input->char_count; ++i)
         {
-            char character[2] = {input_state->char_stack[i], 0};
+            char character[2] = {raw_input->char_stack[i], 0};
             if (character[0])
             {
                 output_to_input_section(character, g_console->input_color);
-                g_console->input_characters[g_console->input_character_count++] = input_state->char_stack[i];
-                input_state->char_stack[i] = 0;
+                g_console->input_characters[g_console->input_character_count++] = raw_input->char_stack[i];
+                raw_input->char_stack[i] = 0;
             }
         }
 
-        if (input_state->keyboard[keyboard_button_type_t::BACKSPACE].is_down)
+        if (raw_input->buttons[button_type_t::BACKSPACE].state)
         {
             if (g_console->input_character_count)
             {
@@ -677,7 +677,7 @@ static void handle_console_input(input_state_t *input_state, element_focus_t foc
             }
         }
 
-        if (input_state->keyboard[keyboard_button_type_t::ENTER].is_down)
+        if (raw_input->buttons[button_type_t::ENTER].state)
         {
             g_console->input_characters[g_console->input_character_count] = '\0';
             output_to_output_section(g_console->input_characters, g_console->input_color);
@@ -690,19 +690,19 @@ static void handle_console_input(input_state_t *input_state, element_focus_t foc
         }
     }
 
-    if (input_state->keyboard[keyboard_button_type_t::ESCAPE].is_down)
+    if (raw_input->buttons[button_type_t::ESCAPE].state)
     {
         g_console->receive_input = false;
     }
     // Open console - This happens no matter if console has focus or not (or if no "typing" element has focus)
-    if (input_state->char_stack[0] == 'c' && !g_console->receive_input)
+    if (raw_input->char_stack[0] == 'c' && !g_console->receive_input)
     {
         g_console->render_console ^= 0x1;
-        input_state->char_stack[0] = 0;
+        raw_input->char_stack[0] = 0;
     }
 }
 
-static void push_console_to_render(input_state_t *input_state)
+static void push_console_to_render(raw_input_t *raw_input)
 {
     if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
     {
@@ -712,7 +712,7 @@ static void push_console_to_render(input_state_t *input_state)
     }
     if (g_console->fade_in_or_out == console_t::fade_t::FADE_OUT)
     {
-        g_console->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
+        g_console->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * raw_input->dt * (float32_t)0xff);
         if (g_console->cursor_fade < 0x00)
         {
             g_console->cursor_fade = 0x00;
@@ -723,7 +723,7 @@ static void push_console_to_render(input_state_t *input_state)
     }
     else
     {
-        g_console->cursor_fade += (int32_t)(console_t::BLINK_SPEED * input_state->dt * (float32_t)0xff);
+        g_console->cursor_fade += (int32_t)(console_t::BLINK_SPEED * raw_input->dt * (float32_t)0xff);
         g_console->cursor_color >>= 8;
         g_console->cursor_color <<= 8;
         g_console->cursor_color |= g_console->cursor_fade;
@@ -998,13 +998,13 @@ void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform
     initialize_ui_elements(resolution);
 }
 
-void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state, element_focus_t focus)
+void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus)
 {
-    handle_console_input(input_state, focus);
+    handle_console_input(raw_input, focus);
     
     if (g_console->render_console)
     {
-        push_console_to_render(input_state);
+        push_console_to_render(raw_input);
     }
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager->get(g_ui->ui_render_pass),
@@ -1131,7 +1131,7 @@ static int32_t lua_get_fps(lua_State *state)
 
 static int32_t lua_print_fps(lua_State *state)
 {
-    input_state_t *is = get_input_state();
+    raw_input_t *is = get_raw_input();
     
     console_out(1.0f / (is->dt), " | ");
     

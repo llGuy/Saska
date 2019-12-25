@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <memory.h>
 #include "core.hpp"
+#include "raw_input.hpp"
 #include "containers.hpp"
 #include "allocators.hpp"
 //#include <GLFW/glfw3.h>
@@ -867,7 +868,7 @@ struct graphics_api_initialize_ret_t
     VkCommandPool *command_pool;
 };
 
-graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_proc, input_state_t *input_state);
+graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_proc, raw_input_t *raw_input);
 
 struct frame_rendering_data_t
 {
@@ -875,10 +876,10 @@ struct frame_rendering_data_t
     VkCommandBuffer command_buffer;
 };
 
-frame_rendering_data_t begin_frame_rendering(input_state_t *input_state);
-void end_frame_rendering_and_refresh(input_state_t *input_state);
+frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input);
+void end_frame_rendering_and_refresh(raw_input_t *raw_input);
 
-void recreate_swapchain(input_state_t *state);
+void recreate_swapchain(raw_input_t *state);
 
 void destroy_framebuffer(VkFramebuffer *fbo);
 void destroy_image_view(VkImageView *image_view);

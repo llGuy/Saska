@@ -66,7 +66,7 @@ struct client_t
 
 
 void initialize_client(char *message_buffer);
-void tick_client(input_state_t *input_state, float32_t dt);
+void tick_client(raw_input_t *raw_input, float32_t dt);
 void cache_player_state(float32_t dt);
 void send_prediction_error_correction(uint64_t tick);
 client_t *get_user_client(void);

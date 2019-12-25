@@ -1,5 +1,6 @@
 #pragma once
 
+#include "raw_input.hpp"
 #include "vulkan.hpp"
 #include "world.hpp"
 #include "graphics.hpp"
@@ -31,10 +32,10 @@ struct game_memory_t
 };
 
 void load_game(game_memory_t *memory);
-void initialize_game(game_memory_t *memory, input_state_t *input_state, create_vulkan_surface *create_surface_proc, application_mode_t app_mode, application_type_t app_type);
+void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulkan_surface *create_surface_proc, application_mode_t app_mode, application_type_t app_type);
 void destroy_game(game_memory_t *memory);
 
-void game_tick(game_memory_t *memory, input_state_t *input_state, float32_t dt);
+void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt);
 
 gpu_command_queue_pool_t *get_global_command_pool(void);
 application_type_t get_app_type(void);

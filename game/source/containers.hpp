@@ -270,3 +270,37 @@ template <typename T, uint32_t Max, typename Index_Type = uint32_t> struct stack
         removed[removed_count++] = index;
     }
 };
+
+
+#ifndef __GNUC__
+#include <intrin.h>
+#endif
+
+struct bitset32_t
+{
+    uint32_t bitset = 0;
+
+    inline uint32_t pop_count(void)
+    {
+#ifndef __GNUC__
+	return __popcnt(bitset);
+#else
+	return __builtin_popcount(bitset);  
+#endif
+    }
+
+    inline void set1(uint32_t bit)
+    {
+	bitset |= left_shift(bit);
+    }
+
+    inline void set0(uint32_t bit)
+    {
+	bitset &= ~(left_shift(bit));
+    }
+
+    inline bool get(uint32_t bit)
+    {
+	return bitset & left_shift(bit);
+    }
+};

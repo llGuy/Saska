@@ -59,7 +59,7 @@ void initialize_server(char *msg_buffer)
 }
 
 
-void tick_server(input_state_t *input_state, float32_t dt)
+void tick_server(raw_input_t *raw_input, float32_t dt)
 {
     //if (wait_for_mutex_and_own(receiver_thread.mutex))
     {

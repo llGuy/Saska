@@ -527,7 +527,7 @@ static VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *avai
     return(best_mode);
 }
 
-static VkExtent2D choose_swapchain_extent(input_state_t *input_state, const VkSurfaceCapabilitiesKHR *capabilities)
+static VkExtent2D choose_swapchain_extent(raw_input_t *raw_input, const VkSurfaceCapabilitiesKHR *capabilities)
 {
     if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
     {
@@ -535,7 +535,7 @@ static VkExtent2D choose_swapchain_extent(input_state_t *input_state, const VkSu
     }
     else
     {
-        int32_t width = input_state->window_width, height = input_state->window_height;
+        int32_t width = raw_input->window_width, height = raw_input->window_height;
 
         VkExtent2D actual_extent	= { (uint32_t)width, (uint32_t)height };
         actual_extent.width		= MAX(capabilities->minImageExtent.width, MIN(capabilities->maxImageExtent.width, actual_extent.width));
@@ -981,11 +981,11 @@ void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, V
     vkFreeMemory(g_context->gpu.logical_device, staging_buffer.memory, nullptr);
 }
     
-static void init_swapchain(input_state_t *input_state)
+static void init_swapchain(raw_input_t *raw_input)
 {
     swapchain_details_t *swapchain_details = &g_context->gpu.swapchain_support;
     VkSurfaceFormatKHR surface_format = choose_surface_format(swapchain_details->available_formats, swapchain_details->available_formats_count);
-    VkExtent2D surface_extent = choose_swapchain_extent(input_state, &swapchain_details->capabilities);
+    VkExtent2D surface_extent = choose_swapchain_extent(raw_input, &swapchain_details->capabilities);
     VkPresentModeKHR present_mode = choose_surface_present_mode(swapchain_details->available_present_modes, swapchain_details->available_present_modes_count);
 
     // add 1 to the minimum images supported in the swapchain
@@ -1367,7 +1367,7 @@ VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uin
     return(vkQueuePresentKHR(*present_queue, &present_info));
 }
     
-graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, input_state_t *input_state)
+graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, raw_input_t *raw_input)
 {
     // initialize instance
     static constexpr uint32_t layer_count = 1;
@@ -1431,7 +1431,7 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
     init_device(&gpu_extensions, &validation_params);
 
     // create swapchain
-    init_swapchain(input_state);
+    init_swapchain(raw_input);
 
     allocate_command_pool(g_context->gpu.queue_families.graphics_family, &g_context->command_pool);
 
@@ -1447,16 +1447,16 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
     return graphics_api_initialize_ret_t{ &g_context->command_pool };
 }
 
-void recreate_swapchain(input_state_t *input_state)
+void recreate_swapchain(raw_input_t *raw_input)
 {
     destroy_swapchain();
 
     get_swapchain_support(&g_context->surface);
     
-    init_swapchain(input_state);
+    init_swapchain(raw_input);
 }
 
-frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
+frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input)
 {
     static uint32_t current_frame = 0;
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
@@ -1469,7 +1469,7 @@ frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
     
     if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        //recreate_swapchain(input_state);
+        //recreate_swapchain(raw_input);
 	return {};
     }
     else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
@@ -1487,7 +1487,7 @@ frame_rendering_data_t begin_frame_rendering(input_state_t *input_state)
     return {g_context->image_index, g_context->command_buffer[g_context->current_frame]};
 }
 
-void end_frame_rendering_and_refresh(input_state_t *input_state)
+void end_frame_rendering_and_refresh(raw_input_t *raw_input)
 {
     end_command_buffer(&g_context->command_buffer[g_context->current_frame]);
 
@@ -1508,7 +1508,7 @@ void end_frame_rendering_and_refresh(input_state_t *input_state)
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
     {
-        //recreate_swapchain(input_state);
+        //recreate_swapchain(raw_input);
     }
     else if (result != VK_SUCCESS)
     {

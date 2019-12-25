@@ -167,7 +167,7 @@ struct user_interface_t
 
 void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &);
 
-void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, input_state_t *input_state, enum element_focus_t focus);
+void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, enum element_focus_t focus);
 
 void render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_t *queue);
 

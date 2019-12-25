@@ -42,12 +42,12 @@ application_mode_t get_app_mode(void)
 }
 
 
-void tick_net(input_state_t *input_state, float32_t dt)
+void tick_net(raw_input_t *raw_input, float32_t dt)
 {
     switch(current_app_mode)
     {
-    case application_mode_t::CLIENT_MODE: { tick_client(input_state, dt); } break;
-    case application_mode_t::SERVER_MODE: { tick_server(input_state, dt); } break;
+    case application_mode_t::CLIENT_MODE: { tick_client(raw_input, dt); } break;
+    case application_mode_t::SERVER_MODE: { tick_server(raw_input, dt); } break;
     }
 }
 

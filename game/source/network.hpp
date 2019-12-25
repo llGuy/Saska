@@ -28,4 +28,4 @@ application_mode_t get_app_mode(void);
 
 
 void initialize_net(struct game_memory_t *memory, application_mode_t app_mode);
-void tick_net(input_state_t *input_state, float32_t dt);
+void tick_net(raw_input_t *raw_input, float32_t dt);

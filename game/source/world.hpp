@@ -14,129 +14,6 @@
 
 #define MAX_PLAYERS 30
 #define MAX_BULLETS 100
-#define VOXEL_CHUNK_EDGE_LENGTH 16
-#define MAX_VERTICES_PER_VOXEL_CHUNK 5 * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1) * (VOXEL_CHUNK_EDGE_LENGTH - 1)
-
-// Will always be allocated on the heap
-struct voxel_chunk_t
-{
-    ivector3_t xs_bottom_corner;
-    ivector3_t chunk_coord;
-
-    // Make the maximum voxel value be 254 (255 will be reserved for *not* modified in the second section of the 2-byte voxel value)
-    uint8_t voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
-
-    // These will be for the server
-    uint8_t *voxel_history = nullptr; // Array size will be VOXEL_CHUNK_EDGE_LENGTH ^ 3
-    static constexpr uint32_t MAX_MODIFIED_VOXELS = (VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) / 4;
-    uint32_t modified_voxels_list_count = 0;
-    uint16_t *list_of_modified_voxels = nullptr;
-
-    uint32_t vertex_count;
-    vector3_t mesh_vertices[MAX_VERTICES_PER_VOXEL_CHUNK];
-
-    // Chunk rendering data
-    mesh_t gpu_mesh;
-    gpu_buffer_t chunk_mesh_gpu_buffer;
-
-    struct push_k // Rendering stuff
-    {
-        matrix4_t model_matrix;
-        vector4_t color;
-    } push_k;
-
-    bool should_do_gpu_sync = 0;
-
-    bool added_to_history = 0;
-
-    union
-    {
-        // Flags and stuff
-        uint32_t flags;
-        struct
-        {
-            uint32_t was_previously_modified_by_client: 1;
-            uint32_t index_of_modified_chunk: 31;
-        };
-    };
-};
-
-void ready_chunk_for_gpu_sync(voxel_chunk_t *chunk);
-void initialize_chunk(voxel_chunk_t *chunk, vector3_t position);
-void update_chunk_mesh(voxel_chunk_t *chunk, uint8_t surface_level);
-void push_chunk_to_render_queue(voxel_chunk_t *chunk);
-voxel_chunk_t **get_voxel_chunk(int32_t index);
-voxel_chunk_t **get_voxel_chunk(uint32_t x, uint32_t y, uint32_t z);
-
-struct voxel_chunks_flags_t
-{
-    // Should not be updating if 
-    uint32_t should_update_chunk_meshes_from_now: 1;
-    // Number of chunks to update received from server
-    uint32_t chunks_received_to_update_count: 7;
-    // Number that the client is waiting for
-    uint32_t chunks_to_be_received: 8;
-};
-
-struct voxel_chunks_t
-{
-    uint8_t dummy_voxels[VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH][VOXEL_CHUNK_EDGE_LENGTH];
-    
-    // How many chunks on the x, y and z axis
-    uint32_t grid_edge_size;
-    float32_t size;
-    
-    uint32_t chunk_count;
-    uint32_t max_chunks;
-    // Will be an array of pointers to the actual chunk data
-    voxel_chunk_t **chunks;
-
-    // Information that graphics pipelines need
-    model_t chunk_model;
-
-    pipeline_handle_t chunk_pipeline;
-    pipeline_handle_t dbg_chunk_edge_pipeline;
-
-    pipeline_handle_t chunk_mesh_pipeline;
-    pipeline_handle_t chunk_mesh_shadow_pipeline;
-
-    gpu_material_submission_queue_t gpu_queue;
-    uint32_t chunks_to_render_count = 0;
-    voxel_chunk_t **chunks_to_update;
-
-    uint32_t to_sync_count = 0;
-    uint32_t chunks_to_gpu_sync[20];
-
-
-
-    // For the server: in between every game snapshot dispatch, server queues up all terraforming actions.
-    // TODO: MAKE IT SO THAT THIS ONLY GETS ALLOCATED FOR THE SERVER!!!
-    static constexpr uint32_t MAX_MODIFIED_CHUNKS = 32;
-    uint32_t modified_chunks_count = 0;
-    voxel_chunk_t *modified_chunks[MAX_MODIFIED_CHUNKS] = {};
-    float32_t elapsed_interpolation_time = 0.0f;
-
-
-    // Flags
-    voxel_chunks_flags_t flags;
-    
-
-    // This is used for interpolating between snapshots (maximum size is 5000 bytes)
-    linear_allocator_t voxel_linear_allocator_front = {};
-    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_front = nullptr;
-
-    linear_allocator_t voxel_linear_allocator_back = {};
-    struct game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_back = nullptr;
-};
-
-voxel_chunks_flags_t *get_voxel_chunks_flags(void);
-
-void reset_voxel_interpolation(void);
-linear_allocator_t *get_voxel_linear_allocator(void);
-game_snapshot_voxel_delta_packet_t *&get_previous_voxel_delta_packet(void);
-
-
-
 
 struct bullet_create_info_t
 {
@@ -223,7 +100,7 @@ struct particles_t
 struct world_t
 {
     struct entities_t entities;
-    struct voxel_chunks_t voxel_chunks;
+
     struct particles_t particles;
 
     // Not hard initialize (rendering state, vulkan objects, shaders...) but just initialize game data like initialized entities, voxels, etc...
@@ -238,7 +115,6 @@ struct world_t
 player_t *get_user_player(void);
 player_t *get_player(const char *name);
 player_t *get_player(player_handle_t player_handle);
-voxel_chunk_t **get_voxel_chunk(uint32_t index);
 
 player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_client_index, struct player_state_initialize_packet_t *player_init_packet, camera_handle_t camera /* Optional */ = 0);
 uint32_t spawn_fire(const vector3_t &position);
@@ -255,7 +131,6 @@ void initialize_game_state_initialize_packet(struct game_state_initialize_packet
 // Will create packet for each chunk
 struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);
 void clear_chunk_history_for_server(void);
-voxel_chunk_t **get_modified_voxel_chunks(uint32_t *count);
 
 void clean_up_world_data(void);
 void make_world_data(void);
@@ -276,6 +151,4 @@ void initialize_world_translation_unit(struct game_memory_t *memory);
 uint64_t *get_current_tick(void);
 
 int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length);
-struct voxel_coordinate_t {uint8_t x, y, z;};
 voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length);
-uint32_t get_chunk_grid_size(void);

@@ -5,6 +5,8 @@
 #include "client.hpp"
 #include "packets.hpp"
 #include "serializer.hpp"
+#include "chunk.hpp"
+#include "chunks_state.hpp"
 
 
 struct remote_client_t
@@ -150,7 +152,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                         uint32_t to_update_count;
                     } chunks_count;
 
-                    voxel_chunks_flags_t *flags = get_voxel_chunks_flags();
+                    chunks_state_flags_t *flags = get_chunks_state_flags();
                     
                     chunks_count.to_update_count = in_serializer.deserialize_uint32();
                     if (chunks_count.is_first)
@@ -167,8 +169,8 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                         voxel_chunk_values_packet_t packet = {};
                         in_serializer.deserialize_voxel_chunk_values_packet(&packet);
                         
-                        voxel_chunk_t *chunk = *get_voxel_chunk(packet.chunk_coord_x, packet.chunk_coord_y, packet.chunk_coord_z);
-                        memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+                        chunk_t *chunk = *get_chunk(packet.chunk_coord_x, packet.chunk_coord_y, packet.chunk_coord_z);
+                        memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
 
                         ready_chunk_for_gpu_sync(chunk);
                     }
@@ -230,7 +232,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                     for (uint32_t chunk = 0; chunk < modified_voxels.modified_chunk_count; ++chunk)
                                     {
                                         client_modified_chunk_t *modified_chunk_data = &modified_voxels.modified_chunks[chunk];
-                                        voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                                        chunk_t *actual_voxel_chunk = *get_chunk(modified_chunk_data->chunk_index);
                 
                                         for (uint32_t voxel = 0; voxel < modified_chunk_data->modified_voxel_count; ++voxel)
                                         {
@@ -425,7 +427,7 @@ static void send_commands(void)
 
         
     uint32_t modified_chunks_count = 0;
-    voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+    chunk_t **chunks = get_modified_chunks(&modified_chunks_count);
 
     client_modified_voxels_packet_t voxel_packet = {};
     voxel_packet.modified_chunk_count = modified_chunks_count;
@@ -433,7 +435,7 @@ static void send_commands(void)
 
     for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
     {
-        voxel_chunk_t *chunk = chunks[chunk_index];
+        chunk_t *chunk = chunks[chunk_index];
         client_modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
 
         modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
@@ -442,7 +444,7 @@ static void send_commands(void)
         for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
         {
             uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
-            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, CHUNK_EDGE_LENGTH);
             modified_chunk->modified_voxels[voxel].x = coord.x;
             modified_chunk->modified_voxels[voxel].y = coord.y;
             modified_chunk->modified_voxels[voxel].z = coord.z;

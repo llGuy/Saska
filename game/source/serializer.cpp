@@ -3,6 +3,8 @@
 #include "allocators.hpp"
 #include "serializer.hpp"
 
+#include "chunk.hpp"
+
 void serializer_t::initialize(uint32_t max_size)
 {
     data_buffer = (uint8_t *)allocate_linear(max_size * sizeof(uint8_t));
@@ -307,7 +309,7 @@ void serializer_t::serialize_voxel_chunk_values_packet(voxel_chunk_values_packet
     serialize_uint8(packet->chunk_coord_x);
     serialize_uint8(packet->chunk_coord_y);
     serialize_uint8(packet->chunk_coord_z);
-    serialize_bytes(packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+    serialize_bytes(packet->voxels, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
 }
 
 
@@ -317,8 +319,8 @@ void serializer_t::deserialize_voxel_chunk_values_packet(voxel_chunk_values_pack
     packet->chunk_coord_y = deserialize_uint8();
     packet->chunk_coord_z = deserialize_uint8();
 
-    packet->voxels = (uint8_t *)allocate_linear(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
-    deserialize_bytes(packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+    packet->voxels = (uint8_t *)allocate_linear(sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
+    deserialize_bytes(packet->voxels, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
 }
 
 

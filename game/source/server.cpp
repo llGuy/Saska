@@ -5,6 +5,9 @@
 #include "serializer.hpp"
 #include "ui.hpp"
 
+#include "chunks_state.hpp"
+#include "chunk.hpp"
+
 
 #define MAX_RECEIVED_PACKETS_IN_QUEUE 60
 
@@ -314,7 +317,7 @@ static client_t *get_client(uint32_t index)
 static void send_chunks_hard_update_packets(network_address_t address)
 {
     serializer_t chunks_serializer = {};
-    chunks_serializer.initialize(sizeof(uint32_t) + (sizeof(uint8_t) * 3 + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
+    chunks_serializer.initialize(sizeof(uint32_t) + (sizeof(uint8_t) * 3 + sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
     
     packet_header_t header = {};
     header.packet_mode = packet_mode_t::PM_SERVER_MODE;
@@ -343,7 +346,7 @@ static void send_chunks_hard_update_packets(network_address_t address)
     {
         voxel_chunk_values_packet_t *pointer = &voxel_update_packets[packet * 8];
 
-        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * 8;
         chunks_serializer.serialize_packet_header(&header);
 
         if (packet == 0)
@@ -375,7 +378,7 @@ static void send_chunks_hard_update_packets(network_address_t address)
     {
         voxel_chunk_values_packet_t *pointer = &voxel_update_packets[loop_count * 8];
 
-        header.total_packet_size = sizeof_packet_header() + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * hard_update_count;
         chunks_serializer.serialize_packet_header(&header);
 
         if (loop_count == 0)
@@ -446,7 +449,7 @@ static void dispatch_snapshot_to_clients(void)
 
     // Prepare voxel delta snapshot packets
     uint32_t modified_chunks_count = 0;
-    voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+    chunk_t **chunks = get_modified_chunks(&modified_chunks_count);
 
     voxel_packet.modified_count = modified_chunks_count;
     voxel_packet.modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * modified_chunks_count);
@@ -456,7 +459,7 @@ static void dispatch_snapshot_to_clients(void)
     
     for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
     {
-        voxel_chunk_t *chunk = chunks[chunk_index];
+        chunk_t *chunk = chunks[chunk_index];
         modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
 
         modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
@@ -466,7 +469,7 @@ static void dispatch_snapshot_to_clients(void)
         {
             uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
             modified_chunk->modified_voxels[voxel].previous_value = chunk->voxel_history[voxel_index];
-            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, CHUNK_EDGE_LENGTH);
             modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
             modified_chunk->modified_voxels[voxel].index = voxel_index;
 
@@ -544,7 +547,7 @@ static void dispatch_snapshot_to_clients(void)
                 out_serializer.serialize_uint32(client->previous_received_voxel_modifications[chunk].modified_voxel_count);
 
                 client_modified_chunk_nl_t *modified_chunk_data = &client->previous_received_voxel_modifications[chunk];
-                voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                chunk_t *actual_voxel_chunk = *get_chunk(modified_chunk_data->chunk_index);
                 
                 for (uint32_t voxel = 0; voxel < client->previous_received_voxel_modifications[chunk].modified_voxel_count; ++voxel)
                 {

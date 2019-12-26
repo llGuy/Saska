@@ -65,3 +65,73 @@ template <typename T, typename Compare> struct smooth_exponential_interpolation_
         }
     }
 };
+
+
+// Some grid math
+inline bool is_within_boundaries(const ivector3_t &coord, uint32_t edge_length)
+{
+    return(coord.x >= 0 && coord.x < edge_length &&
+           coord.y >= 0 && coord.y < edge_length &&
+           coord.z >= 0 && coord.z < edge_length);
+}
+
+
+inline int32_t convert_3d_to_1d_index(uint32_t x, uint32_t y, uint32_t z, uint32_t edge_length)
+{
+    if (is_within_boundaries(ivector3_t(x, y, z), edge_length))
+    {
+        return(z * (edge_length * edge_length) + y * edge_length + x);
+    }
+    else
+    {
+        return -1;
+    }
+}
+
+
+struct voxel_coordinate_t {uint8_t x, y, z;};
+
+inline voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_length)
+{
+    uint8_t x = index % edge_length;
+    uint8_t y = ((index - x) % (edge_length * edge_length)) / (edge_length);
+    uint8_t z = (index - x) / (edge_length * edge_length);
+
+    return{x, y, z};
+}
+
+
+inline float32_t lerp(float32_t a, float32_t b, float32_t x)
+{
+    return((x - a) / (b - a));
+}
+
+
+inline vector3_t interpolate(const vector3_t &a, const vector3_t &b, float32_t x)
+{
+    return(a + x * (b - a));
+}
+
+
+inline float32_t interpolate(float32_t a, float32_t b, float32_t x)
+{
+    return(a + x * (b - a));
+}
+
+
+inline float32_t squared(float32_t f)
+{
+    return(f * f);
+}
+
+
+inline float32_t distance_squared(const vector3_t &dir)
+{
+    return glm::dot(dir, dir);
+}
+
+
+inline float32_t calculate_sphere_circumference(float32_t radius)
+{
+    return(2.0f * 3.1415f * radius);
+}

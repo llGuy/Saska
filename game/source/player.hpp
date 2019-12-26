@@ -4,7 +4,6 @@
 #include "entity.hpp"
 #include "component.hpp"
 
-void test(void);
 
 // Action components can be modified over keyboard / mouse input, or on a network
 enum action_flags_t { ACTION_FORWARD, ACTION_LEFT, ACTION_BACK, ACTION_RIGHT, ACTION_UP, ACTION_DOWN, ACTION_RUN, ACTION_SHOOT, ACTION_TERRAFORM_DESTROY, ACTION_TERRAFORM_ADD, SHOOT };

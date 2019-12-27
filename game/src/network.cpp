@@ -1,0 +1,1507 @@
+// TODO:
+// Make the client save all the voxels that it modified and sent to the server in a history buffer for each "send_client_action_flags()" (which gradually gets cleared every time client receives game state dispatch from server)
+// Make server receive the modifications and accumulate them into a buffer for the next game snapshot dispatch
+// When the dispatch happens, compare the client's modified voxels (accumulated in the buffer) and compare with actual values
+// If there are some that are wrong - force client to revert to previous state at this tick (gradually undo all the modifications) and force client to set the "globally" modified voxels to what the server says are the actual values.
+
+
+
+
+
+// TODO: Find out why the hell the "next_value" of the voxels sent to the client not match the seemingly actual value of the voxels!!!
+
+// TODO: Make sure that packet header's total packet size member matches the actual amount of bytes received by the socket
+
+#include <cassert>
+
+#include "network.hpp"
+#include "sk_game.hpp"
+#include "ui.hpp"
+#include "script.hpp"
+#include "thread_pool.hpp"
+#include "network_sockets.hpp"
+
+
+#define MAX_RECEIVED_PACKETS_IN_QUEUE 60
+struct receiver_thread_t
+{
+    linear_allocator_t packet_allocator = {};
+    thread_process_t process;
+
+    // Pointers into the packet allocator
+    uint32_t packet_count;
+    void *packets[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    uint32_t packet_sizes[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    network_address_t addresses[MAX_RECEIVED_PACKETS_IN_QUEUE];
+    
+    // Mutex
+    mutex_t *mutex;
+
+    uint32_t receiver_thread_loop_count = 0;
+
+    bool receiver_freezed = 0;
+};
+
+
+//Global TODO: May need to split this module into 2: client.cpp server.cpp
+static const uint32_t MAX_CLIENTS = 40;
+static const uint16_t GAME_OUTPUT_PORT_SERVER = 6000;
+static const uint16_t GAME_OUTPUT_PORT_CLIENT = 6001;
+static const uint16_t GAME_OUTPUT_PORT_BACKUP = 6002;
+
+static application_mode_t app_mode;
+static bool is_connected_to_server = 0;
+static network_address_t server_address; // For client
+static uint32_t client_count = 0;
+static client_t clients[MAX_CLIENTS];
+static uint16_t client_id_stack[MAX_CLIENTS] = {};
+static hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_name;
+static hash_table_inline_t<uint16_t /* Index into clients array */, MAX_CLIENTS * 2, 3, 3> client_table_by_address;
+static circular_buffer_t<player_state_t> player_state_cbuffer;
+static float32_t client_input_snapshot_rate = 25.0f;
+static float32_t server_game_state_snapshot_rate = 20.0f;
+static receiver_thread_t receiver_thread; // Not currently in use
+// -
+
+
+
+
+
+
+
+void serialize_packet_header(serializer_t *serializer, packet_header_t *packet)
+{
+    serialize_uint32(serializer, packet->bytes);
+    serialize_uint64(serializer, packet->current_tick);
+    serialize_uint32(serializer, packet->client_id);
+}
+
+
+void deserialize_packet_header(serializer_t *serializer, packet_header_t *packet)
+{
+    packet->bytes = deserialize_uint32(serializer);
+    packet->current_tick = deserialize_uint64(serializer);
+    packet->client_id = deserialize_uint32(serializer);
+}
+
+
+void serialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet)
+{
+    serialize_string(serializer, packet->client_name);
+}
+
+
+void deserialize_client_join_packet(serializer_t *serializer, client_join_packet_t *packet)
+{
+    packet->client_name = deserialize_string(serializer);
+}
+
+
+void serialize_client_input_state_packet(serializer_t *serializer, player_state_t *state)
+{
+    serialize_uint32(serializer, state->action_flags);
+    serialize_float32(serializer, state->mouse_x_diff);
+    serialize_float32(serializer, state->mouse_y_diff);
+    serialize_uint8(serializer, state->flags_byte);
+    serialize_float32(serializer, state->dt);
+}
+
+
+void deserialize_client_input_state_packet(serializer_t *serializer, client_input_state_packet_t *packet)
+{
+    packet->action_flags = deserialize_uint32(serializer);
+    packet->mouse_x_diff = deserialize_float32(serializer);
+    packet->mouse_y_diff = deserialize_float32(serializer);
+    packet->flags_byte = deserialize_uint8(serializer);
+    packet->dt = deserialize_float32(serializer);
+}
+
+
+void serialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->client_id);
+    serialize_string(serializer, packet->player_name);
+    
+    serialize_float32(serializer, packet->ws_position_x);
+    serialize_float32(serializer, packet->ws_position_y);
+    serialize_float32(serializer, packet->ws_position_z);
+
+    serialize_float32(serializer, packet->ws_view_direction_x);
+    serialize_float32(serializer, packet->ws_view_direction_y);
+    serialize_float32(serializer, packet->ws_view_direction_z);
+
+    // Etc...
+}
+
+
+void deserialize_player_state_initialize_packet(serializer_t *serializer, player_state_initialize_packet_t *packet)
+{
+    packet->client_id = deserialize_uint32(serializer);
+    packet->player_name = deserialize_string(serializer);
+    
+    packet->ws_position_x = deserialize_float32(serializer);
+    packet->ws_position_y = deserialize_float32(serializer);
+    packet->ws_position_z = deserialize_float32(serializer);
+
+    packet->ws_view_direction_x = deserialize_float32(serializer);
+    packet->ws_view_direction_y = deserialize_float32(serializer);
+    packet->ws_view_direction_z = deserialize_float32(serializer);
+    // Etc...
+}
+
+
+void serialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->grid_edge_size);
+    serialize_float32(serializer, packet->size);
+    serialize_uint32(serializer, packet->chunk_count);
+    serialize_uint32(serializer, packet->max_chunks);
+}
+
+
+void deserialize_voxel_state_initialize_packet(serializer_t *serializer, voxel_state_initialize_packet_t *packet)
+{
+    packet->grid_edge_size = deserialize_uint32(serializer);
+    packet->size = deserialize_float32(serializer);
+    packet->chunk_count = deserialize_uint32(serializer);
+    packet->max_chunks = deserialize_uint32(serializer);
+}
+
+
+void serialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet)
+{
+    serialize_uint8(serializer, packet->chunk_coord_x);
+    serialize_uint8(serializer, packet->chunk_coord_y);
+    serialize_uint8(serializer, packet->chunk_coord_z);
+    serialize_bytes(serializer, packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+}
+
+
+void deserialize_voxel_chunk_values_packet(serializer_t *serializer, voxel_chunk_values_packet_t *packet)
+{
+    packet->chunk_coord_x = deserialize_uint8(serializer);
+    packet->chunk_coord_y = deserialize_uint8(serializer);
+    packet->chunk_coord_z = deserialize_uint8(serializer);
+
+    packet->voxels = (uint8_t *)allocate_linear(sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+    deserialize_bytes(serializer, packet->voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+}
+
+
+void serialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
+{
+    serialize_voxel_state_initialize_packet(serializer, &packet->voxels);
+    serialize_uint32(serializer, packet->client_index);
+    serialize_uint32(serializer, packet->player_count);
+    for (uint32_t i = 0; i < packet->player_count; ++i)
+    {
+        serialize_player_state_initialize_packet(serializer, &packet->player[i]);
+    }
+}
+
+
+void serialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->client_id);
+    
+    serialize_float32(serializer, packet->ws_position.x);
+    serialize_float32(serializer, packet->ws_position.y);
+    serialize_float32(serializer, packet->ws_position.z);
+
+    serialize_float32(serializer, packet->ws_direction.x);
+    serialize_float32(serializer, packet->ws_direction.y);
+    serialize_float32(serializer, packet->ws_direction.z);
+
+    serialize_float32(serializer, packet->ws_velocity.x);
+    serialize_float32(serializer, packet->ws_velocity.y);
+    serialize_float32(serializer, packet->ws_velocity.z);
+    
+    serialize_float32(serializer, packet->ws_up_vector.x);
+    serialize_float32(serializer, packet->ws_up_vector.y);
+    serialize_float32(serializer, packet->ws_up_vector.z);
+
+    serialize_float32(serializer, packet->ws_rotation[0]);
+    serialize_float32(serializer, packet->ws_rotation[1]);
+    serialize_float32(serializer, packet->ws_rotation[2]);
+    serialize_float32(serializer, packet->ws_rotation[3]);
+
+    serialize_uint32(serializer, packet->action_flags);
+
+    serialize_uint8(serializer, packet->flags);
+}
+
+
+void deserialize_game_snapshot_player_state_packet(serializer_t *serializer, game_snapshot_player_state_packet_t *packet)
+{
+    packet->client_id = deserialize_uint32(serializer);
+    
+    packet->ws_position.x = deserialize_float32(serializer);
+    packet->ws_position.y = deserialize_float32(serializer);
+    packet->ws_position.z = deserialize_float32(serializer);
+
+    packet->ws_direction.x = deserialize_float32(serializer);
+    packet->ws_direction.y = deserialize_float32(serializer);
+    packet->ws_direction.z = deserialize_float32(serializer);
+
+    packet->ws_velocity.x = deserialize_float32(serializer);
+    packet->ws_velocity.y = deserialize_float32(serializer);
+    packet->ws_velocity.z = deserialize_float32(serializer);
+
+    packet->ws_up_vector.x = deserialize_float32(serializer);
+    packet->ws_up_vector.y = deserialize_float32(serializer);
+    packet->ws_up_vector.z = deserialize_float32(serializer);
+
+    packet->ws_rotation[0] = deserialize_float32(serializer);
+    packet->ws_rotation[1] = deserialize_float32(serializer);
+    packet->ws_rotation[2] = deserialize_float32(serializer);
+    packet->ws_rotation[3] = deserialize_float32(serializer);
+
+    packet->action_flags = deserialize_uint32(serializer);
+
+    packet->flags = deserialize_uint8(serializer);
+}
+
+
+void serialize_client_modified_voxels_packet(serializer_t *serializer, client_modified_voxels_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->modified_chunk_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
+    {
+        serialize_uint16(serializer, packet->modified_chunks[chunk].chunk_index);
+        serialize_uint32(serializer, packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].x);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].y);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].z);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].value);
+        }
+    }
+}
+
+
+void deserialize_client_modified_voxels_packet(serializer_t *serializer, client_modified_voxels_packet_t *packet)
+{
+    packet->modified_chunk_count = deserialize_uint32(serializer);
+
+    packet->modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * packet->modified_chunk_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
+    {
+        packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
+
+        packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
+        
+        packet->modified_chunks[chunk].modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            packet->modified_chunks[chunk].modified_voxels[voxel].x = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].y = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].z = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].value = deserialize_uint8(serializer);
+        }
+    }
+}
+
+
+void serialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet)
+{
+    serialize_uint32(serializer, packet->modified_count);
+
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
+    {
+        serialize_uint16(serializer, packet->modified_chunks[chunk].chunk_index);
+        serialize_uint32(serializer, packet->modified_chunks[chunk].modified_voxel_count);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].previous_value);
+            serialize_uint8(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].next_value);
+            serialize_uint16(serializer, packet->modified_chunks[chunk].modified_voxels[voxel].index);
+        }
+    }
+}
+
+
+void deserialize_game_snapshot_voxel_delta_packet(serializer_t *serializer, game_snapshot_voxel_delta_packet_t *packet, linear_allocator_t *allocator = nullptr)
+{
+    packet->modified_count = deserialize_uint32(serializer);
+
+    packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count, 1, "", allocator);
+
+    uint32_t output_count = 0;
+    
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
+    {
+        packet->modified_chunks[chunk].chunk_index = deserialize_uint16(serializer);
+
+        packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32(serializer);
+        
+        packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count, 1, "", allocator);
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
+        {
+            packet->modified_chunks[chunk].modified_voxels[voxel].previous_value = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].next_value = deserialize_uint8(serializer);
+            packet->modified_chunks[chunk].modified_voxels[voxel].index = deserialize_uint16(serializer);
+
+            ++output_count;
+            output_to_debug_console((int32_t)(packet->modified_chunks[chunk].modified_voxels[voxel].next_value), " ");
+        }
+    }
+
+    if (output_count)
+    {
+        output_to_debug_console("\n");
+    }
+}
+
+
+void deserialize_game_state_initialize_packet(serializer_t *serializer, game_state_initialize_packet_t *packet)
+{
+    deserialize_voxel_state_initialize_packet(serializer, &packet->voxels);
+    packet->client_index = deserialize_uint32(serializer);
+    packet->player_count = deserialize_uint32(serializer);
+    packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * packet->player_count);
+    for (uint32_t i = 0; i < packet->player_count; ++i)
+    {
+        deserialize_player_state_initialize_packet(serializer, &packet->player[i]);
+    }
+}
+
+
+void join_server(const char *ip_address, const char *client_name)
+{
+    packet_header_t header = {};
+    client_join_packet_t packet = {};
+    {
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_CLIENT_JOIN;
+        packet.client_name = client_name;
+    }
+    header.total_packet_size = sizeof_packet_header();
+    header.total_packet_size += strlen(packet.client_name) + 1;
+
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, header.total_packet_size);
+    serialize_packet_header(&serializer, &header);
+    serialize_client_join_packet(&serializer, &packet);
+    
+    network_address_t server_address { (uint16_t)host_to_network_byte_order(GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
+    send_serialized_message(&serializer, server_address);
+
+    server_address = server_address;
+}
+
+
+void join_loop_back(uint32_t client_index /* will be the client name */)
+{
+    const char *ip_address = "127.0.0.1";
+    
+    char client_name[10];
+    sprintf(client_name, "%d", client_index);
+    
+    packet_header_t header = {};
+    client_join_packet_t packet = {};
+    {
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_CLIENT_JOIN;
+        packet.client_name = client_name;
+    }
+    header.total_packet_size = sizeof_packet_header();
+    header.total_packet_size += strlen(packet.client_name) + 1;
+
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, header.total_packet_size);
+    serialize_packet_header(&serializer, &header);
+    serialize_client_join_packet(&serializer, &packet);
+    
+    network_address_t server_address { (uint16_t)host_to_network_byte_order(GAME_OUTPUT_PORT_SERVER), str_to_ipv4_int32(ip_address) };
+    send_serialized_message(&serializer, server_address);
+
+    server_address = server_address;
+}
+
+
+static int32_t lua_join_server(lua_State *state);
+static int32_t lua_join_loop_back(lua_State *state);
+static int32_t lua_toggle_freeze_receiver_thread(lua_State *state);
+static int32_t lua_toggle_freeze_client_after_input(lua_State *state);
+
+
+void initialize_as_client(void)
+{
+    initialize_socket_api(GAME_OUTPUT_PORT_CLIENT);
+    
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "join_server", &lua_join_server);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "lb", &lua_join_loop_back);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "toggle_freeze_receiver_thread", &lua_toggle_freeze_receiver_thread);
+    add_global_to_lua(script_primitive_type_t::FUNCTION, "freeze_after_input_packet_sent", &lua_toggle_freeze_client_after_input);
+
+    player_state_cbuffer.initialize(40);
+    player_state_history.initialize(60);
+}
+
+static void receiver_thread_process(void *receiver_thread_data)
+{
+    output_to_debug_console("Started receiver thread\n");
+    
+    receiver_thread_t *process_data = (receiver_thread_t *)receiver_thread_data;
+
+    for (;;)
+    {
+        if (wait_for_mutex_and_own(process_data->mutex) && !process_data->receiver_freezed)
+        {
+            if (process_data->receiver_thread_loop_count == 0)
+            {
+            }
+            
+            ++(process_data->receiver_thread_loop_count);
+            // ^^^^^^^^^^ debug stuff ^^^^^^^^^^^^
+
+            char *message_buffer = (char *)process_data->packet_allocator.current;
+        
+            network_address_t received_address = {};
+            int32_t bytes_received = receive_from(&main_network_socket, message_buffer, process_data->packet_allocator.capacity - process_data->packet_allocator.used_capacity, &received_address);
+
+            if (bytes_received > 0)
+            {
+                // Actually officially allocate memory on linear allocator (even though it will already have been filled)
+                process_data->packets[process_data->packet_count] = allocate_linear(bytes_received, 1, "", &process_data->packet_allocator);
+                process_data->packet_sizes[process_data->packet_count] = bytes_received;
+                process_data->addresses[process_data->packet_count] = received_address;
+
+                ++(process_data->packet_count);
+            }
+
+            release_mutex(process_data->mutex);
+        }
+    }
+}
+
+static void initialize_receiver_thread(void)
+{
+    receiver_thread.packet_allocator.capacity = megabytes(30);
+    receiver_thread.packet_allocator.start = receiver_thread.packet_allocator.current = malloc(receiver_thread.packet_allocator.capacity);
+
+    receiver_thread.mutex = request_mutex();
+    request_thread_for_process(&receiver_thread_process, &receiver_thread);
+}
+
+void initialize_as_server(void)
+{
+    initialize_socket_api(GAME_OUTPUT_PORT_SERVER);
+    
+     //initialize_receiver_thread();
+}
+
+// Adds a client to the network_component_t array in entities_t
+uint32_t add_client(network_address_t network_address, const char *client_name, player_handle_t player_handle)
+{
+    // Initialize network component or something
+
+    return(0);
+}
+
+client_t *get_client(uint32_t index)
+{
+    return(&clients[index]);
+}
+
+#define MAX_MESSAGE_BUFFER_SIZE 40000
+global_var char message_buffer[MAX_MESSAGE_BUFFER_SIZE] = {};
+
+
+void send_chunks_hard_update_packets(network_address_t address)
+{
+    serializer_t chunks_serializer = {};
+    initialize_serializer(&chunks_serializer, sizeof(uint32_t) + (sizeof(uint8_t) * 3 + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH) * 8 /* Maximum amount of chunks to "hard update per packet" */);
+
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE;
+    // TODO: Increment this with every packet sent
+    header.current_tick = *get_current_tick();
+
+    uint32_t hard_update_count = 0;
+    voxel_chunk_values_packet_t *voxel_update_packets = initialize_chunk_values_packets(&hard_update_count);
+
+    union
+    {
+        struct
+        {
+            uint32_t is_first: 1;
+            uint32_t count: 31;
+        };
+        uint32_t to_update_count;
+    } chunks_count;
+
+    chunks_count.is_first = 0;
+    chunks_count.count = hard_update_count;
+    
+    uint32_t loop_count = (hard_update_count / 8);
+    for (uint32_t packet = 0; packet < loop_count; ++packet)
+    {
+        voxel_chunk_values_packet_t *pointer = &voxel_update_packets[packet * 8];
+
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * 8;
+        serialize_packet_header(&chunks_serializer, &header);
+
+        if (packet == 0)
+        {
+            chunks_count.is_first = 1;
+            // This is the total amount of chunks that the client is waiting for
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+            chunks_count.is_first = 0;
+        }
+        else
+        {
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+        }
+
+        serialize_uint32(&chunks_serializer, 8);
+        
+        for (uint32_t chunk = 0; chunk < 8; ++chunk)
+        {
+            serialize_voxel_chunk_values_packet(&chunks_serializer, &pointer[chunk]);
+        }
+
+        send_serialized_message(&chunks_serializer, address);
+        chunks_serializer.data_buffer_head = 0;
+
+        hard_update_count -= 8;
+    }
+
+    if (hard_update_count)
+    {
+        voxel_chunk_values_packet_t *pointer = &voxel_update_packets[loop_count * 8];
+
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * hard_update_count;
+        serialize_packet_header(&chunks_serializer, &header);
+
+        if (loop_count == 0)
+        {
+            chunks_count.is_first = 1;
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+            chunks_count.is_first = 0;
+        }
+        else
+        {
+            serialize_uint32(&chunks_serializer, chunks_count.to_update_count);
+        }
+        
+        serialize_uint32(&chunks_serializer, hard_update_count);
+        
+        for (uint32_t chunk = 0; chunk < hard_update_count; ++chunk)
+        {
+            serialize_voxel_chunk_values_packet(&chunks_serializer, &pointer[chunk]);
+        }
+
+        
+        send_serialized_message(&chunks_serializer, address);
+    }
+}
+
+void dispatch_newcoming_client_to_clients(uint32_t new_client_index)
+{
+    client_t *newcoming_client = get_client(new_client_index);
+    player_t *player = get_player(newcoming_client->player_handle);
+    
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, 80);
+
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_CLIENT_JOINED;
+    header.current_tick = *get_current_tick();
+
+    serialize_packet_header(&serializer, &header);
+
+    player_state_initialize_packet_t player_initialize_packet = {};
+    player_initialize_packet.client_id = new_client_index;
+    player_initialize_packet.player_name = newcoming_client->name;
+    player_initialize_packet.ws_position = player->ws_p;
+    player_initialize_packet.ws_direction = player->ws_d;
+    
+    serialize_player_state_initialize_packet(&serializer, &player_initialize_packet);
+
+    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    {
+        client_t *current_client = get_client(client_index);
+
+        send_serialized_message(&serializer, current_client->network_address);
+    }
+}
+
+void dispatch_snapshot_to_clients(void)
+{
+    packet_header_t header = {};
+    header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+    header.packet_type = server_packet_type_t::SPT_GAME_STATE_SNAPSHOT;
+
+    // First game snapshot voxel deltas, then game snapshot players
+    game_snapshot_voxel_delta_packet_t voxel_packet = {};
+    game_snapshot_player_state_packet_t player_snapshots[MAX_CLIENTS] = {};
+
+    // Prepare voxel delta snapshot packets
+    uint32_t modified_chunks_count = 0;
+    voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+
+    voxel_packet.modified_count = modified_chunks_count;
+    voxel_packet.modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * modified_chunks_count);
+
+    // FOR DEBUGGING
+    uint32_t output_count = 0;
+    
+    for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
+    {
+        voxel_chunk_t *chunk = chunks[chunk_index];
+        modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
+
+        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+        modified_chunk->modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * chunk->modified_voxels_list_count);
+        modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
+        for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+        {
+            uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
+            modified_chunk->modified_voxels[voxel].previous_value = chunk->voxel_history[voxel_index];
+            voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+            modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
+            modified_chunk->modified_voxels[voxel].index = voxel_index;
+
+            ++output_count;
+            output_to_debug_console((int32_t)(modified_chunk->modified_voxels[voxel].next_value), " ");
+        }
+    }
+
+    output_to_debug_console(" -> ");
+    
+    // Prepare the player snapshot packets
+    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    {
+        client_t *client = get_client(client_index);
+        player_t *player = get_player(client->player_handle);
+
+        player_snapshots[client_index].client_id = client->client_id;
+        player_snapshots[client_index].ws_position = player->ws_p;
+        player_snapshots[client_index].ws_direction = player->ws_d;
+        player_snapshots[client_index].ws_velocity = player->ws_v;
+        player_snapshots[client_index].ws_up_vector = player->camera.ws_current_up_vector;
+        player_snapshots[client_index].ws_rotation = player->ws_r;
+        player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
+
+        player_snapshots[client_index].is_rolling = player->rolling_mode;
+    }
+
+    serializer_t out_serializer = {};
+    initialize_serializer(&out_serializer,
+                          sizeof_packet_header() +
+                          sizeof(uint64_t) +
+                          sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
+                          sizeof_game_snapshot_player_state_packet() * client_count);
+
+    // TODO: FIX THIS IS NOT THE ACTUAL PACKET SIZE: IT VARIES DEPENDING ON THE CLIENT
+    header.total_packet_size = sizeof_packet_header() +
+        sizeof(uint64_t) +
+        sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
+        sizeof_game_snapshot_player_state_packet() * client_count;
+        
+    serialize_packet_header(&out_serializer, &header);
+
+
+
+    // These are the actual current voxel values
+    serialize_game_snapshot_voxel_delta_packet(&out_serializer, &voxel_packet);
+
+
+    
+    uint32_t player_snapshots_start = out_serializer.data_buffer_head;
+
+    // TODO: Find way so that sending packets to each client does not need packets to be reserialized
+    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    {
+        client_t *client = get_client(client_index);
+        player_t *player = get_player(client->player_handle);
+
+        if (client->received_input_commands)
+        {
+            game_snapshot_player_state_packet_t *player_snapshot_packet = &player_snapshots[client_index];
+
+            out_serializer.data_buffer_head = player_snapshots_start;
+
+            player_state_t *previous_received_player_state = &client->previous_received_player_state;
+
+            uint64_t previous_received_tick = client->previous_client_tick;
+            serialize_uint64(&out_serializer, previous_received_tick);
+
+            // Now need to serialize the chunks / voxels that the client has modified, so that the client can remember which voxels it modified so that it does not do interpolation for the "correct" voxels that it just calculated
+            serialize_uint32(&out_serializer, client->modified_chunks_count);
+
+            bool force_client_to_do_voxel_correction = 0;
+            for (uint32_t chunk = 0; chunk < client->modified_chunks_count; ++chunk)
+            {
+                serialize_uint16(&out_serializer, client->previous_received_voxel_modifications[chunk].chunk_index);
+                serialize_uint32(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxel_count);
+
+                client_modified_chunk_nl_t *modified_chunk_data = &client->previous_received_voxel_modifications[chunk];
+                voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                
+                for (uint32_t voxel = 0; voxel < client->previous_received_voxel_modifications[chunk].modified_voxel_count; ++voxel)
+                {
+                    local_client_modified_voxel_t *voxel_ptr = &modified_chunk_data->modified_voxels[voxel];
+                    uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z];
+
+                    if (actual_voxel_value != voxel_ptr->value)
+                    {
+                        force_client_to_do_voxel_correction = 1;
+
+                        client->needs_to_do_voxel_correction = 1;
+                        client->needs_to_acknowledge_prediction_error = 1;
+                        
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
+                        serialize_uint8(&out_serializer, actual_voxel_value);
+                    }
+                    // If the prediction was correct, do not force client to do the correction
+                    else
+                    {
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
+                        serialize_uint8(&out_serializer, client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].z);
+                        serialize_uint8(&out_serializer, 255);
+                    }
+                }
+            }
+
+            if (force_client_to_do_voxel_correction)
+            {
+                output_to_debug_console("Client needs to do voxel correction: waiting for correction\n"); 
+                            
+                player_snapshot_packet->need_to_do_voxel_correction = 1;
+                player_snapshot_packet->need_to_do_correction = 1;
+                client->needs_to_acknowledge_prediction_error = 1;
+            }
+            
+            for (uint32_t i = 0; i < client_count; ++i)
+            {
+                if (i == client_index)
+                {
+                    if (client->received_input_commands)
+                    {
+                        // Do comparison to determine if client correction is needed
+                        float32_t precision = 0.1f;
+                        vector3_t ws_position_difference = glm::abs(previous_received_player_state->ws_position - player_snapshot_packet->ws_position);
+                        vector3_t ws_direction_difference = glm::abs(previous_received_player_state->ws_direction - player_snapshot_packet->ws_direction);
+
+                        bool position_is_different = (ws_position_difference.x > precision ||
+                                                      ws_position_difference.y > precision ||
+                                                      ws_position_difference.z > precision);
+
+                        bool direction_is_different = (ws_direction_difference.x > precision ||
+                                                       ws_direction_difference.y > precision ||
+                                                       ws_direction_difference.z > precision);
+
+                        if (position_is_different)
+                        {
+                            output_to_debug_console("pos-");
+                        }
+
+                        if (direction_is_different)
+                        {
+                            output_to_debug_console("dir-");
+                        }
+                        
+                        if (position_is_different || direction_is_different)
+                        {
+                            output_to_debug_console("correction-");
+                            
+                            // Make sure that server invalidates all packets previously sent by the client
+                            player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
+                            player->network.player_states_cbuffer.head_tail_difference = 0;
+                            
+                            // Force client to do correction
+                            player_snapshot_packet->need_to_do_correction = 1;
+
+                            // Server will now wait until reception of a prediction error packet
+                            client->needs_to_acknowledge_prediction_error = 1;
+                        }
+                        
+                        player_snapshot_packet->is_to_ignore = 0;
+                    }
+                    else
+                    {
+                        player_snapshot_packet->is_to_ignore = 1;
+                    }
+                }
+
+                serialize_game_snapshot_player_state_packet(&out_serializer, &player_snapshots[i]);
+            }
+
+            client->modified_chunks_count = 0;
+            send_serialized_message(&out_serializer, client->network_address);
+            output_to_debug_console(client->name, " ");
+       }
+    }
+
+    output_to_debug_console("\n");
+
+    clear_chunk_history_for_server();
+}
+
+float32_t get_snapshot_server_rate(void)
+{
+    return(server_game_state_snapshot_rate);
+}
+
+// Might have to be done on a separate thread just for updating world data
+void update_as_server(input_state_t *input_state, float32_t dt)
+{    
+    //if (wait_for_mutex_and_own(receiver_thread.mutex))
+    {
+        // Send Snapshots (25 per second)
+        // Every 40ms (25 sps) - basically every frame
+        // TODO: Add function to send snapshot
+        persist_var float32_t time_since_previous_snapshot = 0.0f;
+    
+        // Send stuff out to the clients (game state and stuff...)
+        // TODO: Add changeable
+    
+        time_since_previous_snapshot += dt;
+        float32_t max_time = 1.0f / server_game_state_snapshot_rate; // 20 per second
+        
+        if (time_since_previous_snapshot > max_time)
+        {
+            // Dispath game state to all clients
+            dispatch_snapshot_to_clients();
+            
+            time_since_previous_snapshot = 0.0f;
+        }
+        
+        receiver_thread.receiver_thread_loop_count = 0;
+
+        //        for (uint32_t packet_index = 0; packet_index < receiver_thread.packet_count; ++packet_index)
+        for (uint32_t i = 0; i < 1 + 2 * client_count; ++i)
+        {
+            //network_address_t received_address = receiver_thread.addresses[packet_index];
+            
+            //serializer_t in_serializer = {};
+            //in_serializer.data_buffer = (uint8_t *)(receiver_thread.packets[packet_index]);
+            //in_serializer.data_buffer_size = receiver_thread.packet_sizes[packet_index];
+
+            network_address_t received_address = {};
+            int32_t bytes_received = receive_from(&main_network_socket, message_buffer, MAX_MESSAGE_BUFFER_SIZE, &received_address);
+
+            if (bytes_received > 0)
+            {
+                serializer_t in_serializer = {};
+                in_serializer.data_buffer = (uint8_t *)message_buffer;
+                in_serializer.data_buffer_size = bytes_received;
+                
+                packet_header_t header = {};
+                deserialize_packet_header(&in_serializer, &header);
+
+                if (header.total_packet_size == in_serializer.data_buffer_size)
+                {
+                    if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
+                    {
+                        switch (header.packet_type)
+                        {
+                        case client_packet_type_t::CPT_CLIENT_JOIN:
+                            {
+
+                                client_join_packet_t client_join = {};
+                                deserialize_client_join_packet(&in_serializer, &client_join);
+
+                                // Add client
+                                client_t *client = get_client(client_count);
+                                client->name = client_join.client_name;
+                                client->client_id = client_count;
+                                client->network_address = received_address;
+                                client->current_packet_count = 0;
+
+                                // Add the player to the actual entities list (spawn the player in the world)
+                                client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
+                                player_t *local_player_data_ptr = get_player(client->player_handle);
+                                local_player_data_ptr->network.client_state_index = client->client_id;
+
+                                ++client_count;
+                                constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
+                                client_table_by_name.insert(constant_str_name.hash, client->client_id);
+                                client_table_by_address.insert(received_address.ipv4_address, client->client_id);
+                        
+                                // LOG:
+                                console_out(client_join.client_name);
+                                console_out(" joined the game!\n");
+                        
+                                // Reply - Create handshake packet
+                                serializer_t out_serializer = {};
+                                initialize_serializer(&out_serializer, 2000);
+                                game_state_initialize_packet_t game_state_init_packet = {};
+                                initialize_game_state_initialize_packet(&game_state_init_packet, client->client_id);
+
+
+                        
+                                packet_header_t handshake_header = {};
+                                handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+                                handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
+                                handshake_header.total_packet_size = sizeof_packet_header();
+                                handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
+                                handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
+                                handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
+                                handshake_header.current_tick = *get_current_tick();
+                        
+                                serialize_packet_header(&out_serializer, &handshake_header);
+                                serialize_game_state_initialize_packet(&out_serializer, &game_state_init_packet);
+                                send_serialized_message(&out_serializer, client->network_address);
+
+                                send_chunks_hard_update_packets(client->network_address);
+
+                                dispatch_newcoming_client_to_clients(client->client_id);
+                        
+                            } break;
+
+                        case client_packet_type_t::CPT_INPUT_STATE:
+                            {
+                                client_t *client = get_client(header.client_id);
+                                if (!client->needs_to_acknowledge_prediction_error)
+                                {
+                                    client->received_input_commands = 1;
+                        
+                                    // Current client tick (will be used for the snapshot that will be sent to the clients)
+                                    // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
+                                    client->previous_client_tick = header.current_tick;
+
+                                    player_t *player = get_player(client->player_handle);
+                        
+                                    uint32_t player_state_count = deserialize_uint32(&in_serializer);
+
+                                    player_state_t last_player_state = {};
+                        
+                                    for (uint32_t i = 0; i < player_state_count; ++i)
+                                    {
+                                        client_input_state_packet_t input_packet = {};
+                                        player_state_t player_state = {};
+                                        deserialize_client_input_state_packet(&in_serializer, &input_packet);
+
+                                        player_state.action_flags = input_packet.action_flags;
+                                        player_state.mouse_x_diff = input_packet.mouse_x_diff;
+                                        player_state.mouse_y_diff = input_packet.mouse_y_diff;
+                                        player_state.flags_byte = input_packet.flags_byte;
+                                        player_state.dt = input_packet.dt;
+
+                                        player->network.player_states_cbuffer.push_item(&player_state);
+
+                                        last_player_state = player_state;
+                                    }
+
+                                    // Will use the data in here to check whether the client needs correction or not
+                                    client->previous_received_player_state = last_player_state;
+
+                                    client->previous_received_player_state.ws_position = deserialize_vector3(&in_serializer);
+                                    client->previous_received_player_state.ws_direction = deserialize_vector3(&in_serializer);
+
+                                    player->network.commands_to_flush += player_state_count;
+
+                                    client_modified_voxels_packet_t voxel_packet = {};
+                                    deserialize_client_modified_voxels_packet(&in_serializer, &voxel_packet);
+
+                                    for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
+                                    {
+                                        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
+                                        chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
+                                        chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
+                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
+                                        {
+                                            chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
+                                            chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
+                                            chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
+                                            chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
+                                        }
+                                    }
+                                    client->modified_chunks_count += voxel_packet.modified_chunk_count;
+                                }
+                            } break;
+                        case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
+                            {
+                                client_t *client = get_client(header.client_id);
+                                client->needs_to_acknowledge_prediction_error = 0;
+
+                                player_t *player = get_player(client->player_handle);
+
+                                client->previous_client_tick = deserialize_uint64(&in_serializer);
+                                //client->received_input_commands = 0;
+                            } break;
+                        case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
+                            {
+                                uint64_t game_state_acknowledged_tick = deserialize_uint64(&in_serializer);
+                                client_t *client = get_client(header.client_id);
+                        
+                            } break;
+                        }
+                    }
+                }
+            }
+        }
+
+        //receiver_thread.packet_count = 0;
+        //clear_linear(&receiver_thread.packet_allocator);
+        //release_mutex(receiver_thread.mutex);
+    }
+}
+
+
+client_modified_chunk_nl_t *previous_client_modified_chunks(uint32_t *count)
+{
+    player_t *user = get_user_player();
+    client_t *client = get_client(user->network.client_state_index);
+    *count = client->modified_chunks_count;
+    return(client->previous_received_voxel_modifications);
+}
+
+ 
+static void send_client_action_flags(void)
+{
+    //    if (!client_will_freeze_after_input && !sent_active_action_flags)
+    {
+        player_t *user = get_user_player();    
+
+        packet_header_t header = {};
+    
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
+
+        
+        uint32_t modified_chunks_count = 0;
+        voxel_chunk_t **chunks = get_modified_voxel_chunks(&modified_chunks_count);
+
+        client_modified_voxels_packet_t voxel_packet = {};
+        voxel_packet.modified_chunk_count = modified_chunks_count;
+        voxel_packet.modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * modified_chunks_count);
+
+        for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
+        {
+            voxel_chunk_t *chunk = chunks[chunk_index];
+            client_modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
+
+            modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+            modified_chunk->modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * chunk->modified_voxels_list_count);
+            modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
+            for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+            {
+                uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
+                voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, VOXEL_CHUNK_EDGE_LENGTH);
+                modified_chunk->modified_voxels[voxel].x = coord.x;
+                modified_chunk->modified_voxels[voxel].y = coord.y;
+                modified_chunk->modified_voxels[voxel].z = coord.z;
+                modified_chunk->modified_voxels[voxel].value = chunk->voxels[coord.x][coord.y][coord.z];
+            }
+        }
+        
+        
+        header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 + sizeof_modified_voxels_packet(modified_chunks_count, voxel_packet.modified_chunks);
+        header.client_id = user->network.client_state_index;
+        header.current_tick = *get_current_tick();
+
+        serializer_t serializer = {};
+        initialize_serializer(&serializer, header.total_packet_size);
+    
+        serialize_packet_header(&serializer, &header);
+
+        serialize_uint32(&serializer, player_state_cbuffer.head_tail_difference);
+
+        uint32_t player_states_to_send = player_state_cbuffer.head_tail_difference;
+
+        player_state_t *state;
+        for (uint32_t i = 0; i < player_states_to_send; ++i)
+        {
+            state = player_state_cbuffer.get_next_item();
+            serialize_client_input_state_packet(&serializer, state);
+        }
+
+        player_state_t to_store = *state;
+        to_store.ws_position = user->ws_p;
+        to_store.ws_direction = user->ws_d;
+        to_store.tick = header.current_tick;
+        //player_state_history.push_item(&to_store);
+
+        serialize_vector3(&serializer, to_store.ws_position);
+        serialize_vector3(&serializer, to_store.ws_direction);
+
+        serialize_client_modified_voxels_packet(&serializer, &voxel_packet);
+        
+        send_serialized_message(&serializer, server_address);
+
+        if (to_store.action_flags)
+        {
+            sent_active_action_flags = 1;
+        }
+    }
+
+    clear_chunk_history_for_server();
+}
+
+
+void buffer_player_state(float32_t dt)
+{
+    player_t *user = get_user_player();
+    player_state_t player_state = initialize_player_state(user);
+    player_state.dt = dt;
+
+    player_state_cbuffer.push_item(&player_state);
+}
+
+
+void fill_last_player_state_if_needed(player_t *player)
+{
+    if (fill_requested)
+    {
+        uint32_t head = player_state_history.head;
+        if (!head)
+        {
+            head = player_state_history.buffer_size - 1;
+        }
+        else
+        {
+            --head;
+        }
+    
+        player_state_t *player_state = &player_state_history.buffer[head];
+
+        player_state->ws_position = player->ws_p;
+        player_state->ws_direction = player->ws_d;
+
+        fill_requested = 0;
+    }
+}
+
+
+void send_prediction_error_correction(uint64_t tick)
+{
+    serializer_t serializer = {};
+    initialize_serializer(&serializer, sizeof_packet_header() + sizeof(uint64_t));
+
+    player_t *user = get_user_player();
+    
+    packet_header_t header = {};
+    header.packet_mode = PM_CLIENT_MODE;
+    header.packet_type = CPT_PREDICTION_ERROR_CORRECTION;
+    header.total_packet_size = sizeof_packet_header() + sizeof(uint64_t);
+    header.current_tick = tick;
+    header.client_id = user->network.client_state_index;
+    
+    serialize_packet_header(&serializer, &header);
+    serialize_uint64(&serializer, tick);
+
+    send_serialized_message(&serializer, server_address);
+
+    *get_current_tick() = tick;
+}
+
+
+void update_as_client(input_state_t *input_state, float32_t dt)
+{
+    persist_var float32_t time_since_last_input_state = 0.0f;
+    
+    // Send stuff out to the server (input state and stuff...)
+    // TODO: Add changeable
+    if (is_connected_to_server)
+    {
+        time_since_last_input_state += dt;
+        float32_t max_time = 1.0f / client_input_snapshot_rate;
+        
+        if (time_since_last_input_state > max_time)
+        {
+            send_client_action_flags();
+
+            time_since_last_input_state = 0.0f;
+        }
+    }
+
+    network_address_t received_address = {};
+    bool received = receive_from(&main_network_socket, message_buffer, sizeof(message_buffer), &received_address);
+
+    if (received)
+    {
+        serializer_t in_serializer = {};
+        in_serializer.data_buffer = (uint8_t *)message_buffer;
+        in_serializer.data_buffer_size = MAX_MESSAGE_BUFFER_SIZE;
+
+        packet_header_t header = {};
+        deserialize_packet_header(&in_serializer, &header);
+
+        if (header.packet_mode == packet_mode_t::PM_SERVER_MODE)
+        {
+            switch(header.packet_type)
+            {
+            case server_packet_type_t::SPT_SERVER_HANDSHAKE:
+                {
+
+                    *get_current_tick() = header.current_tick;
+                    
+                    game_state_initialize_packet_t game_state_init_packet = {};
+                    deserialize_game_state_initialize_packet(&in_serializer, &game_state_init_packet);
+                    
+                    deinitialize_world();
+                    
+                    initialize_world(&game_state_init_packet, input_state);
+
+                    // Add client structs (indices of the structs on the server will be the same as on the client)
+                    client_count = game_state_init_packet.player_count;
+
+                    // Existing players when client joined the game
+                    for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
+                    { 
+                        player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
+                        player_t *player = get_player(player_packet->player_name);
+
+                        client_t *client = get_client(player_packet->client_id);
+                        client->name = player->id.str;
+                        client->client_id = player_packet->client_id;
+                        client->player_handle = player->index;
+
+                        if (client->client_id != game_state_init_packet.client_index)
+                        {
+                            player->network.is_remote = 1;
+                            player->network.max_time = 1.0f / get_snapshot_server_rate();
+                        }
+                    }
+
+                    is_connected_to_server = 1;
+
+                } break;
+            case server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE:
+                {
+
+                    union
+                    {
+                        struct
+                        {
+                            uint32_t is_first: 1;
+                            uint32_t count: 31;
+                        };
+                        uint32_t to_update_count;
+                    } chunks_count;
+
+                    voxel_chunks_flags_t *flags = get_voxel_chunks_flags();
+                    
+                    chunks_count.to_update_count = deserialize_uint32(&in_serializer);
+                    if (chunks_count.is_first)
+                    {
+                        flags->should_update_chunk_meshes_from_now = 0;
+                        flags->chunks_received_to_update_count = 0;
+                        // Don't update chunks meshes until voxels were received entirely
+                        flags->chunks_to_be_received = chunks_count.count;
+                    }
+                    
+                    uint32_t chunks_to_update = deserialize_uint32(&in_serializer);
+                    for (uint32_t i = 0; i < chunks_to_update; ++i)
+                    {
+                        voxel_chunk_values_packet_t packet = {};
+                        deserialize_voxel_chunk_values_packet(&in_serializer, &packet);
+                        
+                        voxel_chunk_t *chunk = *get_voxel_chunk(packet.chunk_coord_x, packet.chunk_coord_y, packet.chunk_coord_z);
+                        memcpy(chunk->voxels, packet.voxels, sizeof(uint8_t) * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH * VOXEL_CHUNK_EDGE_LENGTH);
+
+                        ready_chunk_for_gpu_sync(chunk);
+                    }
+
+                    flags->chunks_received_to_update_count += chunks_to_update;
+
+                    if (flags->chunks_received_to_update_count == flags->chunks_to_be_received)
+                    {
+                        flags->should_update_chunk_meshes_from_now = 1;
+                    }
+                    
+                } break;
+            case server_packet_type_t::SPT_GAME_STATE_SNAPSHOT:
+                {
+                    linear_allocator_t *voxel_allocator = get_voxel_linear_allocator();
+                    reset_voxel_interpolation();
+                    deserialize_game_snapshot_voxel_delta_packet(&in_serializer, get_previous_voxel_delta_packet(), voxel_allocator);
+
+                    // Put this in the history
+                    uint64_t previous_tick = deserialize_uint64(&in_serializer);
+
+                    client_modified_voxels_packet_t modified_voxels = {};
+                    deserialize_client_modified_voxels_packet(&in_serializer, &modified_voxels);
+
+                    for (uint32_t i = 0; i < client_count; ++i)
+                    {
+                        // This is the player state to compare with what the server sent
+                        game_snapshot_player_state_packet_t player_snapshot_packet = {};
+                        deserialize_game_snapshot_player_state_packet(&in_serializer, &player_snapshot_packet);
+
+                        client_t *client = get_client(player_snapshot_packet.client_id);
+                        player_t *current_player = get_player(client->player_handle);
+
+                        player_t *local_user = get_user_player();
+
+                        // We are dealing with the local client: we need to deal with the correction stuff
+                        if (local_user->network.client_state_index == player_snapshot_packet.client_id && !player_snapshot_packet.is_to_ignore)
+                        {
+                            client->previous_client_tick = previous_tick;
+                            
+                            if (player_snapshot_packet.need_to_do_correction)
+                            {
+                                // Do correction here
+                                // TODO: THIS NEEDS TO HAPPEN IN UPDATE_NETWORK_COMPONENT() WHEN THE VOXEL CORRECTIONS HAPPEN
+                                player_t *player = get_user_player();
+                                player->ws_p = player_snapshot_packet.ws_position;
+                                player->ws_d = player_snapshot_packet.ws_direction;
+                                player->ws_v = player_snapshot_packet.ws_velocity;
+                                player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
+                            }
+
+                            if (player_snapshot_packet.need_to_do_correction)
+                            {
+                                if (player_snapshot_packet.need_to_do_voxel_correction)
+                                {
+                                    // Do voxel correction
+                                    for (uint32_t chunk = 0; chunk < modified_voxels.modified_chunk_count; ++chunk)
+                                    {
+                                        client_modified_chunk_t *modified_chunk_data = &modified_voxels.modified_chunks[chunk];
+                                        voxel_chunk_t *actual_voxel_chunk = *get_voxel_chunk(modified_chunk_data->chunk_index);
+                
+                                        for (uint32_t voxel = 0; voxel < modified_chunk_data->modified_voxel_count; ++voxel)
+                                        {
+                                            local_client_modified_voxel_t *voxel_ptr = &modified_chunk_data->modified_voxels[voxel];
+                                            uint8_t actual_voxel_value = actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z];
+
+                                            // Needs to be corrected
+                                            if (voxel_ptr->value != 255)
+                                            {
+                                                // voxel_ptr->value contains the real value that the server has
+                                                actual_voxel_chunk->voxels[voxel_ptr->x][voxel_ptr->y][voxel_ptr->z] = voxel_ptr->value;
+                                            }
+                                        }
+                                    }
+                                    
+                                    send_prediction_error_correction(previous_tick);
+                                }
+                                else
+                                {
+                                    // Send a prediction error correction packet
+                                    send_prediction_error_correction(previous_tick);
+                                }
+
+                                // The correction of the voxels will happen later (deffered, but it will happen)
+                            }
+
+                            // Copy voxel data to client_t struct
+                            // Voxel correction gets deferred to update_chunks_from_network if the flag need to do voxel correction is 1
+                            client->modified_chunks_count = modified_voxels.modified_chunk_count;
+                            for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+                            {
+                                client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i];
+                                chunk->chunk_index = modified_voxels.modified_chunks[i].chunk_index;
+                                chunk->modified_voxel_count = modified_voxels.modified_chunks[i].modified_voxel_count;
+                                for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count; ++voxel)
+                                {
+                                    chunk->modified_voxels[voxel].x = modified_voxels.modified_chunks[i].modified_voxels[voxel].x;
+                                    chunk->modified_voxels[voxel].y = modified_voxels.modified_chunks[i].modified_voxels[voxel].y;
+                                    chunk->modified_voxels[voxel].z = modified_voxels.modified_chunks[i].modified_voxels[voxel].z;
+                                    chunk->modified_voxels[voxel].value = modified_voxels.modified_chunks[i].modified_voxels[voxel].value;
+                                }
+                            }
+                        }
+                        // We are dealing with a remote client: we need to deal with entity interpolation stuff
+                        else
+                        {
+                            remote_player_snapshot_t remote_player_snapshot = {};
+                            remote_player_snapshot.ws_position = player_snapshot_packet.ws_position;
+                            remote_player_snapshot.ws_direction = player_snapshot_packet.ws_direction;
+                            remote_player_snapshot.ws_rotation = player_snapshot_packet.ws_rotation;
+                            remote_player_snapshot.action_flags = player_snapshot_packet.action_flags;
+                            remote_player_snapshot.rolling_mode = player_snapshot_packet.is_rolling;
+                            remote_player_snapshot.ws_up_vector = player_snapshot_packet.ws_up_vector;
+                            current_player->network.remote_player_states.push_item(&remote_player_snapshot);
+                        }
+                    }
+                    
+                } break;
+            case server_packet_type_t::SPT_CLIENT_JOINED:
+                {
+                    player_state_initialize_packet_t new_client_init_packet = {};
+                    deserialize_player_state_initialize_packet(&in_serializer, &new_client_init_packet);
+
+                    player_t *user = get_user_player();
+
+                    
+                    // In case server sends init data to the user
+                    if (new_client_init_packet.client_id != user->network.client_state_index)
+                    {
+                        ++client_count;
+                        
+                        player_handle_t new_player_handle = initialize_player_from_player_init_packet(user->network.client_state_index, &new_client_init_packet);
+
+                        player_t *player = get_player(new_player_handle);
+
+                        // Sync the network.cpp's client data with the world.cpp's player data
+                        client_t *client = get_client(new_client_init_packet.client_id);
+                        client->name = player->id.str;
+                        client->client_id = new_client_init_packet.client_id;
+                        client->player_handle = player->index;
+
+                        player->network.is_remote = 1;
+                        player->network.max_time = 1.0f / get_snapshot_server_rate();
+
+                        console_out(client->name, " joined the game!\n");
+                    }
+                } break;
+            }
+        }
+    }
+}
+
+void update_network_state(input_state_t *input_state, float32_t dt)
+{
+    switch(current_app_mode)
+    {
+    case application_mode_t::CLIENT_MODE: { update_as_client(input_state, dt); } break;
+    case application_mode_t::SERVER_MODE: { update_as_server(input_state, dt); } break;
+    }
+}
+
+void initialize_network_state(game_memory_t *memory, application_mode_t app_mode)
+{
+    current_app_mode = app_mode;
+
+    switch(current_app_mode)
+    {
+    case application_mode_t::CLIENT_MODE: { initialize_as_client(); } break;
+    case application_mode_t::SERVER_MODE: { initialize_as_server(); } break;
+    }
+}
+
+static int32_t lua_join_server(lua_State *state)
+{
+    const char *ip_address = lua_tostring(state, -2);
+    const char *user_name = lua_tostring(state, -1);
+
+    join_server(ip_address, user_name);
+
+    return(0);
+}
+
+static int32_t lua_join_loop_back(lua_State *state)
+{
+    int32_t index = lua_tonumber(state, -1);
+    
+    join_loop_back(index);
+
+    return(0);
+}
+
+static int32_t lua_toggle_freeze_receiver_thread(lua_State *state)
+{
+    receiver_thread.receiver_freezed ^= 1;
+
+    return(0);
+}
+
+static int32_t lua_toggle_freeze_client_after_input(lua_State *state)
+{
+    client_will_freeze_after_input ^= 1;
+
+    return(0);
+}

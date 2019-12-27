@@ -1,7 +1,6 @@
 #pragma once
 
 #include "utils.hpp"
-#include "world.hpp"
 #include "thread_pool.hpp"
 #include "sockets.hpp"
 #include "serializer.hpp"

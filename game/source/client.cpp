@@ -8,6 +8,7 @@
 #include "chunk.hpp"
 #include "chunks_gstate.hpp"
 #include "entities_gstate.hpp"
+#include "gamestate.hpp"
 
 
 struct remote_client_t
@@ -106,9 +107,9 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                     game_state_initialize_packet_t game_state_init_packet = {};
                     in_serializer.deserialize_game_state_initialize_packet(&game_state_init_packet);
                     
-                    deinitialize_world();
+                    deinitialize_gamestate();
                     
-                    initialize_world(&game_state_init_packet, raw_input);
+                    populate_gamestate(&game_state_init_packet, raw_input);
 
                     // Add client structs (indices of the structs on the server will be the same as on the client)
                     client_count = game_state_init_packet.player_count;

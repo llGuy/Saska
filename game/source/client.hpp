@@ -1,6 +1,7 @@
 #pragma once
 
-#include "world.hpp"
+#include "component.hpp"
+#include "player.hpp"
 #include "sockets.hpp"
 #include "utility.hpp"
 #include "containers.hpp"

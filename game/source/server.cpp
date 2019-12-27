@@ -1,3 +1,4 @@
+#include "gamestate.hpp"
 #include "entities_gstate.hpp"
 #include "packets.hpp"
 #include "server.hpp"
@@ -146,7 +147,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 serializer_t out_serializer = {};
                                 out_serializer.initialize(2000);
                                 game_state_initialize_packet_t game_state_init_packet = {};
-                                initialize_game_state_initialize_packet(&game_state_init_packet, client->client_id);
+                                fill_game_state_initialize_packet(&game_state_init_packet, client->client_id);
 
 
                         

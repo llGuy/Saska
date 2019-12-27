@@ -13,7 +13,6 @@
 #include "thread_pool.hpp"
 #include "memory.hpp"
 #include "vulkan.hpp"
-#include "world.hpp"
 #include <stdlib.h>
 
 #include "game.hpp"

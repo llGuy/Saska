@@ -2,7 +2,6 @@
 
 #include "raw_input.hpp"
 #include "vulkan.hpp"
-#include "world.hpp"
 #include "graphics.hpp"
 #include "ui.hpp"
 #include "script.hpp"
@@ -16,8 +15,6 @@ enum element_focus_t { WORLD_3D_ELEMENT_FOCUS, UI_ELEMENT_CONSOLE, UI_ELEMENT_ME
 
 struct game_memory_t
 {
-    // Contains the entities, and the terrains, and possibly more
-    struct world_t world_state;
     // Contains all state to do with graphics: material queues, GPU object managers, etc...
     struct graphics_t graphics_state;
     struct graphics_context_t graphics_context;

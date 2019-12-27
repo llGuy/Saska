@@ -979,7 +979,7 @@ static void make_sun_data(void)
 static void make_shadow_data(void)
 {
     g_lighting->suns[0].ws_position = vector3_t(10.0000001f, 10.0000000001f, 10.00000001f);
-    g_lighting->suns[0].color = vector3_t(0.68867780, 0.29784429, 0.3216065);
+    g_lighting->suns[0].color = vector3_t(0.18867780, 0.5784429, 0.6916065);
     
     g_lighting->suns[1].ws_position = -vector3_t(30.0000001f, -10.0000000001f, 10.00000001f);
     g_lighting->suns[1].color = vector3_t(0.18867780, 0.5784429, 0.6916065);

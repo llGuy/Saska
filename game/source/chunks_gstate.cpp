@@ -141,9 +141,10 @@ void initialize_chunks_state(void)
         }    
     }
 
-    //construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
-    //construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 120.0f);
-    construct_plane(vector3_t(0.0f), 200.0f);
+    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
+    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 70.0f);
+    construct_sphere(vector3_t(80.0f, 50.0f, 0.0f), 70.0f);
+    construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
 
 
     voxel_linear_allocator_front.current = voxel_linear_allocator_front.start = allocate_free_list(sizeof(uint8_t) * 5000);

@@ -479,7 +479,7 @@ void spawn_bullet(player_t *shooter)
     uint32_t bullet_index;
     if (removed_bullets_stack_head > 0)
     {
-        bullet_count = removed_bullets_stack_head;
+        bullet_index = removed_bullets_stack_head;
         new_bullet = &bullet_list[removed_bullets_stack[removed_bullets_stack_head--]];
         new_bullet->dead = 0;
     }
@@ -506,7 +506,7 @@ void spawn_bullet(player_t *shooter)
 
 void destroy_bullet(bullet_t *bullet)
 {
-    bullet_list[bullet->bullet_index].dead = 1;
+    bullet->dead = 1;
     removed_bullets_stack[removed_bullets_stack_head++] = bullet->bullet_index;
 }
 

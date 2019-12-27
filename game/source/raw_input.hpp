@@ -60,3 +60,4 @@ struct raw_input_t
 
 
 raw_input_t *get_raw_input(void);
+void send_vibration_to_gamepad(void);

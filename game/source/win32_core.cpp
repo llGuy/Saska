@@ -73,6 +73,32 @@ struct create_vulkan_surface_win32 : create_vulkan_surface
 };
 
 
+void send_vibration_to_gamepad(void)
+{
+    // Get gamepad input state and active controller
+    int32_t active_controller = -1;
+    XINPUT_STATE gamepad_state = {};
+    ZeroMemory(&gamepad_state, sizeof(gamepad_state));
+                
+    for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i)
+    {
+        DWORD result = XInputGetState(i, &gamepad_state);
+        if (result == ERROR_SUCCESS)
+        {
+            // Connected
+            active_controller = i;
+            break;
+        }
+    }
+    
+    XINPUT_VIBRATION vibration;
+    ZeroMemory( &vibration, sizeof(XINPUT_VIBRATION) );
+    vibration.wLeftMotorSpeed = 32000; // use any value between 0-65535 here
+    vibration.wRightMotorSpeed = 16000; // use any value between 0-65535 here
+    XInputSetState( active_controller, &vibration );
+}
+
+
 
 // Win32 entry point
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
@@ -713,6 +739,12 @@ static void get_gamepad_state(void)
             set_gamepad_button_state(&g_raw_input, gamepad_button_type_t::RTHUMB_MOVE_UP, magnitude > 0 && ly > 0, ((float32_t)ly));
             set_gamepad_button_state(&g_raw_input, gamepad_button_type_t::RTHUMB_MOVE_DOWN, magnitude > 0 && ly < 0, ((float32_t)ly));
         }
+
+        XINPUT_VIBRATION vibration;
+        ZeroMemory( &vibration, sizeof(XINPUT_VIBRATION) );
+        vibration.wLeftMotorSpeed = 0; // use any value between 0-65535 here
+        vibration.wRightMotorSpeed = 0; // use any value between 0-65535 here
+        XInputSetState( active_controller, &vibration );
 
 
         

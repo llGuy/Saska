@@ -300,11 +300,15 @@ void terraform_power_component_t::tick(player_t *affected_player, float32_t dt)
 {
     if (affected_player->action_flags & (1 << action_flags_t::ACTION_TERRAFORM_DESTROY))
     {
+        send_vibration_to_gamepad();
+        
         ray_cast_terraform(affected_player->ws_position, affected_player->ws_direction, 70.0f, dt, 60, 1, speed);
     }
 
     if (affected_player->action_flags & (1 << action_flags_t::ACTION_TERRAFORM_ADD))
     {
+        send_vibration_to_gamepad();
+        
         ray_cast_terraform(affected_player->ws_position, affected_player->ws_direction, 70.0f, dt, 60, 0, speed);
     }
 }
@@ -498,6 +502,8 @@ void shoot_component_t::tick(player_t *affected_player, float32_t dt)
     {
         if (affected_player->shoot.cool_off > affected_player->shoot.shoot_speed)
         {
+            send_vibration_to_gamepad();
+            
             spawn_bullet(affected_player);
             
             affected_player->shoot.cool_off = 0.0f;

@@ -60,7 +60,7 @@ void initialize_game_input_settings(void)
     bound_gamepad_buttons[LOOK_DOWN].bound_button = gamepad_button_type_t::RTHUMB_MOVE_DOWN;
     bound_gamepad_buttons[LOOK_RIGHT].bound_button = gamepad_button_type_t::RTHUMB_MOVE_RIGHT;
 
-    bound_gamepad_buttons[TRIGGER1].bound_button = gamepad_button_type_t::RIGHT_TRIGGER;
+    bound_gamepad_buttons[TRIGGER1].bound_button = gamepad_button_type_t::RIGHT_SHOULDER;
     bound_gamepad_buttons[TRIGGER2].bound_button = gamepad_button_type_t::LEFT_TRIGGER;
     bound_gamepad_buttons[TRIGGER3].bound_button = gamepad_button_type_t::CONTROLLER_Y;
     bound_gamepad_buttons[TRIGGER4].bound_button = gamepad_button_type_t::CONTROLLER_B;

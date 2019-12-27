@@ -42,6 +42,7 @@ static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_addr
 static uint16_t client_id_stack[MAX_CLIENTS] = {};
 static receiver_thread_t receiver_thread;
 static char *message_buffer;
+static uint8_t dummy_voxels[CHUNK_EDGE_LENGTH][CHUNK_EDGE_LENGTH][CHUNK_EDGE_LENGTH];
 
 
 
@@ -52,6 +53,11 @@ static client_t *get_client(uint32_t index);
 static void send_chunks_hard_update_packets(network_address_t address);
 static void dispatch_newcoming_client_to_clients(uint32_t new_client_index);
 static void dispatch_snapshot_to_clients(void);
+static void update_client_modified_chunks_from_input_state_packet(client_t *client, client_modified_voxels_packet_t *voxel_packet);
+static void flag_chunks_that_client_last_modified(client_t *client);
+static void unflag_chunks_that_client_last_modified(client_t *client);
+static void fill_dummy_voxels_last_modified_by_client(client_t *client);
+static void unfill_dummy_voxels_last_modified_by_client(client_t *client);
 
 
 
@@ -652,4 +658,65 @@ static void dispatch_snapshot_to_clients(void)
     output_to_debug_console("\n");
 
     clear_chunk_history_for_server();
+}
+
+
+static void update_client_modified_chunks_from_input_state_packet(client_t *client, client_modified_voxels_packet_t *voxel_packet)
+{
+    for (uint32_t i = 0; i < voxel_packet->modified_chunk_count; ++i)
+    {
+        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
+        chunk->chunk_index = voxel_packet->modified_chunks[i].chunk_index;
+        chunk->modified_voxel_count = voxel_packet->modified_chunks[i].modified_voxel_count;
+        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
+        {
+            chunk->modified_voxels[voxel].x = voxel_packet->modified_chunks[i].modified_voxels[voxel].x;
+            chunk->modified_voxels[voxel].y = voxel_packet->modified_chunks[i].modified_voxels[voxel].y;
+            chunk->modified_voxels[voxel].z = voxel_packet->modified_chunks[i].modified_voxels[voxel].z;
+            chunk->modified_voxels[voxel].value = voxel_packet->modified_chunks[i].modified_voxels[voxel].value;
+        }
+    }
+    client->modified_chunks_count += voxel_packet->modified_chunk_count;
+}
+
+
+static void flag_chunks_that_client_last_modified(client_t *client)
+{
+    for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+    {
+        client_modified_chunk_nl_t *modified_chunk = &client->previous_received_voxel_modifications[i];
+        // Flag chunk with get_chunk()
+        chunk_t *chunk = *get_chunk(modified_chunk->chunk_index);
+
+        chunk->was_previously_modified_by_client = 1;
+        chunk->index_of_modified_chunk = i;
+    }
+}
+
+
+static void unflag_chunks_that_client_last_modified(client_t *client)
+{
+    for (uint32_t i = 0; i < client->modified_chunks_count; ++i)
+    {
+        client_modified_chunk_nl_t *modified_chunk = &client->previous_received_voxel_modifications[i];
+        chunk_t *chunk = *get_chunk(modified_chunk->chunk_index);
+
+        chunk->was_previously_modified_by_client = 0;
+        chunk->index_of_modified_chunk = 0;
+    }
+}
+
+
+static void fill_dummy_voxels_last_modified_by_client(client_t *client, client_modified_chunk_nl_t *modified_chunk)
+{
+    for (uint32_t i = 0; i < modified_chunk->modified_voxel_count; ++i)
+    {
+        local_client_modified_voxel_t vx = modified_chunk->modified_voxels[i];
+        dummy_voxels[vx.x][vx.y][vx.z] = i;
+    }
+}
+
+
+static void unfill_dummy_voxels_last_modified_by_client(client_t *client)
+{
 }

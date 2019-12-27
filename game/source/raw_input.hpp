@@ -53,6 +53,8 @@ struct raw_input_t
 
     float32_t dt;
 
+    bool show_cursor = 1;
+
 
     uint32_t gamepad_packet_number;
     gamepad_button_input_t gamepad_buttons[gamepad_button_type_t::INVALID_BUTTON];

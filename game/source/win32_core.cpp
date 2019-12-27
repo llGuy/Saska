@@ -204,8 +204,18 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                     DispatchMessage(&message);
                 }
 
+
+                if ((int32_t)(g_raw_input.buttons[W].state) && g_raw_input.cursor_moved)
+                {
+                    output_to_debug_console("Works\n");
+                }
+                else
+                {
+                    output_to_debug_console("\n");
+                }
+
                 
-                get_gamepad_state();
+                //get_gamepad_state();
 
                 
                 if (g_raw_input.resized)
@@ -213,7 +223,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                     handle_window_resize(&g_raw_input);
                 }
 
-                RECT client_rect = {};
+                /*RECT client_rect = {};
                 GetClientRect(g_window, &client_rect);
 
                 POINT top_left = { client_rect.left, client_rect.top }, bottom_right = { client_rect.right, client_rect.bottom };
@@ -228,7 +238,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 if (g_hasfocus)
                 {
                     ClipCursor(&client_rect);
-                }
+                }*/
         
                 // Render
                 game_tick(&g_game, &g_raw_input, g_dt);
@@ -347,6 +357,8 @@ static void handle_mouse_move_event(LPARAM lparam)
     int32_t dx = true_diff_x;
     int32_t dy = true_diff_y;
 
+    //output_to_debug_console(dx, " ", dy, "\n");
+    
     vector2_t d = vector2_t(0.0f);
     if (dx != 0 || dy != 0)
     {
@@ -362,7 +374,7 @@ static void handle_mouse_move_event(LPARAM lparam)
     true_prev_x = true_x_position;
     true_prev_y = true_y_position;
     
-    if (true_x_position >= client_rect.right - 2)
+    /*if (true_x_position >= client_rect.right - 2)
     {
         POINT infinite = { 2, true_y_position };
         true_x_position = true_prev_x = 2;
@@ -389,7 +401,7 @@ static void handle_mouse_move_event(LPARAM lparam)
         true_y_position = true_prev_y = client_rect.bottom - 2;
         ClientToScreen(g_window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
-    }
+        }*/
 
     POINT top_left = { client_rect.left, client_rect.top }, bottom_right = { client_rect.right, client_rect.bottom };
     ClientToScreen(g_window, &top_left);
@@ -400,13 +412,16 @@ static void handle_mouse_move_event(LPARAM lparam)
     client_rect.right = bottom_right.x;
     client_rect.bottom = bottom_right.y;
 
-    ClipCursor(&client_rect);
+    //ClipCursor(&client_rect);
 
     POINT top_left_corner = {};
     ClientToScreen(g_window, &top_left_corner);
     top_left_corner.x += client_rect.right / 2;
     top_left_corner.y += client_rect.bottom / 2;
-    SetCursorPos(top_left_corner.x, top_left_corner.y);
+    if (!g_raw_input.show_cursor)
+    {
+        SetCursorPos(top_left_corner.x, top_left_corner.y);
+    }
 
     ScreenToClient(g_window, &top_left_corner);
     
@@ -865,11 +880,13 @@ void output_to_debug_console_i(const char *string)
 
 void enable_cursor_display(void)
 {
+    g_raw_input.show_cursor = 1;
     ShowCursor(1);
 }
 
 
 void disable_cursor_display(void)
-{    
+{
+    g_raw_input.show_cursor = 0;
     ShowCursor(0);
 }

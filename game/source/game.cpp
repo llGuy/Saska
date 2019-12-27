@@ -17,7 +17,6 @@ void load_game(game_memory_t *memory)
     
     g_game_memory = memory;
 
-    initialize_world_translation_unit(memory);
     initialize_vulkan_translation_unit(memory);
     initialize_graphics_translation_unit(memory);
     initialize_ui_translation_unit(memory);

@@ -13,7 +13,10 @@ CPPS := $(wildcard *.cpp)
 OBJS := $(CPPS:.cpp=.obj)
 DEPFILES := $(CPPS:.cpp=.dep)
 
-all: saska.exe
+all: saska.exe TAGS
+
+TAGS:
+	etags *.cpp *.hpp
 
 saska.exe: $(OBJS)
 	$(CC) $(CFLAGS) /Fe$@ $(DEF) $(INCS) $(OBJS) $(LIBS)

@@ -1,3 +1,4 @@
+#include "entities_gstate.hpp"
 #include "packets.hpp"
 #include "server.hpp"
 #include "thread_pool.hpp"
@@ -5,7 +6,7 @@
 #include "serializer.hpp"
 #include "ui.hpp"
 
-#include "chunks_state.hpp"
+#include "chunks_gstate.hpp"
 #include "chunk.hpp"
 
 

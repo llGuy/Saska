@@ -1,6 +1,6 @@
 #include "math.hpp"
 #include "chunk.hpp"
-#include "chunks_state.hpp"
+#include "chunks_gstate.hpp"
 
 // For updating mesh
 #include "ttable.inc"

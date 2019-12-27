@@ -15,25 +15,7 @@
 #define MAX_PLAYERS 30
 #define MAX_BULLETS 100
 
-struct bullet_create_info_t
-{
-    vector3_t ws_position;
-    vector3_t ws_direction;
-    quaternion_t ws_rotation;
-    vector3_t ws_size;
-    player_color_t color;
-    bounce_physics_component_create_info_t bounce_info;
-    rendering_component_create_info_t rendering_info;
-};
 
-
-struct bullet_t : entity_t
-{
-    uint32_t player_index;
-    rendering_component_t rendering;
-    bounce_physics_component_t bounce_physics;
-    burnable_component_t burnable;
-};
 
 
 struct dbg_entities_t
@@ -43,66 +25,9 @@ struct dbg_entities_t
 };
 
 
-struct entities_t
-{
-    dbg_entities_t dbg;
-
-    
-    int32_t player_count = 0;
-    player_t player_list[MAX_PLAYERS];
-
-
-    int32_t bullet_count = 0;
-    bullet_t bullet_list[MAX_BULLETS];
-    uint32_t removed_bullets_stack_head;
-    uint16_t removed_bullets_stack[MAX_BULLETS];
-
-    
-    hash_table_inline_t<player_handle_t, 30, 5, 5> name_map{"map.entities"};
-
-
-    pipeline_handle_t player_ppln;
-    pipeline_handle_t player_shadow_ppln;
-
-    
-    pipeline_handle_t rolling_player_ppln;
-    pipeline_handle_t rolling_player_shadow_ppln;
-
-    
-    pipeline_handle_t dbg_hitbox_ppln;
-
-
-    mesh_t rolling_player_mesh;
-    model_t rolling_player_model;
-
-    
-    mesh_t player_mesh;
-    skeleton_t player_mesh_skeleton;
-    animation_cycles_t player_mesh_cycles;
-    uniform_layout_t animation_ubo_layout;
-    model_t player_model;
-
-    
-    // For now:
-    int32_t main_player = -1;
-    // have some sort of stack of REMOVED entities
-
-    gpu_material_submission_queue_t player_submission_queue;
-    gpu_material_submission_queue_t rolling_player_submission_queue;
-};
-
-struct particles_t
-{
-    particle_spawner_t explosion_particle_spawner;
-    particle_spawner_t fire_particle_spawner;
-};
 
 struct world_t
 {
-    struct entities_t entities;
-
-    struct particles_t particles;
-
     // Not hard initialize (rendering state, vulkan objects, shaders...) but just initialize game data like initialized entities, voxels, etc...
     bool initialized_world;
 
@@ -112,16 +37,9 @@ struct world_t
 };
 
 // Gets the data of the player that is being controlled by client
-player_t *get_user_player(void);
-player_t *get_player(const char *name);
-player_t *get_player(player_handle_t player_handle);
 
 player_handle_t initialize_player_from_player_init_packet(uint32_t local_user_client_index, struct player_state_initialize_packet_t *player_init_packet, camera_handle_t camera /* Optional */ = 0);
-uint32_t spawn_fire(const vector3_t &position);
-void spawn_explosion(const vector3_t &position);
-void spawn_bullet(player_t *shooter);
-player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id);
-player_handle_t spawn_player_at(const char *player_name, player_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
+//player_handle_t spawn_player_at(const char *player_name, player_color_t color, const vector3_t &ws_position, const quaternion_t &quat);
 void make_player_renderable(player_handle_t player_handle, player_color_t color);
 void make_player_main(player_handle_t player_handle, raw_input_t *raw_input);
 

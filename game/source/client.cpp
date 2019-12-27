@@ -6,7 +6,8 @@
 #include "packets.hpp"
 #include "serializer.hpp"
 #include "chunk.hpp"
-#include "chunks_state.hpp"
+#include "chunks_gstate.hpp"
+#include "entities_gstate.hpp"
 
 
 struct remote_client_t
@@ -304,7 +305,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                     {
                         ++client_count;
                         
-                        player_handle_t new_player_handle = initialize_player_from_player_init_packet(user->network.client_state_index, &new_client_init_packet);
+                        player_handle_t new_player_handle = create_player_from_player_init_packet(user->network.client_state_index, &new_client_init_packet);
 
                         player_t *player = get_player(new_player_handle);
 

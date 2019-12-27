@@ -135,3 +135,23 @@ inline float32_t calculate_sphere_circumference(float32_t radius)
 {
     return(2.0f * 3.1415f * radius);
 }
+
+
+enum matrix4_mul_vec3_with_translation_flag { WITH_TRANSLATION, WITHOUT_TRANSLATION, TRANSLATION_DONT_CARE };
+
+
+struct movement_axes_t
+{
+    vector3_t right;
+    vector3_t up;
+    vector3_t forward;
+};
+
+
+inline movement_axes_t compute_movement_axes(const vector3_t &view_direction, const vector3_t &up)
+{
+    vector3_t right = glm::normalize(glm::cross(view_direction, up));
+    vector3_t forward = glm::normalize(glm::cross(up, right));
+    movement_axes_t axes = {right, up, forward};
+    return(axes);
+}

@@ -1,4 +1,5 @@
-#include "chunks_state.hpp"
+#include "entities_gstate.hpp"
+#include "chunks_gstate.hpp"
 #include "graphics.hpp"
 #include "packets.hpp"
 #include "chunk.hpp"

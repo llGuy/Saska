@@ -35,6 +35,13 @@ struct physics_component_t
 
     vector3_t axes;
     float32_t acceleration = 2.0f;
+
+    void tick(struct player_t *affected_player, float32_t dt);
+
+private:
+    void tick_standing_player_physics(struct player_t *player, float32_t dt);
+    void tick_rolling_player_physics(struct player_t *player, float32_t dt);
+    void tick_not_physically_affected_player(struct player_t *player, float32_t dt);
 };
 
 
@@ -50,6 +57,8 @@ struct terraform_power_component_t
     // Some sort of limit or something
     float32_t speed;
     float32_t terraform_radius;
+
+    void tick(struct player_t *affected_player, float32_t dt);
 };
 
 
@@ -85,10 +94,10 @@ struct camera_component_t
     
     vector2_t mouse_diff = vector2_t(0.0f);
 
-    
-
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> fov;
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> camera_distance;
+
+    void tick(struct player_t *affected_player, float32_t dt);
 };
 
 
@@ -105,6 +114,8 @@ struct animation_component_t
     // Rendering the animated entity
     animated_instance_t animation_instance;
     animation_cycles_t *cycles;
+
+    void tick(struct player_t *affected_player, float32_t dt);
 };
 
 
@@ -127,6 +138,9 @@ struct rendering_component_t
     } push_k;
 
     bool enabled = true;
+
+    void tick(struct player_t *affected_player, float32_t dt);
+    void tick(struct bullet_t *affected_bullet, float32_t dt);
 };
 
 
@@ -141,6 +155,8 @@ struct shoot_component_t
 {
     float32_t cool_off;
     float32_t shoot_speed;
+
+    void tick(struct player_t *affected_player, float32_t dt);
 };
 
 
@@ -149,6 +165,10 @@ struct burnable_component_t
     bool burning = 0;
     // Going to have to update this every frame
     int32_t particle_index = 0;
+
+    void tick(struct bullet_t *affected_bullet, float32_t dt);
+    void set_on_fire(const vector3_t &position);
+    void extinguish_fire(void);
 };
 
 
@@ -240,6 +260,8 @@ struct network_component_t
     };
 
     bool is_remote = 0;
+
+    float32_t tick(struct player_t *affceted_player, float32_t dt);
 };
 
 
@@ -251,4 +273,5 @@ struct bounce_physics_component_create_info_t
 struct bounce_physics_component_t
 {
     // Data
+    void tick(struct bullet_t *affected_bullet, float32_t dt);
 };

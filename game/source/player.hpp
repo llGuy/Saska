@@ -74,5 +74,4 @@ struct player_t : entity_t
 
     void initialize(player_create_info_t *info);
     player_state_t create_player_state(void);
-    // void tick(...);
 };

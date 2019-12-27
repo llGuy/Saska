@@ -205,17 +205,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 }
 
 
-                if ((int32_t)(g_raw_input.buttons[W].state) && g_raw_input.cursor_moved)
-                {
-                    output_to_debug_console("Works\n");
-                }
-                else
-                {
-                    output_to_debug_console("\n");
-                }
-
-                
-                //get_gamepad_state();
+                get_gamepad_state();
 
                 
                 if (g_raw_input.resized)
@@ -245,6 +235,14 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 RedrawWindow(g_window, NULL, NULL, RDW_INTERNALPAINT);
 
                 g_raw_input.cursor_moved = false;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_RIGHT].state = button_state_t::NOT_DOWN;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_LEFT].state = button_state_t::NOT_DOWN;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_UP].state = button_state_t::NOT_DOWN;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_DOWN].state = button_state_t::NOT_DOWN;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_RIGHT].value = 0;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_LEFT].value = 0;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_UP].value = 0;
+                g_raw_input.buttons[button_type_t::MOUSE_MOVE_DOWN].value = 0;
 
                 g_raw_input.char_count = 0;
                 g_raw_input.buttons[button_type_t::BACKSPACE].state = button_state_t::NOT_DOWN;
@@ -354,8 +352,8 @@ static void handle_mouse_move_event(LPARAM lparam)
 
 
     // Calculate difference
-    int32_t dx = true_diff_x;
-    int32_t dy = true_diff_y;
+    int32_t dx = g_raw_input.cursor_pos_x - g_raw_input.previous_cursor_pos_x;
+    int32_t dy = g_raw_input.cursor_pos_y - g_raw_input.previous_cursor_pos_y;
 
     //output_to_debug_console(dx, " ", dy, "\n");
     
@@ -364,11 +362,14 @@ static void handle_mouse_move_event(LPARAM lparam)
     {
         d = vector2_t(dx, dy);
     }
-    
-    set_mouse_move_button_state(d.x, dx > 0, button_type_t::MOUSE_MOVE_RIGHT);
-    set_mouse_move_button_state(d.x, dx < 0, button_type_t::MOUSE_MOVE_LEFT);
-    set_mouse_move_button_state(d.y, dy > 0, button_type_t::MOUSE_MOVE_UP);
-    set_mouse_move_button_state(d.y, dy < 0, button_type_t::MOUSE_MOVE_DOWN);
+
+    if (g_raw_input.cursor_moved)
+    {
+        set_mouse_move_button_state(d.x, dx > 0, button_type_t::MOUSE_MOVE_RIGHT);
+        set_mouse_move_button_state(d.x, dx < 0, button_type_t::MOUSE_MOVE_LEFT);
+        set_mouse_move_button_state(d.y, dy > 0, button_type_t::MOUSE_MOVE_UP);
+        set_mouse_move_button_state(d.y, dy < 0, button_type_t::MOUSE_MOVE_DOWN);
+    }
     
             
     true_prev_x = true_x_position;

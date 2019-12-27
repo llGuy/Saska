@@ -73,13 +73,11 @@ static void set_button_action_state(uint32_t action, raw_input_t *raw_input, gam
     button_input_t *raw_key_mouse_input = &raw_input->buttons[bound_key_mouse_buttons[action].bound_button];
     gamepad_button_input_t *raw_gamepad_input = &raw_input->gamepad_buttons[bound_gamepad_buttons[action].bound_button];
 
-    if (raw_key_mouse_input->state != button_state_t::NOT_DOWN)
-    {
-        dst->actions[action].state = raw_key_mouse_input->state;
-        dst->actions[action].down_amount = raw_key_mouse_input->down_amount;
-        dst->actions[action].value = raw_key_mouse_input->value;
-    }
-    else if (raw_gamepad_input->state != button_state_t::NOT_DOWN)
+    dst->actions[action].state = raw_key_mouse_input->state;
+    dst->actions[action].down_amount = raw_key_mouse_input->down_amount;
+    dst->actions[action].value = raw_key_mouse_input->value;
+    
+    if (raw_gamepad_input->state != button_state_t::NOT_DOWN)
     {
         dst->actions[action].state = raw_gamepad_input->state;
         dst->actions[action].down_amount = raw_gamepad_input->down_amount;

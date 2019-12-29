@@ -56,8 +56,8 @@ static void dispatch_snapshot_to_clients(void);
 static void update_client_modified_chunks_from_input_state_packet(client_t *client, client_modified_voxels_packet_t *voxel_packet);
 static void flag_chunks_that_client_last_modified(client_t *client);
 static void unflag_chunks_that_client_last_modified(client_t *client);
-static void fill_dummy_voxels_last_modified_by_client(client_t *client);
-static void unfill_dummy_voxels_last_modified_by_client(client_t *client);
+static void fill_dummy_voxels_last_modified_by_client(client_t *client, client_modified_chunk_nl_t *modified_chunk);
+static void unfill_dummy_voxels_last_modified_by_client(client_t *client, client_modified_chunk_nl_t *modified_chunk);
 
 
 
@@ -67,6 +67,8 @@ void initialize_server(char *msg_buffer)
     message_buffer = msg_buffer;
     
     initialize_socket_api(GAME_OUTPUT_PORT_SERVER);
+
+    memset(dummy_voxels, 255, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
 }
 
 
@@ -221,12 +223,14 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     client_modified_voxels_packet_t voxel_packet = {};
                                     in_serializer.deserialize_client_modified_voxels_packet(&voxel_packet);
 
-                                    for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
+                                    update_client_modified_chunks_from_input_state_packet(client, &voxel_packet);
+                                    
+                                    /*for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
                                     {
                                         client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
                                         chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
                                         chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
-                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
+                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < MAX_MODIFIED_VOXELS_PER_CHUNK; ++voxel)
                                         {
                                             chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
                                             chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
@@ -234,7 +238,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                             chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
                                         }
                                     }
-                                    client->modified_chunks_count += voxel_packet.modified_chunk_count;
+                                    client->modified_chunks_count += voxel_packet.modified_chunk_count;*/
                                 }
                             } break;
                         case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
@@ -657,26 +661,74 @@ static void dispatch_snapshot_to_clients(void)
 
     output_to_debug_console("\n");
 
-    clear_chunk_history_for_server();
+    clear_chunk_history();
 }
 
 
 static void update_client_modified_chunks_from_input_state_packet(client_t *client, client_modified_voxels_packet_t *voxel_packet)
 {
-    for (uint32_t i = 0; i < voxel_packet->modified_chunk_count; ++i)
+    flag_chunks_that_client_last_modified(client);
     {
-        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
-        chunk->chunk_index = voxel_packet->modified_chunks[i].chunk_index;
-        chunk->modified_voxel_count = voxel_packet->modified_chunks[i].modified_voxel_count;
-        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < 80; ++voxel)
+        for (uint32_t i = 0; i < voxel_packet->modified_chunk_count; ++i)
         {
-            chunk->modified_voxels[voxel].x = voxel_packet->modified_chunks[i].modified_voxels[voxel].x;
-            chunk->modified_voxels[voxel].y = voxel_packet->modified_chunks[i].modified_voxels[voxel].y;
-            chunk->modified_voxels[voxel].z = voxel_packet->modified_chunks[i].modified_voxels[voxel].z;
-            chunk->modified_voxels[voxel].value = voxel_packet->modified_chunks[i].modified_voxels[voxel].value;
+            client_modified_chunk_t *new_modified_chunk = &voxel_packet->modified_chunks[i];
+            
+            chunk_t *real_chunk = *get_chunk(new_modified_chunk->chunk_index);
+            
+            if (real_chunk->was_previously_modified_by_client)
+            {
+                client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[real_chunk->index_of_modified_chunk];
+
+                fill_dummy_voxels_last_modified_by_client(client, chunk);
+                {
+                    for (uint32_t voxel = 0; voxel < new_modified_chunk->modified_voxel_count && voxel < MAX_VOXELS_MODIFIED_PER_CHUNK; ++voxel)
+                    {
+                        local_client_modified_voxel_t *vptr = &new_modified_chunk->modified_voxels[voxel];
+                        uint32_t index_in_permanent_modified_chunk_list = dummy_voxels[vptr->x][vptr->y][vptr->z];
+                        if (index_in_permanent_modified_chunk_list == 255)
+                        {
+                            // Hasn't been modified yet!
+                            if (chunk->modified_voxel_count < MAX_VOXELS_MODIFIED_PER_CHUNK)
+                            {
+                                local_client_modified_voxel_t *pmptr = &chunk->modified_voxels[chunk->modified_voxel_count++];
+                                pmptr->x = vptr->x;
+                                pmptr->y = vptr->y;
+                                pmptr->z = vptr->z;
+                                pmptr->value = vptr->value;
+                            }
+                            else
+                            {
+                                // TODO: Have a way to have client modifiy as many voxels as it wants
+                                output_to_debug_console("Client has modified too many voxels");
+                            }
+                        }
+                        else
+                        {
+                            // Has been modified!
+                            local_client_modified_voxel_t *pmptr = &chunk->modified_voxels[index_in_permanent_modified_chunk_list];
+                            pmptr->value  = vptr->value;
+                        }
+                    }
+                }
+                unfill_dummy_voxels_last_modified_by_client(client, chunk);
+            }
+            else
+            {
+                // Append this chunk to the list of chunks modified by the client
+                client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[client->modified_chunks_count++];
+                chunk->chunk_index = new_modified_chunk->chunk_index;
+                chunk->modified_voxel_count = new_modified_chunk->modified_voxel_count;
+                for (uint32_t voxel = 0; voxel < new_modified_chunk->modified_voxel_count && voxel < MAX_VOXELS_MODIFIED_PER_CHUNK; ++voxel)
+                {
+                    chunk->modified_voxels[voxel].x = new_modified_chunk->modified_voxels[voxel].x;
+                    chunk->modified_voxels[voxel].y = new_modified_chunk->modified_voxels[voxel].y;
+                    chunk->modified_voxels[voxel].z = new_modified_chunk->modified_voxels[voxel].z;
+                    chunk->modified_voxels[voxel].value = new_modified_chunk->modified_voxels[voxel].value;
+                }
+            }
         }
     }
-    client->modified_chunks_count += voxel_packet->modified_chunk_count;
+    unflag_chunks_that_client_last_modified(client);
 }
 
 
@@ -717,6 +769,11 @@ static void fill_dummy_voxels_last_modified_by_client(client_t *client, client_m
 }
 
 
-static void unfill_dummy_voxels_last_modified_by_client(client_t *client)
+static void unfill_dummy_voxels_last_modified_by_client(client_t *client, client_modified_chunk_nl_t *modified_chunk)
 {
+    for (uint32_t i = 0; i < modified_chunk->modified_voxel_count; ++i)
+    {
+        local_client_modified_voxel_t vx = modified_chunk->modified_voxels[i];
+        dummy_voxels[vx.x][vx.y][vx.z] = 255;
+    }
 }

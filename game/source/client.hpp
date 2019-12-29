@@ -22,11 +22,13 @@ struct local_client_modified_voxel_t
 };
 
 
+#define MAX_VOXELS_MODIFIED_PER_CHUNK 100
+
 struct client_modified_chunk_nl_t
 {
     uint16_t chunk_index;
     // TODO: Find way to vary this: maybe have its own linear allocator or something
-    local_client_modified_voxel_t modified_voxels[80]; // max 40
+    local_client_modified_voxel_t modified_voxels[MAX_VOXELS_MODIFIED_PER_CHUNK]; // max 100
     uint32_t modified_voxel_count;
 };
 
@@ -55,6 +57,7 @@ struct client_t
     // Client will most likely only ever be able to terraform 4 chunks per action flag packet
     uint32_t modified_chunks_count = 0;
     // Accumulates for every action flag packet
+    // Check if 30 is necessary
     client_modified_chunk_nl_t previous_received_voxel_modifications[30];
 
     bool received_input_commands = 0;

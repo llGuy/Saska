@@ -35,7 +35,7 @@ void render_chunks(uniform_group_t *uniforms, gpu_command_queue_t *queue);
 void sync_gpu_with_chunks_state(struct gpu_command_queue_t *queue);
 void reset_voxel_interpolation(void);
 void ready_chunk_for_gpu_sync(chunk_t *chunk);
-void clear_chunk_history_for_server(void);
+void clear_chunk_history(void);
 
 
 // TODO: See if this needs to be removed

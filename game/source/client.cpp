@@ -18,6 +18,17 @@ struct remote_client_t
 };
 
 
+#define MAX_HISTORY_INSTANCES 20
+// For the local client, for every send_commands() call, client program will add the voxel modifications to an array of local_client_voxel_modification_history. If the server forces a correction, client will traverse through the local_client_voxel_modification_history array and revert so that client is in sync with client (in case client terraformed while server was checking clients' state)
+struct local_client_voxel_modification_history_t
+{
+    // The voxel modifications will actually store the "previous value"
+    client_modified_chunk_nl_t modified_chunks[10];
+    uint32_t modified_chunks_count = 0;
+    uint64_t tick;
+};
+
+
 // Global
 static bool is_connected_to_server = 0;
 static network_address_t server_address;
@@ -33,6 +44,7 @@ static struct
 {
     uint32_t sent_active_action_flags: 1;
 } client_flags;
+static circular_buffer_t<local_client_voxel_modification_history_t> vmod_history; // Voxel-modification history
 
 
 
@@ -44,6 +56,7 @@ static int32_t lua_join_server(lua_State *state);
 static int32_t lua_join_loop_back(lua_State *state);
 
 static void send_commands(void);
+static void revert_voxels_against_modifications_until(uint64_t tick);
 
 
 
@@ -58,6 +71,7 @@ void initialize_client(char *msg_buffer)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "lb", &lua_join_loop_back);
 
     player_state_cbuffer.initialize(40);
+    vmod_history.initialize(MAX_HISTORY_INSTANCES);
 }
 
 
@@ -116,7 +130,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
 
                     // Existing players when client joined the game
                     for (uint32_t i = 0; i < game_state_init_packet.player_count; ++i)
-                    { 
+                    {
                         player_state_initialize_packet_t *player_packet = &game_state_init_packet.player[i];
                         player_t *player = get_player(player_packet->player_name);
 
@@ -191,7 +205,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                     reset_voxel_interpolation();
                     in_serializer.deserialize_game_snapshot_voxel_delta_packet(get_previous_voxel_delta_packet(), voxel_allocator);
 
-                    // Put this in the history
+                    // Put this in the history - VERY IMPORTANT IF NEED TO REVERT VOXELS
                     uint64_t previous_tick = in_serializer.deserialize_uint64();
 
                     client_modified_voxels_packet_t modified_voxels = {};
@@ -230,7 +244,15 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                             {
                                 if (player_snapshot_packet.need_to_do_voxel_correction)
                                 {
-                                    // Do voxel correction
+                                    // NEED TO DO VOXEL CORRECTION :
+                                    // Step 1: Revert voxel state against all modifications until the "client->previous_client_tick"
+                                    // Step 2: Correct all voxels
+
+                                    
+                                    // Step 1: Revert
+                                    revert_voxels_against_modifications_until(previous_tick);
+
+                                    // Step 2: Do correction
                                     for (uint32_t chunk = 0; chunk < modified_voxels.modified_chunk_count; ++chunk)
                                     {
                                         client_modified_chunk_t *modified_chunk_data = &modified_voxels.modified_chunks[chunk];
@@ -435,6 +457,16 @@ static void send_commands(void)
     voxel_packet.modified_chunk_count = modified_chunks_count;
     voxel_packet.modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * modified_chunks_count);
 
+    local_client_voxel_modification_history_t *history_instance = nullptr;
+    
+    if (modified_chunks_count)
+    {
+        history_instance = vmod_history.push_item();
+        history_instance->tick = *get_current_tick();
+
+        history_instance->modified_chunks_count = modified_chunks_count;
+    }
+    
     for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
     {
         chunk_t *chunk = chunks[chunk_index];
@@ -443,6 +475,11 @@ static void send_commands(void)
         modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
         modified_chunk->modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * chunk->modified_voxels_list_count);
         modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
+
+        client_modified_chunk_nl_t *history_to_keep = &history_instance->modified_chunks[chunk_index];
+        history_to_keep->chunk_index = modified_chunk->chunk_index;
+        history_to_keep->modified_voxel_count = modified_chunk->modified_voxel_count;
+
         for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
         {
             uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
@@ -451,6 +488,15 @@ static void send_commands(void)
             modified_chunk->modified_voxels[voxel].y = coord.y;
             modified_chunk->modified_voxels[voxel].z = coord.z;
             modified_chunk->modified_voxels[voxel].value = chunk->voxels[coord.x][coord.y][coord.z];
+
+            if (voxel < MAX_VOXELS_MODIFIED_PER_CHUNK)
+            {
+                history_to_keep->modified_voxels[voxel].x = coord.x;
+                history_to_keep->modified_voxels[voxel].y = coord.y;
+                history_to_keep->modified_voxels[voxel].z = coord.z;
+                // Set it to the "previous" value so that revert is possible
+                history_to_keep->modified_voxels[voxel].value = chunk->voxel_history[convert_3d_to_1d_index(coord.x, coord.y, coord.z, CHUNK_EDGE_LENGTH)];
+            }
         }
     }
         
@@ -493,7 +539,49 @@ static void send_commands(void)
         client_flags.sent_active_action_flags = 1;
     }
 
-    clear_chunk_history_for_server();
+    clear_chunk_history();
+}
+
+
+static void revert_voxels_against_modifications_until(uint64_t previous_tick)
+{
+    uint32_t current_history_instance_index = vmod_history.head;
+    local_client_voxel_modification_history_t *instance = &vmod_history.buffer[current_history_instance_index];
+
+    uint32_t i = 0;
+    uint32_t max_loop = MAX_HISTORY_INSTANCES;
+    while (i < max_loop && i < vmod_history.head_tail_difference)
+    {
+        // Decrement current_history_instance_index
+        current_history_instance_index = vmod_history.decrement_index(current_history_instance_index);
+        
+        instance = &vmod_history.buffer[current_history_instance_index];
+
+        for (uint32_t c = 0; c < instance->modified_chunks_count; ++c)
+        {
+            client_modified_chunk_nl_t *modified_chunk = &instance->modified_chunks[c];
+            chunk_t *real_chunk = *get_chunk(modified_chunk->chunk_index);
+            
+            for (uint32_t v = 0 ; v < modified_chunk->modified_voxel_count; ++v)
+            {
+                local_client_modified_voxel_t *vptr = &modified_chunk->modified_voxels[v];
+                // ->value = the "before" value of the voxel at tick
+                real_chunk->voxels[vptr->x][vptr->y][vptr->z] = vptr->value;
+            }
+        }
+
+        // We are finished
+        if (instance->tick == previous_tick)
+        {
+            vmod_history.head_tail_difference = 0;
+            vmod_history.head = 0;
+            vmod_history.tail = 0;
+
+            break;
+        }
+        
+        ++i;
+    }
 }
 
 

@@ -203,6 +203,20 @@ template <typename T, cbhtdt_t CBHTDT = cbhtdt_t::TRACKING> struct circular_buff
         if constexpr (CBHTDT) { ++head_tail_difference; }
     }
 
+    T *push_item(void)
+    {
+        T *new_item = &buffer[head++];
+
+        if (head == buffer_size)
+        {
+            head = 0;
+        }
+
+        if constexpr (CBHTDT) { ++head_tail_difference; }
+
+        return(new_item);
+    }
+
     T *get_next_item(void)
     {
         if constexpr (CBHTDT)
@@ -236,6 +250,18 @@ template <typename T, cbhtdt_t CBHTDT = cbhtdt_t::TRACKING> struct circular_buff
         head = 0;
         tail = 0;
         head_tail_difference = 0;
+    }
+
+    uint32_t decrement_index(uint32_t index)
+    {
+        if (index == 0)
+        {
+            return (buffer_size - 1);
+        }
+        else
+        {
+            return (index - 1);
+        }
     }
 };
 

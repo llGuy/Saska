@@ -595,7 +595,7 @@ void ready_chunk_for_gpu_sync(chunk_t *chunk)
 }
 
 
-void clear_chunk_history_for_server(void)
+void clear_chunk_history(void)
 {
     for (uint32_t i = 0; i < modified_chunks_count; ++i)
     {

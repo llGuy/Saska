@@ -990,6 +990,9 @@ struct post_processing_t
 {
     // Testing godrays effect
     pfx_stage_t ssr_stage;
+    // Blurring of scene
+    //pfx_stage_t horizontal_blur;
+    //pfx_stage_t vertical_blur;
     pfx_stage_t pre_final_stage;
     pfx_stage_t final_stage;
 

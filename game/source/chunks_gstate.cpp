@@ -8,6 +8,19 @@
 
 constexpr uint8_t VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY = 255;
 constexpr float32_t MAX_VOXEL_VALUE = 254.0f;
+constexpr uint32_t MAX_VOXEL_COLOR_BEACON_COUNT = 50;
+
+
+struct alignas(16) voxel_color_beacon_t
+{
+    vector4_t ws_position;
+    vector4_t color;
+    float32_t reach; // Radius
+    float32_t roughness;
+    float32_t metalness;
+    
+    float32_t power;
+};
 
 
 // Global
@@ -24,6 +37,18 @@ static uint32_t chunks_to_render_count = 0;
 static chunk_t **chunks_to_update;
 static uint32_t to_sync_count = 0;
 static uint32_t chunks_to_gpu_sync[20];
+
+static alignas(16) struct
+{    
+
+    voxel_color_beacon_t default_voxel_color;
+    voxel_color_beacon_t voxel_color_beacons[MAX_VOXEL_COLOR_BEACON_COUNT] = {};
+    int32_t beacon_count;
+    
+} voxel_beacons;
+static gpu_buffer_t voxel_color_beacon_uniform_buffer;
+static uniform_layout_handle_t voxel_color_beacon_ulayout;
+static uniform_group_t voxel_color_beacon_uniform;
 
 static constexpr uint32_t MAX_MODIFIED_CHUNKS = 32;
 static uint32_t modified_chunks_count = 0;
@@ -53,6 +78,15 @@ static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk);
 // "Public" definitions
 void initialize_chunks_state(void)
 {
+    voxel_color_beacon_ulayout = g_uniform_layout_manager->add("uniform_layout.voxel_color_beacon"_hash);
+    auto *layout_ptr = g_uniform_layout_manager->get(voxel_color_beacon_ulayout);
+    
+    uniform_layout_info_t voxel_color_beacon_ulayout_blueprint = {};
+    voxel_color_beacon_ulayout_blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);
+    *layout_ptr = make_uniform_layout(&voxel_color_beacon_ulayout_blueprint);
+
+    voxel_color_beacon_uniform = make_uniform_group(layout_ptr, g_uniform_pool);
+
     chunk_model.attribute_count = 1;
     chunk_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
     chunk_model.binding_count = 1;
@@ -75,7 +109,8 @@ void initialize_chunks_state(void)
                                  shader_module_info_t{"shaders/SPV/voxel_mesh.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
                                  shader_module_info_t{"shaders/SPV/voxel_mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                         voxel_color_beacon_ulayout);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT };
         shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
@@ -146,6 +181,31 @@ void initialize_chunks_state(void)
     construct_sphere(vector3_t(80.0f, 50.0f, 0.0f), 70.0f);
     construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
 
+
+    // Initialize voxel color beacons - will update this uniform buffer every time game gets initialized
+    make_unmappable_gpu_buffer(&voxel_color_beacon_uniform_buffer, sizeof(voxel_beacons), &voxel_beacons, gpu_buffer_usage_t::UNIFORM_BUFFER, get_global_command_pool());
+
+    update_uniform_group(&voxel_color_beacon_uniform, update_binding_t{BUFFER, &voxel_color_beacon_uniform_buffer, 0});
+
+    voxel_beacons.default_voxel_color.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1);
+    voxel_beacons.default_voxel_color.metalness = 0.3f;
+    voxel_beacons.default_voxel_color.roughness = 0.8f;
+
+    voxel_beacons.beacon_count = 3;
+    voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0, 0, 1), 30.0f, 0.2, 0.8, 60.0f };
+    voxel_beacons.voxel_color_beacons[1] = { vector4_t(-80.0f, -50.0f, 0.0f, 1), vector4_t(0, 0, 1, 1), 30.0f, 0.8, 0.4, 60.0f };
+    voxel_beacons.voxel_color_beacons[2] = { vector4_t(80.0f, 50.0f, 0.0f, 1), vector4_t(1, 0, 1, 1), 30.0f, 0.1, 0.9, 60.0f };
+
+
+    // Update voxel color beacons uniform buffer
+    VkCommandBuffer cmdbuf;
+    init_single_use_command_buffer(get_global_command_pool(), &cmdbuf);
+
+    update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons), 0, VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &cmdbuf);
+
+    destroy_single_use_command_buffer(&cmdbuf, get_global_command_pool());
+    
+    
 
     voxel_linear_allocator_front.current = voxel_linear_allocator_front.start = allocate_free_list(sizeof(uint8_t) * 5000);
     voxel_linear_allocator_front.capacity = sizeof(uint8_t) * 5000;
@@ -437,7 +497,8 @@ void render_chunks_to_shadowmap(uniform_group_t *transforms_ubo_uniform_groups, 
 
 void render_chunks(uniform_group_t *uniforms, gpu_command_queue_t *queue)
 {
-    gpu_queue.submit_queued_materials({2, uniforms}, g_pipeline_manager->get(chunk_mesh_pipeline), queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    uniform_group_t groups[3] = { uniforms[0], uniforms[1], voxel_color_beacon_uniform };
+    gpu_queue.submit_queued_materials({3, groups}, g_pipeline_manager->get(chunk_mesh_pipeline), queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
 
 
@@ -805,6 +866,19 @@ float32_t get_chunk_size(void)
 struct linear_allocator_t *get_voxel_linear_allocator(void)
 {
     return &voxel_linear_allocator_front;
+}
+
+
+void debug_stuff(gpu_command_queue_t *queue)
+{
+    // TESTING!! TODO: REMOVE THIS
+    /*player_t *p = get_user_player();
+    if (p)
+    {
+        voxel_beacons.voxel_color_beacons[0].ws_position = vector4_t(p->ws_position, 1.0f);
+
+        update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons.beacon_count) + sizeof(voxel_color_beacon_t) * (voxel_beacons.beacon_count + 1), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
+        }*/
 }
 
 

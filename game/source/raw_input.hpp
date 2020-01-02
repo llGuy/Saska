@@ -55,6 +55,10 @@ struct raw_input_t
 
     bool show_cursor = 1;
 
+    bool toggled_fullscreen = 0;
+    bool in_fullscreen = 0;
+    bool has_focus = 1;
+
 
     uint32_t gamepad_packet_number;
     gamepad_button_input_t gamepad_buttons[gamepad_button_type_t::INVALID_BUTTON];

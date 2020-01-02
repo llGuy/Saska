@@ -53,3 +53,5 @@ struct game_snapshot_voxel_delta_packet_t *&get_previous_voxel_delta_packet(void
 chunk_t **get_modified_chunks(uint32_t *count);
 float32_t get_chunk_grid_size(void);
 float32_t get_chunk_size(void);
+
+void debug_stuff(gpu_command_queue_t *queue);

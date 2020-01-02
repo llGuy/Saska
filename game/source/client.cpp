@@ -238,6 +238,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                 player->ws_direction = player_snapshot_packet.ws_direction;
                                 player->ws_velocity = player_snapshot_packet.ws_velocity;
                                 player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
+                                player->action_flags = 0;
                             }
 
                             if (player_snapshot_packet.need_to_do_correction)

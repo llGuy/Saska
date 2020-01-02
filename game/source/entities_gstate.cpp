@@ -622,6 +622,7 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
     if (game_input->actions[game_input_action_type_t::MOVE_BACK].state) {acc_v(-d, res); *action_flags |= (1 << action_flags_t::ACTION_BACK);} 
     if (game_input->actions[game_input_action_type_t::MOVE_RIGHT].state) {acc_v(glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_RIGHT);}
     if (game_input->actions[game_input_action_type_t::TRIGGER4].state) *action_flags |= (1 << action_flags_t::ACTION_UP);
+    if (game_input->actions[game_input_action_type_t::TRIGGER6].state) *action_flags |= (1 << action_flags_t::ACTION_DOWN);
     if (game_input->actions[game_input_action_type_t::TRIGGER5].state && !player->toggled_rolling_previous_frame)
     {
         player->toggled_rolling_previous_frame = 1;

@@ -22,6 +22,7 @@ enum game_input_action_type_t { // Menu stuff
                                TRIGGER3,
                                TRIGGER4,
                                TRIGGER5,
+                               TRIGGER6,
                                // Invalid
                                INVALID_ACTION };
 

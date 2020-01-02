@@ -43,6 +43,7 @@ void initialize_game_input_settings(void)
     bound_key_mouse_buttons[TRIGGER3].bound_button = button_type_t::R;
     bound_key_mouse_buttons[TRIGGER4].bound_button = button_type_t::SPACE;
     bound_key_mouse_buttons[TRIGGER5].bound_button = button_type_t::E;
+    bound_key_mouse_buttons[TRIGGER6].bound_button = button_type_t::LEFT_SHIFT;
 
 
 
@@ -65,6 +66,7 @@ void initialize_game_input_settings(void)
     bound_gamepad_buttons[TRIGGER3].bound_button = gamepad_button_type_t::CONTROLLER_Y;
     bound_gamepad_buttons[TRIGGER4].bound_button = gamepad_button_type_t::CONTROLLER_B;
     bound_gamepad_buttons[TRIGGER5].bound_button = gamepad_button_type_t::CONTROLLER_X;
+    bound_gamepad_buttons[TRIGGER6].bound_button = gamepad_button_type_t::CONTROLLER_A;
 }
 
 

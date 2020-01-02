@@ -37,7 +37,7 @@ void main(void)
 
     gl_Position = camera_transforms.proj * vs_position;
 
-    vs_out.ws_position = vs_position.xyz;
+    vs_out.ws_position = ws_position.xyz;
     vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
 

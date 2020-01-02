@@ -3,12 +3,15 @@
 
 layout(location = 0) in VS_DATA
 {
-    vec3 color;
     vec3 ws_position;
-    vec3 ws_normal;
+    vec3 vs_normal;
 
     vec3 vs_position;
     vec4 shadow_coord;
+
+    vec3 color;
+    float roughness;
+    float metalness;
 } fs_in;
 
 layout(location = 0) out vec4 out_final;
@@ -87,10 +90,10 @@ void main(void)
 
     out_final = vec4(0.0, 0.0, 0.0, 1.0);
     out_albedo = vec4(fs_in.color, shadow_factor);
-    out_position = vec4(fs_in.ws_position, 1.0);
-    out_normal = vec4(fs_in.ws_normal, 1.0);
+    out_position = vec4(fs_in.vs_position, 1.0);
+    out_normal = vec4(fs_in.vs_normal, 1.0);
     out_sun = vec4(0, 0, 0, 1);
 
-    set_roughness(0.8);
-    set_metalness(0.3);
+    set_roughness(fs_in.roughness);
+    set_metalness(fs_in.metalness);
 }

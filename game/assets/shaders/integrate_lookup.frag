@@ -1,19 +1,29 @@
 #version 450
 
-layout(location = 0) in vec3 local_position;
-layout(location = 0) out vec4 final_color;
+layout(location = 0) in vec2 in_uvs;
 
-layout(set = 0, binding = 0) uniform samplerCube atmosphere;
-
-layout(push_constant) uniform push_constant_t
-{
-    mat4 matrix;
-    float roughness;
-
-    float layer;
-} push_k;
+layout(location = 0) out vec4 out_color;
 
 const float PI = 3.14159265f;
+
+float geometry_schlick_ggx(float ndotv, float roughness)
+{
+    float r = roughness;
+    float k = (r * r) / 2;
+
+    float num = ndotv;
+    float den = ndotv * (1 - k) + k;
+
+    return num / den;
+}
+
+float geometry_smith(vec3 n, vec3 v, vec3 l, float roughness)
+{
+    float ndotv = max(dot(n, v), 0.0);
+    float ndotl = max(dot(n, l), 0.0);
+
+    return geometry_schlick_ggx(ndotv, roughness) * geometry_schlick_ggx(ndotl, roughness);
+}
 
 vec3 importance_sample_ggx(vec2 xi, vec3 n, float roughness)
 {
@@ -49,31 +59,48 @@ float radical_inverse_vandercorpus(uint bits)
 vec2 hammersley(uint i, uint n)
 {
     return vec2(float(i) / float(n), radical_inverse_vandercorpus(i));
-}  
+}
 
-void main(void)
+vec2 integrate(float ndotv, float roughness)
 {
-    vec3 n = normalize(local_position);
-    vec3 r = n;
-    vec3 v = r;
+    vec3 v;
+    v.x = sqrt(1.0 - ndotv * ndotv);
+    v.y = 0.0;
+    v.z = ndotv;
+
+    float a = 0.0;
+    float b = 0.0;
+
+    vec3 n = vec3(0.0, 0.0, 1.0);
 
     const uint SAMPLE_COUNT = 1024u;
-    float total_weight = 0.0;
-    vec3 prefiltered_color = vec3(0.0);     
+    
     for(uint i = 0u; i < SAMPLE_COUNT; ++i)
     {
         vec2 xi = hammersley(i, SAMPLE_COUNT);
-        vec3 h  = importance_sample_ggx(xi, n, push_k.roughness);
+        vec3 h  = importance_sample_ggx(xi, n, roughness);
         vec3 l  = normalize(2.0 * dot(v, h) * h - v);
 
-        float ndotl = max(dot(n, l), 0.0);
+        float ndotl = max(l.z, 0.0);
+        float ndoth = max(h.z, 0.0);
+        float vdoth = max(dot(v, h), 0.0);
+
         if(ndotl > 0.0)
         {
-            prefiltered_color += texture(atmosphere, l).rgb * ndotl;
-            total_weight += ndotl;
+            float g = geometry_smith(n, v, l, roughness);
+            float g_vis = (g * vdoth) / (ndoth * ndotv);
+            float fc = pow(1.0 - vdoth, 5.0);
+
+            a += (1.0 - fc) * g_vis;
+            b += fc * g_vis;
         }
     }
-    prefiltered_color = prefiltered_color / total_weight;
+    a /= float(SAMPLE_COUNT);
+    b /= float(SAMPLE_COUNT);
+    return vec2(a, b);
+}
 
-    final_color = vec4(prefiltered_color, 1.0);
+void main(void)
+{
+    out_color = vec4(integrate(in_uvs.x, in_uvs.y), 0, 1);
 }

@@ -717,25 +717,14 @@ void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
 
     matrix4_t projection_matrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 512.0f);
 
-    /*matrix4_t view_matrices[6] = {
+    matrix4_t view_matrices[6] = {
                                   glm::rotate(glm::rotate(matrix4_t(1.0f), glm::radians(90.0f), vector3_t(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
                                   glm::rotate(glm::rotate(matrix4_t(1.0f), glm::radians(-90.0f), vector3_t(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
                                   glm::rotate(matrix4_t(1.0f), glm::radians(-90.0f), vector3_t(1.0f, 0.0f, 0.0f)),
                                   glm::rotate(matrix4_t(1.0f), glm::radians(90.0f), vector3_t(1.0f, 0.0f, 0.0f)),
                                   glm::rotate(matrix4_t(1.0f), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
                                   glm::rotate(matrix4_t(1.0f), glm::radians(180.0f), vector3_t(0.0f, 0.0f, 1.0f)),
-                                  };*/
-
-    matrix4_t view_matrices[6] = {
-
-                                  glm::lookAt(vector3_t(0), vector3_t(0, 0, 1), vector3_t(0, 1, 0)),
-                                  glm::lookAt(vector3_t(0), vector3_t(1, 0, 0), vector3_t(0, 1, 0)),
-                                  glm::lookAt(vector3_t(0), vector3_t(0, 0, -1), vector3_t(0, 1, 0)),
-                                  glm::lookAt(vector3_t(0), vector3_t(-1, 0, 0), vector3_t(0, 1, 0)),
-                                  glm::lookAt(vector3_t(0), vector3_t(0, -1, 0), vector3_t(0, 1, 0)),
-                                  glm::lookAt(vector3_t(0), vector3_t(0, 1, 0), vector3_t(0, 1, 0)),
-
-    };
+                                  };
 
     image2d_t *cubemap = g_image_manager->get(g_atmosphere->prefiltered_environment_handle);
     image2d_t *interm = g_image_manager->get(g_atmosphere->prefiltered_environment_interm_handle);
@@ -766,10 +755,12 @@ void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
             {
                 matrix4_t mvp;
                 float32_t roughness;
+                float32_t layer;
             } pk;
 
             pk.roughness = roughness;
             pk.mvp = projection_matrix * view_matrices[layer];
+            pk.layer = layer;
 
             command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, prefiltered_environment_ppln->layout, &queue->q);
             
@@ -793,6 +784,24 @@ void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
     }
 }
 
+void update_atmosphere_integrate_lookup(gpu_command_queue_t *queue)
+{
+    auto *integrate_lookup_ppln = g_pipeline_manager->get(g_atmosphere->integrate_pipeline_handle);    
+    
+    queue->begin_render_pass(g_atmosphere->integrate_lookup_pass, g_atmosphere->integrate_lookup_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
+            
+    // Set viewport
+    VkViewport viewport;
+    init_viewport(0, 0, 512, 512, 0.0f, 1.0f, &viewport);
+    vkCmdSetViewport(queue->q, 0, 1, &viewport);
+
+    command_buffer_bind_pipeline(&integrate_lookup_ppln->pipeline, &queue->q);
+
+    command_buffer_draw(&queue->q, 4, 1, 0, 0);
+
+    queue->end_render_pass();
+}
+
 void update_atmosphere(gpu_command_queue_t *queue)
 {
     update_atmosphere_cubemap(queue);
@@ -814,6 +823,8 @@ void update_atmosphere(gpu_command_queue_t *queue)
     update_atmosphere_irradiance_cubemap(queue);
 
     update_atmosphere_prefiltered_cubemap(queue);
+
+    update_atmosphere_integrate_lookup(queue);
 }
 
 void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue)
@@ -823,9 +834,7 @@ void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const 
 
     uniform_group_t *groups = ALLOCA_T(uniform_group_t, sets.count + 1);
     for (uint32_t i = 0; i < sets.count; ++i) groups[i] = sets[i];
-    //groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
-    groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->atmosphere_prefiltered_environment_uniform_group);
-    //groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->atmosphere_irradiance_uniform_group);
+    groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
     
     command_buffer_bind_descriptor_sets(&render_pipeline->layout, {sets.count + 1, groups}, &queue->q);
 
@@ -944,6 +953,51 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
     }
 
     
+    g_atmosphere->integrate_lookup_pass = g_render_pass_manager->add("render_pass.integrate_lookup_render_pass"_hash);
+    auto *integrate_lookup_pass = g_render_pass_manager->get(g_atmosphere->integrate_lookup_pass);
+    // ---- Make render pass ----
+    {
+        // ---- Set render pass attachment data ----
+        render_pass_attachment_t texture_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        // ---- Set render pass subpass data ----
+        render_pass_subpass_t subpass = {};
+        subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        // ---- Set render pass dependencies data ----
+        render_pass_dependency_t dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        
+        make_render_pass(integrate_lookup_pass, {1, &texture_attachment}, {1, &subpass}, {2, dependencies});
+    }
+
+
+    g_atmosphere->integrate_lookup_fbo = g_framebuffer_manager->add("framebuffer.integrate_lookup_fbo"_hash);
+    auto *integrate_lookup_fbo = g_framebuffer_manager->get(g_atmosphere->integrate_lookup_fbo);
+    {
+        g_atmosphere->integrate_lookup = g_image_manager->add("image2D.integrate_lookup"_hash);
+        auto *lookup = g_image_manager->get(g_atmosphere->integrate_lookup);
+        make_framebuffer_attachment(lookup, 512, 512, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2);
+
+        make_framebuffer(integrate_lookup_fbo, 512, 512, 1, integrate_lookup_pass, {1, lookup}, nullptr);
+    }
+
+    uniform_layout_handle_t render_atmosphere_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
+    auto *render_atmosphere_layout_ptr = g_uniform_layout_manager->get(render_atmosphere_layout_hdl);
+    
+
+    g_atmosphere->integrate_lookup_uniform_group = g_uniform_group_manager->add("descriptor_set.integrate_lookup"_hash);
+    auto *integrate_lookup_group = g_uniform_group_manager->get(g_atmosphere->integrate_lookup_uniform_group);
+    {
+        image_handle_t integrate_lookup_hdl = g_image_manager->get_handle("image2D.integrate_lookup"_hash);
+        auto *integrate_lookup_ptr = g_image_manager->get(integrate_lookup_hdl);
+
+        *integrate_lookup_group = make_uniform_group(render_atmosphere_layout_ptr, g_uniform_pool);
+        update_uniform_group(integrate_lookup_group, update_binding_t{TEXTURE, integrate_lookup_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    
     // Initialize prefiltered environment cubemap
     g_atmosphere->prefiltered_environment_handle = g_image_manager->add("image2D.prefiltered_environment_cubemap"_hash);
     {
@@ -953,8 +1007,7 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
     }
 
     
-    uniform_layout_handle_t render_atmosphere_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
-    auto *render_atmosphere_layout_ptr = g_uniform_layout_manager->get(render_atmosphere_layout_hdl);
+
 
     
     g_atmosphere->cubemap_uniform_group = g_uniform_group_manager->add("descriptor_set.cubemap"_hash);
@@ -1007,6 +1060,25 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
                                     false, 0.0f, dynamic, atmosphere_render_pass, 0, info);
         make_ppln->info = info;
         make_graphics_pipeline(make_ppln);
+    }
+
+
+    g_atmosphere->integrate_pipeline_handle = g_pipeline_manager->add("pipeline.integrate_lookup_pipeline"_hash);
+    auto *integrate_ppln = g_pipeline_manager->get(g_atmosphere->integrate_pipeline_handle);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        VkExtent2D atmosphere_extent {512, 512};
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/integrate_lookup.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                               shader_module_info_t{"shaders/SPV/integrate_lookup.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts = {};
+        shader_pk_data_t push_k = {200, 0, VK_SHADER_STAGE_FRAGMENT_BIT};
+        shader_blend_states_t blending{blend_type_t::NO_BLENDING};
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
+                                    false, 0.0f, dynamic, integrate_lookup_pass, 0, info);
+        integrate_ppln->info = info;
+        make_graphics_pipeline(integrate_ppln);
     }
 
     
@@ -1615,24 +1687,6 @@ void make_dfr_rendering_data(void)
                              update_binding_t{INPUT_ATTACHMENT, normal_tx, 2, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                              update_binding_t{INPUT_ATTACHMENT, sun_tx, 3, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
-
-    g_dfr_rendering->dfr_lighting_ppln = g_pipeline_manager->add("pipeline.deferred_pipeline"_hash);
-    auto *deferred_ppln = g_pipeline_manager->get(g_dfr_rendering->dfr_lighting_ppln);
-    {
-        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/deferred_lighting.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                                 shader_module_info_t{"shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.deferred_layout"_hash),
-                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
-        shader_pk_data_t push_k{ 160, 0, VK_SHADER_STAGE_FRAGMENT_BIT };
-        shader_blend_states_t blend_states(blend_type_t::NO_BLENDING);
-        dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
-        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blend_states, nullptr,
-                                    false, 0.0f, dynamic_states, dfr_render_pass, 1, info);
-        deferred_ppln->info = info;
-        make_graphics_pipeline(deferred_ppln);
-    }
 }
 
 void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue)
@@ -1682,21 +1736,28 @@ void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix,
 
     auto *dfr_subpass_group = g_uniform_group_manager->get(g_dfr_rendering->dfr_subpass_group);
     auto *irradiance_cubemap = g_uniform_group_manager->get(g_atmosphere->atmosphere_irradiance_uniform_group);
+    auto *prefiltered_env_group = g_uniform_group_manager->get(g_atmosphere->atmosphere_prefiltered_environment_uniform_group);
+    auto *integrate_lookup_group = g_uniform_group_manager->get(g_atmosphere->integrate_lookup_uniform_group);
     
-    VkDescriptorSet deferred_sets[] = {*dfr_subpass_group, *irradiance_cubemap};
+    VkDescriptorSet deferred_sets[] = {*dfr_subpass_group, *irradiance_cubemap, *prefiltered_env_group, *integrate_lookup_group};
     
-    command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, {2, deferred_sets}, &queue->q);
+    command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, {4, deferred_sets}, &queue->q);
     
     struct deferred_lighting_push_k_t
     {
 	vector4_t light_position;
 	matrix4_t view_matrix;
         matrix4_t inverse_view_matrix;
+        vector4_t ws_view_direction;
     } deferred_push_k;
     
     deferred_push_k.light_position = vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 1.0f);
     deferred_push_k.view_matrix = view_matrix;
     deferred_push_k.inverse_view_matrix = glm::inverse(view_matrix);
+
+    camera_t *camera = get_camera_bound_to_3d_output();
+    
+    deferred_push_k.ws_view_direction = vector4_t(camera->d, 1.0f);
     
     command_buffer_push_constant(&deferred_push_k, sizeof(deferred_push_k), 0, VK_SHADER_STAGE_FRAGMENT_BIT, dfr_lighting_ppln->layout, &queue->q);
     command_buffer_draw(&queue->q, 4, 1, 0, 0);
@@ -2408,6 +2469,29 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *ra
     make_atmosphere_data(g_uniform_pool, pool);
     make_sun_data();
     initialize_particle_rendering();
+
+    
+    g_dfr_rendering->dfr_lighting_ppln = g_pipeline_manager->add("pipeline.deferred_pipeline"_hash);
+    auto *deferred_ppln = g_pipeline_manager->get(g_dfr_rendering->dfr_lighting_ppln);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/deferred_lighting.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.deferred_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
+        shader_pk_data_t push_k{ 160, 0, VK_SHADER_STAGE_FRAGMENT_BIT };
+        shader_blend_states_t blend_states(blend_type_t::NO_BLENDING);
+        dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
+        auto *dfr_render_pass = g_render_pass_manager->get(g_dfr_rendering->dfr_render_pass);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, g_dfr_rendering->backbuffer_res, blend_states, nullptr,
+                                    false, 0.0f, dynamic_states, dfr_render_pass, 1, info);
+        deferred_ppln->info = info;
+        make_graphics_pipeline(deferred_ppln);
+    }
+    
 
     add_global_to_lua(script_primitive_type_t::FUNCTION, "begin_frame_capture", &lua_begin_frame_capture);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "end_frame_capture", &lua_end_frame_capture);

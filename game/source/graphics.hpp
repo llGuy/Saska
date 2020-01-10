@@ -913,6 +913,7 @@ struct atmosphere_t
     // Prefiltered environment
     render_pass_handle_t generate_prefiltered_environment_pass;
     framebuffer_handle_t generate_prefiltered_environment_fbo;
+    
     pipeline_handle_t generate_prefiltered_environment_pipeline;
 
     // pipeline needed to render the cubemap to the screen
@@ -922,6 +923,12 @@ struct atmosphere_t
     image_handle_t prefiltered_environment_handle;
     // This is the image that gets attached to the framebuffer
     image_handle_t prefiltered_environment_interm_handle;
+    image_handle_t integrate_lookup;
+
+    render_pass_handle_t integrate_lookup_pass;
+    framebuffer_handle_t integrate_lookup_fbo;
+    pipeline_handle_t integrate_pipeline_handle;
+    uniform_group_handle_t integrate_lookup_uniform_group;
     
     // Descriptor set that will be used to sample (should not be used in world.cpp)
     uniform_group_handle_t cubemap_uniform_group;

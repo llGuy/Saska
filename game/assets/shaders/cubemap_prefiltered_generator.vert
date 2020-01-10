@@ -12,28 +12,29 @@ vec3 local_positions[] = vec3[]( vec3(-1.0f, -1.0f, 1.0f),      // 0
                                  vec3(1.0f, 1.0f, -1.0f),       // 6
                                  vec3(-1.0f, 1.0f, -1.0f) );    // 7
 
-uint mesh_indices[] = uint[](0, 1, 2,
-                             2, 3, 0,
+uint mesh_indices[] = uint[](7, 6, 5,  // -z
+                             5, 4, 7,   
 
-                             1, 5, 6,
-                             6, 2, 1,
+                             0, 1, 2,  // +z
+                             2, 3, 0,   
 
-                             7, 6, 5,
-                             5, 4, 7,
-	    
-                             3, 7, 4,
-                             4, 0, 3,
-	    
-                             4, 5, 1,
+                             3, 2, 6,  // +y
+                             6, 7, 3,
+
+                             4, 5, 1,  // -y
                              1, 0, 4,
-	    
-                             3, 2, 6,
-                             6, 7, 3);
+
+                             3, 7, 4,  // -x
+                             4, 0, 3,
+
+                             1, 5, 6,  // +x
+                             6, 2, 1);
 
 layout(push_constant) uniform push_constant_t
 {
     mat4 matrix;
     float roughness;
+    float layer;
 } push_k;
 
 void main(void)

@@ -14,6 +14,8 @@ layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput g_
 layout(input_attachment_index = 2, set = 0, binding = 2) uniform subpassInput g_buffer_normal;
 
 layout(set = 1, binding = 0) uniform samplerCube irradiance_cubemap;
+layout(set = 2, binding = 0) uniform samplerCube prefiltered_environment;
+layout(set = 3, binding = 0) uniform sampler2D integrate_lookup;
 
 //layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
@@ -22,6 +24,7 @@ layout(push_constant) uniform Push_K
     vec4 light_direction;
     mat4 view_matrix;
     mat4 inverse_view_matrix;
+    vec4 ws_view_direction;
 } push_k;
 
 const float PI = 3.14159265359;
@@ -73,12 +76,19 @@ vec4 pbr(void)
     albedo.xyz = pow(albedo.xyz, vec3(2.2));
     vec4 gposition = subpassLoad(g_buffer_position);
     vec3 vs_position = gposition.xyz;
+
     vec4 gnormal = -subpassLoad(g_buffer_normal);
     vec3 vs_normal = gnormal.xyz;
     vec3 ws_normal = vec3(push_k.inverse_view_matrix * vec4(vs_normal, 0.0));
     float roughness = gnormal.a;
     float metallic = gposition.a;
 
+    vec3 reflection_vector = reflect(-push_k.ws_view_direction.xyz, ws_normal);
+
+    const float MAX_REFLECTION_LOD = 4.0;
+
+    vec3 prefiltered_color = textureLod(prefiltered_environment, reflection_vector, roughness * MAX_REFLECTION_LOD).rgb;
+    
     vec3 radiance = vec3(24.47, 21.31, 20.79);
     vec3 ws_light = normalize(push_k.light_direction.xyz);
     //    ws_light.y *= 1.0;
@@ -114,9 +124,11 @@ vec4 pbr(void)
     
     vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * radiance * n_dot_l;
 
+    vec2 env_brdf = texture(integrate_lookup, vec2(max(dot(ws_normal.xyz, push_k.ws_view_direction.xyz), 0.0), roughness)).rg;
+    vec3 specular = prefiltered_color * (F * env_brdf.x + env_brdf.y);
+    
     vec3 diffuse = irradiance * albedo.rgb;
-    vec3 ambient = (kd * diffuse);
-    //vec3 ambient = vec3(0.03);
+    vec3 ambient = (kd * diffuse + specular);
     
     result += ambient;
 

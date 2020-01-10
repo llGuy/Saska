@@ -13,7 +13,7 @@ layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
 void main(void)
 {
-    vec4 cubemap_color = textureLod(cubemap_sampler, in_ms_cubemap_direction, 1);
+    vec4 cubemap_color = texture(cubemap_sampler, in_ms_cubemap_direction);
 
     out_final = cubemap_color;
     out_albedo = cubemap_color;

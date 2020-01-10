@@ -1,5 +1,6 @@
-/* graphics.hpp */
+// TODO: MAKE SURE TO DESTROY ALL OBJECTS THAT ARE NOT NEEDED (e.g. atmosphere intermediate stuff - framebuffers, etc...)
 
+/* graphics.hpp */
 #pragma once
 
 #include "core.hpp"
@@ -355,6 +356,8 @@ update_uniform_group(uniform_group_t *group, const Update_Ts &...updates)
     update_descriptor_sets({sizeof...(updates), writes});
 }
 
+
+
 // --------------------- Rendering stuff ---------------------
 // Material is submittable to a GPU_Material_Submission_Queue to be eventually submitted to the GPU for render
 struct material_t
@@ -388,8 +391,8 @@ struct gpu_material_submission_queue_t
 
 gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst, submit_level_t level, gpu_command_queue_pool_t *pool);
 void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue);
-void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions);
-void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter);
+void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, VkImageUsageFlags usage, uint32_t dimensions);
+void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat, uint32_t layer_count, uint32_t mip_levels, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter);
 void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth);
 
 struct render_pass_attachment_t
@@ -526,7 +529,6 @@ struct camera_transform_uniform_data_t
     alignas(16) vector4_t debug_vector;
 };
 
-void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data, const matrix4_t &view_matrix, const matrix4_t &projection_matrix, const matrix4_t &shadow_view_matrix, const matrix4_t &shadow_projection_matrix, const vector4_t &debug_vector);
 void update_3d_output_camera_transforms(uint32_t image_index);
 void clean_up_cameras(void);
 
@@ -896,24 +898,35 @@ struct atmosphere_t
 {
     static constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
     static constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
+    static constexpr uint32_t PREFILTERED_ENVIRONMENT_CUBEMAP_W = 128, PREFILTERED_ENVIRONMENT_CUBEMAP_H = 128;
 
     // gpu_t objects needed to create the atmosphere skybox cubemap
     render_pass_handle_t make_render_pass;
     framebuffer_handle_t make_fbo;
     pipeline_handle_t make_pipeline;
 
+    // Irradiance
     render_pass_handle_t generate_irradiance_pass;
     framebuffer_handle_t generate_irradiance_fbo;
     pipeline_handle_t generate_irradiance_pipeline;
+
+    // Prefiltered environment
+    render_pass_handle_t generate_prefiltered_environment_pass;
+    framebuffer_handle_t generate_prefiltered_environment_fbo;
+    pipeline_handle_t generate_prefiltered_environment_pipeline;
 
     // pipeline needed to render the cubemap to the screen
     pipeline_handle_t render_pipeline;
 
     image_handle_t cubemap_handle;
+    image_handle_t prefiltered_environment_handle;
+    // This is the image that gets attached to the framebuffer
+    image_handle_t prefiltered_environment_interm_handle;
     
     // Descriptor set that will be used to sample (should not be used in world.cpp)
     uniform_group_handle_t cubemap_uniform_group;
     uniform_group_handle_t atmosphere_irradiance_uniform_group;
+    uniform_group_handle_t atmosphere_prefiltered_environment_uniform_group;
 
     model_handle_t cube_handle;
 };

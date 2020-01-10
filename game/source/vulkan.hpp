@@ -1,6 +1,7 @@
 /* vulkan.hpp */
 
 // TODO: Organize Vulkan API code, memory barriers, graphics pipeline, render pass creation, etc...
+// TODO: PLEASE FUTURE LUC REFACTOR THIS MESS
 
 #pragma once
 
@@ -170,6 +171,8 @@ struct image2d_t
     VkDeviceMemory device_memory	= VK_NULL_HANDLE;
 
     VkFormat format;
+    uint32_t mip_level_count;
+    uint32_t layer_count;
 	
     VkMemoryRequirements get_memory_requirements(void);
 
@@ -187,8 +190,8 @@ struct image2d_t
     mapped_gpu_memory_t construct_map(void);
 }; 
     
-void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, VkImageCreateFlags flags = 0);
-void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers);
+void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, uint32_t mips, VkImageCreateFlags flags = 0);
+void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers, uint32_t mips);
 void init_image_sampler(VkFilter mag_filter, VkFilter min_filter, VkSamplerAddressMode u_sampler_address_mode, VkSamplerAddressMode v_sampler_address_mode, VkSamplerAddressMode w_sampler_address_mode,
                         VkBool32 anisotropy_enable, uint32_t max_anisotropy, VkBorderColor clamp_border_color, VkBool32 compare_enable, VkCompareOp compare_op,
                         VkSamplerMipmapMode mipmap_mode, float32_t mip_lod_bias, float32_t min_lod, float32_t max_lod, VkSampler *dest_sampler);
@@ -700,12 +703,12 @@ void initialize_buffer_memory_barrier(gpu_buffer_t *buffer, uint32_t offset, uin
 void issue_pipeline_barrier(VkPipelineStageFlags stage_before, VkPipelineStageFlags stage_after, const memory_buffer_view_t<buffer_memory_barrier_t> &buffer_barriers, const memory_buffer_view_t<image_memory_barrier_t> &image_barriers, VkCommandBuffer *cmdbuf);
 
 
-void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool);
+void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool, uint32_t layer_count = 1, uint32_t mip_count = 1);
 
 void copy_buffer_into_image(gpu_buffer_t *src_buffer, image2d_t *dst_image, uint32_t width, uint32_t height, VkCommandPool *command_pool);
 void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPool *command_pool);
 
-void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height,VkPipelineStageFlags flags_before,VkPipelineStageFlags flags_after,VkImageLayout layout_before,VkCommandBuffer *cmdbuf);
+void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before_dst, VkImageLayout layout_before_src, VkCommandBuffer *cmdbuf, uint32_t dest_layer = 0, uint32_t dest_mip = 0);
 void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before, VkCommandBuffer *cmdbuf);
 
 void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, VkBufferUsageFlags usage, VkCommandPool *transfer_command_pool, gpu_buffer_t *dst_buffer);

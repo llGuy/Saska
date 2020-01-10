@@ -57,7 +57,6 @@ void end_command_queue(gpu_command_queue_t *queue)
 }
 
 
-
 // --------------------- Uniform stuff ---------------------
 
 static void make_uniform_pool(void)
@@ -249,11 +248,11 @@ void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue)
     //    command_buffer_execute_commands(queue, {g_material_queue_manager->active_queue_ptr, g_material_queue_manager->active_queues});
 }
 
-void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, VkImageUsageFlags usage, uint32_t dimensions)
+void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, VkImageUsageFlags usage, uint32_t dimensions)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
-    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, flags);
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, mip_levels, flags);
 
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     
@@ -261,25 +260,25 @@ void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkForma
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
     
-    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count);
+    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count, mip_levels);
 
     if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
     {
         init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                            VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-                           VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, 0.0f, &img->image_sampler);
+                           VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, (float)mip_levels, &img->image_sampler);
     }
 }
 
-void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
+void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
 {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
-    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, flags);
+    init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, mip_levels, flags);
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
-    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count);
+    init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count, mip_levels);
     init_image_sampler(filter, filter, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-                       VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, 0.0f, &img->image_sampler);
+                       VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, (float)mip_levels, &img->image_sampler);
 }
 
 void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth)
@@ -712,6 +711,88 @@ void update_atmosphere_irradiance_cubemap(gpu_command_queue_t *queue)
     queue->end_render_pass();
 }
 
+void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
+{
+    auto *prefiltered_environment_ppln = g_pipeline_manager->get(g_atmosphere->generate_prefiltered_environment_pipeline);
+
+    matrix4_t projection_matrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 512.0f);
+
+    /*matrix4_t view_matrices[6] = {
+                                  glm::rotate(glm::rotate(matrix4_t(1.0f), glm::radians(90.0f), vector3_t(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
+                                  glm::rotate(glm::rotate(matrix4_t(1.0f), glm::radians(-90.0f), vector3_t(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
+                                  glm::rotate(matrix4_t(1.0f), glm::radians(-90.0f), vector3_t(1.0f, 0.0f, 0.0f)),
+                                  glm::rotate(matrix4_t(1.0f), glm::radians(90.0f), vector3_t(1.0f, 0.0f, 0.0f)),
+                                  glm::rotate(matrix4_t(1.0f), glm::radians(180.0f), vector3_t(1.0f, 0.0f, 0.0f)),
+                                  glm::rotate(matrix4_t(1.0f), glm::radians(180.0f), vector3_t(0.0f, 0.0f, 1.0f)),
+                                  };*/
+
+    matrix4_t view_matrices[6] = {
+
+                                  glm::lookAt(vector3_t(0), vector3_t(0, 0, 1), vector3_t(0, 1, 0)),
+                                  glm::lookAt(vector3_t(0), vector3_t(1, 0, 0), vector3_t(0, 1, 0)),
+                                  glm::lookAt(vector3_t(0), vector3_t(0, 0, -1), vector3_t(0, 1, 0)),
+                                  glm::lookAt(vector3_t(0), vector3_t(-1, 0, 0), vector3_t(0, 1, 0)),
+                                  glm::lookAt(vector3_t(0), vector3_t(0, -1, 0), vector3_t(0, 1, 0)),
+                                  glm::lookAt(vector3_t(0), vector3_t(0, 1, 0), vector3_t(0, 1, 0)),
+
+    };
+
+    image2d_t *cubemap = g_image_manager->get(g_atmosphere->prefiltered_environment_handle);
+    image2d_t *interm = g_image_manager->get(g_atmosphere->prefiltered_environment_interm_handle);
+    
+    for (uint32_t mip = 0; mip < 5; ++mip)
+    {
+        uint32_t width = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W * pow(0.5, mip);
+        uint32_t height = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H * pow(0.5, mip);
+
+        float32_t roughness = (float32_t)mip / (float32_t)(5 - 1);
+        
+        for (uint32_t layer = 0; layer < 6; ++layer)
+        {
+            queue->begin_render_pass(g_atmosphere->generate_prefiltered_environment_pass, g_atmosphere->generate_prefiltered_environment_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
+            
+            // Set viewport
+            VkViewport viewport;
+            init_viewport(0, 0, width, height, 0.0f, 1.0f, &viewport);
+            vkCmdSetViewport(queue->q, 0, 1, &viewport);
+
+            command_buffer_bind_pipeline(&prefiltered_environment_ppln->pipeline, &queue->q);
+
+            uniform_group_t *atmosphere_uniform = g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
+            command_buffer_bind_descriptor_sets(&prefiltered_environment_ppln->layout, {1, atmosphere_uniform}, &queue->q);
+
+            // Push constant
+            struct push_constant_t
+            {
+                matrix4_t mvp;
+                float32_t roughness;
+            } pk;
+
+            pk.roughness = roughness;
+            pk.mvp = projection_matrix * view_matrices[layer];
+
+            command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, prefiltered_environment_ppln->layout, &queue->q);
+            
+            command_buffer_draw(&queue->q, 36, 1, 0, 0);
+
+            queue->end_render_pass();
+            
+            // Copy into correct cubemap mip and layer
+            copy_image(interm,
+                       cubemap,
+                       width,
+                       height,
+                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                       &queue->q,
+                       layer,
+                       mip);
+        }
+    }
+}
+
 void update_atmosphere(gpu_command_queue_t *queue)
 {
     update_atmosphere_cubemap(queue);
@@ -731,6 +812,8 @@ void update_atmosphere(gpu_command_queue_t *queue)
                            &queue->q);*/
     
     update_atmosphere_irradiance_cubemap(queue);
+
+    update_atmosphere_prefiltered_cubemap(queue);
 }
 
 void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue)
@@ -740,7 +823,8 @@ void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const 
 
     uniform_group_t *groups = ALLOCA_T(uniform_group_t, sets.count + 1);
     for (uint32_t i = 0; i < sets.count; ++i) groups[i] = sets[i];
-    groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
+    //groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
+    groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->atmosphere_prefiltered_environment_uniform_group);
     //groups[sets.count] = *g_uniform_group_manager->get(g_atmosphere->atmosphere_irradiance_uniform_group);
     
     command_buffer_bind_descriptor_sets(&render_pipeline->layout, {sets.count + 1, groups}, &queue->q);
@@ -785,16 +869,18 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         make_render_pass(atmosphere_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies});
     }
 
+    
     g_atmosphere->make_fbo = g_framebuffer_manager->add("framebuffer.atmosphere_fbo"_hash);
     auto *atmosphere_fbo = g_framebuffer_manager->get(g_atmosphere->make_fbo);
     {
         image_handle_t atmosphere_cubemap_handle = g_image_manager->add("image2D.atmosphere_cubemap"_hash);
         auto *cubemap = g_image_manager->get(atmosphere_cubemap_handle);
-        make_framebuffer_attachment(cubemap, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3);
+        make_framebuffer_attachment(cubemap, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3);
 
         make_framebuffer(atmosphere_fbo, atmosphere_t::CUBEMAP_W, atmosphere_t::CUBEMAP_H, 6, atmosphere_render_pass, {1, cubemap}, nullptr);
         g_atmosphere->cubemap_handle = atmosphere_cubemap_handle;
     }
+
 
     g_atmosphere->generate_irradiance_pass = g_render_pass_manager->add("render_pass.irradiance_render_pass"_hash);
     auto *irradiance_render_pass = g_render_pass_manager->get(g_atmosphere->generate_irradiance_pass);
@@ -815,19 +901,62 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         make_render_pass(irradiance_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies});
     }
 
+
     g_atmosphere->generate_irradiance_fbo = g_framebuffer_manager->add("framebuffer.irradiance_fbo"_hash);
     auto *irradiance_fbo = g_framebuffer_manager->get(g_atmosphere->generate_irradiance_fbo);
     {
         image_handle_t irradiance_cubemap_handle = g_image_manager->add("image2D.irradiance_cubemap"_hash);
         auto *cubemap = g_image_manager->get(irradiance_cubemap_handle);
-        make_framebuffer_attachment(cubemap, atmosphere_t::IRRADIANCE_CUBEMAP_W, atmosphere_t::IRRADIANCE_CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3);
+        make_framebuffer_attachment(cubemap, atmosphere_t::IRRADIANCE_CUBEMAP_W, atmosphere_t::IRRADIANCE_CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 3);
 
         make_framebuffer(irradiance_fbo, atmosphere_t::IRRADIANCE_CUBEMAP_W, atmosphere_t::IRRADIANCE_CUBEMAP_H, 6, irradiance_render_pass, {1, cubemap}, nullptr);
     }
 
+
+    g_atmosphere->generate_prefiltered_environment_pass = g_render_pass_manager->add("render_pass.prefiltered_environment_render_pass"_hash);
+    auto *prefiltered_environment_render_pass = g_render_pass_manager->get(g_atmosphere->generate_prefiltered_environment_pass);
+    // ---- Make render pass ----
+    {
+        // ---- Set render pass attachment data ----
+        render_pass_attachment_t cubemap_attachment {VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        // ---- Set render pass subpass data ----
+        render_pass_subpass_t subpass = {};
+        subpass.set_color_attachment_references(render_pass_attachment_reference_t{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+        // ---- Set render pass dependencies data ----
+        render_pass_dependency_t dependencies[2] = {};
+        dependencies[0] = make_render_pass_dependency(VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT,
+                                                      0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        dependencies[1] = make_render_pass_dependency(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                                                      VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_ACCESS_MEMORY_READ_BIT);
+        
+        make_render_pass(prefiltered_environment_render_pass, {1, &cubemap_attachment}, {1, &subpass}, {2, dependencies});
+    }
+
+    
+    g_atmosphere->generate_prefiltered_environment_fbo = g_framebuffer_manager->add("framebuffer.prefiltered_environment_fbo"_hash);
+    auto *prefiltered_environment_fbo = g_framebuffer_manager->get(g_atmosphere->generate_prefiltered_environment_fbo);
+    {
+        g_atmosphere->prefiltered_environment_interm_handle = g_image_manager->add("image2D.prefiltered_environment_interm"_hash);
+        auto *interm = g_image_manager->get(g_atmosphere->prefiltered_environment_interm_handle);
+        make_framebuffer_attachment(interm, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2);
+
+        make_framebuffer(prefiltered_environment_fbo, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H, 1, prefiltered_environment_render_pass, {1, interm}, nullptr);
+    }
+
+    
+    // Initialize prefiltered environment cubemap
+    g_atmosphere->prefiltered_environment_handle = g_image_manager->add("image2D.prefiltered_environment_cubemap"_hash);
+    {
+        auto *cubemap = g_image_manager->get(g_atmosphere->prefiltered_environment_handle);
+        make_framebuffer_attachment(cubemap, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H, VK_FORMAT_R8G8B8A8_UNORM, 6, 5, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 3);
+        transition_image_layout(&cubemap->image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, get_global_command_pool(), 6, 5);
+    }
+
+    
     uniform_layout_handle_t render_atmosphere_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash);
     auto *render_atmosphere_layout_ptr = g_uniform_layout_manager->get(render_atmosphere_layout_hdl);
 
+    
     g_atmosphere->cubemap_uniform_group = g_uniform_group_manager->add("descriptor_set.cubemap"_hash);
     auto *cubemap_group_ptr = g_uniform_group_manager->get(g_atmosphere->cubemap_uniform_group);
     {
@@ -838,6 +967,7 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         update_uniform_group(cubemap_group_ptr, update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
+    
     g_atmosphere->atmosphere_irradiance_uniform_group = g_uniform_group_manager->add("descriptor_set.irradiance_cubemap"_hash);
     auto *irradiance_group_ptr = g_uniform_group_manager->get(g_atmosphere->atmosphere_irradiance_uniform_group);
     {
@@ -848,6 +978,18 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         update_uniform_group(irradiance_group_ptr, update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
     }
 
+    
+    g_atmosphere->atmosphere_prefiltered_environment_uniform_group = g_uniform_group_manager->add("descriptor_set.prefiltered_environment_cubemap"_hash);
+    auto *prefiltered_environment_group_ptr = g_uniform_group_manager->get(g_atmosphere->atmosphere_prefiltered_environment_uniform_group);
+    {
+        image_handle_t cubemap_hdl = g_image_manager->get_handle("image2D.prefiltered_environment_cubemap"_hash);
+        auto *cubemap_ptr = g_image_manager->get(cubemap_hdl);
+
+        *prefiltered_environment_group_ptr = make_uniform_group(render_atmosphere_layout_ptr, g_uniform_pool);
+        update_uniform_group(prefiltered_environment_group_ptr, update_binding_t{TEXTURE, cubemap_ptr, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+    }
+
+    
     g_atmosphere->make_pipeline = g_pipeline_manager->add("pipeline.atmosphere_pipeline"_hash);
     auto *make_ppln = g_pipeline_manager->get(g_atmosphere->make_pipeline);
     {
@@ -867,6 +1009,7 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         make_graphics_pipeline(make_ppln);
     }
 
+    
     g_atmosphere->generate_irradiance_pipeline = g_pipeline_manager->add("pipeline.irradiance_pipeline"_hash);
     auto *irradiance_ppln = g_pipeline_manager->get(g_atmosphere->generate_irradiance_pipeline);
     {
@@ -886,6 +1029,26 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         make_graphics_pipeline(irradiance_ppln);
     }
 
+    
+    g_atmosphere->generate_prefiltered_environment_pipeline = g_pipeline_manager->add("pipeline.prefiltered_environment_pipeline"_hash);
+    auto *prefiltered_environment_ppln = g_pipeline_manager->get(g_atmosphere->generate_prefiltered_environment_pipeline);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        VkExtent2D atmosphere_extent {atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W, atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H};
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/cubemap_prefiltered_generator.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/cubemap_prefiltered_generator.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts = {render_atmosphere_layout_hdl};
+        shader_pk_data_t push_k = {200, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT};
+        shader_blend_states_t blending{blend_type_t::NO_BLENDING};
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, atmosphere_extent, blending, nullptr,
+                                    false, 0.0f, dynamic, prefiltered_environment_render_pass, 0, info);
+        prefiltered_environment_ppln->info = info;
+        make_graphics_pipeline(prefiltered_environment_ppln);
+    }
+
+    
     g_atmosphere->render_pipeline = g_pipeline_manager->add("pipeline.render_atmosphere"_hash);
     auto *render_ppln = g_pipeline_manager->get(g_atmosphere->render_pipeline);
     {
@@ -907,6 +1070,7 @@ static void make_atmosphere_data(VkDescriptorPool *pool, VkCommandPool *cmdpool)
         make_graphics_pipeline(render_ppln);
     }
 
+    
     g_atmosphere->cube_handle = g_model_manager->get_handle("model.cube_model"_hash);
 
     // ---- Update the atmosphere (initialize it) ----
@@ -947,7 +1111,7 @@ static void make_sun_data(void)
         external_image_data_t image_data = read_image(sun_png_handle);
 
         make_texture(&g_lighting->sun_texture, image_data.width, image_data.height,
-                     VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                     VK_FORMAT_R8G8B8A8_UNORM, 1, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                      VK_FILTER_LINEAR);
         transition_image_layout(&g_lighting->sun_texture.image, VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1016,7 +1180,7 @@ static void make_shadow_data(void)
     {
         image_handle_t shadowmap_handle = g_image_manager->add("image2D.shadow_map"_hash);
         auto *shadowmap_texture = g_image_manager->get(shadowmap_handle);
-        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, get_device_supported_depth_format(), 4, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(shadowmap_texture, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, get_device_supported_depth_format(), 4, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
         
         make_framebuffer(shadow_fbo, lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_W, 4, shadow_pass, null_buffer<image2d_t>(), shadowmap_texture);
     }
@@ -1365,12 +1529,12 @@ void make_dfr_rendering_data(void)
         image_handle_t depth_tx_hdl = g_image_manager->add("image2D.fbo_depth"_hash);
         auto *depth_tx = g_image_manager->get(depth_tx_hdl);
 
-        make_framebuffer_attachment(final_tx, w, h, get_swapchain_format(), 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2);
-        make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
-        make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
-        make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
-        make_framebuffer_attachment(sun_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
-        make_framebuffer_attachment(depth_tx, w, h, get_device_supported_depth_format(), 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(final_tx, w, h, get_swapchain_format(), 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(albedo_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(position_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(normal_tx, w, h, VK_FORMAT_R16G16B16A16_SFLOAT, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(sun_tx, w, h, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, 2);
+        make_framebuffer_attachment(depth_tx, w, h, get_device_supported_depth_format(), 1, 1, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, 2);
 
         image2d_t color_attachments[5] = {};
         color_attachments[0] = *final_tx;
@@ -1711,13 +1875,13 @@ void dbg_handle_input(raw_input_t *raw_input)
 static void dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
     VkImageAspectFlags aspect_flags = aspect;
-    init_image(w, h, format, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1, dst_img, 0);
-    init_image_view(&dst_img->image, format, aspect_flags, &dst_img->image_view, VK_IMAGE_VIEW_TYPE_2D, 1);
+    init_image(w, h, format, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1, dst_img, 1, 0);
+    init_image_view(&dst_img->image, format, aspect_flags, &dst_img->image_view, VK_IMAGE_VIEW_TYPE_2D, 1, 1);
 }
 
 static void dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
 {
-    make_framebuffer_attachment(dst_image, w, h, format, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
+    make_framebuffer_attachment(dst_image, w, h, format, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
     dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
@@ -1827,7 +1991,7 @@ static void make_pfx_stage(pfx_stage_t *dst_stage,
     {
         auto *tx_ptr = stage_output;
         make_framebuffer_attachment(tx_ptr, resolution.width, resolution.height,
-                                    get_swapchain_format(), 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 2);
+                                    get_swapchain_format(), 1, 1, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 2);
         make_framebuffer(stage_framebuffer, resolution.width, resolution.height, 1, pfx_render_pass, {1, tx_ptr}, nullptr);
     }
 
@@ -1984,7 +2148,7 @@ inline void render_to_pre_final(gpu_command_queue_t *queue)
 {
     if (g_postfx->dbg_requested_capture)
     {
-        g_postfx->dbg_in_frame_capture_mode = true;
+        /*g_postfx->dbg_in_frame_capture_mode = true;
         g_postfx->dbg_requested_capture = false;
 
         // Do image copy
@@ -2015,7 +2179,7 @@ inline void render_to_pre_final(gpu_command_queue_t *queue)
                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                        &queue->q);
-        }
+                       }*/
     }
     
     queue->begin_render_pass(g_postfx->pfx_render_pass, g_postfx->pre_final_stage.fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
@@ -2163,7 +2327,6 @@ static void make_cube_model(gpu_command_queue_pool_t *pool)
             {{radius, -radius, radius	}, gray},
             {{radius, radius, radius	}, gray},
             {{-radius, radius, radius	}, gray},
-												 
             {{-radius, -radius, -radius	}, gray},
             {{radius, -radius, -radius	}, gray},
             {{radius, radius, -radius	}, gray},
@@ -2994,7 +3157,7 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
 
     file_handle_t png_handle = create_file(texture_atlas, file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
     external_image_data_t image_data = read_image(png_handle);
-    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
+    make_texture(&particles.texture_atlas, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, 2, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_LINEAR);
     transition_image_layout(&particles.texture_atlas.image, VK_FORMAT_R8G8B8A8_UNORM,
                             VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

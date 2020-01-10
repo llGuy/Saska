@@ -502,7 +502,7 @@ static void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].ws_position = player->ws_position;
         player_snapshots[client_index].ws_direction = player->ws_direction;
         player_snapshots[client_index].ws_velocity = player->ws_velocity;
-        player_snapshots[client_index].ws_up_vector = player->camera.ws_current_up_vector;
+        player_snapshots[client_index].ws_up_vector = player->ws_up;
         player_snapshots[client_index].ws_rotation = player->ws_rotation;
         player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
 
@@ -634,12 +634,16 @@ static void dispatch_snapshot_to_clients(void)
                             // Make sure that server invalidates all packets previously sent by the client
                             player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
                             player->network.player_states_cbuffer.head_tail_difference = 0;
+
+                            player->network.commands_to_flush = 0;
                             
                             // Force client to do correction
                             player_snapshot_packet->need_to_do_correction = 1;
 
                             // Server will now wait until reception of a prediction error packet
                             client->needs_to_acknowledge_prediction_error = 1;
+
+                            player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up;
                         }
                         
                         player_snapshot_packet->is_to_ignore = 0;

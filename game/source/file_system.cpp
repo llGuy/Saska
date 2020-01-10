@@ -79,7 +79,7 @@ void initialize_filetime(file_object_t *object)
 // #elif
 #endif
 
-#define MAX_FILES 50
+#define MAX_FILES 60
 
 static struct file_manager_t
 {

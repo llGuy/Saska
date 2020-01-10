@@ -9,6 +9,7 @@ typedef uint8_t byte_t;
 typedef uint32_t bool32_t;
 
 #include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
 typedef glm::vec2 vector2_t;

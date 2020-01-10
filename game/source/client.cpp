@@ -56,6 +56,7 @@ static int32_t lua_join_server(lua_State *state);
 static int32_t lua_join_loop_back(lua_State *state);
 
 static void send_commands(void);
+static void push_pending_modified_voxels(void);
 static void revert_voxels_against_modifications_until(uint64_t tick);
 
 
@@ -246,14 +247,19 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                 if (player_snapshot_packet.need_to_do_voxel_correction)
                                 {
                                     // NEED TO DO VOXEL CORRECTION :
-                                    // Step 1: Revert voxel state against all modifications until the "client->previous_client_tick"
-                                    // Step 2: Correct all voxels
+                                    // Step 1: Push voxel modifications that are currently pending
+                                    // Step 2: Revert voxel state against all modifications until the "client->previous_client_tick"
+                                    // Step 3: Correct all voxels
+
 
                                     
-                                    // Step 1: Revert
+                                    // Step 1: Push pending voxel modifications
+                                    push_pending_modified_voxels();
+                                    
+                                    // Step 2: Revert
                                     revert_voxels_against_modifications_until(previous_tick);
 
-                                    // Step 2: Do correction
+                                    // Step 3: Do correction
                                     for (uint32_t chunk = 0; chunk < modified_voxels.modified_chunk_count; ++chunk)
                                     {
                                         client_modified_chunk_t *modified_chunk_data = &modified_voxels.modified_chunks[chunk];
@@ -272,6 +278,8 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                             }
                                         }
                                     }
+
+                                    console_out("Did voxel correction\n");
                                     
                                     send_prediction_error_correction(previous_tick);
                                 }
@@ -540,7 +548,45 @@ static void send_commands(void)
         client_flags.sent_active_action_flags = 1;
     }
 
-    clear_chunk_history();
+     clear_chunk_history();
+}
+
+
+static void push_pending_modified_voxels(void)
+{
+    uint32_t modified_chunks_count = 0;
+    chunk_t **chunks = get_modified_chunks(&modified_chunks_count);
+    
+    if (modified_chunks_count)
+    {
+        local_client_voxel_modification_history_t *history_instance = vmod_history.push_item();
+        history_instance->tick = *get_current_tick();
+
+        history_instance->modified_chunks_count = modified_chunks_count;
+        
+        for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
+        {
+            chunk_t *chunk = chunks[chunk_index];
+            client_modified_chunk_nl_t *history_to_keep = &history_instance->modified_chunks[chunk_index];
+            
+            for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)
+            {
+                uint16_t voxel_index = chunk->list_of_modified_voxels[voxel];
+                voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, CHUNK_EDGE_LENGTH);
+                
+                if (voxel < MAX_VOXELS_MODIFIED_PER_CHUNK)
+                {
+                    history_to_keep->modified_voxels[voxel].x = coord.x;
+                    history_to_keep->modified_voxels[voxel].y = coord.y;
+                    history_to_keep->modified_voxels[voxel].z = coord.z;
+                    // Set it to the "previous" value so that revert is possible
+                    history_to_keep->modified_voxels[voxel].value = chunk->voxel_history[convert_3d_to_1d_index(coord.x, coord.y, coord.z, CHUNK_EDGE_LENGTH)];
+                }
+            }
+        }
+
+        clear_chunk_history();
+    }
 }
 
 

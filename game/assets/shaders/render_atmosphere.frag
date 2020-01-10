@@ -11,10 +11,9 @@ layout(location = 4) out vec4 out_sun;
 
 layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
-void
-main(void)
+void main(void)
 {
-    vec4 cubemap_color = texture(cubemap_sampler, in_ms_cubemap_direction);
+    vec4 cubemap_color = textureLod(cubemap_sampler, in_ms_cubemap_direction, 1);
 
     out_final = cubemap_color;
     out_albedo = cubemap_color;

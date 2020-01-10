@@ -552,7 +552,7 @@ VkSubresourceLayout get_image_subresource_layout(VkImage *image,VkImageSubresour
     return(layout);
 }
 
-void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, VkImageCreateFlags flags)
+void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, uint32_t mips, VkImageCreateFlags flags)
 {
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -560,7 +560,7 @@ void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling 
     image_info.extent.width = width;
     image_info.extent.height = height;
     image_info.extent.depth = 1;
-    image_info.mipLevels = 1;
+    image_info.mipLevels = mips;
     image_info.arrayLayers = layers;
     image_info.format = format;
     image_info.tiling = tiling;
@@ -580,9 +580,11 @@ void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling 
     vkBindImageMemory(g_context->gpu.logical_device, dest_image->image, dest_image->device_memory, 0);
 
     dest_image->format;
+    dest_image->mip_level_count = mips;
+    dest_image->layer_count = layers;
 }
     
-void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers)
+void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers, uint32_t mips)
 {
     VkImageViewCreateInfo view_info			= {};
     view_info.sType					= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -591,7 +593,7 @@ void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_
     view_info.format				= format;
     view_info.subresourceRange.aspectMask		= aspect_flags;
     view_info.subresourceRange.baseMipLevel		= 0;
-    view_info.subresourceRange.levelCount		= 1;
+    view_info.subresourceRange.levelCount		= mips;
     view_info.subresourceRange.baseArrayLayer	= 0;
     view_info.subresourceRange.layerCount		= layers;
 
@@ -712,7 +714,7 @@ void issue_pipeline_barrier(VkPipelineStageFlags stage_before, VkPipelineStageFl
     vkCmdPipelineBarrier(*cmdbuf, stage_after, stage_before, 0, 0, 0, buffer_barriers.count, buffer_barriers.buffer, image_barriers.count, image_barriers.buffer);
 }
 
-void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool)
+void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool, uint32_t layer_count, uint32_t mip_count)
 {
     VkCommandBuffer single_use;
     init_single_use_command_buffer(graphics_command_pool, &single_use);
@@ -728,9 +730,9 @@ void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_
     barrier.image				= *image;
     barrier.subresourceRange.aspectMask	= VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel	= 0;
-    barrier.subresourceRange.levelCount	= 1;
+    barrier.subresourceRange.levelCount	= mip_count;
     barrier.subresourceRange.baseArrayLayer	= 0;
-    barrier.subresourceRange.layerCount	= 1;
+    barrier.subresourceRange.layerCount	= layer_count;
 
     VkPipelineStageFlags source_stage;
     VkPipelineStageFlags destination_stage;
@@ -827,23 +829,26 @@ void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPo
     destroy_single_use_command_buffer(&command_buffer, command_pool);
 }
 
-void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height,VkPipelineStageFlags flags_before,VkPipelineStageFlags flags_after,VkImageLayout layout_before,VkCommandBuffer *cmdbuf)
+void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before_dst, VkImageLayout layout_before_src, VkCommandBuffer *cmdbuf, uint32_t dest_layer, uint32_t dest_mip)
 {
     VkImageMemoryBarrier image_barrier = {};
     image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    image_barrier.oldLayout = layout_before;
+    image_barrier.oldLayout = layout_before_src;
     image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     image_barrier.image = src_image->image;
     image_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     image_barrier.subresourceRange.baseMipLevel = 0;
-    image_barrier.subresourceRange.levelCount = 1;
+    image_barrier.subresourceRange.levelCount = src_image->mip_level_count;
     image_barrier.subresourceRange.baseArrayLayer = 0;
     image_barrier.subresourceRange.layerCount = 1;
     
     vkCmdPipelineBarrier(*cmdbuf, flags_before, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 
     image_barrier.image = dst_image->image;
+    image_barrier.oldLayout = layout_before_dst;
     image_barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    image_barrier.subresourceRange.levelCount = dst_image->mip_level_count;
+    image_barrier.subresourceRange.layerCount = dst_image->layer_count;
 
     // Just perform layout transition
     vkCmdPipelineBarrier(*cmdbuf, flags_before, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
@@ -857,10 +862,10 @@ void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32
     image_copy.srcOffset.y = 0;
     image_copy.srcOffset.z = 0;
     
-    image_copy.dstSubresource.mipLevel = 0;
+    image_copy.dstSubresource.mipLevel = dest_mip;
     image_copy.dstSubresource.layerCount = 1;
     image_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_copy.dstSubresource.baseArrayLayer = 0;
+    image_copy.dstSubresource.baseArrayLayer = dest_layer;
     image_copy.dstOffset.x = 0;
     image_copy.dstOffset.y = 0;
     image_copy.dstOffset.z = 0;
@@ -873,12 +878,16 @@ void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32
 
     image_barrier.image = src_image->image;
     image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    image_barrier.newLayout = layout_before;
+    image_barrier.newLayout = layout_before_src;
+    image_barrier.subresourceRange.levelCount = 1;
+    image_barrier.subresourceRange.layerCount = 1;
     vkCmdPipelineBarrier(*cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, flags_after, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 
     image_barrier.image = dst_image->image;
     image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    image_barrier.newLayout = layout_before;
+    image_barrier.newLayout = layout_before_dst;
+    image_barrier.subresourceRange.levelCount = dst_image->mip_level_count;
+    image_barrier.subresourceRange.layerCount = dst_image->layer_count;
     vkCmdPipelineBarrier(*cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, flags_after, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 }
 
@@ -931,6 +940,7 @@ void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint
     image_barrier.image = src_image->image;
     image_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     image_barrier.newLayout = layout_before;
+    image_barrier.subresourceRange.levelCount = 1;
     vkCmdPipelineBarrier(*cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, flags_after, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 
     image_barrier.image = dst_image->image;
@@ -1046,7 +1056,7 @@ static void init_swapchain(raw_input_t *raw_input)
     {
         VkImage *image = &g_context->swapchain.imgs[i];
 
-        init_image_view(image, g_context->swapchain.format, VK_IMAGE_ASPECT_COLOR_BIT, &g_context->swapchain.views[i], VK_IMAGE_VIEW_TYPE_2D, 1);
+        init_image_view(image, g_context->swapchain.format, VK_IMAGE_ASPECT_COLOR_BIT, &g_context->swapchain.views[i], VK_IMAGE_VIEW_TYPE_2D, 1, 1);
     }
 }
     
@@ -1189,7 +1199,7 @@ void init_framebuffer_attachment(uint32_t width, uint32_t height, VkFormat forma
     if (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
     if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
 	
-    init_image_view(&attachment->image, format, aspect_flags, &attachment->image_view, image_view_type, layers);
+    init_image_view(&attachment->image, format, aspect_flags, &attachment->image_view, image_view_type, layers, 1);
 }
     
 void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uint32_t height, uint32_t layer_count, framebuffer_t *framebuffer)

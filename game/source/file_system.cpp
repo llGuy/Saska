@@ -79,12 +79,12 @@ void initialize_filetime(file_object_t *object)
 // #elif
 #endif
 
-#define MAX_FILES 60
+#define MAX_FILES 80
 
 static struct file_manager_t
 {
 
-    typedef stack_dynamic_container_t<file_object_t, 50> file_stack_dynamic_container_t;
+    typedef stack_dynamic_container_t<file_object_t, MAX_FILES> file_stack_dynamic_container_t;
     file_stack_dynamic_container_t files;
 
 } g_files;

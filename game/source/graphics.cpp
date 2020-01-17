@@ -569,9 +569,17 @@ void update_spectator_camera(const matrix4_t &view_matrix)
     g_cameras->spectator_camera.v_m = view_matrix;
 }
 
-void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data, const matrix4_t &view_matrix, const matrix4_t &projection_matrix, const matrix4_t &shadow_view_matrix, const matrix4_t &shadow_projection_matrix, const vector4_t &debug_vector)
+void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
+                                        const matrix4_t &view_matrix,
+                                        const matrix4_t &projection_matrix,
+                                        const matrix4_t &shadow_view_matrix,
+                                        const matrix4_t &shadow_projection_matrix,
+                                        const vector4_t &debug_vector,
+                                        const vector4_t &light_direction,
+                                        const matrix4_t &inverse_view_matrix,
+                                        const vector4_t &view_direction)
 {
-    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector };
+    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector, light_direction, inverse_view_matrix, view_direction };
 }
 
 void clean_up_cameras(void)
@@ -591,7 +599,15 @@ void update_3d_output_camera_transforms(uint32_t image_index)
     camera_transform_uniform_data_t transform_data = {};
     matrix4_t projection_matrix = camera->p_m;
     projection_matrix[1][1] *= -1.0f;
-    make_camera_transform_uniform_data(&transform_data, camera->v_m, projection_matrix, shadow_data.light_view_matrix, shadow_data.projection_matrix, vector4_t(1.0f, 0.0f, 0.0f, 1.0f));
+    make_camera_transform_uniform_data(&transform_data,
+                                       camera->v_m,
+                                       projection_matrix,
+                                       shadow_data.light_view_matrix,
+                                       shadow_data.projection_matrix,
+                                       vector4_t(1.0f, 0.0f, 0.0f, 1.0f),
+                                       vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 1.0),
+                                       glm::inverse(camera->v_m), // TODO: Get rid of glm::inverse call
+                                       vector4_t(camera->d, 1.0));
     
     gpu_buffer_t &current_ubo = *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos + image_index);
 
@@ -1725,6 +1741,25 @@ void begin_deferred_rendering(uint32_t image_index /* to_t remove in the future 
 
     // User renders what is needed ...
 }    
+
+
+uniform_group_t get_irradiance_group(void)
+{
+    return(*g_uniform_group_manager->get(g_atmosphere->atmosphere_irradiance_uniform_group));
+}
+
+
+uniform_group_t get_prefiltered_group(void)
+{
+    return(*g_uniform_group_manager->get(g_atmosphere->atmosphere_prefiltered_environment_uniform_group));
+}
+
+
+uniform_group_t get_integrate_lookup_group(void)
+{
+    return(*g_uniform_group_manager->get(g_atmosphere->integrate_lookup_uniform_group));
+}
+
 
 void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue)
 {

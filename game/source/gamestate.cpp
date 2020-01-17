@@ -112,6 +112,7 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
         // Render particles
         // TODO: In future, render skybox and sun here
         render_alpha_particles(uniform_groups, queue);
+        render_transparent_entities(uniform_groups, queue);
     }
     end_deferred_rendering(queue);
 

@@ -97,7 +97,7 @@ struct camera_component_t
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> fov;
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> camera_distance;
 
-    smooth_linear_interpolation_t<float32_t> transition_first_third;
+    smooth_linear_interpolation_t<float32_t> transition_first_third = {};
 
     void tick(struct player_t *affected_player, float32_t dt);
 };
@@ -138,6 +138,14 @@ struct rendering_component_t
         float32_t roughness;
         float32_t metalness;
     } push_k;
+
+    struct
+    {
+        matrix4_t ws_t{1.0f};
+        vector4_t color;
+
+        float32_t fade = 0.5f;
+    } push_k_alpha;
 
     bool enabled = true;
 

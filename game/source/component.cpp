@@ -348,7 +348,7 @@ void camera_component_t::tick(player_t *affected_player, float32_t dt)
 
         was_entering = affected_player->is_entering;
         
-        camera_position += -camera_distance.current * affected_player->ws_direction;
+        camera_position += -camera_distance.current * affected_player->ws_direction * (1.0f - transition_first_third.current);
 
         if (initialized_previous_position)
         {
@@ -374,15 +374,23 @@ void camera_component_t::tick(player_t *affected_player, float32_t dt)
         }
     }
 
-    camera_ptr->current_fov = camera_ptr->fov * fov.current;
-    camera_ptr->v_m = glm::lookAt(camera_position, affected_player->ws_position + affected_player->ws_direction, up);
+    if (transition_first_third.in_animation)
+    {
+        transition_first_third.animate(dt);
 
-    // TODO: Don't need to calculate this every frame, just when parameters change
-    camera_ptr->compute_projection();
+        output_to_debug_console(transition_first_third.current);
+    }
+
+    camera_ptr->current_fov = camera_ptr->fov * fov.current;
 
     camera_ptr->p = camera_position;
     camera_ptr->d = affected_player->ws_direction;
     camera_ptr->u = up;
+    
+    camera_ptr->v_m = glm::lookAt(camera_ptr->p, camera_ptr->p + camera_ptr->d, camera_ptr->u);
+
+    // TODO: Don't need to calculate this every frame, just when parameters change
+    camera_ptr->compute_projection();
 }
 
 
@@ -471,13 +479,53 @@ void rendering_component_t::tick(player_t *affected_player, float32_t dt)
         push_k.ws_t = matrix4_t(0.0f);
     }
 
-    if (affected_player->rolling_mode)
+    if (affected_player->camera.transition_first_third.in_animation)
     {
-        push_entity_to_rolling_queue(this);
+        push_k_alpha.fade = (1.0f - affected_player->camera.transition_first_third.current);
+        push_k_alpha.ws_t = push_k.ws_t;
+        push_k_alpha.color = push_k.color;
+
+        if (affected_player->rolling_mode)
+        {
+            push_entity_to_rolling_alpha_queue(this);
+            push_entity_to_rolling_shadow_queue(this);
+        }
+        else
+        {
+            push_entity_to_skeletal_animation_alpha_queue(this, &affected_player->animation);
+            push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+        }
     }
     else
     {
-        push_entity_to_skeletal_animation_queue(this, &affected_player->animation);
+        if (player_t *main_player = get_user_player(); main_player)
+        {
+            // Always render the rolling player for main player
+            if (affected_player->rolling_mode && main_player->index == affected_player->index)
+            {
+                push_entity_to_rolling_queue(this);
+                push_entity_to_rolling_shadow_queue(this);
+            }
+            else
+            {
+                // Don't push anything. Player will be in first person mode if in standing mode anyway.
+                // Maybe just push to the shadowmap
+                push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+            }
+        }
+        else
+        {
+            if (affected_player->rolling_mode)
+            {
+                push_entity_to_rolling_queue(this);
+                push_entity_to_rolling_shadow_queue(this);
+            }
+            else
+            {
+                push_entity_to_skeletal_animation_queue(this, &affected_player->animation);
+                push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+            }
+        }
     }
 }
 

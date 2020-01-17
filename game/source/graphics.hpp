@@ -526,7 +526,10 @@ struct camera_transform_uniform_data_t
     alignas(16) matrix4_t shadow_projection_matrix;
     alignas(16) matrix4_t shadow_view_matrix;
     
-    alignas(16) vector4_t debug_vector;
+    vector4_t debug_vector;
+    vector4_t light_direction;
+    matrix4_t inverse_view_matrix;
+    vector4_t view_direction;
 };
 
 void update_3d_output_camera_transforms(uint32_t image_index);
@@ -937,6 +940,10 @@ struct atmosphere_t
 
     model_handle_t cube_handle;
 };
+
+uniform_group_t get_irradiance_group(void);
+uniform_group_t get_prefiltered_group(void);
+uniform_group_t get_integrate_lookup_group(void);
 
 struct pfx_stage_t
 {

@@ -18,8 +18,10 @@ static uint32_t removed_bullets_stack_head;
 static uint16_t removed_bullets_stack[MAX_BULLETS];
 static hash_table_inline_t<player_handle_t, 30, 5, 5> name_map{"map.entities"};
 static pipeline_handle_t player_ppln;
+static pipeline_handle_t player_alpha_ppln;
 static pipeline_handle_t player_shadow_ppln;
 static pipeline_handle_t rolling_player_ppln;
+static pipeline_handle_t rolling_player_alpha_ppln;
 static pipeline_handle_t rolling_player_shadow_ppln;
 static pipeline_handle_t dbg_hitbox_ppln;
 static mesh_t rolling_player_mesh;
@@ -31,7 +33,12 @@ static uniform_layout_t animation_ubo_layout;
 static model_t player_model;
 static int32_t main_player = -1;
 static gpu_material_submission_queue_t player_submission_queue;
+static gpu_material_submission_queue_t player_submission_alpha_queue;
+static gpu_material_submission_queue_t player_submission_shadow_queue;
+
 static gpu_material_submission_queue_t rolling_player_submission_queue;
+static gpu_material_submission_queue_t rolling_player_submission_alpha_queue;
+static gpu_material_submission_queue_t rolling_player_submission_shadow_queue;
 
 
 
@@ -85,6 +92,33 @@ void initialize_entities_state(void)
         player_ppln_ptr->info = info;
         make_graphics_pipeline(player_ppln_ptr);
     }
+
+    player_alpha_ppln = g_pipeline_manager->add("pipeline.model_alpha"_hash);
+    // Uses forward-rendering style for lighting
+    auto *player_alpha_ppln_ptr = g_pipeline_manager->get(player_alpha_ppln);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_animated_alpha.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_animated_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                         // Lighting stuff
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         animation_layout_hdl);
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_BACK_BIT, layouts, push_k, get_backbuffer_resolution(), blending, &player_model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
+        player_alpha_ppln_ptr->info = info;
+        make_graphics_pipeline(player_alpha_ppln_ptr);
+    }
+    
     // TODO: Rename all the pipelines correctly : animated / normal
     rolling_player_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
     auto *rolling_player_ppln_ptr = g_pipeline_manager->get(rolling_player_ppln);
@@ -104,6 +138,30 @@ void initialize_entities_state(void)
                                     true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
         rolling_player_ppln_ptr->info = info;
         make_graphics_pipeline(rolling_player_ppln_ptr);
+    }
+
+    rolling_player_alpha_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
+    auto *rolling_player_alpha_ppln_ptr = g_pipeline_manager->get(rolling_player_alpha_ppln);
+    {
+        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+        shader_modules_t modules(shader_module_info_t{"shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
+                                 shader_module_info_t{"shaders/SPV/lp_notex_model_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                         // Lighting stuff
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_BACK_BIT, layouts, push_k, get_backbuffer_resolution(), blending, &rolling_player_model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
+        rolling_player_alpha_ppln_ptr->info = info;
+        make_graphics_pipeline(rolling_player_alpha_ppln_ptr);
     }
 
     dbg_hitbox_ppln = g_pipeline_manager->add("pipeline.hitboxes"_hash);
@@ -168,6 +226,12 @@ void initialize_entities_state(void)
 
     rolling_player_submission_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
     player_submission_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+
+    rolling_player_submission_alpha_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+    player_submission_alpha_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+
+    rolling_player_submission_shadow_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+    player_submission_shadow_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
 }
 
 
@@ -363,11 +427,15 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
 
 void render_entities_to_shadowmap(uniform_group_t *transforms, gpu_command_queue_t *queue)
 {
+    // TODO: Make sure this uses the shadow submission queue
     auto *model_ppln = g_pipeline_manager->get(player_shadow_ppln);
-    player_submission_queue.submit_queued_materials({1, transforms}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    player_submission_shadow_queue.submit_queued_materials({1, transforms}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     
     auto *rolling_model_ppln = g_pipeline_manager->get(rolling_player_shadow_ppln);
-    rolling_player_submission_queue.submit_queued_materials({1, transforms}, rolling_model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    rolling_player_submission_shadow_queue.submit_queued_materials({1, transforms}, rolling_model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    player_submission_shadow_queue.flush_queue();
+    rolling_player_submission_shadow_queue.flush_queue();
 }
 
 
@@ -381,6 +449,21 @@ void render_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
 
     player_submission_queue.flush_queue();
     rolling_player_submission_queue.flush_queue();
+}
+
+
+void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
+{
+    uniform_group_t groups[] = { uniforms[0], uniforms[1], get_irradiance_group(), get_prefiltered_group(), get_integrate_lookup_group() };
+    
+    auto *player_ppln_alpha_ptr = g_pipeline_manager->get(player_alpha_ppln);
+    player_submission_alpha_queue.submit_queued_materials({5, groups}, player_ppln_alpha_ptr, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    
+    auto *rolling_player_alpha_ppln_ptr = g_pipeline_manager->get(rolling_player_alpha_ppln);
+    rolling_player_submission_alpha_queue.submit_queued_materials({5, groups}, rolling_player_alpha_ppln_ptr, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    player_submission_alpha_queue.flush_queue();
+    rolling_player_submission_alpha_queue.flush_queue();
 }
 
 
@@ -518,9 +601,35 @@ void push_entity_to_skeletal_animation_queue(rendering_component_t *rendering, a
 }
 
 
+void push_entity_to_skeletal_animation_alpha_queue(rendering_component_t *rendering, animation_component_t *animation)
+{
+    uniform_group_t *group = &animation->animation_instance.group;
+    player_submission_alpha_queue.push_material(&rendering->push_k_alpha, sizeof(rendering->push_k_alpha), &player_mesh, group);
+}
+
+
+void push_entity_to_skeletal_animation_shadow_queue(rendering_component_t *rendering, animation_component_t *animation)
+{
+    uniform_group_t *group = &animation->animation_instance.group;
+    player_submission_shadow_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &player_mesh, group);
+}
+
+
 void push_entity_to_rolling_queue(rendering_component_t *rendering)
 {
     rolling_player_submission_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &rolling_player_mesh, nullptr);
+}
+
+
+void push_entity_to_rolling_alpha_queue(rendering_component_t *rendering)
+{
+    rolling_player_submission_alpha_queue.push_material(&rendering->push_k_alpha, sizeof(rendering->push_k_alpha), &rolling_player_mesh, nullptr);
+}
+
+
+void push_entity_to_rolling_shadow_queue(rendering_component_t *rendering)
+{
+    rolling_player_submission_shadow_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &rolling_player_mesh, nullptr);
 }
 
 
@@ -636,8 +745,8 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
             player->camera.transition_first_third.max_time = 0.3f;
             player->camera.transition_first_third.current = 0.0f;
             
-            player->camera.transition_first_third.prev = 1.0f; // 1 = standing
-            player->camera.transition_first_third.next = 0.0f; // 0 = rolling
+            player->camera.transition_first_third.prev = 0.0f; // 1 = standing
+            player->camera.transition_first_third.next = 1.0f; // 0 = rolling
             
             player->camera.transition_first_third.current_time = 0.0f;
             player->camera.transition_first_third.in_animation = 1;
@@ -648,8 +757,8 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
             player->camera.transition_first_third.max_time = 0.3f;
             player->camera.transition_first_third.current = 1.0f;
             
-            player->camera.transition_first_third.prev = 0.0f;
-            player->camera.transition_first_third.next = 1.0f;
+            player->camera.transition_first_third.prev = 1.0f;
+            player->camera.transition_first_third.next = 0.0f;
             
             player->camera.transition_first_third.current_time = 0.0f;
             player->camera.transition_first_third.in_animation = 1;

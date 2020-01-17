@@ -501,16 +501,32 @@ void rendering_component_t::tick(player_t *affected_player, float32_t dt)
         if (player_t *main_player = get_user_player(); main_player)
         {
             // Always render the rolling player for main player
-            if (affected_player->rolling_mode && main_player->index == affected_player->index)
+            if (main_player->index == affected_player->index)
             {
-                push_entity_to_rolling_queue(this);
-                push_entity_to_rolling_shadow_queue(this);
+                if (affected_player->rolling_mode)
+                {
+                    push_entity_to_rolling_queue(this);
+                    push_entity_to_rolling_shadow_queue(this);
+                }
+                else
+                {
+                    push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+                }
             }
             else
             {
                 // Don't push anything. Player will be in first person mode if in standing mode anyway.
                 // Maybe just push to the shadowmap
-                push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+                if (affected_player->rolling_mode)
+                {
+                    push_entity_to_rolling_queue(this);
+                    push_entity_to_rolling_shadow_queue(this);
+                }
+                else
+                {
+                    push_entity_to_skeletal_animation_queue(this, &affected_player->animation);
+                    push_entity_to_skeletal_animation_shadow_queue(this, &affected_player->animation);
+                }
             }
         }
         else

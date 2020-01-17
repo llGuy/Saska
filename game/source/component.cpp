@@ -348,8 +348,7 @@ void camera_component_t::tick(player_t *affected_player, float32_t dt)
 
         was_entering = affected_player->is_entering;
         
-        vector3_t right = glm::cross(affected_player->ws_direction, up);
-        camera_position += right * affected_player->size.x + -camera_distance.current * affected_player->ws_direction;
+        camera_position += -camera_distance.current * affected_player->ws_direction;
 
         if (initialized_previous_position)
         {
@@ -376,7 +375,7 @@ void camera_component_t::tick(player_t *affected_player, float32_t dt)
     }
 
     camera_ptr->current_fov = camera_ptr->fov * fov.current;
-    camera_ptr->v_m = glm::lookAt(camera_position, affected_player->ws_position + up + affected_player->ws_direction, up);
+    camera_ptr->v_m = glm::lookAt(camera_position, affected_player->ws_position + affected_player->ws_direction, up);
 
     // TODO: Don't need to calculate this every frame, just when parameters change
     camera_ptr->compute_projection();

@@ -188,12 +188,13 @@ void initialize_chunks_state(void)
     update_uniform_group(&voxel_color_beacon_uniform, update_binding_t{BUFFER, &voxel_color_beacon_uniform_buffer, 0});
 
     //voxel_beacons.default_voxel_color.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1);
-    voxel_beacons.default_voxel_color.color = vector4_t(1);
-    voxel_beacons.default_voxel_color.metalness = 0.5f;
-    voxel_beacons.default_voxel_color.roughness = 0.0f;
+    voxel_beacons.default_voxel_color.color = vector4_t(0);
+    voxel_beacons.default_voxel_color.metalness = 0.3f;
+    voxel_beacons.default_voxel_color.roughness = 0.5f;
 
-    voxel_beacons.beacon_count = 1;
-    voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0.8, 0.1, 1), 10.0f, 0.8, 0.2, 5.0f };
+    voxel_beacons.beacon_count = 0;
+    //voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0.8, 0.1, 1), 10.0f, 0.8, 0.2, 5.0f };
+    
     /*voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0, 0, 1), 30.0f, 0.2, 0.8, 60.0f };
     voxel_beacons.voxel_color_beacons[1] = { vector4_t(-80.0f, -50.0f, 0.0f, 1), vector4_t(0, 0, 1, 1), 30.0f, 0.8, 0.4, 60.0f };
     voxel_beacons.voxel_color_beacons[2] = { vector4_t(80.0f, 50.0f, 0.0f, 1), vector4_t(1, 0, 1, 1), 30.0f, 0.1, 0.9, 60.0f };*/
@@ -874,13 +875,13 @@ struct linear_allocator_t *get_voxel_linear_allocator(void)
 void debug_stuff(gpu_command_queue_t *queue)
 {
     // TESTING!! TODO: REMOVE THIS
-    player_t *p = get_user_player();
+    /*player_t *p = get_user_player();
     if (p)
     {
         voxel_beacons.voxel_color_beacons[0].ws_position = vector4_t(p->ws_position, 1.0f);
 
         update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons.beacon_count) + sizeof(voxel_color_beacon_t) * (voxel_beacons.beacon_count + 1), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
-    }
+        }*/
 }
 
 

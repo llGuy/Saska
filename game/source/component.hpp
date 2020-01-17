@@ -97,6 +97,8 @@ struct camera_component_t
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> fov;
     smooth_exponential_interpolation_t<float32_t, smooth_exponential_interpolation_compare_float_t> camera_distance;
 
+    smooth_linear_interpolation_t<float32_t> transition_first_third;
+
     void tick(struct player_t *affected_player, float32_t dt);
 };
 

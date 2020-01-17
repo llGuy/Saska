@@ -407,7 +407,7 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::GRAY;
+    player_create_info.color = player_color_t::DARK_GRAY;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -451,7 +451,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
     player_create_info.ws_size = vector3_t(2);
     player_create_info.starting_velocity = 15.0f;
-    player_create_info.color = player_color_t::GRAY;
+    player_create_info.color = player_color_t::DARK_GRAY;
     player_create_info.physics_info.enabled = 1;
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
@@ -631,6 +631,28 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
         {
             player->rolling_rotation = matrix4_t(1.0f);
             player->current_rolling_rotation_angle = 0.0f;
+
+            // Going from standing to rolling
+            player->camera.transition_first_third.max_time = 0.3f;
+            player->camera.transition_first_third.current = 0.0f;
+            
+            player->camera.transition_first_third.prev = 1.0f; // 1 = standing
+            player->camera.transition_first_third.next = 0.0f; // 0 = rolling
+            
+            player->camera.transition_first_third.current_time = 0.0f;
+            player->camera.transition_first_third.in_animation = 1;
+        }
+        else
+        {
+            // Going from rolling to standing
+            player->camera.transition_first_third.max_time = 0.3f;
+            player->camera.transition_first_third.current = 1.0f;
+            
+            player->camera.transition_first_third.prev = 0.0f;
+            player->camera.transition_first_third.next = 1.0f;
+            
+            player->camera.transition_first_third.current_time = 0.0f;
+            player->camera.transition_first_third.in_animation = 1;
         }
     }
     else if (!game_input->actions[game_input_action_type_t::TRIGGER5].state)

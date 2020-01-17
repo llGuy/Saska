@@ -495,7 +495,7 @@ struct camera_t
 	d = vector3_t(+1, 0.0f, +1);
 	u = vector3_t(0, 1, 0);
 
-	fov = current_fov = glm::radians(60.0f);
+	fov = current_fov = glm::radians(80.0f);
 	asp = w / h;
 	n = 1.0f;
 	f = 10000000.0f;

@@ -1,31 +1,87 @@
 #version 450
 
-layout(location = 0) in vec2 in_uvs;
-
-layout(location = 0) out vec4 out_color;
-
-const uint G_BUFFER_ALBEDO	= 0;
-const uint G_BUFFER_POSITION	= 1;
-const uint G_BUFFER_NORMAL	= 2;
-const uint G_BUFFER_TOTAL	= 4;
-
-layout(input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput g_buffer_albedo;
-layout(input_attachment_index = 1, set = 0, binding = 1) uniform subpassInput g_buffer_position;
-layout(input_attachment_index = 2, set = 0, binding = 2) uniform subpassInput g_buffer_normal;
-
-layout(set = 1, binding = 0) uniform samplerCube irradiance_cubemap;
-layout(set = 2, binding = 0) uniform samplerCube prefiltered_environment;
-layout(set = 3, binding = 0) uniform sampler2D integrate_lookup;
-
-//layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
-
-layout(push_constant) uniform Push_K
+layout(location = 0) in GS_DATA
 {
-    vec4 light_direction;
-    mat4 view_matrix;
-    mat4 inverse_view_matrix;
-    vec4 ws_view_direction;
+
+    vec3 final;
+    vec3 position;
+    vec3 normal;
+    vec4 shadow_coord;
+    
+} fs_in;
+
+
+layout(location = 0) out vec4 final_color;
+
+layout(push_constant) uniform Push_Constants
+{
+    mat4 model;
+    vec4 color;
+
+    float fade;
 } push_k;
+
+layout(set = 0, binding = 0) uniform transforms_t
+{
+    mat4 view;
+    mat4 proj;
+
+    mat4 shadow_view;
+    mat4 shadow_proj;
+
+    vec4 debug_vector;
+
+    vec4 light_direction;
+    mat4 inverse_view;
+    vec4 view_direction;
+} ubo;
+
+layout(set = 1, binding = 0) uniform sampler2D shadow_map;
+layout(set = 2, binding = 0) uniform samplerCube irradiance_cubemap;
+layout(set = 3, binding = 0) uniform samplerCube prefiltered_environment;
+layout(set = 4, binding = 0) uniform sampler2D integrate_lookup;
+
+const float MAP_SIZE = 4000.0;
+const float PCF_COUNT = 1.0;
+const float TRANSITION_DISTANCE = 20.0;
+const float SHADOW_DISTANCE = 1000.0;
+
+float get_shadow_light_factor(float dist, in vec4 shadow_coord)
+{
+    float total_texels = (PCF_COUNT * 2.0f + 1.0f) * (PCF_COUNT * 2.0f + 1.0f);
+
+    dist = dist - (SHADOW_DISTANCE - TRANSITION_DISTANCE);
+    dist = dist / TRANSITION_DISTANCE;
+    dist = clamp(1.0 - dist, 0.0, 1.0);
+
+    float texel_size = 1.0f / MAP_SIZE;
+    float total = 0.0f;
+
+    vec3 shadow_space_pos = shadow_coord.xyz / shadow_coord.w;
+    shadow_space_pos.xy = shadow_space_pos.xy * 0.5 + 0.5;
+    
+    if (shadow_space_pos.z > -1.0 && shadow_space_pos.z < 1.0
+	&& shadow_space_pos.x > 0.0 && shadow_space_pos.x < 1.0
+	&& shadow_space_pos.y > 0.0 && shadow_space_pos.y < 1.0)
+    {
+	for (int x = int(-PCF_COUNT); x <= int(PCF_COUNT); ++x)
+	{
+	    for (int y = int(-PCF_COUNT); y <= int(PCF_COUNT); ++y)
+	    {
+		float object_nearest_light = texture(shadow_map, shadow_space_pos.xy + vec2(x, y) * texel_size).x;
+		if (shadow_space_pos.z - 0.005 > object_nearest_light)
+		{
+		    total += 0.8f;
+		}
+	    }
+	}
+	total /= total_texels;
+    }
+
+    float light_factor = 1.0f - (total * dist);
+
+    return light_factor;
+}
 
 const float PI = 3.14159265359;
 
@@ -72,33 +128,32 @@ vec3 fresnel_schlick(float cos_theta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cos_theta, 5.0);
 }
 
-
-// roughness of the material controlled in normal.a and the metalness in the position.a
-vec4 pbr(void)
+void main(void)
 {
-    vec4 albedo = subpassLoad(g_buffer_albedo);
-    float shadow_factor = albedo.a;
+    float shadow_factor = get_shadow_light_factor(length(fs_in.position), fs_in.shadow_coord);
+
+    vec4 albedo = push_k.color;
     albedo.xyz = pow(albedo.xyz, vec3(2.2));
-    vec4 gposition = subpassLoad(g_buffer_position);
+    vec4 gposition = vec4(fs_in.position, 1.0);
     vec3 vs_position = gposition.xyz;
 
-    vec4 gnormal = -subpassLoad(g_buffer_normal);
+    vec4 gnormal = -vec4(fs_in.normal, 1.0);
     vec3 vs_normal = gnormal.xyz;
-    vec3 ws_normal = vec3(push_k.inverse_view_matrix * vec4(vs_normal, 0.0));
+    vec3 ws_normal = vec3(ubo.inverse_view * vec4(vs_normal, 0.0));
     float roughness = gnormal.a;
     float metallic = gposition.a;
 
-    vec3 reflection_vector = reflect(-push_k.ws_view_direction.xyz, -ws_normal);
+    vec3 reflection_vector = reflect(-ubo.view_direction.xyz, -ws_normal);
 
     const float MAX_REFLECTION_LOD = 4.0;
 
     vec3 prefiltered_color = textureLod(prefiltered_environment, reflection_vector, roughness * MAX_REFLECTION_LOD).rgb;
     
     vec3 radiance = vec3(24.47, 21.31, 20.79);
-    vec3 ws_light = normalize(push_k.light_direction.xyz);
+    vec3 ws_light = normalize(ubo.light_direction.xyz);
     //    ws_light.y *= 1.0;
     ws_light.xz *= -1.0f;
-    vec3 light_vector = vec3(push_k.view_matrix * vec4(ws_light, 0.0));
+    vec3 light_vector = vec3(ubo.view * vec4(ws_light, 0.0));
     vec3 to_camera = normalize(vs_position);
     vec3 halfway = normalize(to_camera + light_vector);
 
@@ -129,7 +184,7 @@ vec4 pbr(void)
     
     vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * irradiance * n_dot_l;
 
-    vec2 env_brdf = texture(integrate_lookup, vec2(max(dot(ws_normal.xyz, push_k.ws_view_direction.xyz), 0.0), roughness)).rg;
+    vec2 env_brdf = texture(integrate_lookup, vec2(max(dot(ws_normal.xyz, ubo.view_direction.xyz), 0.0), roughness)).rg;
     vec3 specular = prefiltered_color * (F * env_brdf.x + env_brdf.y);
     
     vec3 diffuse = irradiance * albedo.rgb;
@@ -145,20 +200,5 @@ vec4 pbr(void)
 
     result = clamp(result, ambient, vec3(1.0));
     
-    return vec4(result * shadow_factor, 1.0);
-}
-
-void
-main(void)
-{
-    vec3 albedo_color = subpassLoad(g_buffer_albedo).rgb;
-    vec3 vs_position = subpassLoad(g_buffer_position).rgb;
-    vec3 vs_normal = subpassLoad(g_buffer_normal).rgb;
-
-    out_color = vec4(albedo_color, 1.0);
-
-    if (vs_normal.x > -10.0 && vs_normal.y > -10.0 && vs_normal.z > -10.0)
-    {
-	out_color = pbr();
-    }
+    final_color = vec4(result * shadow_factor, push_k.fade);
 }

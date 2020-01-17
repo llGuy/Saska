@@ -26,7 +26,6 @@
 #include "raw_input.hpp"
 
 
-
 // Global
 static bool running;
 static double dt = 0.0f;

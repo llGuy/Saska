@@ -6,10 +6,18 @@ If "%1" == "compile" goto compile
 If "%1" == "all" goto all
 
 :all
+
+
 %VULKAN_SHADER_COMPILER% -V -o SPV/atmosphere.frag.spv atmosphere.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/atmosphere.geom.spv atmosphere.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/atmosphere.vert.spv atmosphere.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/atomsphere_init.vert.spv atomsphere_init.vert
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_irradiance_generator.frag.spv cubemap_irradiance_generator.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_irradiance_generator.geom.spv cubemap_irradiance_generator.geom
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_irradiance_generator.vert.spv cubemap_irradiance_generator.vert
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_prefiltered_generator.frag.spv cubemap_prefiltered_generator.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_prefiltered_generator.geom.spv cubemap_prefiltered_generator.geom
+%VULKAN_SHADER_COMPILER% -V -o SPV/cubemap_prefiltered_generator.vert.spv cubemap_prefiltered_generator.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/debug_frustum.frag.spv debug_frustum.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/debug_frustum.vert.spv debug_frustum.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/deferred_lighting.frag.spv deferred_lighting.frag
@@ -18,17 +26,24 @@ If "%1" == "all" goto all
 %VULKAN_SHADER_COMPILER% -V -o SPV/explosion_particle.vert.spv explosion_particle.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/hitbox_render.frag.spv hitbox_render.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/hitbox_render.vert.spv hitbox_render.vert
+%VULKAN_SHADER_COMPILER% -V -o SPV/integrate_lookup.frag.spv integrate_lookup.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/integrate_lookup.vert.spv integrate_lookup.vert
+%VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_animated_alpha.frag.spv lp_notex_animated_alpha.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_animated_alpha.vert.spv lp_notex_animated_alpha.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_animated.frag.spv lp_notex_animated.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_animated.geom.spv lp_notex_animated.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_animated.vert.spv lp_notex_animated.vert
+%VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model_alpha.frag.spv lp_notex_model_alpha.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model.frag.spv lp_notex_model.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model.geom.spv lp_notex_model.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model_shadow.frag.spv lp_notex_model_shadow.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model_shadow.geom.spv lp_notex_model_shadow.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model_shadow.vert.spv lp_notex_model_shadow.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/lp_notex_model.vert.spv lp_notex_model.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/model.frag.spv model.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/model.geom.spv model.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/model_shadow.frag.spv model_shadow.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/model_shadow.geom.spv model_shadow.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/model_shadow.vert.spv model_shadow.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/model.vert.spv model.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/pfx_final.frag.spv pfx_final.frag
@@ -57,10 +72,15 @@ If "%1" == "all" goto all
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh.frag.spv voxel_mesh.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh.geom.spv voxel_mesh.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh_shadow.frag.spv voxel_mesh_shadow.frag
+%VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh_shadow.geom.spv voxel_mesh_shadow.geom
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh_shadow.vert.spv voxel_mesh_shadow.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_mesh.vert.spv voxel_mesh.vert
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_point.frag.spv voxel_point.frag
 %VULKAN_SHADER_COMPILER% -V -o SPV/voxel_point.vert.spv voxel_point.vert
+
+
+
+
 goto eof
 
 :compile

@@ -15,7 +15,7 @@ layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
     vec4 view_direction;
 } ubo;
 
-layout(set = 2, binding = 0) uniform Joint_Transforms
+layout(set = 5, binding = 0) uniform Joint_Transforms
 {
     // TODO: Don't hardcode number of transforms
     mat4 transforms[13];

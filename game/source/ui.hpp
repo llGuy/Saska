@@ -3,54 +3,14 @@
 #include "vulkan.hpp"
 #include "graphics.hpp"
 
+
+#include "fonts.hpp"
+#include "gui_box.hpp"
+
 struct dbg_ui_utils_t
 {
     graphics_pipeline_t dbg_tx_quad_ppln;
     uniform_layout_t dbg_tx_ulayout;
-};
-
-enum coordinate_type_t { PIXEL, GLSL };
-
-struct ui_vector2_t
-{
-    union
-    {
-        struct {int32_t ix, iy;};
-        struct {float32_t fx, fy;};
-    };
-    coordinate_type_t type;
-
-    ui_vector2_t(void) = default;
-    ui_vector2_t(float32_t x, float32_t y) : fx(x), fy(y), type(GLSL) {}
-    ui_vector2_t(int32_t x, int32_t y) : ix(x), iy(y), type(PIXEL) {}
-    ui_vector2_t(const ivector2_t &iv) : ix(iv.x), iy(iv.y) {}
-    
-    inline vector2_t to_fvec2(void) const
-    {
-        return vector2_t(fx, fy);
-    }
-
-    inline ivector2_t to_ivec2(void) const
-    {
-        return ivector2_t(ix, iy);
-    }
-};
-
-enum relative_to_t { LEFT_DOWN, LEFT_UP, CENTER, RIGHT_DOWN, RIGHT_UP };
-
-struct ui_box_t
-{
-    ui_box_t *parent {nullptr};
-    relative_to_t relative_to;
-    ui_vector2_t relative_position;
-    ui_vector2_t gls_position;
-    ui_vector2_t px_position;
-    ui_vector2_t gls_max_values;
-    ui_vector2_t px_current_size;
-    ui_vector2_t gls_current_size;
-    ui_vector2_t gls_relative_size;
-    float32_t aspect_ratio;
-    uint32_t color;
 };
 
 struct ui_state_t
@@ -90,50 +50,6 @@ struct ui_state_t
     ui_box_t test_character_placeholder;
 };
 
-struct font_character_t
-{
-    char character_value;
-    vector2_t uvs_base;
-    vector2_t uvs_size;
-    vector2_t display_size;
-    vector2_t offset;
-    float32_t advance;
-};
-
-struct font_t
-{
-    uint32_t char_count;
-    image_handle_t font_img;
-
-    font_character_t font_characters[126];
-};
-
-typedef int32_t font_handle_t;
-
-struct ui_text_t
-{
-    ui_box_t *dst_box;
-    font_t *font;
-    
-    // Max characters = 500
-    uint32_t colors[500] = {};
-    char characters[500] = {};
-    uint32_t char_count = 0;
-
-    enum font_stream_box_relative_to_t { TOP, BOTTOM /* add CENTER in the future */ };
-
-    font_stream_box_relative_to_t relative_to;
-
-    // Relative to xadvance
-    float32_t x_start;
-    float32_t y_start;
-
-    uint32_t chars_per_line;
-
-    // Relative to xadvance
-    float32_t line_height;
-};
-
 struct console_t
 {
     bool render_console = false;
@@ -158,11 +74,35 @@ struct console_t
     uint32_t output_color = 0xBBFFFFFF;
 };
 
+struct crosshair_t
+{
+    image2d_t crosshair_image;
+    uniform_group_t crosshair_group;
+
+    uint32_t selected_crosshair;
+
+    ui_box_t crosshair_box;
+
+    struct textured_vertex_t
+    {
+        vector2_t position;
+        vector2_t uvs;
+        uint32_t color;
+    };
+
+    // Only one cursor to render
+    textured_vertex_t cpu_tx_vertex_pool[ 6 ];
+    uint32_t cpu_tx_vertex_count = 0;
+};
+
 struct user_interface_t
 {
     dbg_ui_utils_t dbg_ui_utils;
     ui_state_t ui_state;
     console_t console;
+
+    // in-game
+    crosshair_t crosshair;
 };
 
 void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &);
@@ -195,3 +135,26 @@ void console_out_color_override(const char *string, uint32_t color);
 uint32_t vec4_color_to_ui32b(const vector4_t &color);
 
 void initialize_ui_translation_unit(struct game_memory_t *memory);
+
+
+
+struct gui_colored_vertex_t
+{
+    vector2_t position;
+    uint32_t color;
+};
+
+struct gui_textured_vertex_t
+{
+    vector2_t position;
+    vector2_t uvs;
+    uint32_t color;
+};
+
+
+// Pushes the text to the textured quad vertex list
+void push_text_to_render(ui_text_t *text, const resolution_t &resolution)
+{
+    
+}
+

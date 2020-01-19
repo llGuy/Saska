@@ -7,382 +7,141 @@
 
 #include "file_system.hpp"
 
-static inline vector2_t convert_glsl_to_normalized(const vector2_t &position)
+#include "gui_math.hpp"
+#include "gui_box.hpp"
+
+
+
+#define MAX_TEXTURES_IN_RENDER_LIST 20
+#define MAX_QUADS_To_RENDER 1000
+
+struct gui_textured_vertex_render_list_t
 {
-    return(position * 2.0f - 1.0f);
-}
-
-static inline ui_vector2_t glsl_to_pixel_coord(const ui_vector2_t &position, const resolution_t &resolution)
-{
-    ui_vector2_t ret((int32_t)(position.fx * (float32_t)resolution.width), (int32_t)(position.fy * (float32_t)resolution.height));
-    return(ret);
-}
-
-static inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &position, const resolution_t &resolution)
-{
-    ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width,
-                     (float32_t)position.iy / (float32_t)resolution.height);
-    return(ret);
-}
-
-// for_t now, doesn't support the relative to function (need to add in the fufure)
-static constexpr vector2_t RELATIVE_TO_ADD_VALUES[] { vector2_t(0.0f, 0.0f),
-        vector2_t(0.0f, 1.0f),
-        vector2_t(0.5f, 0.5f),
-        vector2_t(1.0f, 0.0f),
-        vector2_t(1.0f, 1.0f)};
-static constexpr vector2_t RELATIVE_TO_FACTORS[] { vector2_t(0.0f, 0.0f),
-        vector2_t(0.0f, -1.0f),
-        vector2_t(-0.5f, -0.5f),
-        vector2_t(-1.0f, 0.0f),
-        vector2_t(-1.0f, -1.0f)};
-
-uint32_t vec4_color_to_ui32b(const vector4_t &color)
-{
-    float32_t xf = color.x * 255.0f;
-    float32_t yf = color.y * 255.0f;
-    float32_t zf = color.z * 255.0f;
-    float32_t wf = color.w * 255.0f;
-    uint32_t xui = (uint32_t)xf;
-    uint32_t yui = (uint32_t)yf;
-    uint32_t zui = (uint32_t)zf;
-    uint32_t wui = (uint32_t)wf;
-    return (xui << 24) | (yui << 16) | (zui << 8) | wui;
-}
-
-static void update_ui_box_size(ui_box_t *box, const resolution_t &backbuffer_resolution)
-{
-    ui_vector2_t px_max_values;
-    if (box->parent)
+    struct vertex_section_t
     {
-        // relative_t to the parent aspect ratio
-        px_max_values = glsl_to_pixel_coord(box->gls_max_values,
-                                            resolution_t{(uint32_t)box->parent->px_current_size.ix, (uint32_t)box->parent->px_current_size.iy});
-    }
-    else
-    {
-        px_max_values = glsl_to_pixel_coord(box->gls_max_values, backbuffer_resolution);
-    }
-    ui_vector2_t px_max_xvalue_coord(px_max_values.ix, (int32_t)((float32_t)px_max_values.ix / box->aspect_ratio));
-    // Check if, using glsl max x value, the y still fits in the given glsl max y value
-    if (px_max_xvalue_coord.iy <= px_max_values.iy)
-    {
-        // Then use this new size;
-        box->px_current_size = px_max_xvalue_coord;
-    }
-    else
-    {
-        // Then use y max value, and modify the x dependending on the new y
-        ui_vector2_t px_max_yvalue_coord((uint32_t)((float32_t)px_max_values.iy * box->aspect_ratio), px_max_values.iy);
-        box->px_current_size = px_max_yvalue_coord;
-    }
-    if (box->parent)
-    {
-        box->gls_relative_size = ui_vector2_t((float32_t)box->px_current_size.ix / (float32_t)box->parent->px_current_size.ix,
-                                       (float32_t)box->px_current_size.iy / (float32_t)box->parent->px_current_size.iy);
-        box->gls_current_size = ui_vector2_t((float32_t)box->px_current_size.ix / (float32_t)backbuffer_resolution.width,
-                                       (float32_t)box->px_current_size.iy / (float32_t)backbuffer_resolution.height);
-    }
-    else
-    {
-        box->gls_current_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
-        box->gls_relative_size = pixel_to_glsl_coord(box->px_current_size, backbuffer_resolution);
-    }
-}
-
-static void update_ui_box_position(ui_box_t *box, const resolution_t &backbuffer_resolution)
-{
-    vector2_t gls_size = box->gls_relative_size.to_fvec2();
-    vector2_t gls_relative_position;
-    if (box->relative_position.type == GLSL)
-    {
-        gls_relative_position = box->relative_position.to_fvec2();
-    }
-    if (box->relative_position.type == PIXEL)
-    {
-        gls_relative_position = pixel_to_glsl_coord(box->relative_position,
-                                                    resolution_t{(uint32_t)box->parent->px_current_size.ix, (uint32_t)box->parent->px_current_size.iy}).to_fvec2();
-    }
-    gls_relative_position += RELATIVE_TO_ADD_VALUES[box->relative_to];
-    gls_relative_position += RELATIVE_TO_FACTORS[box->relative_to] * gls_size;
-    if (box->parent)
-    {
-        ui_vector2_t px_size = glsl_to_pixel_coord(ui_vector2_t(gls_size.x, gls_size.y),
-                                            resolution_t{(uint32_t)box->parent->px_current_size.ix, (uint32_t)box->parent->px_current_size.iy});
-        
-        ui_vector2_t px_relative_position = glsl_to_pixel_coord(ui_vector2_t(gls_relative_position.x, gls_relative_position.y),
-                                                         resolution_t{(uint32_t)box->parent->px_current_size.ix, (uint32_t)box->parent->px_current_size.iy});
-        ivector2_t px_real_position = box->parent->px_position.to_ivec2() + px_relative_position.to_ivec2();
-        gls_relative_position = pixel_to_glsl_coord(ui_vector2_t(px_real_position.x, px_real_position.y), backbuffer_resolution).to_fvec2();
-    }
-
-    box->gls_position = ui_vector2_t(gls_relative_position.x, gls_relative_position.y);
-    box->px_position = glsl_to_pixel_coord(box->gls_position, backbuffer_resolution);
-}
-
-static ui_box_t make_ui_box(relative_to_t relative_to, float32_t aspect_ratio,
-                                       ui_vector2_t position /* coord_t space agnostic */,
-                                       ui_vector2_t gls_max_values /* max_t X and Y size */,
-                                       ui_box_t *parent,
-                                       const uint32_t &color,
-                                       resolution_t backbuffer_resolution = {})
-{
-    resolution_t dst_resolution = backbuffer_resolution;
-    if (parent)
-    {
-        dst_resolution = resolution_t{ (uint32_t)parent->px_current_size.ix, (uint32_t)parent->px_current_size.iy };
-    }
+        uint32_t section_start, section_size;
+    };
     
-    ui_box_t box = {};
-    box.relative_position = position;
-    box.parent = parent;
-    box.aspect_ratio = aspect_ratio;
-    box.gls_max_values = gls_max_values;
-    update_ui_box_size(&box, backbuffer_resolution);
-    box.relative_to = relative_to;
-    update_ui_box_position(&box, backbuffer_resolution);
-    box.color = color;
-    return(box);
-}
+    uint32_t section_count = 0;
+    // Index where there is a transition to the next texture to bind for the following vertices
+    vertex_section_t sections[MAX_TEXTURES_IN_RENDER_LIST] = {};
+    // Corresponds to the same index as the index of the current section
+    uniform_group_t textures[MAX_TEXTURES_IN_RENDER_LIST] = {};
 
-static void make_text(ui_box_t *box,
-                                 font_t *font,
-                                 ui_text_t::font_stream_box_relative_to_t relative_to,
-                                 float32_t px_x_start,
-                                 float32_t px_y_start,
-                                 uint32_t chars_per_line,
-                                 float32_t line_height,
-                                 ui_text_t *dst_text)
-{
-    dst_text->dst_box = box;
-    dst_text->font = font;
-    dst_text->relative_to = relative_to;
-    dst_text->x_start = px_x_start;
-    dst_text->y_start = px_y_start;
-    dst_text->chars_per_line = chars_per_line;
-    dst_text->line_height = line_height;
-}
+    gui_textured_vertex_t vertices[MAX_TEXTURES_IN_RENDER_LIST * 6];
 
-struct fonts_t
-{
-    static constexpr uint32_t MAX_FONTS = 5;
-    font_t fonts[MAX_FONTS];
-    uint32_t font_count;
+    void mark_section(uint32_t size)
+    {
+        if (section_count)
+        {
+            // Get current section
+            vertex_section_t *next = sections[section_count];
 
-    hash_table_inline_t<uint32_t, 10, 3, 4> font_map;
+            next->section_start = sections[section_count - 1].section_start + sections[section_count - 1].section_size;
+            next->section_size = size;
 
-    ui_text_t test_text;
-} g_fonts;
-
-struct fnt_word_t
-{
-    char *pointer;
-    uint16_t size;
+            ++section_count;
+        }
+        else
+        {
+            sections[0].section_start = 0;
+            sections[0].section_size = size;
+            ++section_count;
+        }
+    }
 };
 
-// Except new line
-static char *fnt_skip_break_characters(char *pointer)
-{
-    for(;;)
-    {
-        switch(*pointer)
-        {
-        case ' ': case '=': ++pointer;
-        default: return pointer;
-        }
-    }
-    return nullptr;
-}
+static gui_textured_vertex_render_list_t textured_vertex_render_list = {};
 
-static char *fnt_goto_next_break_character(char *pointer)
-{
-    for(;;)
-    {
-        switch(*pointer)
-        {
-        case ' ': case '=': case '\n': return pointer;
-        default: ++pointer;
-        }
-    }
-    return nullptr;
-}
 
-static char *fnt_skip_line(char *pointer)
-{
-    for(;;)
-    {
-        switch(*pointer)
-        {
-        case '\n': return ++pointer;
-        default: ++pointer;
-        }
-    }
-    return nullptr;
-}
 
-static char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
-{
-    char *new_pointer = fnt_goto_next_break_character(pointer);
-    if (dst_word)
-    {
-        dst_word->pointer = pointer;
-        dst_word->size = new_pointer - pointer;
-    }
-    return(new_pointer);
-}
 
-static char *fnt_skip_until_digit(char *pointer)
+void push_text_to_render(ui_text_t *text, const resolution_t &resolution)
 {
-    for(;;)
-    {
-        switch(*pointer)
-        {
-        case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': return pointer;
-        default: ++pointer;
-        }
-    }
-    return nullptr;
-}
+    ui_box_t *box = text->dst_box;
 
-struct fnt_string_number_t
-{
-    fnt_word_t word;
-    // Maximum 10 chars for a number
-    char characters[10];
-};
-
-static int32_t fnt_atoi(fnt_word_t word)
-{
-    fnt_string_number_t number;
-    memcpy(number.characters, word.pointer, sizeof(char) * word.size);
-    number.characters[word.size] = '\0';
-    return(atoi(number.characters));
-}
-
-static char *fnt_get_char_count(char *pointer, int32_t *count)
-{
-    for(;;)
-    {
-        fnt_word_t chars_str;
-        pointer = fnt_move_and_get_word(pointer, &chars_str);
-        if (chars_str.size == strlen("chars"))
-        {
-            pointer = fnt_skip_until_digit(pointer);
-            fnt_word_t count_str;
-            pointer = fnt_move_and_get_word(pointer, &count_str);
-            *count = fnt_atoi(count_str);
-            pointer = fnt_skip_line(pointer);
-            return pointer;
-        }
-        pointer = fnt_skip_line(pointer);
-    }
-}
-
-char *fnt_get_font_attribute_value(char *pointer, int32_t *value)
-{
-    pointer = fnt_skip_until_digit(pointer);
-    fnt_word_t value_str;
-    pointer = fnt_move_and_get_word(pointer, &value_str);
-    *value = fnt_atoi(value_str);
-    return(pointer);
-}
-
-font_handle_t add_font(const constant_string_t &font_name)
-{
-    uint32_t current_count = g_fonts.font_count++;
-    g_fonts.font_map.insert(font_name.hash, current_count);
-    return(current_count);
-}
-
-font_t *get_font(font_handle_t handle)
-{
-    return(&g_fonts.fonts[handle]);
-}
-
-font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
-{
-    // TODO : Make sure this is parameterised, not fixed!
-    static constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
+    uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
+    uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
+    px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
+    uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width);
     
-    font_handle_t hdl = add_font(font_name);
-    font_t *font_ptr = get_font(hdl);
+    ivector2_t px_cursor_position = get_px_cursor_position(box, text, resolution);
 
-    file_handle_t fnt_file_handle = create_file(fnt_file, file_type_flags_t::TEXT | file_type_flags_t::ASSET);
-    file_contents_t fnt = read_file_tmp(fnt_file_handle);
-    int32_t char_count = 0;
-    char *current_char = fnt_get_char_count((char *)fnt.content, &char_count);
-    // Ready to start parsing the file
-    for (uint32_t i = 0; i < char_count; ++i)
+    uint32_t chars_since_new_line = 0;
+    
+    for (uint32_t character = 0;
+         character < text->char_count;)
     {
-        // Char ID value
-        int32_t char_id = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &char_id);
-
-        // X value
-        int32_t x = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &x);
-
-        // X value
-        int32_t y = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &y);
-        y = FNT_MAP_H - y;
+        char current_char_value = text->characters[character];
+        if (current_char_value == '\n')
+        {
+            px_cursor_position.y -= px_char_height;
+            px_cursor_position.x = x_start + box->px_position.ix;
+            ++character;
+            chars_since_new_line = 0;
+            continue;
+        }
         
-        // Width value
-        int32_t width = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &width);
+        font_character_t *font_character_data = &text->font->font_characters[(uint32_t)current_char_value];
+        uint32_t color = text->colors[character];
 
-        // Height value
-        int32_t height = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &height);
-
-        // XOffset value
-        int32_t xoffset = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &xoffset);
-
-        // YOffset value
-        int32_t yoffset = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &yoffset);
-
-        // XAdvanc value
-        int32_t xadvance = 0;
-        current_char = fnt_get_font_attribute_value(current_char, &xadvance);
-
-        font_character_t *character = &font_ptr->font_characters[char_id];
-        character->character_value = (char)char_id;
-        // ----------------------------------------------------------------------------- \/ Do y - height so that base position is at bottom of character
-        character->uvs_base = vector2_t((float32_t)x / (float32_t)FNT_MAP_W, (float32_t)(y - height) / (float32_t)FNT_MAP_H);
-        character->uvs_size = vector2_t((float32_t)width / (float32_t)FNT_MAP_W, (float32_t)height / (float32_t)FNT_MAP_H);
-        character->display_size = vector2_t((float32_t)width / (float32_t)xadvance, (float32_t)height / (float32_t)xadvance);
-        character->offset = vector2_t((float32_t)xoffset / (float32_t)xadvance, (float32_t)yoffset / (float32_t)xadvance);
-        character->offset.y *= -1.0f;
-        character->advance = (float32_t)xadvance / (float32_t)xadvance;
+        // Top left
         
-        current_char = fnt_skip_line(current_char);
+        vector2_t px_character_size = vector2_t(vector2_t(font_character_data->display_size) * (float32_t)px_char_width);
+        vector2_t px_character_base_position =  vector2_t(px_cursor_position) + vector2_t(vector2_t(font_character_data->offset) * (float32_t)px_char_width);
+        vector2_t normalized_base_position = px_character_base_position;
+        normalized_base_position /= vector2_t((float32_t)resolution.width, (float32_t)resolution.height);
+        normalized_base_position *= 2.0f;
+        normalized_base_position -= vector2_t(1.0f);
+        vector2_t normalized_size = (px_character_size / vector2_t((float32_t)resolution.width, (float32_t)resolution.height)) * 2.0f;
+        vector2_t adjust = vector2_t(0.0f, -normalized_size.y);
+        
+        vector2_t current_uvs = font_character_data->uvs_base;
+        current_uvs.y = 1.0f - current_uvs.y;
+        
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust,
+                                                               current_uvs, color};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               current_uvs, color};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               current_uvs, color};
+        
+        current_uvs = font_character_data->uvs_base + vector2_t(0.0f, font_character_data->uvs_size.y);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(0.0f, normalized_size.y),
+                                                               current_uvs, color};
+
+        current_uvs = font_character_data->uvs_base + vector2_t(font_character_data->uvs_size.x, 0.0f);
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + vector2_t(normalized_size.x, 0.0f),
+                                                               current_uvs, color};
+
+        current_uvs = font_character_data->uvs_base + font_character_data->uvs_size;
+        current_uvs.y = 1.0f - current_uvs.y;
+        g_ui->cpu_tx_vertex_pool[g_ui->cpu_tx_vertex_count++] = {normalized_base_position + adjust + normalized_size,
+                                                               current_uvs, color};
+
+        px_cursor_position += ivector2_t(px_char_width, 0.0f);
+
+        ++character;
+        ++chars_since_new_line;
+        if (chars_since_new_line % text->chars_per_line == 0)
+        {
+            px_cursor_position.y -= px_char_height;
+            px_cursor_position.x = text->x_start + box->px_position.ix;
+        }
     }
-
-    remove_and_destroy_file(fnt_file_handle);
-
-    return(font_ptr);
 }
 
-static void draw_char(ui_text_t *text, char character, uint32_t color)
-{
-    text->colors[text->char_count] = color;
-    text->characters[text->char_count++] = character;
-}
 
-static void draw_string(ui_text_t *text, const char *string, uint32_t color)
-{
-    uint32_t string_length = strlen(string);
-    memcpy(text->characters + text->char_count, string, sizeof(char) * string_length);
-    for (uint32_t i = 0; i < string_length; ++i)
-    {
-        text->colors[text->char_count + i] = color;
-    }
-    text->char_count += string_length;
-}
 
-// TODO: Make a textured quad renderer
+
 static dbg_ui_utils_t *dbg_ui_utils;
 
 static void initialize_debug_ui_utils(void)
@@ -526,6 +285,7 @@ static void push_font_character_to_render(ui_box_t *box)
 }
 
 static console_t *g_console;
+static crosshair_t *g_crosshair;
 
 // Lua function declarations
 static int32_t lua_console_out(lua_State *state);
@@ -616,7 +376,7 @@ static void initialize_console(void)
     g_console->cursor_color = 0x00ee00ff;
     g_console->cursor_fade = 0xff;
     
-    g_console->back_box = make_ui_box(LEFT_DOWN, 0.8f,
+    g_console->back_box.initialize(LEFT_DOWN, 0.8f,
                                      ui_vector2_t(0.05f, 0.05f),
                                      ui_vector2_t(1.0f, 0.9f),
                                      nullptr,
@@ -650,6 +410,56 @@ static void initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_fps", &lua_print_fps);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "debug_break", &lua_break);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
+}
+
+void push_crosshair_for_render(void)
+{
+    vector2_t normalized_base_position = convert_glsl_to_normalized(g_crosshair->crosshair_box.gls_position.to_fvec2());
+    vector2_t normalized_size = g_crosshair->crosshair_box.gls_current_size.to_fvec2() * 2.0f;
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position, vector2_t(0.0f, 0.0f)};
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
+    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, vector2_t(1.0f)};
+}
+
+void initialize_crosshair(void)
+{
+    // Just a dot
+    g_crosshair->selected_crosshair = 1;
+
+    file_handle_t crosshair_texture_file = create_file("textures/gui/crosshair.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+    external_image_data_t image_data = read_image(crosshair_texture_file);
+
+    make_texture(&g_crosshair->crosshair_image,
+                 image_data.width,
+                 image_data.height,
+                 VK_FORMAT_R8G8B8A8_UNORM,
+                 1,
+                 1,
+                 2,
+                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                 VK_FILTER_NEAREST);
+    transition_image_layout(&g_crosshair->crosshair_image.image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            get_global_command_pool());
+    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                 get_global_command_pool(),
+                                                 &g_crosshair->crosshair_image,
+                                                 (uint32_t)image_data.width,
+                                                 (uint32_t)image_data.height);
+    transition_image_layout(&g_crosshair->crosshair_image.image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            get_global_command_pool());
+
+    free_external_image_data(&image_data);
+
+    g_crosshair->crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.1f, -0.1f), ui_vector2_t(0.2f, 0.2f), nullptr, 0xffffffff, get_backbuffer_resolution());
 }
 
 static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
@@ -787,6 +597,8 @@ static void push_console_to_render(raw_input_t *raw_input)
 static void initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
     initialize_console();
+
+    initialize_crosshair();
 }
 
 void initialize_ui_rendering_state(VkFormat swapchain_format,
@@ -1007,6 +819,9 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
     {
         push_console_to_render(raw_input);
     }
+
+    // in-game stuff
+    //    push_crosshair_for_render();
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(g_render_pass_manager->get(g_ui->ui_render_pass),
                                                                              g_framebuffer_manager->get(get_pfx_framebuffer_hdl()));
@@ -1053,6 +868,18 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
         {
             command_buffer_draw(&g_ui->secondary_ui_q.q, g_ui->cpu_tx_vertex_count, 1, 0, 0);
         }
+
+
+        
+        /*font_tx_group = &g_crosshair->crosshair_group;
+        command_buffer_bind_descriptor_sets(&font_pipeline->layout, {1, font_tx_group}, &g_ui->secondary_ui_q.q);
+        
+        auto *tx_quads_model = g_model_manager->get(g_ui->tx_quads_model);
+        command_buffer_bind_vbos(tx_quads_model->raw_cache_for_rendering, {1, &zero}, 0, tx_quads_model->binding_count, &g_ui->secondary_ui_q.q);
+        if (g_crosshair->cpu_tx_vertex_count)
+        {
+            command_buffer_draw(&g_ui->secondary_ui_q.q, g_crossshair->cpu_tx_vertex_count, 1, 0, 0);
+        }*/
     }
     end_command_queue(&g_ui->secondary_ui_q);
 }
@@ -1090,6 +917,7 @@ void render_game_ui(framebuffer_handle_t dst_framebuffer_hdl, gpu_command_queue_
 
     g_ui->cpu_vertex_count = 0;
     g_ui->cpu_tx_vertex_count = 0;
+    g_crosshair->cpu_tx_vertex_count = 0;
 }
 
 // All console-and-ui-linked commands (e.g. printing, ui stuff)
@@ -1150,6 +978,7 @@ void initialize_ui_translation_unit(struct game_memory_t *memory)
     g_console = &memory->user_interface_state.console;
     g_ui = &memory->user_interface_state.ui_state;
     dbg_ui_utils = &memory->user_interface_state.dbg_ui_utils;
+    g_crosshair = &memory->user_interface_state.crosshair;
 }
 
 static int32_t lua_quit(lua_State *state)

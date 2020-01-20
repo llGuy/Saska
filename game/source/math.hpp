@@ -100,6 +100,12 @@ inline voxel_coordinate_t convert_1d_to_3d_coord(uint16_t index, uint32_t edge_l
     return{x, y, z};
 }
 
+inline vector2_t convert_1d_to_2d_coord(uint32_t index, uint32_t edge_length)
+{
+    return vector2_t(index % edge_length, index / edge_length);
+}
+
+
 
 inline float32_t lerp(float32_t a, float32_t b, float32_t x)
 {

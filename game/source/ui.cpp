@@ -152,6 +152,7 @@ static gui_colored_vertex_render_list_t colored_vertex_render_list = {};
 static render_pass_t gui_render_pass;
 static gpu_command_queue_t gui_secondary_queue;
 static uniform_group_t font_png_image_uniform;
+static uniform_group_t crosshair_png_image_uniform;
 
 
 
@@ -428,14 +429,19 @@ static void initialize_console(void)
 
 void push_crosshair_for_render(void)
 {
+    textured_vertex_render_list.mark_section(crosshair_png_image_uniform);
+    
     vector2_t normalized_base_position = convert_glsl_to_normalized(g_crosshair->crosshair_box.gls_position.to_fvec2());
     vector2_t normalized_size = g_crosshair->crosshair_box.gls_current_size.to_fvec2() * 2.0f;
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position, vector2_t(0.0f, 0.0f)};
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f, 1.0f)};
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f, 0.0f)};
-    g_crosshair->cpu_tx_vertex_pool[g_crosshair->cpu_tx_vertex_count++] = {normalized_base_position + normalized_size, vector2_t(1.0f)};
+
+    normalized_base_position = vector2_t(0.0f) - normalized_size / 2.0f;
+
+    textured_vertex_render_list.push_vertex({normalized_base_position, g_crosshair->uvs[0], 0xffffff88});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), g_crosshair->uvs[1], 0xffffff88});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), g_crosshair->uvs[2], 0xffffff88});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), g_crosshair->uvs[1], 0xffffff88});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), g_crosshair->uvs[2], 0xffffff88});
+    textured_vertex_render_list.push_vertex({normalized_base_position + normalized_size, g_crosshair->uvs[3], 0xffffff88});
 }
 
 void initialize_crosshair(void)
@@ -443,6 +449,8 @@ void initialize_crosshair(void)
     // Just a dot
     g_crosshair->selected_crosshair = 1;
 
+    g_crosshair->get_uvs_for_crosshair();
+    
     file_handle_t crosshair_texture_file = create_file("textures/gui/crosshair.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
     external_image_data_t image_data = read_image(crosshair_texture_file);
 
@@ -473,7 +481,12 @@ void initialize_crosshair(void)
 
     free_external_image_data(&image_data);
 
-    g_crosshair->crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.1f, -0.1f), ui_vector2_t(0.2f, 0.2f), nullptr, 0xffffffff, get_backbuffer_resolution());
+    uniform_layout_t *tx_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.tx_ui_quad"_hash));
+    crosshair_png_image_uniform = make_uniform_group(tx_layout, g_uniform_pool);
+    update_uniform_group(&crosshair_png_image_uniform,
+                         update_binding_t{ TEXTURE, &g_crosshair->crosshair_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+
+    g_crosshair->crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.02f, -0.02f), ui_vector2_t(0.04f, 0.04f), nullptr, 0xffffffff, get_backbuffer_resolution());
 }
 
 static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
@@ -831,7 +844,7 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
     }
 
     // in-game stuff
-    //    push_crosshair_for_render();
+    push_crosshair_for_render();
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(&gui_render_pass,
                                                                              g_framebuffer_manager->get(get_pfx_framebuffer_hdl()));

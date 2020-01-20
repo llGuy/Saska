@@ -4,6 +4,7 @@
 #include "graphics.hpp"
 
 
+#include "math.hpp"
 #include "fonts.hpp"
 #include "gui_box.hpp"
 
@@ -40,16 +41,23 @@ struct crosshair_t
 
     ui_box_t crosshair_box;
 
-    struct textured_vertex_t
+    vector2_t uvs[4];
+    
+    // Crosshair image is 8x8
+    void get_uvs_for_crosshair(void)
     {
-        vector2_t position;
-        vector2_t uvs;
-        uint32_t color;
-    };
+        vector2_t *list = uvs;
+        
+        // Starting coordinate
+        vector2_t starting_coord = convert_1d_to_2d_coord(selected_crosshair, 8) / 8.0f;
 
-    // Only one cursor to render
-    textured_vertex_t cpu_tx_vertex_pool[ 6 ];
-    uint32_t cpu_tx_vertex_count = 0;
+        float32_t unit = (1.0f / 8.0f);
+        
+        list[0] = vector2_t(starting_coord.x, starting_coord.y + unit);
+        list[1] = vector2_t(starting_coord.x, starting_coord.y);
+        list[2] = vector2_t(starting_coord.x + unit, starting_coord.y + unit);
+        list[3] = vector2_t(starting_coord.x + unit, starting_coord.y);
+    }
 };
 
 struct user_interface_t

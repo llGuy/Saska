@@ -7,49 +7,6 @@
 #include "fonts.hpp"
 #include "gui_box.hpp"
 
-struct dbg_ui_utils_t
-{
-    graphics_pipeline_t dbg_tx_quad_ppln;
-    uniform_layout_t dbg_tx_ulayout;
-};
-
-struct ui_state_t
-{
-    struct gui_vertex_t
-    {
-        vector2_t position;
-        uint32_t color;
-    };
-    static constexpr uint32_t MAX_QUADS = 10;
-    gui_vertex_t cpu_vertex_pool[ MAX_QUADS * 6 ];
-    uint32_t cpu_vertex_count = 0;
-    model_handle_t ui_quads_model;
-    gpu_buffer_handle_t ui_quads_vbo;
-    pipeline_handle_t ui_pipeline;
-
-    struct textured_vertex_t
-    {
-        vector2_t position;
-        vector2_t uvs;
-        uint32_t color;
-    };
-    static constexpr uint32_t MAX_TX_QUADS = 1000;
-    textured_vertex_t cpu_tx_vertex_pool[ MAX_TX_QUADS * 6 ];
-    uint32_t cpu_tx_vertex_count = 0;    
-    model_handle_t tx_quads_model;
-    gpu_buffer_handle_t tx_quads_vbo;
-    pipeline_handle_t tx_pipeline;
-    // may_t contain an array of textures
-    uniform_group_handle_t tx_group;
-
-    render_pass_handle_t ui_render_pass;
-    gpu_command_queue_t secondary_ui_q;
-    
-    ui_box_t box;
-    ui_box_t child;
-    ui_box_t test_character_placeholder;
-};
-
 struct console_t
 {
     bool render_console = false;
@@ -97,8 +54,6 @@ struct crosshair_t
 
 struct user_interface_t
 {
-    dbg_ui_utils_t dbg_ui_utils;
-    ui_state_t ui_state;
     console_t console;
 
     // in-game
@@ -153,8 +108,6 @@ struct gui_textured_vertex_t
 
 
 // Pushes the text to the textured quad vertex list
-void push_text_to_render(ui_text_t *text, const resolution_t &resolution)
-{
-    
-}
+// NOTE: When pushing text for rendering, make sure that the current vertex section of the gui vertex render list is for the font
+void push_text_to_render(ui_text_t *text, const resolution_t &resolution);
 

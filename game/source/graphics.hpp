@@ -244,6 +244,16 @@ struct gpu_command_queue_t
         command_buffer_begin_render_pass(g_render_pass_manager->get(pass), fbo_object, init_render_area({0, 0}, fbo_object->extent), {sizeof...(clear_values), clears}, contents, &q);
     }
 
+    template <typename ...Clears> void
+    begin_render_pass(render_pass_t *pass, framebuffer_t *fbo, VkSubpassContents contents, const Clears &...clear_values)
+    {
+        subpass = 0;
+
+        VkClearValue clears[sizeof...(clear_values) + 1] = {clear_values..., VkClearValue{}};
+
+        command_buffer_begin_render_pass(pass, fbo, init_render_area({0, 0}, fbo->extent), {sizeof...(clear_values), clears}, contents, &q);
+    }
+
     inline void next_subpass(VkSubpassContents contents)
     {
         command_buffer_next_subpass(&q, contents);

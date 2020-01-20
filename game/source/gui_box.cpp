@@ -83,11 +83,11 @@ void ui_box_t::update_position(const resolution_t &backbuffer_resolution)
 }
 
 
-void ui_box_t::initialize(relative_to_t relative_to, float32_t aspect_ratio,
+void ui_box_t::initialize(relative_to_t in_relative_to, float32_t in_aspect_ratio,
                               ui_vector2_t position /* coord_t space agnostic */,
-                              ui_vector2_t gls_max_values /* max_t X and Y size */,
-                              ui_box_t *parent,
-                              const uint32_t &color,
+                              ui_vector2_t in_gls_max_values /* max_t X and Y size */,
+                              ui_box_t *in_parent,
+                              const uint32_t &in_color,
                               resolution_t backbuffer_resolution)
 {
     resolution_t dst_resolution = backbuffer_resolution;
@@ -98,15 +98,15 @@ void ui_box_t::initialize(relative_to_t relative_to, float32_t aspect_ratio,
     }
     
     relative_position = position;
-    parent = parent;
-    aspect_ratio = aspect_ratio;
-    gls_max_values = gls_max_values;
+    parent = in_parent;
+    aspect_ratio = in_aspect_ratio;
+    gls_max_values = in_gls_max_values;
     
     update_size(backbuffer_resolution);
     
-    relative_to = relative_to;
+    relative_to = in_relative_to;
     
     update_position(backbuffer_resolution);
     
-    this->color = color;
+    this->color = in_color;
 }

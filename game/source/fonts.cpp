@@ -15,19 +15,20 @@ static char *fnt_move_and_get_word(char *pointer, struct fnt_word_t *dst_word);
 static char *fnt_skip_until_digit(char *pointer);
 static int32_t fnt_atoi(fnt_word_t word);
 static char *fnt_get_char_count(char *pointer, int32_t *count);
+static char *fnt_get_font_attribute_value(char *pointer, int32_t *value);
 
 
 font_handle_t add_font(const constant_string_t &font_name)
 {
-    uint32_t current_count = g_fonts.font_count++;
-    g_fonts.font_map.insert(font_name.hash, current_count);
+    uint32_t current_count = font_count++;
+    font_map.insert(font_name.hash, current_count);
     return(current_count);
 }
 
 
 font_t *get_font(font_handle_t handle)
 {
-    return(&g_fonts.fonts[handle]);
+    return(&fonts[handle]);
 }
 
 
@@ -100,20 +101,39 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
 
 
 void ui_text_t::initialize(ui_box_t *box,
-                    font_t *font,
-                    font_stream_box_relative_to_t relative_to,
+                    font_t *in_font,
+                    font_stream_box_relative_to_t in_relative_to,
                     float32_t px_x_start,
                     float32_t px_y_start,
-                    uint32_t chars_per_line,
-                    float32_t line_height)
+                    uint32_t in_chars_per_line,
+                    float32_t in_line_height)
 {
-    dst_box = box;
-    font = font;
-    relative_to = relative_to;
-    x_start = px_x_start;
-    y_start = px_y_start;
-    chars_per_line = chars_per_line;
-    line_height = line_height;
+    this->dst_box = box;
+    this->font = in_font;
+    this->relative_to = in_relative_to;
+    this->x_start = px_x_start;
+    this->y_start = px_y_start;
+    this->chars_per_line = in_chars_per_line;
+    this->line_height = in_line_height;
+}
+
+
+void ui_text_t::draw_char(char character, uint32_t color)
+{
+    colors[char_count] = color;
+    characters[char_count++] = character;
+}
+
+
+void ui_text_t::draw_string(const char *string, uint32_t color)
+{
+    uint32_t string_length = strlen(string);
+    memcpy(characters + char_count, string, sizeof(char) * string_length);
+    for (uint32_t i = 0; i < string_length; ++i)
+    {
+        colors[char_count + i] = color;
+    }
+    char_count += string_length;
 }
 
 

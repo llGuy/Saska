@@ -32,40 +32,9 @@ struct console_t
     uint32_t output_color = 0xBBFFFFFF;
 };
 
-struct crosshair_t
-{
-    image2d_t crosshair_image;
-    uniform_group_t crosshair_group;
-
-    uint32_t selected_crosshair;
-
-    ui_box_t crosshair_box;
-
-    vector2_t uvs[4];
-    
-    // Crosshair image is 8x8
-    void get_uvs_for_crosshair(void)
-    {
-        vector2_t *list = uvs;
-        
-        // Starting coordinate
-        vector2_t starting_coord = convert_1d_to_2d_coord(selected_crosshair, 8) / 8.0f;
-
-        float32_t unit = (1.0f / 8.0f);
-        
-        list[0] = vector2_t(starting_coord.x, starting_coord.y + unit);
-        list[1] = vector2_t(starting_coord.x, starting_coord.y);
-        list[2] = vector2_t(starting_coord.x + unit, starting_coord.y + unit);
-        list[3] = vector2_t(starting_coord.x + unit, starting_coord.y);
-    }
-};
-
 struct user_interface_t
 {
     console_t console;
-
-    // in-game
-    crosshair_t crosshair;
 };
 
 void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform_pool, const resolution_t &);
@@ -101,21 +70,10 @@ void initialize_ui_translation_unit(struct game_memory_t *memory);
 
 
 
-struct gui_colored_vertex_t
-{
-    vector2_t position;
-    uint32_t color;
-};
-
-struct gui_textured_vertex_t
-{
-    vector2_t position;
-    vector2_t uvs;
-    uint32_t color;
-};
 
 
 // Pushes the text to the textured quad vertex list
-// NOTE: When pushing text for rendering, make sure that the current vertex section of the gui vertex render list is for the font
+// TODO: MAKE SURE THAT THESE ARE PART OF THE RENDER LIST CLASSES
 void push_text_to_render(ui_text_t *text, const resolution_t &resolution);
+void push_box_to_render(ui_box_t *box);
 

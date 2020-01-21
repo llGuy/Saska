@@ -67,3 +67,18 @@ inline uint32_t vec4_color_to_ui32b(const vector4_t &color)
     uint32_t wui = (uint32_t)wf;
     return (xui << 24) | (yui << 16) | (zui << 8) | wui;
 }
+
+
+
+struct gui_colored_vertex_t
+{
+    vector2_t position;
+    uint32_t color;
+};
+
+struct gui_textured_vertex_t
+{
+    vector2_t position;
+    vector2_t uvs;
+    uint32_t color;
+};

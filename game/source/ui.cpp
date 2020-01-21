@@ -7,143 +7,11 @@
 
 #include "file_system.hpp"
 
+#include "hud.hpp"
+#include "menu.hpp"
 #include "gui_math.hpp"
 #include "gui_box.hpp"
-
-
-
-#define MAX_TEXTURES_IN_RENDER_LIST 20
-#define MAX_QUADS_TO_RENDER 1000
-
-struct gui_textured_vertex_render_list_t
-{
-    model_t vtx_attribs;
-    graphics_pipeline_t gfx_pipeline;
-    
-    struct vertex_section_t
-    {
-        uint32_t section_start, section_size;
-    };
-    
-    uint32_t section_count = 0;
-    // Index where there is a transition to the next texture to bind for the following vertices
-    vertex_section_t sections[MAX_TEXTURES_IN_RENDER_LIST] = {};
-    // Corresponds to the same index as the index of the current section
-    uniform_group_t textures[MAX_TEXTURES_IN_RENDER_LIST] = {};
-
-    uint32_t vertex_count;
-    gui_textured_vertex_t vertices[MAX_QUADS_TO_RENDER * 6];
-
-    gpu_buffer_t vtx_buffer;
-
-    void mark_section(uniform_group_t group)
-    {
-        if (section_count)
-        {
-            // Get current section
-            vertex_section_t *next = &sections[section_count];
-
-            next->section_start = sections[section_count - 1].section_start + sections[section_count - 1].section_size;
-            // Starts at 0. Every vertex that gets pushed adds to this variable
-            next->section_size = 0;
-
-            textures[section_count] = group;
-
-            ++section_count;
-        }
-        else
-        {
-            sections[0].section_start = 0;
-            sections[0].section_size = 0;
-
-            textures[0] = group;
-            
-            ++section_count;
-        }
-    }
-
-    void push_vertex(const gui_textured_vertex_t &vertex)
-    {
-        vertices[vertex_count++] = vertex;
-        sections[section_count - 1].section_size += 1;
-    }
-
-    void clear_containers(void)
-    {
-        section_count = 0;
-        vertex_count = 0;
-    }
-
-    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue)
-    {
-        if (vertex_count)
-        {
-            update_gpu_buffer(&vtx_buffer, vertices, sizeof(gui_textured_vertex_t) * vertex_count, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
-        }
-    }
-    
-    void render_textured_quads(gpu_command_queue_t *queue, framebuffer_t *fbo)
-    {
-        if (vertex_count)
-        {
-            command_buffer_set_viewport(fbo->extent.width, fbo->extent.height, 0.0f, 1.0f, &queue->q);
-            command_buffer_bind_pipeline(&gfx_pipeline.pipeline, &queue->q);
-
-            // Loop through each section, bind texture, and render the quads from the section
-            for (uint32_t current_section = 0; current_section < section_count; ++current_section)
-            {
-                vertex_section_t *section = &sections[current_section];
-                
-                command_buffer_bind_descriptor_sets(&gfx_pipeline.layout, {1, &textures[current_section]}, &queue->q);
-            
-                VkDeviceSize zero = 0;
-                command_buffer_bind_vbos(vtx_attribs.raw_cache_for_rendering, {1, &zero}, 0, vtx_attribs.binding_count, &queue->q);
-
-                command_buffer_draw(&queue->q, section->section_size, 1, section->section_start, 0);
-            }
-        }
-    }
-};
-
-struct gui_colored_vertex_render_list_t
-{
-    model_t vtx_attribs;
-    graphics_pipeline_t gfx_pipeline;
-    
-    uint32_t vertex_count;
-    gui_colored_vertex_t vertices[MAX_QUADS_TO_RENDER * 6];
-
-    gpu_buffer_t vtx_buffer;
-
-    void push_vertex(const gui_colored_vertex_t &vertex)
-    {
-        vertices[vertex_count++] = vertex;
-    }
-    
-    void clear_containers(void)
-    {
-        vertex_count = 0;
-    }
-
-    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue)
-    {
-        update_gpu_buffer(&vtx_buffer, &vertices, sizeof(gui_colored_vertex_t) * vertex_count, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
-    }
-
-    void render_colored_quads(gpu_command_queue_t *queue, framebuffer_t *fbo)
-    {
-        if (vertex_count)
-        {
-            command_buffer_set_viewport(fbo->extent.width, fbo->extent.height, 0.0f, 1.0f, &queue->q);
-            command_buffer_bind_pipeline(&gfx_pipeline.pipeline, &queue->q);
-
-            VkDeviceSize zero = 0;
-            command_buffer_bind_vbos(vtx_attribs.raw_cache_for_rendering, {1, &zero}, 0, vtx_attribs.binding_count, &queue->q);
-            command_buffer_draw(&queue->q, vertex_count, 1, 0, 0);
-        }
-    }
-};
-
+#include "gui_render_list.hpp"
 
 
 
@@ -152,7 +20,6 @@ static gui_colored_vertex_render_list_t colored_vertex_render_list = {};
 static render_pass_t gui_render_pass;
 static gpu_command_queue_t gui_secondary_queue;
 static uniform_group_t font_png_image_uniform;
-static uniform_group_t crosshair_png_image_uniform;
 
 
 
@@ -275,7 +142,7 @@ static void initialize_debug_ui_utils(void)
     
 }
 
-static void push_box_to_render(ui_box_t *box)
+void push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
@@ -301,7 +168,6 @@ static void push_box_to_render(ui_box_t *box)
     }*/
 
 static console_t *g_console;
-static crosshair_t *g_crosshair;
 
 // Lua function declarations
 static int32_t lua_console_out(lua_State *state);
@@ -399,7 +265,7 @@ static void initialize_console(void)
                                      0x16161636,
                                      get_backbuffer_resolution());
 
-    font_t *font_ptr = load_font("liberation_mono_font"_hash, "fonts/liberation_mono.fnt", "");
+    font_t *font_ptr = load_font("liberation_mono.font"_hash, "fonts/liberation_mono.fnt", "");
 
     g_console->console_input.initialize(&g_console->back_box,
                                         font_ptr,
@@ -425,68 +291,6 @@ static void initialize_console(void)
     add_global_to_lua(script_primitive_type_t::FUNCTION, "print_fps", &lua_print_fps);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "debug_break", &lua_break);
     add_global_to_lua(script_primitive_type_t::FUNCTION, "quit", &lua_quit);
-}
-
-void push_crosshair_for_render(void)
-{
-    textured_vertex_render_list.mark_section(crosshair_png_image_uniform);
-    
-    vector2_t normalized_base_position = convert_glsl_to_normalized(g_crosshair->crosshair_box.gls_position.to_fvec2());
-    vector2_t normalized_size = g_crosshair->crosshair_box.gls_current_size.to_fvec2() * 2.0f;
-
-    normalized_base_position = vector2_t(0.0f) - normalized_size / 2.0f;
-
-    textured_vertex_render_list.push_vertex({normalized_base_position, g_crosshair->uvs[0], 0xffffff88});
-    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), g_crosshair->uvs[1], 0xffffff88});
-    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), g_crosshair->uvs[2], 0xffffff88});
-    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), g_crosshair->uvs[1], 0xffffff88});
-    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), g_crosshair->uvs[2], 0xffffff88});
-    textured_vertex_render_list.push_vertex({normalized_base_position + normalized_size, g_crosshair->uvs[3], 0xffffff88});
-}
-
-void initialize_crosshair(void)
-{
-    // Just a dot
-    g_crosshair->selected_crosshair = 1;
-
-    g_crosshair->get_uvs_for_crosshair();
-    
-    file_handle_t crosshair_texture_file = create_file("textures/gui/crosshair.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
-    external_image_data_t image_data = read_image(crosshair_texture_file);
-
-    make_texture(&g_crosshair->crosshair_image,
-                 image_data.width,
-                 image_data.height,
-                 VK_FORMAT_R8G8B8A8_UNORM,
-                 1,
-                 1,
-                 2,
-                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                 VK_FILTER_NEAREST);
-    transition_image_layout(&g_crosshair->crosshair_image.image,
-                            VK_FORMAT_R8G8B8A8_UNORM,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            get_global_command_pool());
-    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
-                                                 get_global_command_pool(),
-                                                 &g_crosshair->crosshair_image,
-                                                 (uint32_t)image_data.width,
-                                                 (uint32_t)image_data.height);
-    transition_image_layout(&g_crosshair->crosshair_image.image,
-                            VK_FORMAT_R8G8B8A8_UNORM,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            get_global_command_pool());
-
-    free_external_image_data(&image_data);
-
-    uniform_layout_t *tx_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.tx_ui_quad"_hash));
-    crosshair_png_image_uniform = make_uniform_group(tx_layout, g_uniform_pool);
-    update_uniform_group(&crosshair_png_image_uniform,
-                         update_binding_t{ TEXTURE, &g_crosshair->crosshair_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
-
-    g_crosshair->crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.02f, -0.02f), ui_vector2_t(0.04f, 0.04f), nullptr, 0xffffffff, get_backbuffer_resolution());
 }
 
 static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
@@ -627,7 +431,9 @@ static void initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
     initialize_console();
 
-    initialize_crosshair();
+    initialize_hud();
+
+    initialize_menus();
 }
 
 void initialize_ui_rendering_state(VkFormat swapchain_format,
@@ -844,7 +650,9 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
     }
 
     // in-game stuff
-    push_crosshair_for_render();
+    push_hud_to_render(&textured_vertex_render_list, focus);
+
+    push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus);
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(&gui_render_pass,
                                                                              g_framebuffer_manager->get(get_pfx_framebuffer_hdl()));
@@ -931,7 +739,6 @@ static int32_t lua_break(lua_State *state)
 void initialize_ui_translation_unit(struct game_memory_t *memory)
 {
     g_console = &memory->user_interface_state.console;
-    g_crosshair = &memory->user_interface_state.crosshair;
 }
 
 static int32_t lua_quit(lua_State *state)

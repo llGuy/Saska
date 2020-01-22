@@ -1,5 +1,6 @@
 #include "ui.hpp"
 #include "menu.hpp"
+#include "core.hpp"
 
 
 // Main menu
@@ -112,7 +113,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
 
                 main_menu.icon_color_interpolation.in_animation = 1;
                 vector4_t icon_start = ui32b_color_to_vec4(0xFFFFFF36);
-                vector4_t icon_final = ui32b_color_to_vec4(0x16161636);
+                vector4_t icon_final = ui32b_color_to_vec4(0x46464636);
                 main_menu.icon_color_interpolation.current = vector3_t(icon_start.r, icon_start.g, icon_start.b);
                 main_menu.icon_color_interpolation.prev = main_menu.icon_color_interpolation.current;
                 main_menu.icon_color_interpolation.next = vector3_t(icon_final.r, icon_final.g, icon_final.b);
@@ -147,6 +148,16 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
         {
             main_menu.main_menu_buttons[i].color = 0xFFFFFF36;
             main_menu.main_menu_buttons_backgrounds[i].color = 0x16161636;
+        }
+    }
+
+    if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
+    {
+        switch(main_menu.hovering_over)
+        {
+        case main_menu_t::buttons_t::QUIT: {
+            request_quit();
+        } break;
         }
     }
 }

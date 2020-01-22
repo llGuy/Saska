@@ -89,6 +89,16 @@ inline uint32_t vec4_color_to_ui32b(const vector4_t &color)
     return (xui << 24) | (yui << 16) | (zui << 8) | wui;
 }
 
+inline vector4_t ui32b_color_to_vec4(uint32_t color)
+{
+    float32_t r = (float32_t)(color >> 24);
+    float32_t g = (float32_t)((color >> 16) & 0xFF);
+    float32_t b = (float32_t)((color >> 8) & 0xFF);
+    float32_t a = (float32_t)((color >> 0) & 0xFF);
+
+    return(vector4_t(r, g, b, a) / 255.0f);
+}
+
 
 
 struct gui_colored_vertex_t

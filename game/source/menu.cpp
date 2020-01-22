@@ -26,7 +26,9 @@ struct main_menu_t
     ui_box_t main_menu_buttons[buttons_t::INVALID_MENU_BUTTON];
     ui_box_t main_menu_buttons_backgrounds[buttons_t::INVALID_MENU_BUTTON];
 
-    // Text is to finish
+    buttons_t hovering_over;
+    smooth_linear_interpolation_t<vector3_t> background_color_interpolation;
+    smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;    
 };
 
 
@@ -54,55 +56,97 @@ void initialize_menus(void)
 
 void update_menus(raw_input_t *raw_input, element_focus_t focus)
 {
-    if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
+    // Convert screen cursor positions to ndc coordinates
+    // Need to take into account the scissor
+
+    VkExtent2D swapchain_extent = get_swapchain_extent();
+
+    resolution_t backbuffer_res = get_backbuffer_resolution();
+    
+    float32_t backbuffer_asp = (float32_t)backbuffer_res.width / (float32_t)backbuffer_res.height;
+    float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
+
+    uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
+    
+    if (backbuffer_asp >= swapchain_asp)
     {
-        // Convert screen cursor positions to ndc coordinates
-        // Need to take into account the scissor
+        rect2D_width = swapchain_extent.width;
+        rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
+        rect2Dx = 0;
+        rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
+    }
 
-        VkExtent2D swapchain_extent = get_swapchain_extent();
+    if (backbuffer_asp < swapchain_asp)
+    {
+        rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
+        rect2D_height = swapchain_extent.height;
+        rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
+        rect2Dy = 0;
+    }
 
-        resolution_t backbuffer_res = get_backbuffer_resolution();
+    // Relative to the viewport coordinate system
+    float32_t cursor_x = raw_input->cursor_pos_x;
+    float32_t cursor_y = raw_input->cursor_pos_y;
+
+    cursor_x = (float32_t)(cursor_x - rect2Dx) / (float32_t)rect2D_width;
+    cursor_y = 1.0f - (float32_t)(cursor_y - rect2Dy) / (float32_t)rect2D_height;
+
+    cursor_x = 2.0f * cursor_x - 1.0f;
+    cursor_y = 2.0f * cursor_y - 1.0f;
     
-        float32_t backbuffer_asp = (float32_t)backbuffer_res.width / (float32_t)backbuffer_res.height;
-        float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
-
-        uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
-    
-        if (backbuffer_asp >= swapchain_asp)
+    for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
+    {
+        if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
         {
-            rect2D_width = swapchain_extent.width;
-            rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
-            rect2Dx = 0;
-            rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
-        }
-
-        if (backbuffer_asp < swapchain_asp)
-        {
-            rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
-            rect2D_height = swapchain_extent.height;
-            rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
-            rect2Dy = 0;
-        }
-
-        // Relative to the viewport coordinate system
-        float32_t cursor_x = raw_input->cursor_pos_x;
-        float32_t cursor_y = raw_input->cursor_pos_y;
-
-        cursor_x = (float32_t)(cursor_x - rect2Dx) / (float32_t)rect2D_width;
-        cursor_y = 1.0f - (float32_t)(cursor_y - rect2Dy) / (float32_t)rect2D_height;
-
-        cursor_x = 2.0f * cursor_x - 1.0f;
-        cursor_y = 2.0f * cursor_y - 1.0f;
-    
-        main_menu_t::buttons_t pressed_button = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
-
-        for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
-        {
-            if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
+            if (main_menu.hovering_over != i)
             {
-                output_to_debug_console(main_menu.button_names[i], "\n");
-                break;
+                // Start interpolation
+                main_menu.background_color_interpolation.in_animation = 1;
+                vector4_t background_start = ui32b_color_to_vec4(0x16161636);
+                vector4_t background_final = ui32b_color_to_vec4(0x76767636);
+                main_menu.background_color_interpolation.current = vector3_t(background_start.r, background_start.g, background_start.b);
+                main_menu.background_color_interpolation.prev = main_menu.background_color_interpolation.current;
+                main_menu.background_color_interpolation.next = vector3_t(background_final.r, background_final.g, background_final.b);
+                main_menu.background_color_interpolation.current_time = 0;
+                main_menu.background_color_interpolation.max_time = 0.5f;
+
+                main_menu.icon_color_interpolation.in_animation = 1;
+                vector4_t icon_start = ui32b_color_to_vec4(0xFFFFFF36);
+                vector4_t icon_final = ui32b_color_to_vec4(0x16161636);
+                main_menu.icon_color_interpolation.current = vector3_t(icon_start.r, icon_start.g, icon_start.b);
+                main_menu.icon_color_interpolation.prev = main_menu.icon_color_interpolation.current;
+                main_menu.icon_color_interpolation.next = vector3_t(icon_final.r, icon_final.g, icon_final.b);
+                main_menu.icon_color_interpolation.current_time = 0;
+                main_menu.icon_color_interpolation.max_time = 0.5f;
             }
+            
+            main_menu.hovering_over = (main_menu_t::buttons_t)i;
+
+            if (main_menu.background_color_interpolation.in_animation)
+            {
+                main_menu.background_color_interpolation.animate(raw_input->dt);
+                main_menu.icon_color_interpolation.animate(raw_input->dt);
+
+                vector4_t current_background = vector4_t(main_menu.background_color_interpolation.current.r,
+                                                         main_menu.background_color_interpolation.current.g,
+                                                         main_menu.background_color_interpolation.current.b,
+                                                         ((float32_t)0x36) / 255.0f);
+
+                main_menu.main_menu_buttons_backgrounds[i].color = vec4_color_to_ui32b(current_background);
+
+                vector4_t current_icon = vector4_t(main_menu.icon_color_interpolation.current.r,
+                                                   main_menu.icon_color_interpolation.current.g,
+                                                   main_menu.icon_color_interpolation.current.b,
+                                                   ((float32_t)0x36) / 255.0f);
+
+                main_menu.main_menu_buttons[i].color = vec4_color_to_ui32b(current_icon);
+            }
+            //main_menu.icon_color_interpolation.animate(raw_input->dt);
+        }
+        else
+        {
+            main_menu.main_menu_buttons[i].color = 0xFFFFFF36;
+            main_menu.main_menu_buttons_backgrounds[i].color = 0x16161636;
         }
     }
 }
@@ -121,6 +165,9 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
 
 static void initialize_main_menu(void)
 {
+    main_menu.background_color_interpolation.in_animation = 0;
+    main_menu.background_color_interpolation.current = vector3_t();
+    
     float32_t button_size = 0.15;
 
     // Relative to top right

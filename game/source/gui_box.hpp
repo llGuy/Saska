@@ -25,4 +25,6 @@ struct ui_box_t
     
     void update_size(const resolution_t &backbuffer_resolution);
     void update_position(const resolution_t &backbuffer_resolution);
+
+    void rotate_clockwise(float32_t rad_angle);
 };

@@ -71,9 +71,12 @@ void initialize_ui_translation_unit(struct game_memory_t *memory);
 
 
 
+uniform_group_t create_texture_uniform(const char *path, image2d_t *image);
+
 
 // Pushes the text to the textured quad vertex list
 // TODO: MAKE SURE THAT THESE ARE PART OF THE RENDER LIST CLASSES
 void push_text_to_render(ui_text_t *text, const resolution_t &resolution);
 void push_box_to_render(ui_box_t *box);
+void push_box_to_render_with_texture(ui_box_t *box, uniform_group_t group);
 

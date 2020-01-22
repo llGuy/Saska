@@ -190,8 +190,6 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     
         SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
         ShowWindow(window, showcmd);
-        
-        disable_cursor_display();
     }
 
     // If in console mode, surface obviously won't get created
@@ -260,7 +258,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 // Render
                 game_tick(&game, &raw_input, dt);
                 RedrawWindow(window, NULL, NULL, RDW_INTERNALPAINT);
-
+                
                 raw_input.cursor_moved = false;
                 raw_input.buttons[button_type_t::MOUSE_MOVE_RIGHT].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::MOUSE_MOVE_LEFT].state = button_state_t::NOT_DOWN;
@@ -276,6 +274,11 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 raw_input.buttons[button_type_t::ENTER].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::ESCAPE].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::LEFT_CONTROL].state = button_state_t::NOT_DOWN;
+
+                if (raw_input.has_focus)
+                {
+                    LoadCursorA(hinstance, IDC_ARROW);
+                }
                 // TODO: Set input state's normalized cursor position
             } break;
         case application_type_t::CONSOLE_APPLICATION_MODE:
@@ -372,8 +375,16 @@ static void handle_mouse_move_event(LPARAM lparam)
     int32_t true_diff_y = true_y_position - true_prev_y;
 
     // Virtual "infinite" cursor space
-    raw_input.cursor_pos_x += (float32_t)true_diff_x;
-    raw_input.cursor_pos_y += (float32_t)true_diff_y;
+    if (raw_input.show_cursor)
+    {
+        raw_input.cursor_pos_x = cursor_pos.x;
+        raw_input.cursor_pos_y = cursor_pos.y;
+    }
+    else
+    {
+        raw_input.cursor_pos_x += (float32_t)true_diff_x;
+        raw_input.cursor_pos_y += (float32_t)true_diff_y;
+    }
 
 
     // Calculate difference
@@ -631,7 +642,6 @@ static LRESULT CALLBACK win32_callback(HWND window_handle, UINT message, WPARAM 
     case WM_LBUTTONDOWN: { if (raw_input.has_focus) set_mouse_button_state(&raw_input, button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_DOWN); } break;
     case WM_LBUTTONUP: { if (raw_input.has_focus) set_mouse_button_state(&raw_input, button_type_t::MOUSE_LEFT, key_action_t::KEY_ACTION_UP); } break;
         // NOTE: Make sure this doesn't break anything in the future
-    case WM_SETCURSOR: { SetCursor(0);} break;
     case WM_CLOSE: { running = 0; PostQuitMessage(0); return 0; } break;
     case WM_DESTROY: { running = 0; PostQuitMessage(0); return 0; } break;
     case WM_QUIT: { running = 0; return 0 ; } break;

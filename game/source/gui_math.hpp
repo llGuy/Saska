@@ -40,9 +40,22 @@ inline vector2_t convert_glsl_to_normalized(const vector2_t &position)
 }
 
 
+inline vector2_t convert_normalized_to_glsl(const vector2_t &position)
+{
+    return((position + 1.0f) / 2.0f);
+}
+
+
 inline ui_vector2_t glsl_to_pixel_coord(const ui_vector2_t &position, const resolution_t &resolution)
 {
     ui_vector2_t ret((int32_t)(position.fx * (float32_t)resolution.width), (int32_t)(position.fy * (float32_t)resolution.height));
+    return(ret);
+}
+
+
+inline vector2_t glsl_to_pixel_coord(const vector2_t &position, const resolution_t &resolution)
+{
+    vector2_t ret((int32_t)(position.x * (float32_t)resolution.width), (int32_t)(position.x * (float32_t)resolution.height));
     return(ret);
 }
 
@@ -51,6 +64,14 @@ inline ui_vector2_t pixel_to_glsl_coord(const ui_vector2_t &position, const reso
 {
     ui_vector2_t ret((float32_t)position.ix / (float32_t)resolution.width,
                      (float32_t)position.iy / (float32_t)resolution.height);
+    return(ret);
+}
+
+
+inline vector2_t pixel_to_glsl_coord(const vector2_t &position, const resolution_t &resolution)
+{
+    vector2_t ret((float32_t)position.x / (float32_t)resolution.width,
+                  (float32_t)position.x / (float32_t)resolution.height);
     return(ret);
 }
 

@@ -142,6 +142,21 @@ static void initialize_debug_ui_utils(void)
     
 }
 
+void push_box_to_render_with_texture(ui_box_t *box, uniform_group_t group)
+{
+    textured_vertex_render_list.mark_section(group);
+    
+    vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
+    vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
+    
+    textured_vertex_render_list.push_vertex({normalized_base_position, vector2_t(0.0f, 1.0f), box->color});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f), box->color});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f), box->color});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(0.0f, normalized_size.y), vector2_t(0.0f), box->color});
+    textured_vertex_render_list.push_vertex({normalized_base_position + vector2_t(normalized_size.x, 0.0f), vector2_t(1.0f), box->color});
+    textured_vertex_render_list.push_vertex({normalized_base_position + normalized_size, vector2_t(1.0f, 0.0f), box->color});
+}
+
 void push_box_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
@@ -295,6 +310,20 @@ static void initialize_console(void)
 
 static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
 {
+    if (raw_input->buttons[button_type_t::ESCAPE].state)
+    {
+        g_console->receive_input = false;
+        g_console->render_console = 0;
+    }
+    
+    // Open console - This happens no matter if console has focus or not (or if no "typing" element has focus)
+    if (raw_input->char_stack[0] == 't' && !g_console->receive_input)
+    {
+        g_console->receive_input = true;
+        g_console->render_console = 1;
+        raw_input->char_stack[0] = 0;
+    }
+    
     if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
         for (uint32_t i = 0; i < raw_input->char_count; ++i)
@@ -329,17 +358,6 @@ static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
            
             clear_input_section();
         }
-    }
-
-    if (raw_input->buttons[button_type_t::ESCAPE].state)
-    {
-        g_console->receive_input = false;
-    }
-    // Open console - This happens no matter if console has focus or not (or if no "typing" element has focus)
-    if (raw_input->char_stack[0] == 'c' && !g_console->receive_input)
-    {
-        g_console->render_console ^= 0x1;
-        raw_input->char_stack[0] = 0;
     }
 }
 
@@ -434,6 +452,49 @@ static void initialize_ui_elements(const resolution_t &backbuffer_resolution)
     initialize_hud();
 
     initialize_menus();
+}
+
+uniform_group_t create_texture_uniform(const char *path, image2d_t *image)
+{
+    file_handle_t font_png_handle = create_file(path, file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+    external_image_data_t image_data = read_image(font_png_handle);
+        
+    make_texture(image,
+                 image_data.width,
+                 image_data.height,
+                 VK_FORMAT_R8G8B8A8_UNORM,
+                 1,
+                 1,
+                 2,
+                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                 VK_FILTER_NEAREST);
+    transition_image_layout(&image->image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            get_global_command_pool());
+    invoke_staging_buffer_for_device_local_image({(uint32_t)(4 * image_data.width * image_data.height), image_data.pixels},
+                                                 get_global_command_pool(),
+                                                 image,
+                                                 (uint32_t)image_data.width,
+                                                 (uint32_t)image_data.height);
+    transition_image_layout(&image->image,
+                            VK_FORMAT_R8G8B8A8_UNORM,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            get_global_command_pool());
+
+    free_external_image_data(&image_data);
+
+    uniform_group_t uniform;
+
+    auto *layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.tx_ui_quad"_hash));
+    
+    uniform = make_uniform_group(layout, g_uniform_pool);
+    update_uniform_group(&uniform,
+                         update_binding_t{ TEXTURE, image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+
+    return(uniform);
 }
 
 void initialize_ui_rendering_state(VkFormat swapchain_format,
@@ -643,6 +704,8 @@ void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform
 void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus)
 {
     handle_console_input(raw_input, focus);
+
+    update_menus(raw_input, focus);
     
     if (g_console->render_console)
     {

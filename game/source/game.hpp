@@ -13,6 +13,27 @@ enum application_type_t { WINDOW_APPLICATION_MODE, CONSOLE_APPLICATION_MODE };
 
 enum element_focus_t { WORLD_3D_ELEMENT_FOCUS, UI_ELEMENT_CONSOLE, UI_ELEMENT_MENU };
 
+struct focus_stack_t
+{
+    int32_t current_foci = -1;
+    element_focus_t foci [ 10 ];
+
+    void pop_focus(void)
+    {
+        --current_foci;
+    }
+    
+    void push_focus(element_focus_t focus)
+    {
+        foci[++current_foci] = focus;
+    }
+    
+    element_focus_t get_current_focus(void)
+    {
+        return foci[current_foci];
+    }
+};
+
 struct game_memory_t
 {
     // Contains all state to do with graphics: material queues, GPU object managers, etc...
@@ -25,7 +46,7 @@ struct game_memory_t
     application_type_t app_type;
 
     // Which screen has the focus (3D scene screen, ui console screen, ui menu screen, ...)
-    element_focus_t screen_focus = WORLD_3D_ELEMENT_FOCUS;
+    focus_stack_t focus_stack;
 };
 
 void load_game(game_memory_t *memory);

@@ -51,6 +51,8 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
     }
 
     initialize_game_input_settings();
+
+    memory->focus_stack.push_focus(element_focus_t::UI_ELEMENT_MENU);
 }
 
 void destroy_game(game_memory_t *memory)
@@ -71,24 +73,16 @@ void destroy_game(game_memory_t *memory)
 // Decides which element gets input focus
 static void handle_global_game_input(game_memory_t *memory, raw_input_t *raw_input)
 {
-    if (raw_input->char_stack[0] == 't' && memory->screen_focus != element_focus_t::UI_ELEMENT_CONSOLE)
+    if (raw_input->char_stack[0] == 't' && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_CONSOLE)
     {
-        raw_input->char_stack[0] = 0;
-        
-        memory->screen_focus = element_focus_t::UI_ELEMENT_CONSOLE;
+        memory->focus_stack.push_focus(element_focus_t::UI_ELEMENT_CONSOLE);
     }
     else if (raw_input->buttons[button_type_t::ESCAPE].state)
     {
-        switch (memory->screen_focus)
+        // Main menu needs to be at the beginning of the stack always
+        if (memory->focus_stack.current_foci > 0)
         {
-        case element_focus_t::UI_ELEMENT_CONSOLE:
-            {
-                memory->screen_focus = element_focus_t::WORLD_3D_ELEMENT_FOCUS;
-            } break;
-        case element_focus_t::WORLD_3D_ELEMENT_FOCUS:
-            {
-                // Set focus to like some escape menu or something
-            } break;
+            memory->focus_stack.pop_focus();
         }
     }
 }
@@ -115,10 +109,10 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
             gpu_command_queue_t queue{frame.command_buffer};
             {
                 // Important function: may need to change structure of world API to incorporate networking
-                tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->screen_focus, frame.image_index);
+                tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->focus_stack.get_current_focus(), frame.image_index);
 
                 dbg_handle_input(raw_input);
-                update_game_ui(get_pfx_framebuffer_hdl(), raw_input, memory->screen_focus);
+                update_game_ui(get_pfx_framebuffer_hdl(), raw_input, memory->focus_stack.get_current_focus());
                 render_game_ui(get_pfx_framebuffer_hdl(), &queue);
         
                 render_final_output(frame.image_index, &queue);

@@ -291,7 +291,7 @@ static void init_instance(VkApplicationInfo *app_info, instance_create_validatio
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT *message_data, void *user_data)
 {
-    output_to_debug_console("Vulkan> ", message_data->pMessage, "\n");
+    //output_to_debug_console("Vulkan> ", message_data->pMessage, "\n");
 
     return(VK_FALSE);
 }

@@ -18,6 +18,7 @@ typedef glm::vec4 vector4_t;
 typedef glm::ivec2 ivector2_t;
 typedef glm::ivec3 ivector3_t;
 typedef glm::ivec4 ivector4_t;
+typedef glm::mat2 matrix2_t;
 typedef glm::mat3 matrix3_t;
 typedef glm::mat4 matrix4_t;
 typedef glm::quat quaternion_t;

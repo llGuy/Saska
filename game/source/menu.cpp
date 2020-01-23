@@ -44,6 +44,15 @@ struct main_menu_t
     // TODO: Make this something that each button has (for a fade out animation)
     smooth_linear_interpolation_t<vector3_t> background_color_interpolation;
     smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;
+
+
+
+    // For the browse server menu
+    struct
+    {
+        ui_box_t ip_address_input_box;
+        ui_text_t input_text;
+    } browse_menu;
 };
 
 
@@ -52,6 +61,10 @@ enum menu_mode_t { NONE, MAIN_MENU, INVALID_MENU_MODE };
 static menu_mode_t current_menu_mode;
 
 static main_menu_t main_menu;
+
+static font_t *menus_font;
+static uniform_group_t font_uniform;
+static image2d_t font_image;
 
 
 static void initialize_main_menu(void);
@@ -62,11 +75,16 @@ static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, floa
 
 static void update_open_menu(main_menu_t::buttons_t button, float32_t dt);
 static void open_menu(main_menu_t::buttons_t button);
+static void initialize_menu_windows(void);
 
 
 void initialize_menus(void)
 {
     current_menu_mode = menu_mode_t::MAIN_MENU;
+    
+    // Initialize menu font
+    menus_font = load_font("menu.font"_hash, "fonts/liberation_mono.fnt", "");
+    font_uniform = create_texture_uniform("fonts/liberation_mono.png", &font_image);
     
     initialize_main_menu();
 }
@@ -232,9 +250,13 @@ static void initialize_main_menu(void)
                                           ui_vector2_t(-0.125f, 0.0f),
                                           ui_vector2_t(1.0f, 1.0f),
                                           &main_menu.main_menu,
-                                          0x46464636,
+                                          0x76767636,
                                           get_backbuffer_resolution());
 
+
+    initialize_menu_windows();
+    
+    
     main_menu.slider_x_max_size = main_menu.main_menu_slider.gls_current_size.to_fvec2().x;
     main_menu.slider_y_max_size = main_menu.main_menu_slider.gls_current_size.to_fvec2().y;
 
@@ -350,6 +372,22 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
     }
 
     push_box_to_render_reversed(&main_menu.main_menu_slider, vector2_t(main_menu.slider_x_max_size, main_menu.slider_y_max_size) * 2.0f);
+
+    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation)
+    {
+        switch(main_menu.selected_menu)
+        {
+            
+            // Render the selected menu
+        case main_menu_t::buttons_t::BROWSE_SERVER: {
+            push_box_to_render(&main_menu.browse_menu.ip_address_input_box);
+
+            textured_render_list->mark_section(font_uniform);
+            push_text_to_render(&main_menu.browse_menu.input_text, get_backbuffer_resolution());
+        } break;
+            
+        }
+    }
 }
 
 
@@ -439,4 +477,36 @@ static void update_open_menu(main_menu_t::buttons_t button, float32_t dt)
         main_menu.main_menu_slider_x.current_time = 0.0f;
         main_menu.main_menu_slider_x.max_time = 0.3f;
     }
+
+    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation)
+    {
+        switch(main_menu.selected_menu)
+        {
+            
+            // Render the selected menu
+        case main_menu_t::buttons_t::BROWSE_SERVER: {
+            
+        } break;
+            
+        }
+    }
+}
+
+
+static void initialize_menu_windows(void)
+{
+    main_menu.browse_menu.ip_address_input_box.initialize(LEFT_DOWN, 15.0f,
+                                                          ui_vector2_t(0.05f, 0.05f),
+                                                          ui_vector2_t(0.6f, 0.6f),
+                                                          &main_menu.main_menu_slider,
+                                                          0x16161646,
+                                                          get_backbuffer_resolution());
+
+    main_menu.browse_menu.input_text.initialize(&main_menu.browse_menu.ip_address_input_box,
+                                                menus_font,
+                                                ui_text_t::font_stream_box_relative_to_t::BOTTOM,
+                                                0.8f, 1.0f,
+                                                55, 1.8f);
+
+    main_menu.browse_menu.input_text.draw_string("192.168.1.1", 0xFFFFFFC6);
 }

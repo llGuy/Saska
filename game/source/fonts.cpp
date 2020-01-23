@@ -26,9 +26,9 @@ font_handle_t add_font(const constant_string_t &font_name)
 }
 
 
-font_t *get_font(font_handle_t handle)
+font_t *get_font(const constant_string_t &name)
 {
-    return(&fonts[handle]);
+    return(&fonts[*font_map.get(name.hash)]);
 }
 
 
@@ -38,7 +38,7 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
     static constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
     
     font_handle_t hdl = add_font(font_name);
-    font_t *font_ptr = get_font(hdl);
+    font_t *font_ptr = get_font(font_name);
 
     file_handle_t fnt_file_handle = create_file(fnt_file, file_type_flags_t::TEXT | file_type_flags_t::ASSET);
     file_contents_t fnt = read_file_tmp(fnt_file_handle);

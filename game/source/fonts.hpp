@@ -60,6 +60,6 @@ struct ui_text_t
 
 
 font_handle_t add_font(const constant_string_t &font_name);
-font_t *get_font(font_handle_t handle);
+font_t *get_font(const constant_string_t &name);
 
 font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file);

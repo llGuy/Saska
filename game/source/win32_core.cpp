@@ -68,6 +68,7 @@ static double dt = 0.0f;
 static HWND window;
 static raw_input_t raw_input = {};
 static game_memory_t game;
+static HCURSOR arrow;
 
 
 
@@ -187,7 +188,9 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         top_left_of_window.x = 0;
         top_left_of_window.y = 0;
         ClientToScreen(window, &top_left_of_window);
-    
+
+        arrow = LoadCursorA(hinstance, IDC_ARROW);
+        
         SetCursorPos(top_left_of_window.x + 2, top_left_of_window.y + 2);
         ShowWindow(window, showcmd);
     }
@@ -274,11 +277,6 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 raw_input.buttons[button_type_t::ENTER].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::ESCAPE].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::LEFT_CONTROL].state = button_state_t::NOT_DOWN;
-
-                if (raw_input.has_focus)
-                {
-                    LoadCursorA(hinstance, IDC_ARROW);
-                }
                 // TODO: Set input state's normalized cursor position
             } break;
         case application_type_t::CONSOLE_APPLICATION_MODE:
@@ -645,7 +643,7 @@ static LRESULT CALLBACK win32_callback(HWND window_handle, UINT message, WPARAM 
     case WM_CLOSE: { running = 0; PostQuitMessage(0); return 0; } break;
     case WM_DESTROY: { running = 0; PostQuitMessage(0); return 0; } break;
     case WM_QUIT: { running = 0; return 0 ; } break;
-    case WM_SETFOCUS: { raw_input.has_focus = 1; } break;
+    case WM_SETFOCUS: { raw_input.has_focus = 1; SetCursor(arrow); } break;
     case WM_KILLFOCUS: { raw_input.has_focus = 0; } break;
     }
 

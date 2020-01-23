@@ -135,3 +135,26 @@ application_type_t get_app_type(void)
 {
     return g_game_memory->app_type;
 }
+
+
+void clear_and_request_focus(element_focus_t focus)
+{
+    g_game_memory->focus_stack.current_foci = 1;
+    g_game_memory->focus_stack.foci[1] = focus;
+
+    if (focus == WORLD_3D_ELEMENT_FOCUS)
+    {
+        disable_cursor_display();
+    }
+}
+
+void request_focus(element_focus_t focus)
+{
+    g_game_memory->focus_stack.push_focus(focus);
+    
+    if (focus == WORLD_3D_ELEMENT_FOCUS)
+    {
+        disable_cursor_display();
+    }
+}
+

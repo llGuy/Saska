@@ -58,3 +58,6 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt);
 gpu_command_queue_pool_t *get_global_command_pool(void);
 application_type_t get_app_type(void);
 application_mode_t get_app_mode(void);
+
+void clear_and_request_focus(element_focus_t focus);
+void request_focus(element_focus_t focus);

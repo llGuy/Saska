@@ -10,6 +10,8 @@
 #include "entities_gstate.hpp"
 #include "gamestate.hpp"
 
+#include "game.hpp"
+
 
 struct remote_client_t
 {
@@ -98,7 +100,7 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
         }
     }
 
-    network_address_t received_address = {};
+    network_address_t received_address = {}; 
     bool received = receive_from(message_buffer, sizeof(char) * MAX_MESSAGE_BUFFER_SIZE, &received_address);
 
     if (received)
@@ -154,6 +156,9 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                     }
 
                     is_connected_to_server = 1;
+
+                    // Need to go into 3D world focus
+                    clear_and_request_focus(element_focus_t::WORLD_3D_ELEMENT_FOCUS);
 
                 } break;
             case server_packet_type_t::SPT_CHUNK_VOXELS_HARD_UPDATE:

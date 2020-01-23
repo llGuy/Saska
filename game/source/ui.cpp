@@ -703,19 +703,24 @@ void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform
 
 void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus)
 {
-    handle_console_input(raw_input, focus);
-
-    update_menus(raw_input, focus);
-    
-    if (g_console->render_console)
+    if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
-        push_console_to_render(raw_input);
-    }
+        handle_console_input(raw_input, focus);
 
+        if (g_console->render_console)
+        {
+            push_console_to_render(raw_input);
+        }
+    }
+    
     // in-game stuff
     push_hud_to_render(&textured_vertex_render_list, focus);
 
-    push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus);
+    if (focus == element_focus_t::UI_ELEMENT_MENU)
+    {
+        update_menus(raw_input, focus);
+        push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus);
+    }
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(&gui_render_pass,
                                                                              g_framebuffer_manager->get(get_pfx_framebuffer_hdl()));

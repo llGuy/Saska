@@ -21,15 +21,23 @@ struct main_menu_t
 
 
     widget_t widgets[buttons_t::INVALID_MENU_BUTTON];
-    
-    
+
+    // Won't get rendered
+    ui_box_t main_menu;
+
+    // These are relative to the main menu
     // Basially represents the area where the user can click
     ui_box_t main_menu_buttons[buttons_t::INVALID_MENU_BUTTON];
     ui_box_t main_menu_buttons_backgrounds[buttons_t::INVALID_MENU_BUTTON];
 
+    ui_box_t main_menu_slider;
+
+    float32_t slider_x_min = 0.1f;
+    smooth_linear_interpolation_t<float32_t> main_menu_slider_x;
+
     buttons_t hovering_over;
     smooth_linear_interpolation_t<vector3_t> background_color_interpolation;
-    smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;    
+    smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;
 };
 
 
@@ -45,6 +53,8 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
                            gui_colored_vertex_render_list_t *colored_render_list);
 
 static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
+
+static void open_menu(main_menu_t::buttons_t button);
 
 
 void initialize_menus(void)
@@ -94,11 +104,15 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
 
     cursor_x = 2.0f * cursor_x - 1.0f;
     cursor_y = 2.0f * cursor_y - 1.0f;
+
+    bool hovered_over_button = 0;
     
     for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
     {
         if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
         {
+            hovered_over_button = 1;
+            
             if (main_menu.hovering_over != i)
             {
                 // Start interpolation
@@ -151,10 +165,19 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
         }
     }
 
+    if (!hovered_over_button)
+    {
+        main_menu.hovering_over = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
+    }
+
     if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
     {
         switch(main_menu.hovering_over)
         {
+        case main_menu_t::buttons_t::BROWSE_SERVER: {
+            open_menu(main_menu.hovering_over);
+        } break;
+            
         case main_menu_t::buttons_t::QUIT: {
             request_quit();
         } break;
@@ -176,21 +199,37 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
 
 static void initialize_main_menu(void)
 {
-    main_menu.background_color_interpolation.in_animation = 0;
-    main_menu.background_color_interpolation.current = vector3_t();
+    main_menu.main_menu.initialize(CENTER, 2.0f,
+                                   ui_vector2_t(0.0f, 0.0f),
+                                   ui_vector2_t(0.8f, 0.8f),
+                                   nullptr,
+                                   0xFF000036,
+                                   get_backbuffer_resolution());
     
-    float32_t button_size = 0.15;
+    main_menu.main_menu_slider_x.in_animation = 0;
+
+    main_menu.main_menu_slider.initialize(RIGHT_UP, 1.75f,
+                                          ui_vector2_t(-0.125f, 0.0f),
+                                          ui_vector2_t(1.0f, 1.0f),
+                                          &main_menu.main_menu,
+                                          0x46464636,
+                                          get_backbuffer_resolution());
+    
+    main_menu.background_color_interpolation.in_animation = 0;
+    main_menu.background_color_interpolation.current = vector3_t(0);
+    
+    float32_t button_size = 0.25;
 
     // Relative to top right
-    float32_t current_button_y = -0.2f;
+    float32_t current_button_y = 0.0f;
     
     {
         main_menu_t::buttons_t button = main_menu_t::buttons_t::BROWSE_SERVER;
     
         main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(-0.1f, current_button_y),
-                                                                   ui_vector2_t(0.15f, 0.15f),
-                                                                   nullptr,
+                                                                   ui_vector2_t(0.0f, current_button_y),
+                                                                   ui_vector2_t(0.25f, 0.25f),
+                                                                   &main_menu.main_menu,
                                                                    0x1616161636,
                                                                    get_backbuffer_resolution());
     
@@ -210,9 +249,9 @@ static void initialize_main_menu(void)
         main_menu_t::buttons_t button = main_menu_t::buttons_t::HOST_SERVER;
     
         main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(-0.1f, current_button_y),
-                                                                   ui_vector2_t(0.15f, 0.15f),
-                                                                   nullptr,
+                                                                   ui_vector2_t(0.0f, current_button_y),
+                                                                   ui_vector2_t(0.25f, 0.25f),
+                                                                   &main_menu.main_menu,
                                                                    0x1616161636,
                                                                    get_backbuffer_resolution());
     
@@ -232,9 +271,9 @@ static void initialize_main_menu(void)
         main_menu_t::buttons_t button = main_menu_t::buttons_t::SETTINGS;
     
         main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(-0.1f, current_button_y),
-                                                                   ui_vector2_t(0.15f, 0.15f),
-                                                                   nullptr,
+                                                                   ui_vector2_t(0.0f, current_button_y),
+                                                                   ui_vector2_t(0.25f, 0.25f),
+                                                                   &main_menu.main_menu,
                                                                    0x1616161636,
                                                                    get_backbuffer_resolution());
     
@@ -254,9 +293,9 @@ static void initialize_main_menu(void)
         main_menu_t::buttons_t button = main_menu_t::buttons_t::QUIT;
     
         main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(-0.1f, current_button_y),
-                                                                   ui_vector2_t(0.15f, 0.15f),
-                                                                   nullptr,
+                                                                   ui_vector2_t(0.0f, current_button_y),
+                                                                   ui_vector2_t(0.25f, 0.25f),
+                                                                   &main_menu.main_menu,
                                                                    0x1616161636,
                                                                    get_backbuffer_resolution());
     
@@ -283,7 +322,11 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
         push_box_to_render_with_texture(&main_menu.main_menu_buttons[button], main_menu.widgets[button].uniform);
 
         push_box_to_render(&main_menu.main_menu_buttons_backgrounds[button]);
+
+        push_box_to_render(&main_menu.main_menu_slider);
     }
+
+    push_box_to_render(&main_menu.main_menu_slider);
 }
 
 
@@ -308,4 +351,10 @@ static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, floa
     {
         return(false);
     }
+}
+
+
+static void open_menu(main_menu_t::buttons_t button)
+{
+    
 }

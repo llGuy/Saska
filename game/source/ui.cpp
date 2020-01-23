@@ -170,6 +170,21 @@ void push_box_to_render(ui_box_t *box)
     colored_vertex_render_list.push_vertex({normalized_base_position + normalized_size, box->color});
 }
 
+void push_box_to_render_reversed(ui_box_t *box, const vector2_t &size)
+{
+    vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
+    vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
+
+    normalized_base_position += size;
+
+    colored_vertex_render_list.push_vertex({normalized_base_position, box->color});
+    colored_vertex_render_list.push_vertex({normalized_base_position - vector2_t(0.0f, normalized_size.y), box->color});
+    colored_vertex_render_list.push_vertex({normalized_base_position - vector2_t(normalized_size.x, 0.0f), box->color});
+    colored_vertex_render_list.push_vertex({normalized_base_position - vector2_t(0.0f, normalized_size.y), box->color});
+    colored_vertex_render_list.push_vertex({normalized_base_position - vector2_t(normalized_size.x, 0.0f), box->color});
+    colored_vertex_render_list.push_vertex({normalized_base_position - normalized_size, box->color});
+}
+
 /*static void push_font_character_to_render(ui_box_t *box)
 {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());

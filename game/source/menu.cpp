@@ -32,10 +32,16 @@ struct main_menu_t
 
     ui_box_t main_menu_slider;
 
-    float32_t slider_x_min = 0.1f;
-    smooth_linear_interpolation_t<float32_t> main_menu_slider_x;
+    bool in_out_transition = 0;
+    buttons_t selected_menu = INVALID_MENU_BUTTON;
+    float32_t slider_x_min;
+    float32_t slider_x_max_size;
+    float32_t slider_y_max_size;
+    smooth_linear_interpolation_t<float32_t> main_menu_slider_x = {};
 
     buttons_t hovering_over;
+
+    // TODO: Make this something that each button has (for a fade out animation)
     smooth_linear_interpolation_t<vector3_t> background_color_interpolation;
     smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;
 };
@@ -54,6 +60,7 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
 
 static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
 
+static void update_open_menu(main_menu_t::buttons_t button, float32_t dt);
 static void open_menu(main_menu_t::buttons_t button);
 
 
@@ -170,19 +177,32 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
         main_menu.hovering_over = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
     }
 
+    static bool clicked_previous_frame = 0;
+    
     if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
     {
         switch(main_menu.hovering_over)
         {
-        case main_menu_t::buttons_t::BROWSE_SERVER: {
-            open_menu(main_menu.hovering_over);
+        case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::HOST_SERVER: case main_menu_t::buttons_t::SETTINGS: {
+            if (!clicked_previous_frame)
+            {
+                open_menu(main_menu.hovering_over);
+            }
         } break;
             
         case main_menu_t::buttons_t::QUIT: {
             request_quit();
         } break;
         }
+
+        clicked_previous_frame = 1;
     }
+    else
+    {
+        clicked_previous_frame = 0;
+    }
+
+    update_open_menu(main_menu.selected_menu, raw_input->dt);
 }
 
 
@@ -214,6 +234,11 @@ static void initialize_main_menu(void)
                                           &main_menu.main_menu,
                                           0x46464636,
                                           get_backbuffer_resolution());
+
+    main_menu.slider_x_max_size = main_menu.main_menu_slider.gls_current_size.to_fvec2().x;
+    main_menu.slider_y_max_size = main_menu.main_menu_slider.gls_current_size.to_fvec2().y;
+
+    main_menu.main_menu_slider.gls_current_size.fx = 0.0f;
     
     main_menu.background_color_interpolation.in_animation = 0;
     main_menu.background_color_interpolation.current = vector3_t(0);
@@ -322,11 +347,9 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
         push_box_to_render_with_texture(&main_menu.main_menu_buttons[button], main_menu.widgets[button].uniform);
 
         push_box_to_render(&main_menu.main_menu_buttons_backgrounds[button]);
-
-        push_box_to_render(&main_menu.main_menu_slider);
     }
 
-    push_box_to_render(&main_menu.main_menu_slider);
+    push_box_to_render_reversed(&main_menu.main_menu_slider, vector2_t(main_menu.slider_x_max_size, main_menu.slider_y_max_size) * 2.0f);
 }
 
 
@@ -356,5 +379,64 @@ static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, floa
 
 static void open_menu(main_menu_t::buttons_t button)
 {
-    
+    if (button != main_menu.selected_menu)
+    {
+        if (main_menu.selected_menu == main_menu_t::buttons_t::INVALID_MENU_BUTTON)
+        {
+            // Just do transition in
+            main_menu.selected_menu = button;
+
+            // Start animation
+            main_menu.main_menu_slider_x.in_animation = 1;
+            main_menu.main_menu_slider_x.prev = main_menu.main_menu_slider_x.current;
+            main_menu.main_menu_slider_x.next = main_menu.slider_x_max_size;
+            main_menu.main_menu_slider_x.current_time = 0.0f;
+            main_menu.main_menu_slider_x.max_time = 0.3f;
+        }
+        else
+        {
+            // Need to do transition out, then back in
+            main_menu.selected_menu = button;
+
+            // Start animation
+            main_menu.main_menu_slider_x.in_animation = 1;
+            main_menu.main_menu_slider_x.prev = main_menu.main_menu_slider_x.current;
+            main_menu.main_menu_slider_x.next = 0.0f;
+            main_menu.main_menu_slider_x.current_time = 0.0f;
+            main_menu.main_menu_slider_x.max_time = 0.3f;
+
+            main_menu.in_out_transition = 1;
+        }
+    }
+    else
+    {
+        // Just do transition out
+        main_menu.selected_menu = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
+
+        // Start animation
+        main_menu.main_menu_slider_x.in_animation = 1;
+        main_menu.main_menu_slider_x.prev = main_menu.main_menu_slider_x.current;
+        main_menu.main_menu_slider_x.next = 0.0f;
+        main_menu.main_menu_slider_x.current_time = 0.0f;
+        main_menu.main_menu_slider_x.max_time = 0.3f;
+    }
+}
+
+
+static void update_open_menu(main_menu_t::buttons_t button, float32_t dt)
+{
+    main_menu.main_menu_slider_x.animate(dt);
+
+    main_menu.main_menu_slider.gls_current_size.fx = main_menu.main_menu_slider_x.current;
+
+    if (main_menu.in_out_transition && !main_menu.main_menu_slider_x.in_animation)
+    {
+        main_menu.in_out_transition = 0;
+        
+        main_menu.main_menu_slider_x.in_animation = 1;
+        main_menu.main_menu_slider_x.prev = main_menu.main_menu_slider_x.current;
+        main_menu.main_menu_slider_x.next = main_menu.slider_x_max_size;
+        main_menu.main_menu_slider_x.current_time = 0.0f;
+        main_menu.main_menu_slider_x.max_time = 0.3f;
+    }
 }

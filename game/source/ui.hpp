@@ -78,5 +78,6 @@ uniform_group_t create_texture_uniform(const char *path, image2d_t *image);
 // TODO: MAKE SURE THAT THESE ARE PART OF THE RENDER LIST CLASSES
 void push_text_to_render(ui_text_t *text, const resolution_t &resolution);
 void push_box_to_render(ui_box_t *box);
+void push_box_to_render_reversed(ui_box_t *box, const vector2_t &size);
 void push_box_to_render_with_texture(ui_box_t *box, uniform_group_t group);
 

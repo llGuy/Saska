@@ -2492,7 +2492,7 @@ void make_cubemap_uniform_layout(void)
 void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *raw_input)
 {
     g_dfr_rendering->backbuffer_res = {(uint32_t)raw_input->window_width, (uint32_t)raw_input->window_height};
-    g_dfr_rendering->backbuffer_res = {2500, 1400};
+    g_dfr_rendering->backbuffer_res = {2500, 1000};
 
     make_cubemap_uniform_layout();
     

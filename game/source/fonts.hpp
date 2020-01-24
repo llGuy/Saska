@@ -55,6 +55,22 @@ struct ui_text_t
 
     void draw_char(char character, uint32_t color);
     void draw_string(const char *string, uint32_t color);
+    void null_terminate(void);
+};
+
+
+struct ui_input_text_t
+{
+    uint32_t cursor_position = 0;
+    ui_text_t text;
+
+    uint32_t text_color;
+    
+    uint32_t cursor_fade = 0;
+    bool fade_in_or_out = 0;
+
+    // If enter was pressed
+    void input(raw_input_t *raw_input);
 };
 
 

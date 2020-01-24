@@ -52,7 +52,7 @@ static circular_buffer_t<local_client_voxel_modification_history_t> vmod_history
 
 // Static function declarations
 static void join_loop_back(uint32_t client_index /* Will be the client name */);
-static void join_server(const char *ip_address, const char *client_name);
+void join_server(const char *ip_address, const char *client_name);
 
 static int32_t lua_join_server(lua_State *state);
 static int32_t lua_join_loop_back(lua_State *state);
@@ -403,15 +403,8 @@ client_t *get_user_client(void)
 }
 
 
-
-// Static function definitions
-static void join_loop_back(uint32_t client_index /* Will be the client name */)
+void join_server(const char *ip_address, const char *client_name)
 {
-    const char *ip_address = "127.0.0.1";
-    
-    char client_name[10];
-    sprintf(client_name, "%d", client_index);
-    
     packet_header_t header = {};
     client_join_packet_t packet = {};
     {
@@ -432,8 +425,15 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
 }
 
 
-static void join_server(const char *ip_address, const char *client_name)
+
+// Static function definitions
+static void join_loop_back(uint32_t client_index /* Will be the client name */)
 {
+    const char *ip_address = "127.0.0.1";
+    
+    char client_name[10];
+    sprintf(client_name, "%d", client_index);
+    
     packet_header_t header = {};
     client_join_packet_t packet = {};
     {

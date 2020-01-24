@@ -88,8 +88,9 @@ static void set_button_action_state(uint32_t action, raw_input_t *raw_input, gam
 }
 
 
-void translate_raw_to_game_input(raw_input_t *raw_input, game_input_t *dst, float32_t dt)
+void translate_raw_to_game_input(raw_input_t *raw_input, game_input_t *dst, float32_t dt, element_focus_t focus)
 {
+    if (focus == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
     // For buttons
     for (uint32_t action = 0; action < game_input_action_type_t::INVALID_ACTION; ++action)
     {

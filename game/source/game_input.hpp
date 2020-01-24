@@ -1,5 +1,6 @@
 #pragma once
 
+#include "game.hpp"
 #include "utility.hpp"
 #include "raw_input.hpp"
 
@@ -41,4 +42,4 @@ struct game_input_t
 
 // TODO: Load from file
 void initialize_game_input_settings(void);
-void translate_raw_to_game_input(raw_input_t *raw_input, game_input_t *dst, float32_t dt);
+void translate_raw_to_game_input(raw_input_t *raw_input, game_input_t *dst, float32_t dt, element_focus_t focus);

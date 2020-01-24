@@ -45,13 +45,12 @@ struct main_menu_t
     smooth_linear_interpolation_t<vector3_t> background_color_interpolation;
     smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;
 
-
-
     // For the browse server menu
     struct
     {
+        bool typing_in_input = 0;
         ui_box_t ip_address_input_box;
-        ui_text_t input_text;
+        ui_input_text_t input_text;
     } browse_menu;
 };
 
@@ -69,11 +68,11 @@ static image2d_t font_image;
 
 static void initialize_main_menu(void);
 static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
-                           gui_colored_vertex_render_list_t *colored_render_list);
+                           gui_colored_vertex_render_list_t *colored_render_list, float32_t dt);
 
 static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
 
-static void update_open_menu(main_menu_t::buttons_t button, float32_t dt);
+static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt);
 static void open_menu(main_menu_t::buttons_t button);
 static void initialize_menu_windows(void);
 
@@ -220,17 +219,18 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
         clicked_previous_frame = 0;
     }
 
-    update_open_menu(main_menu.selected_menu, raw_input->dt);
+    update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
 }
 
 
 void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_list,
                           gui_colored_vertex_render_list_t *colored_render_list,
-                          element_focus_t focus)
+                          element_focus_t focus,
+                          float32_t dt)
 {
     if (current_menu_mode == menu_mode_t::MAIN_MENU)
     {
-        push_main_menu(textured_render_list, colored_render_list);
+        push_main_menu(textured_render_list, colored_render_list, dt);
     }
 }
 
@@ -361,7 +361,8 @@ static void initialize_main_menu(void)
 
 
 static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
-                           gui_colored_vertex_render_list_t *colored_render_list)
+                           gui_colored_vertex_render_list_t *colored_render_list,
+                           float32_t dt)
 {
     for (uint32_t i = 0; i < main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
     {
@@ -383,7 +384,7 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
             push_box_to_render(&main_menu.browse_menu.ip_address_input_box);
 
             textured_render_list->mark_section(font_uniform);
-            push_text_to_render(&main_menu.browse_menu.input_text, get_backbuffer_resolution());
+            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, get_backbuffer_resolution(), 0xFFFFFFC0, dt);
         } break;
             
         }
@@ -391,10 +392,8 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
 }
 
 
-static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y)
+static bool detect_if_user_clicked_on_widget(ui_box_t *box, float32_t cursor_x, float32_t cursor_y)
 {
-    ui_box_t *box = &main_menu.main_menu_buttons_backgrounds[button];
-    
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
 
@@ -412,6 +411,12 @@ static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, floa
     {
         return(false);
     }
+}
+
+
+static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y)
+{
+    return detect_if_user_clicked_on_widget(&main_menu.main_menu_buttons_backgrounds[button], cursor_x, cursor_y);
 }
 
 
@@ -461,7 +466,7 @@ static void open_menu(main_menu_t::buttons_t button)
 }
 
 
-static void update_open_menu(main_menu_t::buttons_t button, float32_t dt)
+static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt)
 {
     main_menu.main_menu_slider_x.animate(dt);
 
@@ -485,6 +490,18 @@ static void update_open_menu(main_menu_t::buttons_t button, float32_t dt)
             
             // Render the selected menu
         case main_menu_t::buttons_t::BROWSE_SERVER: {
+
+            main_menu.browse_menu.input_text.input(raw_input);
+
+            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
+            {
+                // Join server
+                main_menu.browse_menu.input_text.text.null_terminate();
+                
+                const char *ip_address = main_menu.browse_menu.input_text.text.characters;
+                
+                join_server(ip_address, "");
+            }
             
         } break;
             
@@ -502,11 +519,11 @@ static void initialize_menu_windows(void)
                                                           0x16161646,
                                                           get_backbuffer_resolution());
 
-    main_menu.browse_menu.input_text.initialize(&main_menu.browse_menu.ip_address_input_box,
-                                                menus_font,
-                                                ui_text_t::font_stream_box_relative_to_t::BOTTOM,
-                                                0.8f, 1.0f,
-                                                55, 1.8f);
+    main_menu.browse_menu.input_text.text.initialize(&main_menu.browse_menu.ip_address_input_box,
+                                                     menus_font,
+                                                     ui_text_t::font_stream_box_relative_to_t::BOTTOM,
+                                                     0.8f, 1.0f,
+                                                     55, 1.8f);
 
-    main_menu.browse_menu.input_text.draw_string("192.168.1.1", 0xFFFFFFC6);
+    main_menu.browse_menu.input_text.text_color = 0xFFFFFFC0;
 }

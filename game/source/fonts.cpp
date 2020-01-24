@@ -137,6 +137,37 @@ void ui_text_t::draw_string(const char *string, uint32_t color)
 }
 
 
+void ui_text_t::null_terminate(void)
+{
+    characters[char_count] = 0;
+}
+
+
+void ui_input_text_t::input(raw_input_t *raw_input)
+{
+    for (uint32_t i = 0; i < raw_input->char_count; ++i)
+    {
+        char character[2] = {raw_input->char_stack[i], 0};
+        if (character[0])
+        {
+            text.colors[cursor_position] = text_color;
+            text.characters[cursor_position++] = raw_input->char_stack[i];
+            ++text.char_count;
+            raw_input->char_stack[i] = 0;
+        }
+    }
+
+    if (raw_input->buttons[button_type_t::BACKSPACE].state)
+    {
+        if (text.char_count && cursor_position)
+        {
+            --cursor_position;
+            --text.char_count;
+        }
+    }
+}
+
+
 // Loading fonts
 struct fnt_word_t
 {

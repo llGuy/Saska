@@ -73,16 +73,29 @@ void destroy_game(game_memory_t *memory)
 // Decides which element gets input focus
 static void handle_global_game_input(game_memory_t *memory, raw_input_t *raw_input)
 {
-    if (raw_input->char_stack[0] == 't' && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_CONSOLE)
+    if (raw_input->char_stack[0] == '/' && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_CONSOLE && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_INPUT)
     {
         memory->focus_stack.push_focus(element_focus_t::UI_ELEMENT_CONSOLE);
     }
     else if (raw_input->buttons[button_type_t::ESCAPE].state)
     {
-        // Main menu needs to be at the beginning of the stack always
-        if (memory->focus_stack.current_foci > 0)
+        if (memory->focus_stack.get_current_focus() == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
         {
-            memory->focus_stack.pop_focus();
+            memory->focus_stack.push_focus(element_focus_t::UI_ELEMENT_MENU);
+            enable_cursor_display();
+        }
+        else
+        {
+            // Main menu needs to be at the beginning of the stack always
+            if (memory->focus_stack.current_foci > 0)
+            {
+                memory->focus_stack.pop_focus();
+
+                if (memory->focus_stack.get_current_focus() == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
+                {
+                    disable_cursor_display();
+                }
+            }
         }
     }
 }
@@ -94,7 +107,7 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
             game_input_t game_input = {};
-            translate_raw_to_game_input(raw_input, &game_input, dt);
+            translate_raw_to_game_input(raw_input, &game_input, dt, memory->focus_stack.get_current_focus());
             
             
             
@@ -146,6 +159,10 @@ void clear_and_request_focus(element_focus_t focus)
     {
         disable_cursor_display();
     }
+    else
+    {
+        enable_cursor_display();
+    }
 }
 
 void request_focus(element_focus_t focus)
@@ -155,6 +172,10 @@ void request_focus(element_focus_t focus)
     if (focus == WORLD_3D_ELEMENT_FOCUS)
     {
         disable_cursor_display();
+    }
+    else
+    {
+        enable_cursor_display();
     }
 }
 

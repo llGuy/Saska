@@ -332,7 +332,7 @@ static void handle_console_input(raw_input_t *raw_input, element_focus_t focus)
     }
     
     // Open console - This happens no matter if console has focus or not (or if no "typing" element has focus)
-    if (raw_input->char_stack[0] == 't' && !g_console->receive_input)
+    if (raw_input->char_stack[0] == '/' && !g_console->receive_input)
     {
         g_console->receive_input = true;
         g_console->render_console = 1;
@@ -458,7 +458,69 @@ static void push_console_to_render(raw_input_t *raw_input)
                               g_console->cursor_color});
     }
     // Push output text
-}    
+}
+
+
+void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const resolution_t &resolution, uint32_t cursor_color, float32_t dt)
+{
+    if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
+    {
+        input->fade_in_or_out ^= 0x1;
+        int32_t adjust = (int32_t)input->fade_in_or_out * 2 - 1;
+        input->cursor_fade -= adjust;
+    }
+    if (input->fade_in_or_out == console_t::fade_t::FADE_OUT)
+    {
+        input->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * dt * (float32_t)0xff);
+        if (input->cursor_fade < 0x00)
+        {
+            input->cursor_fade = 0x00;
+        }
+        cursor_color >>= 8;
+        cursor_color <<= 8;
+        cursor_color |= input->cursor_fade;
+    }
+    else
+    {
+        input->cursor_fade += (int32_t)(console_t::BLINK_SPEED * dt * (float32_t)0xff);
+        cursor_color >>= 8;
+        cursor_color <<= 8;
+        cursor_color |= input->cursor_fade;
+    }
+    
+    // Push input text
+    push_text_to_render(&input->text, resolution);
+    // Push cursor quad
+    {
+        ui_box_t *box = back;
+        ui_text_t *text = &input->text;
+
+        float32_t magic = 1.0f;
+        uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
+        uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
+        px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
+        uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
+        ivector2_t px_cursor_start = get_px_cursor_position(box, &input->text, get_backbuffer_resolution());
+        ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)input->cursor_position;
+        
+        vector2_t px_cursor_size = vector2_t((float32_t)px_char_width, (float32_t)px_char_height);
+        vector2_t px_cursor_base_position =  vector2_t(px_cursor_position) + vector2_t(vector2_t(0.0f, 0.0f));
+        vector2_t normalized_cursor_position = px_cursor_base_position;
+        normalized_cursor_position /= vector2_t((float32_t)resolution.width, (float32_t)resolution.height);
+        normalized_cursor_position *= 2.0f;
+        normalized_cursor_position -= vector2_t(1.0f);
+        vector2_t normalized_size = (px_cursor_size / vector2_t((float32_t)resolution.width, (float32_t)resolution.height)) * 2.0f;
+        vector2_t adjust = vector2_t(0.0f, -normalized_size.y);
+        
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust, cursor_color});
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y), cursor_color});
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f), cursor_color});
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust + vector2_t(0.0f, normalized_size.y), cursor_color});
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust + vector2_t(normalized_size.x, 0.0f), cursor_color});
+        colored_vertex_render_list.push_vertex({normalized_cursor_position + adjust + normalized_size, cursor_color});
+    }
+}
+
 
 static void initialize_ui_elements(const resolution_t &backbuffer_resolution)
 {    
@@ -734,7 +796,7 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
     if (focus == element_focus_t::UI_ELEMENT_MENU)
     {
         update_menus(raw_input, focus);
-        push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus);
+        push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus, raw_input->dt);
     }
     
     VkCommandBufferInheritanceInfo inheritance = make_queue_inheritance_info(&gui_render_pass,

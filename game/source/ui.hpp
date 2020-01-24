@@ -77,6 +77,8 @@ uniform_group_t create_texture_uniform(const char *path, image2d_t *image);
 // Pushes the text to the textured quad vertex list
 // TODO: MAKE SURE THAT THESE ARE PART OF THE RENDER LIST CLASSES
 void push_text_to_render(ui_text_t *text, const resolution_t &resolution);
+// Will also render a cursor
+void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const resolution_t &resolution, uint32_t cursor_color, float32_t dt);
 void push_box_to_render(ui_box_t *box);
 void push_box_to_render_reversed(ui_box_t *box, const vector2_t &size);
 void push_box_to_render_with_texture(ui_box_t *box, uniform_group_t group);

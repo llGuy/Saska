@@ -11,7 +11,7 @@
 // The client will always use WINDOW_APPLICATION_MODE
 enum application_type_t { WINDOW_APPLICATION_MODE, CONSOLE_APPLICATION_MODE };
 
-enum element_focus_t { WORLD_3D_ELEMENT_FOCUS, UI_ELEMENT_CONSOLE, UI_ELEMENT_MENU };
+enum element_focus_t { WORLD_3D_ELEMENT_FOCUS, UI_ELEMENT_CONSOLE, UI_ELEMENT_MENU, UI_ELEMENT_INPUT };
 
 struct focus_stack_t
 {

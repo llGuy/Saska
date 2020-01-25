@@ -3,10 +3,12 @@
 #include "vulkan.hpp"
 #include "graphics.hpp"
 
+#include "variables.hpp"
 #include "script.hpp"
 #include "ui.hpp"
 #include "net.hpp"
 #include "game_input.hpp"
+#include "menu.hpp"
 #include <ctime>
 
 static game_memory_t *g_game_memory;
@@ -32,6 +34,10 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
     {
     case application_type_t::WINDOW_APPLICATION_MODE:
         {
+            load_variables();
+
+            
+            
             // Initialize graphics api, atmosphere, shadow, skeletal animation...
             initialize_scripting();
             initialize_net(app_mode);
@@ -39,6 +45,12 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
             initialize_game_3d_graphics(graphics.command_pool, raw_input);
             initialize_game_2d_graphics(graphics.command_pool);
             initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
+
+            if (strlen(variables_get_user_name()) == 0)
+            {
+                // Need to prompt user for user name
+                prompt_user_for_name();
+            }
             
             initialize_gamestate(raw_input);
         } break;
@@ -57,6 +69,8 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
 
 void destroy_game(game_memory_t *memory)
 {
+    save_variables();
+    
     destroy_swapchain();
     
     g_render_pass_manager->clean_up();

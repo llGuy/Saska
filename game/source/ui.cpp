@@ -22,9 +22,6 @@ static gpu_command_queue_t gui_secondary_queue;
 static uniform_group_t font_png_image_uniform;
 
 
-
-
-
 static ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
 {
     uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
@@ -461,36 +458,42 @@ static void push_console_to_render(raw_input_t *raw_input)
 }
 
 
-void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const resolution_t &resolution, uint32_t cursor_color, float32_t dt)
+void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const resolution_t &resolution, uint32_t cursor_color, float32_t dt, bool render_cursor)
 {
-    if (g_console->cursor_fade > 0xff || g_console->cursor_fade <= 0x00)
-    {
-        input->fade_in_or_out ^= 0x1;
-        int32_t adjust = (int32_t)input->fade_in_or_out * 2 - 1;
-        input->cursor_fade -= adjust;
-    }
     if (input->fade_in_or_out == console_t::fade_t::FADE_OUT)
     {
-        input->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * dt * (float32_t)0xff);
-        if (input->cursor_fade < 0x00)
+        input->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * dt * 1000.0f);
+        if (input->cursor_fade < 0.0f)
         {
-            input->cursor_fade = 0x00;
+            input->cursor_fade = 0.0f;
+            input->fade_in_or_out ^= 1;
         }
-        cursor_color >>= 8;
-        cursor_color <<= 8;
-        cursor_color |= input->cursor_fade;
+        //cursor_color >>= 8;
+        //cursor_color <<= 8;
+        uint32_t cursor_alpha = cursor_color & 0xFF;
+        uint32_t alpha = uint32_t(((float32_t)input->cursor_fade / 255.0f) * ((float32_t)(cursor_alpha)));
+        cursor_color |= alpha;
     }
     else
     {
-        input->cursor_fade += (int32_t)(console_t::BLINK_SPEED * dt * (float32_t)0xff);
-        cursor_color >>= 8;
-        cursor_color <<= 8;
-        cursor_color |= input->cursor_fade;
+        input->cursor_fade += (int32_t)(console_t::BLINK_SPEED * dt * 1000.0f);
+        if (input->cursor_fade > 1.0f)
+        {
+            input->cursor_fade = 1.0f;
+            input->fade_in_or_out ^= 1;
+        }
+        
+        //cursor_color >>= 8;
+        //cursor_color <<= 8;
+        uint32_t cursor_alpha = cursor_color & 0xFF;
+        uint32_t alpha = uint32_t(((float32_t)input->cursor_fade) * ((float32_t)(cursor_alpha)));
+        cursor_color |= alpha;
     }
     
     // Push input text
     push_text_to_render(&input->text, resolution);
     // Push cursor quad
+    if (render_cursor)
     {
         ui_box_t *box = back;
         ui_text_t *text = &input->text;

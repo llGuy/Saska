@@ -1195,7 +1195,7 @@ static void make_sun_data(void)
 
     // Make sun texture
     {
-        file_handle_t sun_png_handle = create_file("textures/sun/sun_test.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+        file_handle_t sun_png_handle = create_file("textures/sun/sun_test.PNG", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
         external_image_data_t image_data = read_image(sun_png_handle);
 
         make_texture(&g_lighting->sun_texture, image_data.width, image_data.height,

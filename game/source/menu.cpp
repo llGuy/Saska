@@ -1,3 +1,4 @@
+#include "variables.hpp"
 #include "ui.hpp"
 #include "menu.hpp"
 #include "core.hpp"
@@ -52,6 +53,18 @@ struct main_menu_t
         ui_box_t ip_address_input_box;
         ui_input_text_t input_text;
     } browse_menu;
+
+
+    struct
+    {
+        ui_box_t background;
+        ui_input_text_t input_text;
+        bool prompting_user_name;
+
+        smooth_linear_interpolation_t<float32_t> alpha;
+
+        bool entered = 0;
+    } user_name_prompt;
 };
 
 
@@ -89,137 +102,191 @@ void initialize_menus(void)
 }
 
 
+void prompt_user_for_name(void)
+{
+    main_menu.user_name_prompt.prompting_user_name = 1;
+    main_menu.user_name_prompt.background.initialize(CENTER, 7.5f,
+                                                     ui_vector2_t(0.0f, 0.0f),
+                                                     ui_vector2_t(0.3f, 0.3f),
+                                                     nullptr,
+                                                     0x46464646,
+                                                     get_backbuffer_resolution());
+
+    main_menu.user_name_prompt.input_text.text.initialize(&main_menu.user_name_prompt.background,
+                                                          menus_font,
+                                                          ui_text_t::font_stream_box_relative_to_t::BOTTOM,
+                                                          0.8f, 0.9f,
+                                                          25, 1.8f);
+
+    main_menu.user_name_prompt.alpha.in_animation = 1;
+    main_menu.user_name_prompt.alpha.prev = 0.0f;
+    main_menu.user_name_prompt.alpha.current = main_menu.user_name_prompt.alpha.prev;
+    main_menu.user_name_prompt.alpha.next = (float32_t)0x46 / (float32_t)255.0f;
+    main_menu.user_name_prompt.alpha.current_time = 0;
+    main_menu.user_name_prompt.alpha.max_time = 2.5f;
+}
+
+
 void update_menus(raw_input_t *raw_input, element_focus_t focus)
 {
-    // Convert screen cursor positions to ndc coordinates
-    // Need to take into account the scissor
-
-    VkExtent2D swapchain_extent = get_swapchain_extent();
-
-    resolution_t backbuffer_res = get_backbuffer_resolution();
-    
-    float32_t backbuffer_asp = (float32_t)backbuffer_res.width / (float32_t)backbuffer_res.height;
-    float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
-
-    uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
-    
-    if (backbuffer_asp >= swapchain_asp)
+    if (main_menu.user_name_prompt.prompting_user_name)
     {
-        rect2D_width = swapchain_extent.width;
-        rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
-        rect2Dx = 0;
-        rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
-    }
+        main_menu.user_name_prompt.alpha.animate(raw_input->dt);
+        uint32_t alpha = (uint32_t)(main_menu.user_name_prompt.alpha.current * 255.0f);
+        main_menu.user_name_prompt.background.color &= 0xFFFFFF00;
+        main_menu.user_name_prompt.background.color |= alpha;
 
-    if (backbuffer_asp < swapchain_asp)
-    {
-        rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
-        rect2D_height = swapchain_extent.height;
-        rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
-        rect2Dy = 0;
-    }
-
-    // Relative to the viewport coordinate system
-    float32_t cursor_x = raw_input->cursor_pos_x;
-    float32_t cursor_y = raw_input->cursor_pos_y;
-
-    cursor_x = (float32_t)(cursor_x - rect2Dx) / (float32_t)rect2D_width;
-    cursor_y = 1.0f - (float32_t)(cursor_y - rect2Dy) / (float32_t)rect2D_height;
-
-    cursor_x = 2.0f * cursor_x - 1.0f;
-    cursor_y = 2.0f * cursor_y - 1.0f;
-
-    bool hovered_over_button = 0;
-    
-    for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
-    {
-        if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
+        if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
         {
-            hovered_over_button = 1;
+            main_menu.user_name_prompt.entered = 1;
+
+            char *buffer = (char *)allocate_free_list(sizeof(char) * main_menu.user_name_prompt.input_text.text.char_count + 1);
+            memcpy(buffer, main_menu.user_name_prompt.input_text.text.characters, sizeof(char) * main_menu.user_name_prompt.input_text.text.char_count + 1);
+
+            variables_get_user_name() = buffer;
             
-            if (main_menu.hovering_over != i)
-            {
-                // Start interpolation
-                main_menu.background_color_interpolation.in_animation = 1;
-                vector4_t background_start = ui32b_color_to_vec4(0x16161636);
-                vector4_t background_final = ui32b_color_to_vec4(0x76767636);
-                main_menu.background_color_interpolation.current = vector3_t(background_start.r, background_start.g, background_start.b);
-                main_menu.background_color_interpolation.prev = main_menu.background_color_interpolation.current;
-                main_menu.background_color_interpolation.next = vector3_t(background_final.r, background_final.g, background_final.b);
-                main_menu.background_color_interpolation.current_time = 0;
-                main_menu.background_color_interpolation.max_time = 0.5f;
-
-                main_menu.icon_color_interpolation.in_animation = 1;
-                vector4_t icon_start = ui32b_color_to_vec4(0xFFFFFF36);
-                vector4_t icon_final = ui32b_color_to_vec4(0x46464636);
-                main_menu.icon_color_interpolation.current = vector3_t(icon_start.r, icon_start.g, icon_start.b);
-                main_menu.icon_color_interpolation.prev = main_menu.icon_color_interpolation.current;
-                main_menu.icon_color_interpolation.next = vector3_t(icon_final.r, icon_final.g, icon_final.b);
-                main_menu.icon_color_interpolation.current_time = 0;
-                main_menu.icon_color_interpolation.max_time = 0.5f;
-            }
-            
-            main_menu.hovering_over = (main_menu_t::buttons_t)i;
-
-            if (main_menu.background_color_interpolation.in_animation)
-            {
-                main_menu.background_color_interpolation.animate(raw_input->dt);
-                main_menu.icon_color_interpolation.animate(raw_input->dt);
-
-                vector4_t current_background = vector4_t(main_menu.background_color_interpolation.current.r,
-                                                         main_menu.background_color_interpolation.current.g,
-                                                         main_menu.background_color_interpolation.current.b,
-                                                         ((float32_t)0x36) / 255.0f);
-
-                main_menu.main_menu_buttons_backgrounds[i].color = vec4_color_to_ui32b(current_background);
-
-                vector4_t current_icon = vector4_t(main_menu.icon_color_interpolation.current.r,
-                                                   main_menu.icon_color_interpolation.current.g,
-                                                   main_menu.icon_color_interpolation.current.b,
-                                                   ((float32_t)0x36) / 255.0f);
-
-                main_menu.main_menu_buttons[i].color = vec4_color_to_ui32b(current_icon);
-            }
-            //main_menu.icon_color_interpolation.animate(raw_input->dt);
+            main_menu.user_name_prompt.alpha.in_animation = 1;
+            main_menu.user_name_prompt.alpha.prev = (float32_t)0x46 / (float32_t)255.0f;
+            main_menu.user_name_prompt.alpha.current = main_menu.user_name_prompt.alpha.prev;
+            main_menu.user_name_prompt.alpha.next = 0.0f;
+            main_menu.user_name_prompt.alpha.current_time = 0;
+            main_menu.user_name_prompt.alpha.max_time = 2.5f;
         }
-        else
-        {
-            main_menu.main_menu_buttons[i].color = 0xFFFFFF36;
-            main_menu.main_menu_buttons_backgrounds[i].color = 0x16161636;
-        }
-    }
-
-    if (!hovered_over_button)
-    {
-        main_menu.hovering_over = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
-    }
-
-    static bool clicked_previous_frame = 0;
-    
-    if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
-    {
-        switch(main_menu.hovering_over)
-        {
-        case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::HOST_SERVER: case main_menu_t::buttons_t::SETTINGS: {
-            if (!clicked_previous_frame)
-            {
-                open_menu(main_menu.hovering_over);
-            }
-        } break;
-            
-        case main_menu_t::buttons_t::QUIT: {
-            request_quit();
-        } break;
-        }
-
-        clicked_previous_frame = 1;
+        
+        main_menu.user_name_prompt.input_text.input(raw_input);
     }
     else
     {
-        clicked_previous_frame = 0;
-    }
+        // Convert screen cursor positions to ndc coordinates
+        // Need to take into account the scissor
 
-    update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
+        VkExtent2D swapchain_extent = get_swapchain_extent();
+
+        resolution_t backbuffer_res = get_backbuffer_resolution();
+    
+        float32_t backbuffer_asp = (float32_t)backbuffer_res.width / (float32_t)backbuffer_res.height;
+        float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
+
+        uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
+    
+        if (backbuffer_asp >= swapchain_asp)
+        {
+            rect2D_width = swapchain_extent.width;
+            rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
+            rect2Dx = 0;
+            rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
+        }
+
+        if (backbuffer_asp < swapchain_asp)
+        {
+            rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
+            rect2D_height = swapchain_extent.height;
+            rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
+            rect2Dy = 0;
+        }
+
+        // Relative to the viewport coordinate system
+        float32_t cursor_x = raw_input->cursor_pos_x;
+        float32_t cursor_y = raw_input->cursor_pos_y;
+
+        cursor_x = (float32_t)(cursor_x - rect2Dx) / (float32_t)rect2D_width;
+        cursor_y = 1.0f - (float32_t)(cursor_y - rect2Dy) / (float32_t)rect2D_height;
+
+        cursor_x = 2.0f * cursor_x - 1.0f;
+        cursor_y = 2.0f * cursor_y - 1.0f;
+
+        bool hovered_over_button = 0;
+    
+        for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
+        {
+            if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
+            {
+                hovered_over_button = 1;
+            
+                if (main_menu.hovering_over != i)
+                {
+                    // Start interpolation
+                    main_menu.background_color_interpolation.in_animation = 1;
+                    vector4_t background_start = ui32b_color_to_vec4(0x16161636);
+                    vector4_t background_final = ui32b_color_to_vec4(0x76767636);
+                    main_menu.background_color_interpolation.current = vector3_t(background_start.r, background_start.g, background_start.b);
+                    main_menu.background_color_interpolation.prev = main_menu.background_color_interpolation.current;
+                    main_menu.background_color_interpolation.next = vector3_t(background_final.r, background_final.g, background_final.b);
+                    main_menu.background_color_interpolation.current_time = 0;
+                    main_menu.background_color_interpolation.max_time = 0.5f;
+
+                    main_menu.icon_color_interpolation.in_animation = 1;
+                    vector4_t icon_start = ui32b_color_to_vec4(0xFFFFFF36);
+                    vector4_t icon_final = ui32b_color_to_vec4(0x46464636);
+                    main_menu.icon_color_interpolation.current = vector3_t(icon_start.r, icon_start.g, icon_start.b);
+                    main_menu.icon_color_interpolation.prev = main_menu.icon_color_interpolation.current;
+                    main_menu.icon_color_interpolation.next = vector3_t(icon_final.r, icon_final.g, icon_final.b);
+                    main_menu.icon_color_interpolation.current_time = 0;
+                    main_menu.icon_color_interpolation.max_time = 0.5f;
+                }
+            
+                main_menu.hovering_over = (main_menu_t::buttons_t)i;
+
+                if (main_menu.background_color_interpolation.in_animation)
+                {
+                    main_menu.background_color_interpolation.animate(raw_input->dt);
+                    main_menu.icon_color_interpolation.animate(raw_input->dt);
+
+                    vector4_t current_background = vector4_t(main_menu.background_color_interpolation.current.r,
+                                                             main_menu.background_color_interpolation.current.g,
+                                                             main_menu.background_color_interpolation.current.b,
+                                                             ((float32_t)0x36) / 255.0f);
+
+                    main_menu.main_menu_buttons_backgrounds[i].color = vec4_color_to_ui32b(current_background);
+
+                    vector4_t current_icon = vector4_t(main_menu.icon_color_interpolation.current.r,
+                                                       main_menu.icon_color_interpolation.current.g,
+                                                       main_menu.icon_color_interpolation.current.b,
+                                                       ((float32_t)0x36) / 255.0f);
+
+                    main_menu.main_menu_buttons[i].color = vec4_color_to_ui32b(current_icon);
+                }
+                //main_menu.icon_color_interpolation.animate(raw_input->dt);
+            }
+            else
+            {
+                main_menu.main_menu_buttons[i].color = 0xFFFFFF36;
+                main_menu.main_menu_buttons_backgrounds[i].color = 0x16161636;
+            }
+        }
+
+        if (!hovered_over_button)
+        {
+            main_menu.hovering_over = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
+        }
+
+        static bool clicked_previous_frame = 0;
+    
+        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
+        {
+            switch(main_menu.hovering_over)
+            {
+            case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::HOST_SERVER: case main_menu_t::buttons_t::SETTINGS: {
+                if (!clicked_previous_frame)
+                {
+                    open_menu(main_menu.hovering_over);
+                }
+            } break;
+            
+            case main_menu_t::buttons_t::QUIT: {
+                request_quit();
+            } break;
+            }
+
+            clicked_previous_frame = 1;
+        }
+        else
+        {
+            clicked_previous_frame = 0;
+        }
+
+        update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
+    }
 }
 
 
@@ -230,7 +297,44 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
 {
     if (current_menu_mode == menu_mode_t::MAIN_MENU)
     {
-        push_main_menu(textured_render_list, colored_render_list, dt);
+        if (main_menu.user_name_prompt.prompting_user_name)
+        {
+            if (main_menu.user_name_prompt.entered && !main_menu.user_name_prompt.alpha.in_animation)
+            {
+                main_menu.user_name_prompt.prompting_user_name = 0;
+            }
+            
+            push_box_to_render(&main_menu.user_name_prompt.background);
+
+            uint32_t alpha = (uint32_t)(main_menu.user_name_prompt.alpha.current * 255.0f);
+            main_menu.user_name_prompt.input_text.text_color = 0xFFFFFF00;
+            main_menu.user_name_prompt.input_text.text_color &= 0xFFFFFF00;
+            main_menu.user_name_prompt.input_text.text_color |= alpha;
+
+            if (main_menu.user_name_prompt.entered)
+            {
+                for (uint32_t i = 0; i < main_menu.user_name_prompt.input_text.text.char_count; ++i)
+                {
+                    main_menu.user_name_prompt.input_text.text.colors[i] = 0;
+                }
+            }
+            
+            textured_render_list->mark_section(font_uniform);
+
+            if (!main_menu.user_name_prompt.entered)
+            {
+                push_input_text_to_render(&main_menu.user_name_prompt.input_text,
+                                          &main_menu.user_name_prompt.background,
+                                          get_backbuffer_resolution(),
+                                          main_menu.user_name_prompt.input_text.text_color,
+                                          dt,
+                                          1);
+            }
+        }
+        else
+        {
+            push_main_menu(textured_render_list, colored_render_list, dt);
+        }
     }
 }
 
@@ -384,7 +488,7 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
             push_box_to_render(&main_menu.browse_menu.ip_address_input_box);
 
             textured_render_list->mark_section(font_uniform);
-            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, get_backbuffer_resolution(), 0xFFFFFFC0, dt);
+            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, get_backbuffer_resolution(), 0xFFFFFFC0, dt, 1);
         } break;
             
         }
@@ -500,7 +604,7 @@ static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_inp
                 
                 const char *ip_address = main_menu.browse_menu.input_text.text.characters;
                 
-                join_server(ip_address, "");
+                join_server(ip_address, variables_get_user_name());
             }
             
         } break;

@@ -21,6 +21,11 @@ void initialize_file_handle(file_object_t *object)
     object->handle = CreateFileA(object->file_path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 }
 
+void initialize_writeable_file_handle(file_object_t *object)
+{
+    object->handle = CreateFileA(object->file_path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+}
+
 void close_file(file_object_t *object)
 {
     CloseHandle(object->handle);
@@ -69,6 +74,17 @@ void read_from_file(file_object_t *object, byte_t *bytes, uint32_t buffer_size)
     if (ReadFile(object->handle, bytes, buffer_size, &bytes_read, NULL) == FALSE)
     {
         assert(0);
+    }
+}
+
+void write_to_file(file_object_t *object, byte_t *bytes, uint32_t size)
+{
+    SetFilePointer(object->handle, 0, 0, FILE_BEGIN);
+    
+    DWORD bytes_written = 0;
+    if (!WriteFile(object->handle, bytes, size, &bytes_written, 0))
+    {
+        output_to_debug_console("Failed to write to file\n");
     }
 }
 
@@ -127,6 +143,28 @@ file_handle_t create_file(const char *file, file_type_t type)
     return(new_file);
 }
 
+file_handle_t create_writeable_file(const char *file, file_type_t type)
+{
+    file_handle_t new_file = g_files.files.add();
+    file_object_t *object = g_files.files.get(new_file);
+
+    if (type & file_type_flags_t::ASSET)
+    {
+        object->file_path = create_asset_path(file);
+    }
+    else
+    {
+        object->file_path = file;
+    }
+
+    object->file_type = type;
+    
+    initialize_writeable_file_handle(object);
+    initialize_filetime(object);
+
+    return(new_file);
+}
+
 void remove_and_destroy_file(file_handle_t handle)
 {
     file_object_t *object = g_files.files.get(handle);
@@ -155,6 +193,27 @@ file_contents_t read_file_tmp(file_handle_t handle)
     }
 
     return file_contents_t{ size, buffer };
+}
+
+file_contents_t read_file(file_handle_t handle)
+{
+    file_object_t *object = g_files.files.get(handle);
+    uint32_t size = get_file_size(object);
+    byte_t *buffer = (byte_t *)allocate_free_list(size);
+    read_from_file(object, buffer, size);
+    if (object->file_type & file_type_flags_t::TEXT)
+    {
+        buffer[size] = 0;
+    }
+
+    return file_contents_t{ size, buffer };    
+}
+
+void write_file(file_handle_t handle, byte_t *bytes, uint32_t size)
+{
+    file_object_t *object = g_files.files.get(handle);
+
+    write_to_file(object, bytes, size);
 }
 
 external_image_data_t read_image(file_handle_t handle)

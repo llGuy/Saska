@@ -99,10 +99,12 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
             time_since_last_input_state = 0.0f;
         }
     }
-
+    
     network_address_t received_address = {}; 
     bool received = receive_from(message_buffer, sizeof(char) * MAX_MESSAGE_BUFFER_SIZE, &received_address);
 
+    bool just_did_correction = 0;
+    
     if (received)
     {
         serializer_t in_serializer = {};
@@ -244,7 +246,10 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                 player->ws_direction = player_snapshot_packet.ws_direction;
                                 player->ws_velocity = player_snapshot_packet.ws_velocity;
                                 player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
+                                player->physics.state = (entity_physics_state_t)player_snapshot_packet.physics_state;
                                 player->action_flags = 0;
+
+                                just_did_correction = 1;
                             }
 
                             if (player_snapshot_packet.need_to_do_correction)
@@ -293,6 +298,8 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                     // Send a prediction error correction packet
                                     send_prediction_error_correction(previous_tick);
                                 }
+
+                                just_did_correction = 1;
 
                                 // The correction of the voxels will happen later (deffered, but it will happen)
                             }

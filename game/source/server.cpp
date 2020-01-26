@@ -490,8 +490,6 @@ static void dispatch_snapshot_to_clients(void)
         }
     }
 
-    output_to_debug_console(" -> ");
-    
     // Prepare the player snapshot packets
     for (uint32_t client_index = 0; client_index < client_count; ++client_index)
     {
@@ -505,6 +503,8 @@ static void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].ws_up_vector = player->ws_up;
         player_snapshots[client_index].ws_rotation = player->ws_rotation;
         player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
+
+        player_snapshots[client_index].physics_state = player->physics.state;
 
         player_snapshots[client_index].is_rolling = player->rolling_mode;
     }
@@ -629,7 +629,7 @@ static void dispatch_snapshot_to_clients(void)
                         
                         if (position_is_different || direction_is_different)
                         {
-                            output_to_debug_console("correction-");
+                            output_to_debug_console("correction-\n");
                             
                             // Make sure that server invalidates all packets previously sent by the client
                             player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
@@ -659,11 +659,8 @@ static void dispatch_snapshot_to_clients(void)
 
             client->modified_chunks_count = 0;
             out_serializer.send_serialized_message(client->network_address);
-            output_to_debug_console(client->name, " ");
        }
     }
-
-    output_to_debug_console("\n");
 
     clear_chunk_history();
 }

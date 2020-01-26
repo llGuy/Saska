@@ -13,7 +13,7 @@
 
 #define DEBUG true
 
-#define TICK_TIME 1.0f / 40.0f
+#define TICK_TIME 1.0f / 60.0f
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))

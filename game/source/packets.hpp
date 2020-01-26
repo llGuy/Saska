@@ -118,6 +118,7 @@ struct client_input_state_packet_t
         {
             uint8_t is_entering: 1;
             uint8_t rolling_mode: 1;
+            uint8_t physics_state: 2;
         } flags;
         uint8_t flags_byte;
     };
@@ -174,6 +175,7 @@ struct game_snapshot_player_state_packet_t
             uint8_t need_to_do_voxel_correction: 1;
             uint8_t is_to_ignore: 1;
             uint8_t is_rolling: 1;
+            uint8_t physics_state : 2;
         };
         uint8_t flags;
     };

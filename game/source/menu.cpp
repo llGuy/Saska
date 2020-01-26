@@ -52,6 +52,8 @@ struct main_menu_t
         bool typing_in_input = 0;
         ui_box_t ip_address_input_box;
         ui_input_text_t input_text;
+
+        bool joining = 0;
     } browse_menu;
 
 
@@ -600,6 +602,8 @@ static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_inp
             if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
             {
                 // Join server
+                main_menu.browse_menu.joining = 1;
+                
                 main_menu.browse_menu.input_text.text.null_terminate();
                 
                 const char *ip_address = main_menu.browse_menu.input_text.text.characters;

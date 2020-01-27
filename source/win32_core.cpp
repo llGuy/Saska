@@ -3,7 +3,7 @@
 
 #define NOMINMAX
 
-#define VK_USE_PLATFORM_WIN32_KHR
+
 // Empty
 #define MEMORY_API
 #define SOURCE_GAME

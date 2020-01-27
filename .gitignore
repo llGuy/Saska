@@ -8,5 +8,8 @@
 *.sln
 .debug
 TAGS
+build
+
+Makefile
 
 testing

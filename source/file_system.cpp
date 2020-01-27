@@ -109,8 +109,8 @@ static const char *asset_base_path = "../assets/";
 
 const char *create_asset_path(const char *file)
 {
-    uint32_t asset_base_path_length = strlen(asset_base_path);
-    uint32_t file_path_length = strlen(file);
+    uint32_t asset_base_path_length = (uint32_t)strlen(asset_base_path);
+    uint32_t file_path_length = (uint32_t)strlen(file);
     uint32_t full_path_length = asset_base_path_length + file_path_length;
         
     char *full_path_buffer = (char *)allocate_free_list(full_path_length + 1);

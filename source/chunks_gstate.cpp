@@ -46,6 +46,7 @@ static alignas(16) struct
     int32_t beacon_count;
     
 } voxel_beacons;
+
 static gpu_buffer_t voxel_color_beacon_uniform_buffer;
 static uniform_layout_handle_t voxel_color_beacon_ulayout;
 static uniform_group_t voxel_color_beacon_uniform;
@@ -870,20 +871,6 @@ struct linear_allocator_t *get_voxel_linear_allocator(void)
 {
     return &voxel_linear_allocator_front;
 }
-
-
-void debug_stuff(gpu_command_queue_t *queue)
-{
-    // TESTING!! TODO: REMOVE THIS
-    /*player_t *p = get_user_player();
-    if (p)
-    {
-        voxel_beacons.voxel_color_beacons[0].ws_position = vector4_t(p->ws_position, 1.0f);
-
-        update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons.beacon_count) + sizeof(voxel_color_beacon_t) * (voxel_beacons.beacon_count + 1), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
-        }*/
-}
-
 
 
 // Static definitions

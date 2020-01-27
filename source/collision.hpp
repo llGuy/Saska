@@ -24,8 +24,3 @@ struct collision_t
 
 
 collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const vector3_t &ws_velocity, uint32_t recurse_depth, collision_t previous_collision);
-
-
-
-
-

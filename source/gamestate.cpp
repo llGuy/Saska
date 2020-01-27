@@ -88,8 +88,6 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
 
     camera_t *camera = get_camera_bound_to_3d_output();
 
-    debug_stuff(queue);
-    
     // Rendering to the shadow map
     begin_shadow_offscreen(lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, queue);
     {

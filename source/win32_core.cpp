@@ -73,7 +73,7 @@ static HCURSOR arrow;
 
 
 // Static declarations
-static void set_mouse_move_button_state(float32_t value, bool active);
+static void set_mouse_move_button_state(float32_t value, bool active, button_type_t button);
 static void handle_mouse_move_event(LPARAM lparam);
 enum key_action_t { KEY_ACTION_DOWN, KEY_ACTION_UP };
 static void set_key_state(raw_input_t *raw_input, button_type_t button, int32_t action);

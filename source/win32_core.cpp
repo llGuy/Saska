@@ -133,6 +133,11 @@ void send_vibration_to_gamepad(void)
 // Win32 entry point
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
+	if (strlen(cmdline) == 0)
+	{
+		cmdline = "cl";
+	}
+
     // Initialize game's dynamic memory
     linear_allocator_global.capacity = megabytes(30);
     linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);

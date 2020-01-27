@@ -105,12 +105,10 @@ static struct file_manager_t
 
 } g_files;
 
+static const char *asset_base_path = "../assets/";
+
 const char *create_asset_path(const char *file)
 {
-#if defined (WIN32)
-    const char *asset_base_path = "../assets/";
-#endif
-        
     uint32_t asset_base_path_length = strlen(asset_base_path);
     uint32_t file_path_length = strlen(file);
     uint32_t full_path_length = asset_base_path_length + file_path_length;
@@ -140,6 +138,16 @@ file_handle_t create_file(const char *file, file_type_t type)
     object->file_type = type;
     
     initialize_file_handle(object);
+
+	if (object->handle == INVALID_HANDLE_VALUE && type & file_type_flags_t::ASSET)
+	{
+		asset_base_path = "../../assets/";
+
+		object->file_path = create_asset_path(file);
+
+		initialize_file_handle(object);
+	}
+
     initialize_filetime(object);
 
     return(new_file);
@@ -162,6 +170,16 @@ file_handle_t create_writeable_file(const char *file, file_type_t type)
     object->file_type = type;
     
     initialize_writeable_file_handle(object);
+
+	if (object->handle == INVALID_HANDLE_VALUE && type & file_type_flags_t::ASSET)
+	{
+		asset_base_path = "../../assets/";
+
+		object->file_path = create_asset_path(file);
+
+		initialize_writeable_file_handle(object);
+	}
+
     initialize_filetime(object);
 
     return(new_file);

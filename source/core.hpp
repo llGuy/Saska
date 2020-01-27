@@ -18,8 +18,8 @@
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-#define ALLOCA_T(t, c) (t *)alloca(sizeof(t) * c)
-#define ALLOCA_B(s) alloca(s)
+#define ALLOCA_T(t, c) (t *)_malloca(sizeof(t) * c)
+#define ALLOCA_B(s) _malloca(s)
 
 #define VK_CHECK(f, ...) f
 

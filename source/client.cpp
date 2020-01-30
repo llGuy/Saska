@@ -31,6 +31,7 @@ struct local_client_voxel_modification_history_t
 };
 
 
+
 // Global
 static bool is_connected_to_server = 0;
 static network_address_t server_address;
@@ -48,6 +49,8 @@ static struct
 } client_flags;
 static circular_buffer_t<local_client_voxel_modification_history_t> vmod_history; // Voxel-modification history
 
+
+static bool force_correction = 0;
 
 
 // Static function declarations
@@ -83,6 +86,16 @@ void initialize_client(char *msg_buffer)
 
 void tick_client(raw_input_t *raw_input, float32_t dt)
 {
+    if (raw_input->buttons[button_type_t::F].state != NOT_DOWN)
+    {
+        force_correction = 0;
+        output_to_debug_console(".");
+    }
+    else
+    {
+        force_correction = 1;
+    }
+    
     static float32_t time_since_last_input_state = 0.0f;
 
     // Send stuff out to the server (input state and stuff...)
@@ -94,7 +107,21 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
         
         if (time_since_last_input_state > max_time)
         {
-            send_commands();
+            if (!force_correction)
+            {
+                send_commands();
+            }
+            else
+            {
+                player_t *user = get_user_player();
+
+                uint32_t player_states_to_send = player_state_cbuffer.head_tail_difference;
+
+                for (uint32_t i = 0; i < player_states_to_send; ++i)
+                {
+                    player_state_cbuffer.get_next_item();
+                }
+            }
 
             time_since_last_input_state = 0.0f;
         }
@@ -244,9 +271,13 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                 player_t *player = get_user_player();
                                 player->ws_position = player_snapshot_packet.ws_position;
                                 player->ws_direction = player_snapshot_packet.ws_direction;
+
+                                output_to_debug_console("position: ", player->ws_position, "direction: ", player->ws_direction, "\n");
+
                                 player->ws_velocity = player_snapshot_packet.ws_velocity;
                                 player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up = player_snapshot_packet.ws_up_vector;
                                 player->physics.state = (entity_physics_state_t)player_snapshot_packet.physics_state;
+                                player->physics.previous_velocity = player_snapshot_packet.ws_previous_velocity;
                                 player->action_flags = 0;
 
                                 just_did_correction = 1;

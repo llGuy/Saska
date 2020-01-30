@@ -353,6 +353,10 @@ void serializer_t::serialize_game_snapshot_player_state_packet(game_snapshot_pla
     serialize_float32(packet->ws_velocity.x);
     serialize_float32(packet->ws_velocity.y);
     serialize_float32(packet->ws_velocity.z);
+
+    serialize_float32(packet->ws_previous_velocity.x);
+    serialize_float32(packet->ws_previous_velocity.y);
+    serialize_float32(packet->ws_previous_velocity.z);
     
     serialize_float32(packet->ws_up_vector.x);
     serialize_float32(packet->ws_up_vector.y);
@@ -384,6 +388,10 @@ void serializer_t::deserialize_game_snapshot_player_state_packet(game_snapshot_p
     packet->ws_velocity.x = deserialize_float32();
     packet->ws_velocity.y = deserialize_float32();
     packet->ws_velocity.z = deserialize_float32();
+
+    packet->ws_previous_velocity.x = deserialize_float32();
+    packet->ws_previous_velocity.y = deserialize_float32();
+    packet->ws_previous_velocity.z = deserialize_float32();
 
     packet->ws_up_vector.x = deserialize_float32();
     packet->ws_up_vector.y = deserialize_float32();

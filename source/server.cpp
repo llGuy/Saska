@@ -124,9 +124,13 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 {
                     if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
                     {
-                        switch (header.packet_type)
+                        client_t *client = get_client(header.client_id);
+
+                        if (client_current_packet_count >= client->current_packet_count)
                         {
-                        case client_packet_type_t::CPT_CLIENT_JOIN:
+                            switch (header.packet_type)
+                            {
+                            case client_packet_type_t::CPT_CLIENT_JOIN:
                             {
 
                                 client_join_packet_t client_join = {};
@@ -148,11 +152,11 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
                                 client_table_by_name.insert(constant_str_name.hash, client->client_id);
                                 client_table_by_address.insert(received_address.ipv4_address, client->client_id);
-                        
+
                                 // LOG:
                                 console_out(client_join.client_name);
                                 console_out(" joined the game!\n");
-                        
+
                                 // Reply - Create handshake packet
                                 serializer_t out_serializer = {};
                                 out_serializer.initialize(2000);
@@ -160,7 +164,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 fill_game_state_initialize_packet(&game_state_init_packet, client->client_id);
 
 
-                        
+
                                 packet_header_t handshake_header = {};
                                 handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
                                 handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
@@ -169,7 +173,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
                                 handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
                                 handshake_header.current_tick = *get_current_tick();
-                        
+
                                 out_serializer.serialize_packet_header(&handshake_header);
                                 out_serializer.serialize_game_state_initialize_packet(&game_state_init_packet);
                                 out_serializer.send_serialized_message(client->network_address);
@@ -177,19 +181,19 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 send_chunks_hard_update_packets(client->network_address);
 
                                 dispatch_newcoming_client_to_clients(client->client_id);
-                        
+
                             } break;
 
-                        case client_packet_type_t::CPT_INPUT_STATE:
+                            case client_packet_type_t::CPT_INPUT_STATE:
                             {
                                 client_t *client = get_client(header.client_id);
 
-                                if (client->current_packet_count > client_current_packet_count && client->just_received_correction)
+                                /*if (client->current_packet_count > client_current_packet_count && client->just_received_correction)
                                 {
                                     // Need to discard this packet
                                     output_to_debug_console("discarding packet\n");
                                 }
-                                else
+                                else*/
                                 {
                                     client->just_received_correction = 0;
 
@@ -254,7 +258,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     }
                                 }
                             } break;
-                        case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
+                            case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
                             {
                                 client_t *client = get_client(header.client_id);
                                 client->needs_to_acknowledge_prediction_error = 0;
@@ -266,16 +270,21 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 client->previous_client_tick = in_serializer.deserialize_uint64();
                                 //client->received_input_commands = 0;
                             } break;
-                        case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
+                            case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
                             {
                                 uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
                                 client_t *client = get_client(header.client_id);
-                        
-                            } break;
-                        }
 
-                        client_t *client = get_client(header.client_id);
-                        client->current_packet_count = client_current_packet_count;
+                            } break;
+                            }
+
+                            client_t *client = get_client(header.client_id);
+                            client->current_packet_count = client_current_packet_count;
+}
+                            else
+                            {
+                             output_to_debug_console("packet order is messed up\n");
+                        }
                     }
                 }
             }
@@ -649,6 +658,9 @@ static void dispatch_snapshot_to_clients(void)
                             
                             // Force client to do correction
                             player_snapshot_packet->need_to_do_correction = 1;
+
+                            output_to_debug_console("prev_pos: ", previous_received_player_state->ws_position, "   prev_dir: ", previous_received_player_state->ws_direction, "\n");
+                            output_to_debug_console("corr_pos: ", player_snapshot_packet->ws_position, "   corr_dir: ", player_snapshot_packet->ws_direction, "\n");
 
                             // Server will now wait until reception of a prediction error packet
                             client->needs_to_acknowledge_prediction_error = 1;

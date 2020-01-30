@@ -195,8 +195,6 @@ void physics_component_t::tick_rolling_player_physics(player_t *player, float32_
         // Update rolling rotation speed
         if (!collision.under_terrain)
         {
-            static vector3_t previous_velocity;
-
             /*vector3_t velocity = player->ws_velocity;
             
               if (glm::dot(player->ws_velocity, player->ws_velocity) < 0.001f)

@@ -163,6 +163,7 @@ struct game_snapshot_player_state_packet_t
     vector3_t ws_position;
     vector3_t ws_direction;
     vector3_t ws_velocity;
+    vector3_t ws_previous_velocity;
     vector3_t ws_up_vector;
     quaternion_t ws_rotation;
     // Just fill these in so that the clients can interpolate between different action animations
@@ -221,6 +222,7 @@ constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeo
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_position) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_direction) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_velocity) +
+                                                                           sizeof(game_snapshot_player_state_packet_t::ws_previous_velocity) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_up_vector) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_rotation) +
                                                                            sizeof(game_snapshot_player_state_packet_t::action_flags) +

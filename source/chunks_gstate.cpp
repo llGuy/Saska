@@ -487,7 +487,6 @@ void tick_chunks_state(float32_t dt)
         client->needs_to_do_voxel_correction = 0;
         client->did_voxel_correction = 1;
         
-        output_to_debug_console("Client did correction on voxels!\n");
         send_prediction_error_correction(client->previous_client_tick);
     }
 }
@@ -635,7 +634,6 @@ void reset_voxel_interpolation(void)
         client->needs_to_do_voxel_correction = 0;
         client->did_voxel_correction = 1;
         
-        output_to_debug_console("Client did correction on voxels!\n");
         send_prediction_error_correction(client->previous_client_tick);
     }
     

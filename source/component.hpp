@@ -36,6 +36,8 @@ struct physics_component_t
     vector3_t axes;
     float32_t acceleration = 2.0f;
 
+    vector3_t previous_velocity;
+
     void tick(struct player_t *affected_player, float32_t dt);
 
 private:

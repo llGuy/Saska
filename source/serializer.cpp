@@ -209,6 +209,7 @@ void serializer_t::serialize_packet_header(packet_header_t *packet)
 {
     serialize_uint32(packet->bytes);
     serialize_uint64(packet->current_tick);
+    serialize_uint64(packet->current_packet_id);
     serialize_uint32(packet->client_id);
 }
 
@@ -217,6 +218,7 @@ void serializer_t::deserialize_packet_header(packet_header_t *packet)
 {
     packet->bytes = deserialize_uint32();
     packet->current_tick = deserialize_uint64();
+    packet->current_packet_id = deserialize_uint64();
     packet->client_id = deserialize_uint32();
 }
 

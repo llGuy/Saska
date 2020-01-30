@@ -118,6 +118,8 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 packet_header_t header = {};
                 in_serializer.deserialize_packet_header(&header);
 
+                uint32_t client_current_packet_count = header.current_packet_id;
+
                 if (header.total_packet_size == in_serializer.data_buffer_size)
                 {
                     if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
@@ -181,70 +183,83 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                         case client_packet_type_t::CPT_INPUT_STATE:
                             {
                                 client_t *client = get_client(header.client_id);
-                                if (!client->needs_to_acknowledge_prediction_error)
+
+                                if (client->current_packet_count > client_current_packet_count && client->just_received_correction)
                                 {
-                                    client->received_input_commands = 1;
-                        
-                                    // Current client tick (will be used for the snapshot that will be sent to the clients)
-                                    // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
-                                    client->previous_client_tick = header.current_tick;
+                                    // Need to discard this packet
+                                    output_to_debug_console("discarding packet\n");
+                                }
+                                else
+                                {
+                                    client->just_received_correction = 0;
 
-                                    player_t *player = get_player(client->player_handle);
-                        
-                                    uint32_t player_state_count = in_serializer.deserialize_uint32();
-
-                                    player_state_t last_player_state = {};
-                        
-                                    for (uint32_t i = 0; i < player_state_count; ++i)
+                                    if (!client->needs_to_acknowledge_prediction_error)
                                     {
-                                        client_input_state_packet_t input_packet = {};
-                                        player_state_t player_state = {};
-                                        in_serializer.deserialize_client_input_state_packet(&input_packet);
+                                        client->received_input_commands = 1;
 
-                                        player_state.action_flags = input_packet.action_flags;
-                                        player_state.mouse_x_diff = input_packet.mouse_x_diff;
-                                        player_state.mouse_y_diff = input_packet.mouse_y_diff;
-                                        player_state.flags_byte = input_packet.flags_byte;
-                                        player_state.dt = input_packet.dt;
+                                        // Current client tick (will be used for the snapshot that will be sent to the clients)
+                                        // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
+                                        client->previous_client_tick = header.current_tick;
 
-                                        player->network.player_states_cbuffer.push_item(&player_state);
+                                        player_t *player = get_player(client->player_handle);
 
-                                        last_player_state = player_state;
-                                    }
+                                        uint32_t player_state_count = in_serializer.deserialize_uint32();
 
-                                    // Will use the data in here to check whether the client needs correction or not
-                                    client->previous_received_player_state = last_player_state;
+                                        player_state_t last_player_state = {};
 
-                                    client->previous_received_player_state.ws_position = in_serializer.deserialize_vector3();
-                                    client->previous_received_player_state.ws_direction = in_serializer.deserialize_vector3();
-
-                                    player->network.commands_to_flush += player_state_count;
-
-                                    client_modified_voxels_packet_t voxel_packet = {};
-                                    in_serializer.deserialize_client_modified_voxels_packet(&voxel_packet);
-
-                                    update_client_modified_chunks_from_input_state_packet(client, &voxel_packet);
-                                    
-                                    /*for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
-                                    {
-                                        client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
-                                        chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
-                                        chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
-                                        for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < MAX_MODIFIED_VOXELS_PER_CHUNK; ++voxel)
+                                        for (uint32_t i = 0; i < player_state_count; ++i)
                                         {
-                                            chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
-                                            chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
-                                            chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
-                                            chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
+                                            client_input_state_packet_t input_packet = {};
+                                            player_state_t player_state = {};
+                                            in_serializer.deserialize_client_input_state_packet(&input_packet);
+
+                                            player_state.action_flags = input_packet.action_flags;
+                                            player_state.mouse_x_diff = input_packet.mouse_x_diff;
+                                            player_state.mouse_y_diff = input_packet.mouse_y_diff;
+                                            player_state.flags_byte = input_packet.flags_byte;
+                                            player_state.dt = input_packet.dt;
+
+                                            player->network.player_states_cbuffer.push_item(&player_state);
+
+                                            last_player_state = player_state;
                                         }
+
+                                        // Will use the data in here to check whether the client needs correction or not
+                                        client->previous_received_player_state = last_player_state;
+
+                                        client->previous_received_player_state.ws_position = in_serializer.deserialize_vector3();
+                                        client->previous_received_player_state.ws_direction = in_serializer.deserialize_vector3();
+
+                                        player->network.commands_to_flush += player_state_count;
+
+                                        client_modified_voxels_packet_t voxel_packet = {};
+                                        in_serializer.deserialize_client_modified_voxels_packet(&voxel_packet);
+
+                                        update_client_modified_chunks_from_input_state_packet(client, &voxel_packet);
+
+                                        /*for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
+                                        {
+                                            client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
+                                            chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
+                                            chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
+                                            for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < MAX_MODIFIED_VOXELS_PER_CHUNK; ++voxel)
+                                            {
+                                                chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
+                                                chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
+                                                chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
+                                                chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
+                                            }
+                                        }
+                                        client->modified_chunks_count += voxel_packet.modified_chunk_count;*/
                                     }
-                                    client->modified_chunks_count += voxel_packet.modified_chunk_count;*/
                                 }
                             } break;
                         case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
                             {
                                 client_t *client = get_client(header.client_id);
                                 client->needs_to_acknowledge_prediction_error = 0;
+
+                                client->just_received_correction = 1;
 
                                 player_t *player = get_player(client->player_handle);
 
@@ -258,6 +273,9 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                         
                             } break;
                         }
+
+                        client_t *client = get_client(header.client_id);
+                        client->current_packet_count = client_current_packet_count;
                     }
                 }
             }
@@ -466,9 +484,6 @@ static void dispatch_snapshot_to_clients(void)
     voxel_packet.modified_count = modified_chunks_count;
     voxel_packet.modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * modified_chunks_count);
 
-    // FOR DEBUGGING
-    uint32_t output_count = 0;
-    
     for (uint32_t chunk_index = 0; chunk_index < modified_chunks_count; ++chunk_index)
     {
         chunk_t *chunk = chunks[chunk_index];
@@ -484,9 +499,6 @@ static void dispatch_snapshot_to_clients(void)
             voxel_coordinate_t coord = convert_1d_to_3d_coord(voxel_index, CHUNK_EDGE_LENGTH);
             modified_chunk->modified_voxels[voxel].next_value = chunk->voxels[coord.x][coord.y][coord.z];
             modified_chunk->modified_voxels[voxel].index = voxel_index;
-
-            ++output_count;
-            output_to_debug_console((int32_t)(modified_chunk->modified_voxels[voxel].next_value), " ");
         }
     }
 
@@ -591,8 +603,6 @@ static void dispatch_snapshot_to_clients(void)
 
             if (force_client_to_do_voxel_correction)
             {
-                output_to_debug_console("Client needs to do voxel correction: waiting for correction\n"); 
-                            
                 player_snapshot_packet->need_to_do_voxel_correction = 1;
                 player_snapshot_packet->need_to_do_correction = 1;
                 client->needs_to_acknowledge_prediction_error = 1;

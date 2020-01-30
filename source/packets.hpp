@@ -24,6 +24,7 @@ struct packet_header_t
 
     // To make sure order is still all good
     uint64_t current_tick;
+    uint64_t current_packet_id;
     // When client sends to server, this needs to be filled
     uint32_t client_id;
 };
@@ -209,6 +210,7 @@ struct client_prediction_error_correction_t
 
 constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) +
                                                        sizeof(packet_header_t::current_tick) +
+                                                       sizeof(packet_header_t::current_packet_id) +
                                                        sizeof(packet_header_t::client_id)); }
 constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client_input_state_packet_t::action_flags) +
                                                                    sizeof(client_input_state_packet_t::mouse_x_diff) +

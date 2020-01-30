@@ -62,6 +62,8 @@ struct client_t
 
     bool received_input_commands = 0;
 
+    bool just_received_correction = 0;
+
     // Server will not take in input commands from client if this flag does not get set to false (gets set to false when server receives error correction packet)
     bool needs_to_acknowledge_prediction_error = 0;
     bool needs_to_do_voxel_correction = 0;

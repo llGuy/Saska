@@ -7,26 +7,26 @@
 #define MAX_EVENTS 20
 
 enum receiver_t
-    {
-     WORLD,
-     GUI,
-     PARTICLES,
-     AUDIO, // TODO: In the future
-     INVALID_RECEIVER
-    };
+{
+    WORLD,
+    GUI,
+    PARTICLES,
+    AUDIO, // TODO: In the future
+    INVALID_RECEIVER
+};
 
 enum event_type_t 
-    { 
-     REQUEST_TO_JOIN_SERVER,
-     ENTER_SERVER_WORLD,
-     OPEN_MENU,
-     EXIT_MENU,
-     OPEN_CONSOLE,
-     EXIT_CONSOLE,
-     REQUEST_USERNAME,
-     ENTERED_USERNAME,
-     INVALID_EVENT_TYPE
-    };
+{ 
+    REQUEST_TO_JOIN_SERVER,
+    ENTER_SERVER_WORLD,
+    OPEN_MENU,
+    EXIT_MENU,
+    OPEN_CONSOLE,
+    EXIT_CONSOLE,
+    REQUEST_USERNAME,
+    ENTERED_USERNAME,
+    INVALID_EVENT_TYPE
+};
 
 struct event_data_request_to_join_server_t
 {

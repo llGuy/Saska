@@ -394,6 +394,7 @@ void send_prediction_error_correction(uint64_t tick)
     header.total_packet_size = sizeof_packet_header() + sizeof(uint64_t);
     header.current_tick = tick;
     header.client_id = user->network.client_state_index;
+    header.current_packet_id = ++(get_user_client()->current_packet_count);
     
     serializer.serialize_packet_header(&header);
     serializer.serialize_uint64(tick);
@@ -421,6 +422,8 @@ void join_server(const char *ip_address, const char *client_name)
     }
     header.total_packet_size = sizeof_packet_header();
     header.total_packet_size += strlen(packet.client_name) + 1;
+
+    header.current_packet_id = get_user_client()->current_packet_count = 0;
 
     serializer_t serializer = {};
     serializer.initialize(header.total_packet_size);
@@ -450,6 +453,8 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
     }
     header.total_packet_size = sizeof_packet_header();
     header.total_packet_size += strlen(packet.client_name) + 1;
+    header.current_packet_id = get_user_client()->current_packet_count = 0;
+
 
     serializer_t serializer = {};
     serializer.initialize(header.total_packet_size);
@@ -525,6 +530,7 @@ static void send_commands(void)
     header.total_packet_size = sizeof_packet_header() + sizeof(uint32_t) + sizeof_client_input_state_packet() * player_state_cbuffer.head_tail_difference + sizeof(vector3_t) * 2 + sizeof_modified_voxels_packet(modified_chunks_count, voxel_packet.modified_chunks);
     header.client_id = user->network.client_state_index;
     header.current_tick = *get_current_tick();
+    header.current_packet_id = ++(get_user_client()->current_packet_count);
 
     serializer_t serializer = {};
     serializer.initialize(header.total_packet_size);
@@ -561,6 +567,12 @@ static void send_commands(void)
     }
 
      clear_chunk_history();
+}
+
+
+static void serialize_header(serializer_t *serializer, client_packet_type_t type, uint32_t size, uint64_t tick, uint32_t client_id)
+{
+    
 }
 
 

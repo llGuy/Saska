@@ -663,6 +663,12 @@ float32_t network_component_t::tick(player_t *affected_player, float32_t dt)
 
         if (player_state)
         {
+            output_to_debug_console("------------- state_count: ", (int32_t)player_state->current_state_count, "\n");
+            output_to_debug_console("              BEFORE\n");
+            output_to_debug_console("position: ",  affected_player->ws_position, "\n");
+            output_to_debug_console("direction: ", affected_player->ws_direction, "\n");
+            output_to_debug_console("velocity: ",  affected_player->ws_velocity, "\n");
+            
             float32_t dt = player_state->dt;
 
             player_state_t *next_player_state = player_state;

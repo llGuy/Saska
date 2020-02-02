@@ -302,8 +302,8 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             dt = new_dt;
             raw_input.dt = new_dt;
 
-            dt = TICK_TIME;
-            raw_input.dt = TICK_TIME;
+//            dt = TICK_TIME;
+//            raw_input.dt = TICK_TIME;
         }
         else
         {

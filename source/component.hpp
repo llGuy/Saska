@@ -243,6 +243,10 @@ struct player_state_t
     vector3_t ws_direction;
     vector3_t ws_velocity;
     uint64_t tick;
+
+    // For testing only:
+    uint64_t current_state_count = 0;
+
     float32_t dt;
 };
 

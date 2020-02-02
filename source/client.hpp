@@ -63,6 +63,7 @@ struct client_t
     bool received_input_commands = 0;
 
     bool just_received_correction = 0;
+    uint32_t last_received_correction_packet_count = 0;
 
     // Server will not take in input commands from client if this flag does not get set to false (gets set to false when server receives error correction packet)
     bool needs_to_acknowledge_prediction_error = 0;
@@ -76,5 +77,6 @@ void tick_client(raw_input_t *raw_input, float32_t dt);
 void cache_player_state(float32_t dt);
 void send_prediction_error_correction(uint64_t tick);
 client_t *get_user_client(void);
+uint64_t &get_current_player_state_count(void);
 
 void join_server(const char *ip_address, const char *client_name);

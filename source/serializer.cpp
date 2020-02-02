@@ -242,6 +242,7 @@ void serializer_t::serialize_client_input_state_packet(player_state_t *state)
     serialize_float32(state->mouse_y_diff);
     serialize_uint8(state->flags_byte);
     serialize_float32(state->dt);
+    serialize_uint64(state->current_state_count);
 }
 
 
@@ -252,6 +253,7 @@ void serializer_t::deserialize_client_input_state_packet(client_input_state_pack
     packet->mouse_y_diff = deserialize_float32();
     packet->flags_byte = deserialize_uint8();
     packet->dt = deserialize_float32();
+    packet->command_id = deserialize_uint64();
 }
 
 

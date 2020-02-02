@@ -342,6 +342,13 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                 {
                 case application_type_t::WINDOW_APPLICATION_MODE:
                     {
+                        
+                        output_to_debug_console("------------- state_count: ", (int32_t)get_current_player_state_count(), "\n");
+                        output_to_debug_console("              BEFORE\n");
+                        output_to_debug_console("position: ", player->ws_position, "\n");
+                        output_to_debug_console("direction: ", player->ws_direction, "\n");
+                        output_to_debug_console("velocity: ", player->ws_velocity, "\n");
+                        
                         float32_t client_local_dt = player->network.tick(player, 0.0f);
                         player->physics.tick(player, client_local_dt);
                         player->camera.tick(player, client_local_dt);
@@ -349,6 +356,12 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                         player->animation.tick(player, client_local_dt);
                         player->terraform_power.tick(player, client_local_dt);
                         player->shoot.tick(player, client_local_dt);
+
+                        output_to_debug_console("              AFTER\n");
+                        output_to_debug_console("position: ", player->ws_position, "\n");
+                        output_to_debug_console("direction: ", player->ws_direction, "\n");
+                        output_to_debug_console("velocity: ", player->ws_velocity, "\n\n");
+                        
                     } break;
                 case application_type_t::CONSOLE_APPLICATION_MODE:
                     {
@@ -365,6 +378,13 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
             // Basically if it is the client program running
             else if (player_index == main_player)
             {
+                // Print to console player state before
+                output_to_debug_console("------------- state_count: ", (int32_t)get_current_player_state_count(), "\n");
+                output_to_debug_console("              BEFORE\n");
+                output_to_debug_console("position: ", player->ws_position, "\n");
+                output_to_debug_console("direction: ", player->ws_direction, "\n");
+                output_to_debug_console("velocity: ", player->ws_velocity, "\n");
+
                 player->network.tick(player, 0.0f);
                 player->physics.tick(player, dt);
                 player->camera.tick(player, dt);
@@ -372,6 +392,12 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                 player->animation.tick(player, dt);
                 player->terraform_power.tick(player, dt);
                 player->shoot.tick(player, dt);
+
+                output_to_debug_console("              AFTER\n");
+                output_to_debug_console("position: ", player->ws_position, "\n");
+                output_to_debug_console("direction: ", player->ws_direction, "\n");
+                output_to_debug_console("velocity: ", player->ws_velocity, "\n\n");
+
             }
             // Local client (if entity is not controlled by user) or server when there are no commands to flush
             else

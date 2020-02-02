@@ -119,171 +119,177 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 in_serializer.deserialize_packet_header(&header);
 
                 uint32_t client_current_packet_count = header.current_packet_id;
+                client_t *client = get_client(header.client_id);
 
-                if (header.total_packet_size == in_serializer.data_buffer_size)
+                if (client_current_packet_count >= client->last_received_correction_packet_count)
                 {
-                    if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
+                    if (header.total_packet_size == in_serializer.data_buffer_size)
                     {
-                        client_t *client = get_client(header.client_id);
-
-                        if (client_current_packet_count >= client->current_packet_count)
+                        if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
                         {
-                            switch (header.packet_type)
-                            {
-                            case client_packet_type_t::CPT_CLIENT_JOIN:
-                            {
-
-                                client_join_packet_t client_join = {};
-                                in_serializer.deserialize_client_join_packet(&client_join);
-
-                                // Add client
-                                client_t *client = get_client(client_count);
-                                client->name = client_join.client_name;
-                                client->client_id = client_count;
-                                client->network_address = received_address;
-                                client->current_packet_count = 0;
-
-                                // Add the player to the actual entities list (spawn the player in the world)
-                                client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
-                                player_t *local_player_data_ptr = get_player(client->player_handle);
-                                local_player_data_ptr->network.client_state_index = client->client_id;
-
-                                ++client_count;
-                                constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
-                                client_table_by_name.insert(constant_str_name.hash, client->client_id);
-                                client_table_by_address.insert(received_address.ipv4_address, client->client_id);
-
-                                // LOG:
-                                console_out(client_join.client_name);
-                                console_out(" joined the game!\n");
-
-                                // Reply - Create handshake packet
-                                serializer_t out_serializer = {};
-                                out_serializer.initialize(2000);
-                                game_state_initialize_packet_t game_state_init_packet = {};
-                                fill_game_state_initialize_packet(&game_state_init_packet, client->client_id);
-
-
-
-                                packet_header_t handshake_header = {};
-                                handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
-                                handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
-                                handshake_header.total_packet_size = sizeof_packet_header();
-                                handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
-                                handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
-                                handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
-                                handshake_header.current_tick = *get_current_tick();
-
-                                out_serializer.serialize_packet_header(&handshake_header);
-                                out_serializer.serialize_game_state_initialize_packet(&game_state_init_packet);
-                                out_serializer.send_serialized_message(client->network_address);
-
-                                send_chunks_hard_update_packets(client->network_address);
-
-                                dispatch_newcoming_client_to_clients(client->client_id);
-
-                            } break;
-
-                            case client_packet_type_t::CPT_INPUT_STATE:
-                            {
-                                client_t *client = get_client(header.client_id);
-
-                                /*if (client->current_packet_count > client_current_packet_count && client->just_received_correction)
-                                {
-                                    // Need to discard this packet
-                                    output_to_debug_console("discarding packet\n");
-                                }
-                                else*/
-                                {
-                                    client->just_received_correction = 0;
-
-                                    if (!client->needs_to_acknowledge_prediction_error)
-                                    {
-                                        client->received_input_commands = 1;
-
-                                        // Current client tick (will be used for the snapshot that will be sent to the clients)
-                                        // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
-                                        client->previous_client_tick = header.current_tick;
-
-                                        player_t *player = get_player(client->player_handle);
-
-                                        uint32_t player_state_count = in_serializer.deserialize_uint32();
-
-                                        player_state_t last_player_state = {};
-
-                                        for (uint32_t i = 0; i < player_state_count; ++i)
-                                        {
-                                            client_input_state_packet_t input_packet = {};
-                                            player_state_t player_state = {};
-                                            in_serializer.deserialize_client_input_state_packet(&input_packet);
-
-                                            player_state.action_flags = input_packet.action_flags;
-                                            player_state.mouse_x_diff = input_packet.mouse_x_diff;
-                                            player_state.mouse_y_diff = input_packet.mouse_y_diff;
-                                            player_state.flags_byte = input_packet.flags_byte;
-                                            player_state.dt = input_packet.dt;
-
-                                            player->network.player_states_cbuffer.push_item(&player_state);
-
-                                            last_player_state = player_state;
-                                        }
-
-                                        // Will use the data in here to check whether the client needs correction or not
-                                        client->previous_received_player_state = last_player_state;
-
-                                        client->previous_received_player_state.ws_position = in_serializer.deserialize_vector3();
-                                        client->previous_received_player_state.ws_direction = in_serializer.deserialize_vector3();
-
-                                        player->network.commands_to_flush += player_state_count;
-
-                                        client_modified_voxels_packet_t voxel_packet = {};
-                                        in_serializer.deserialize_client_modified_voxels_packet(&voxel_packet);
-
-                                        update_client_modified_chunks_from_input_state_packet(client, &voxel_packet);
-
-                                        /*for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
-                                        {
-                                            client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
-                                            chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
-                                            chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
-                                            for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < MAX_MODIFIED_VOXELS_PER_CHUNK; ++voxel)
-                                            {
-                                                chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
-                                                chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
-                                                chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
-                                                chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
-                                            }
-                                        }
-                                        client->modified_chunks_count += voxel_packet.modified_chunk_count;*/
-                                    }
-                                }
-                            } break;
-                            case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
-                            {
-                                client_t *client = get_client(header.client_id);
-                                client->needs_to_acknowledge_prediction_error = 0;
-
-                                client->just_received_correction = 1;
-
-                                player_t *player = get_player(client->player_handle);
-
-                                client->previous_client_tick = in_serializer.deserialize_uint64();
-                                //client->received_input_commands = 0;
-                            } break;
-                            case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
-                            {
-                                uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
-                                client_t *client = get_client(header.client_id);
-
-                            } break;
-                            }
-
                             client_t *client = get_client(header.client_id);
-                            client->current_packet_count = client_current_packet_count;
-}
+
+                            if (client_current_packet_count >= client->current_packet_count)
+                            {
+                                switch (header.packet_type)
+                                {
+                                case client_packet_type_t::CPT_CLIENT_JOIN:
+                                {
+
+                                    client_join_packet_t client_join = {};
+                                    in_serializer.deserialize_client_join_packet(&client_join);
+
+                                    // Add client
+                                    client_t *client = get_client(client_count);
+                                    client->name = client_join.client_name;
+                                    client->client_id = client_count;
+                                    client->network_address = received_address;
+                                    client->current_packet_count = 0;
+
+                                    // Add the player to the actual entities list (spawn the player in the world)
+                                    client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
+                                    player_t *local_player_data_ptr = get_player(client->player_handle);
+                                    local_player_data_ptr->network.client_state_index = client->client_id;
+
+                                    ++client_count;
+                                    constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
+                                    client_table_by_name.insert(constant_str_name.hash, client->client_id);
+                                    client_table_by_address.insert(received_address.ipv4_address, client->client_id);
+
+                                    // LOG:
+                                    console_out(client_join.client_name);
+                                    console_out(" joined the game!\n");
+
+                                    // Reply - Create handshake packet
+                                    serializer_t out_serializer = {};
+                                    out_serializer.initialize(2000);
+                                    game_state_initialize_packet_t game_state_init_packet = {};
+                                    fill_game_state_initialize_packet(&game_state_init_packet, client->client_id);
+
+
+
+                                    packet_header_t handshake_header = {};
+                                    handshake_header.packet_mode = packet_mode_t::PM_SERVER_MODE;
+                                    handshake_header.packet_type = server_packet_type_t::SPT_SERVER_HANDSHAKE;
+                                    handshake_header.total_packet_size = sizeof_packet_header();
+                                    handshake_header.total_packet_size += sizeof(voxel_state_initialize_packet_t);
+                                    handshake_header.total_packet_size += sizeof(game_state_initialize_packet_t::client_index) + sizeof(game_state_initialize_packet_t::player_count);
+                                    handshake_header.total_packet_size += sizeof(player_state_initialize_packet_t) * game_state_init_packet.player_count;
+                                    handshake_header.current_tick = *get_current_tick();
+
+                                    out_serializer.serialize_packet_header(&handshake_header);
+                                    out_serializer.serialize_game_state_initialize_packet(&game_state_init_packet);
+                                    out_serializer.send_serialized_message(client->network_address);
+
+                                    send_chunks_hard_update_packets(client->network_address);
+
+                                    dispatch_newcoming_client_to_clients(client->client_id);
+
+                                } break;
+
+                                case client_packet_type_t::CPT_INPUT_STATE:
+                                {
+                                    client_t *client = get_client(header.client_id);
+
+                                    /*if (client->current_packet_count > client_current_packet_count && client->just_received_correction)
+                                    {
+                                        // Need to discard this packet
+                                        output_to_debug_console("discarding packet\n");
+                                    }
+                                    else*/
+                                    {
+                                        client->just_received_correction = 0;
+
+                                        if (!client->needs_to_acknowledge_prediction_error)
+                                        {
+                                            client->received_input_commands = 1;
+
+                                            // Current client tick (will be used for the snapshot that will be sent to the clients)
+                                            // Clients will compare the state at the tick that the server recorded as being the last client tick at which server received input state (commands)
+                                            client->previous_client_tick = header.current_tick;
+
+                                            player_t *player = get_player(client->player_handle);
+
+                                            uint32_t player_state_count = in_serializer.deserialize_uint32();
+
+                                            player_state_t last_player_state = {};
+
+                                            for (uint32_t i = 0; i < player_state_count; ++i)
+                                            {
+                                                client_input_state_packet_t input_packet = {};
+                                                player_state_t player_state = {};
+                                                in_serializer.deserialize_client_input_state_packet(&input_packet);
+
+                                                player_state.action_flags = input_packet.action_flags;
+                                                player_state.mouse_x_diff = input_packet.mouse_x_diff;
+                                                player_state.mouse_y_diff = input_packet.mouse_y_diff;
+                                                player_state.flags_byte = input_packet.flags_byte;
+                                                player_state.dt = input_packet.dt;
+                                                player_state.current_state_count = input_packet.command_id;
+
+                                                player->network.player_states_cbuffer.push_item(&player_state);
+
+                                                last_player_state = player_state;
+                                            }
+
+                                            // Will use the data in here to check whether the client needs correction or not
+                                            client->previous_received_player_state = last_player_state;
+
+                                            client->previous_received_player_state.ws_position = in_serializer.deserialize_vector3();
+                                            client->previous_received_player_state.ws_direction = in_serializer.deserialize_vector3();
+
+                                            player->network.commands_to_flush += player_state_count;
+
+                                            client_modified_voxels_packet_t voxel_packet = {};
+                                            in_serializer.deserialize_client_modified_voxels_packet(&voxel_packet);
+
+                                            update_client_modified_chunks_from_input_state_packet(client, &voxel_packet);
+
+                                            /*for (uint32_t i = 0; i < voxel_packet.modified_chunk_count; ++i)
+                                            {
+                                                client_modified_chunk_nl_t *chunk = &client->previous_received_voxel_modifications[i + client->modified_chunks_count];
+                                                chunk->chunk_index = voxel_packet.modified_chunks[i].chunk_index;
+                                                chunk->modified_voxel_count = voxel_packet.modified_chunks[i].modified_voxel_count;
+                                                for (uint32_t voxel = 0; voxel < chunk->modified_voxel_count && voxel < MAX_MODIFIED_VOXELS_PER_CHUNK; ++voxel)
+                                                {
+                                                    chunk->modified_voxels[voxel].x = voxel_packet.modified_chunks[i].modified_voxels[voxel].x;
+                                                    chunk->modified_voxels[voxel].y = voxel_packet.modified_chunks[i].modified_voxels[voxel].y;
+                                                    chunk->modified_voxels[voxel].z = voxel_packet.modified_chunks[i].modified_voxels[voxel].z;
+                                                    chunk->modified_voxels[voxel].value = voxel_packet.modified_chunks[i].modified_voxels[voxel].value;
+                                                }
+                                            }
+                                            client->modified_chunks_count += voxel_packet.modified_chunk_count;*/
+                                        }
+                                    }
+                                } break;
+                                case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
+                                {
+                                    client_t *client = get_client(header.client_id);
+                                    client->needs_to_acknowledge_prediction_error = 0;
+
+                                    client->just_received_correction = 1;
+                                    client->last_received_correction_packet_count = client_current_packet_count;
+
+                                    player_t *player = get_player(client->player_handle);
+
+                                    client->previous_client_tick = in_serializer.deserialize_uint64();
+                                    //client->received_input_commands = 0;
+                                } break;
+                                case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
+                                {
+                                    uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
+                                    client_t *client = get_client(header.client_id);
+
+                                } break;
+                                }
+
+                                client_t *client = get_client(header.client_id);
+                                client->current_packet_count = client_current_packet_count;
+                            }
                             else
                             {
-                             output_to_debug_console("packet order is messed up\n");
+                                output_to_debug_console("packet order is messed up\n");
+                            }
                         }
                     }
                 }
@@ -523,7 +529,8 @@ static void dispatch_snapshot_to_clients(void)
         player_snapshots[client_index].ws_velocity = player->ws_velocity;
         player_snapshots[client_index].ws_up_vector = player->ws_up;
         player_snapshots[client_index].ws_rotation = player->ws_rotation;
-        player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
+        //player_snapshots[client_index].action_flags = (uint32_t)player->previous_action_flags;
+        player_snapshots[client_index].action_flags = 0;
 
         player_snapshots[client_index].physics_state = player->physics.state;
 
@@ -654,6 +661,8 @@ static void dispatch_snapshot_to_clients(void)
                             player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;
                             player->network.player_states_cbuffer.head_tail_difference = 0;
 
+                            player->action_flags = 0;
+
                             player->network.commands_to_flush = 0;
                             
                             // Force client to do correction
@@ -666,6 +675,8 @@ static void dispatch_snapshot_to_clients(void)
                             client->needs_to_acknowledge_prediction_error = 1;
 
                             player->camera.ws_next_vector = player->camera.ws_current_up_vector = player->ws_up;
+
+                            player->physics.axes = vector3_t(0);
                         }
                         
                         player_snapshot_packet->is_to_ignore = 0;

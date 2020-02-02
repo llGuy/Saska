@@ -124,6 +124,9 @@ struct client_input_state_packet_t
         uint8_t flags_byte;
     };
     float32_t dt;
+
+    // To remove when not testing
+    uint64_t command_id;
 };
 
 
@@ -209,15 +212,24 @@ struct client_prediction_error_correction_t
 
 
 
-constexpr uint32_t sizeof_packet_header(void) { return(sizeof(packet_header_t::bytes) +
-                                                       sizeof(packet_header_t::current_tick) +
-                                                       sizeof(packet_header_t::current_packet_id) +
-                                                       sizeof(packet_header_t::client_id)); }
-constexpr uint32_t sizeof_client_input_state_packet(void) { return(sizeof(client_input_state_packet_t::action_flags) +
-                                                                   sizeof(client_input_state_packet_t::mouse_x_diff) +
-                                                                   sizeof(client_input_state_packet_t::mouse_y_diff) +
-                                                                   sizeof(client_input_state_packet_t::flags_byte) +
-                                                                   sizeof(client_input_state_packet_t::dt)); }
+constexpr uint32_t sizeof_packet_header(void) 
+{ 
+    return(sizeof(packet_header_t::bytes) +
+        sizeof(packet_header_t::current_tick) +
+        sizeof(packet_header_t::current_packet_id) +
+        sizeof(packet_header_t::client_id));
+}
+
+constexpr uint32_t sizeof_client_input_state_packet(void)
+{
+    return(sizeof(client_input_state_packet_t::action_flags) +
+        sizeof(client_input_state_packet_t::mouse_x_diff) +
+        sizeof(client_input_state_packet_t::mouse_y_diff) +
+        sizeof(client_input_state_packet_t::flags_byte) +
+        sizeof(client_input_state_packet_t::dt) +
+        sizeof(client_input_state_packet_t::command_id));
+};
+
 constexpr uint32_t sizeof_game_snapshot_player_state_packet(void) { return(sizeof(game_snapshot_player_state_packet_t::client_id) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_position) +
                                                                            sizeof(game_snapshot_player_state_packet_t::ws_direction) +

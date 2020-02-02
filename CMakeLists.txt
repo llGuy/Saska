@@ -17,27 +17,27 @@ find_package(Vulkan)
 
 
 
-IF(NOT Vulkan_FOUND)
+if(NOT Vulkan_FOUND)
 
        link_directories("${CMAKE_SOURCE_DIR}/dependencies/vulkan/lib")
        include_directories("${CMAKE_SOURCE_DIR}/dependencies/vulkan/include")
 
-       MESSAGE("Using bundled Vulkan version")
+       message("Using bundled Vulkan version")
 
-ELSE(NOT Vulkan_FOUND)
+else(NOT Vulkan_FOUND)
 
          include_directories("${Vulkan_INCLUDE_DIRS}")
          link_libraries("${Vulkan_LIBRARY}")
 
-         MESSAGE("Using preinstalled Vulkan")
+         message("Using preinstalled Vulkan")
 
-ENDIF()
+endif()
 
-IF(WIN32)
+if(WIN32)
 
         link_libraries("user32.lib" "gdi32.lib" "xinput.lib" "ws2_32.lib" "winmm.lib" "msvcrt.lib")
 
-ENDIF(WIN32)
+endif(WIN32)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
 

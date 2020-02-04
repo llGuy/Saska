@@ -235,6 +235,7 @@ struct player_state_t
             uint8_t is_entering: 1;
             uint8_t rolling_mode: 1;
             uint8_t physics_state: 2;
+            uint8_t just_did_correction: 1;
         };
         uint8_t flags_byte;
     };

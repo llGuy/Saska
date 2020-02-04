@@ -322,12 +322,16 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
 
                                     console_out("Did voxel correction\n");
                                     
-                                    send_prediction_error_correction(previous_tick);
+                                    *get_current_tick() = previous_tick;
+                                    client->just_received_correction = 1;
+                                    //send_prediction_error_correction(previous_tick);
                                 }
                                 else
                                 {
                                     // Send a prediction error correction packet
-                                    send_prediction_error_correction(previous_tick);
+                                    //send_prediction_error_correction(previous_tick);
+                                    *get_current_tick() = previous_tick;
+                                    client->just_received_correction = 1;
                                 }
 
                                 just_did_correction = 1;
@@ -501,12 +505,18 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
 static void send_commands(void)
 {
     player_t *user = get_user_player();    
+    client_t *user_client = get_user_client();
 
     packet_header_t header = {};
     
     header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
     header.packet_type = client_packet_type_t::CPT_INPUT_STATE;
+    header.just_did_correction = user_client->just_received_correction;
 
+    if (user_client->just_received_correction)
+    {
+        user_client->just_received_correction = 0;
+    }
         
     uint32_t modified_chunks_count = 0;
     chunk_t **chunks = get_modified_chunks(&modified_chunks_count);

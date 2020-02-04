@@ -121,7 +121,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 uint32_t client_current_packet_count = header.current_packet_id;
                 client_t *client = get_client(header.client_id);
 
-                if (client_current_packet_count >= client->last_received_correction_packet_count)
+                //if (client_current_packet_count >= client->last_received_correction_packet_count)
                 {
                     if (header.total_packet_size == in_serializer.data_buffer_size)
                     {
@@ -200,6 +200,20 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     {
                                         client->just_received_correction = 0;
 
+                                        if (header.just_did_correction)
+                                        {
+                                            client_t *client = get_client(header.client_id);
+                                            client->needs_to_acknowledge_prediction_error = 0;
+
+                                            client->just_received_correction = 1;
+                                            client->last_received_correction_packet_count = client_current_packet_count;
+
+                                            player_t *player = get_player(client->player_handle);
+
+                                            // This will have been corrected anyway
+                                            client->previous_client_tick = header.current_tick;
+                                        }
+
                                         if (!client->needs_to_acknowledge_prediction_error)
                                         {
                                             client->received_input_commands = 1;
@@ -262,7 +276,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                         }
                                     }
                                 } break;
-                                case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
+                                /*case client_packet_type_t::CPT_PREDICTION_ERROR_CORRECTION:
                                 {
                                     client_t *client = get_client(header.client_id);
                                     client->needs_to_acknowledge_prediction_error = 0;
@@ -274,7 +288,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
 
                                     client->previous_client_tick = in_serializer.deserialize_uint64();
                                     //client->received_input_commands = 0;
-                                } break;
+                                } break;*/
                                 case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
                                 {
                                     uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
@@ -628,7 +642,7 @@ static void dispatch_snapshot_to_clients(void)
             {
                 if (i == client_index)
                 {
-                    if (client->received_input_commands)
+                    if (client->received_input_commands && !client->needs_to_acknowledge_prediction_error)
                     {
                         // Do comparison to determine if client correction is needed
                         float32_t precision = 0.1f;
@@ -655,7 +669,7 @@ static void dispatch_snapshot_to_clients(void)
                         
                         if (position_is_different || direction_is_different)
                         {
-                            output_to_debug_console("correction-\n");
+                            output_to_debug_console("correction ########################################################\n");
                             
                             // Make sure that server invalidates all packets previously sent by the client
                             player->network.player_states_cbuffer.tail = player->network.player_states_cbuffer.head;

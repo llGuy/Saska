@@ -15,8 +15,9 @@ struct packet_header_t
         {
             uint32_t packet_mode: 1;
             uint32_t packet_type: 4 /* To increase in the future when more packet types appear */;
+            uint32_t just_did_correction: 1;
             // Includes header
-            uint32_t total_packet_size: 27;
+            uint32_t total_packet_size: 26;
         };
 
         uint32_t bytes;
@@ -120,6 +121,7 @@ struct client_input_state_packet_t
             uint8_t is_entering: 1;
             uint8_t rolling_mode: 1;
             uint8_t physics_state: 2;
+            uint8_t just_did_correction: 1;
         } flags;
         uint8_t flags_byte;
     };

@@ -158,12 +158,8 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            /*game_input_t game_input = {};
-            translate_raw_to_game_input(raw_input, &game_input, dt);
-            
-            tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->screen_focus, frame.image_index);
-            
-            tick_net(raw_input, dt);*/
+            tick_net(nullptr, dt);
+            tick_gamestate(nullptr, dt, nullptr, memory->app_type, (element_focus_t)0, 0);
         } break;
     }
 }

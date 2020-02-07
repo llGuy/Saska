@@ -37,11 +37,10 @@ struct focus_stack_t
 
 struct game_memory_t
 {
-    // Contains all state to do with graphics: material queues, GPU object managers, etc...
-    struct graphics_t graphics_state;
-    struct graphics_context_t graphics_context;
-    // User interface stuff
-    struct user_interface_t user_interface_state;
+    graphics_t graphics_state;
+    graphics_context_t graphics_context;
+    user_interface_t user_interface_state;
+
 
     // If in CONSOLE_MODE, don't render anything, don't create window, don't create graphics context
     application_type_t app_type;

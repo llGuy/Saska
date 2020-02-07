@@ -51,13 +51,13 @@ void tick_net(raw_input_t *raw_input, float32_t dt)
     }
 }
 
-void initialize_net(application_mode_t app_mode)
+void initialize_net(application_mode_t app_mode, event_dispatcher_t *dispatcher)
 {
     current_app_mode = app_mode;
 
     switch(current_app_mode)
     {
-    case application_mode_t::CLIENT_MODE: { initialize_client(message_buffer); } break;
+    case application_mode_t::CLIENT_MODE: { initialize_client(message_buffer, dispatcher); } break;
     case application_mode_t::SERVER_MODE: { initialize_server(message_buffer); } break;
     }
 }

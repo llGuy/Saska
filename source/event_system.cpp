@@ -1,15 +1,36 @@
 #include "event_system.hpp"
 
-void event_dispatcher_t::subscribe(event_type_t type, receiver_t receiver)
+void event_dispatcher_t::set_callback(listener_t listener, listener_callback_t callback, void *object)
 {
-    event_receiver_list_t *list = &event_map[type];
-
-    uint32_t receiver_index = list->listening_receivers++;
-
-    list->event_indices.add();
+    callbacks[listener] = callback;
+    listener_objects[listener] = object;
 }
 
-void event_dispatcher_t::dispatch_event(event_type_t type, void *data)
+void event_dispatcher_t::subscribe(event_type_t type, listener_t listener)
 {
-    
+    subscriptions[type].listeners[subscriptions[type].count++] = listener;
+}
+
+void event_dispatcher_t::submit_event(event_type_t type, void *data)
+{
+    pending_events[pending_event_count++] = event_t{ type, data };
+}
+
+void event_dispatcher_t::dispatch_events()
+{
+    for (uint32_t i = 0; i < pending_event_count; ++i)
+    {
+        event_t *current_event = &pending_events[i];
+        listener_subscriptions_t *subscriptions = &subscriptions[current_event->type];
+
+        for (uint32_t event_listener = 0; event_listener < subscriptions->count; ++event_listener)
+        {
+            listener_callback_t callback = callbacks[subscriptions->listeners[event_listener]];
+            void *object = listener_objects[event_listener];
+
+            (*callback)(object, current_event);
+        }
+    }
+
+    pending_event_count = 0;
 }

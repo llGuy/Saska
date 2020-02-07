@@ -66,8 +66,14 @@ static void revert_voxels_against_modifications_until(uint64_t tick);
 
 
 
+
+void client_event_callback(void *object, event_t *e)
+{
+
+}
+
 // "Public" function definitions
-void initialize_client(char *msg_buffer)
+void initialize_client(char *msg_buffer, event_dispatcher_t *dispatcher)
 {
     message_buffer = msg_buffer;
     
@@ -324,19 +330,15 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                     
                                     *get_current_tick() = previous_tick;
                                     client->just_received_correction = 1;
-                                    //send_prediction_error_correction(previous_tick);
                                 }
                                 else
                                 {
                                     // Send a prediction error correction packet
-                                    //send_prediction_error_correction(previous_tick);
                                     *get_current_tick() = previous_tick;
                                     client->just_received_correction = 1;
                                 }
 
                                 just_did_correction = 1;
-
-                                // The correction of the voxels will happen later (deffered, but it will happen)
                             }
 
                             // Copy voxel data to client_t struct

@@ -10,7 +10,6 @@
 #include "chunks_gstate.hpp"
 #include "chunk.hpp"
 
-
 #define MAX_RECEIVED_PACKETS_IN_QUEUE 60
 
 struct receiver_thread_t

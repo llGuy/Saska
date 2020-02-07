@@ -5,6 +5,7 @@
 #include "sockets.hpp"
 #include "utility.hpp"
 #include "containers.hpp"
+#include "event_system.hpp"
 
 
 struct historical_player_state_t
@@ -72,11 +73,18 @@ struct client_t
 };
 
 
-void initialize_client(char *message_buffer);
+void initialize_client(char *message_buffer, event_dispatcher_t *dispatcher);
 void tick_client(raw_input_t *raw_input, float32_t dt);
+
+
+// Replace this with an event
 void cache_player_state(float32_t dt);
-void send_prediction_error_correction(uint64_t tick);
+
+// Make sure that the client.cpp stores the modified chunks (by the current client) in the chunks_gstate so that this function can get removed
 client_t *get_user_client(void);
+
+// Can remove this
 uint64_t &get_current_player_state_count(void);
 
+// Turn this into an event
 void join_server(const char *ip_address, const char *client_name);

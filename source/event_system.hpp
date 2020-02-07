@@ -6,13 +6,15 @@
 
 #define MAX_EVENTS 20
 
-enum receiver_t
+enum listener_t
 {
     WORLD,
     GUI,
     PARTICLES,
     AUDIO, // TODO: In the future
-    INVALID_RECEIVER
+    // Depends on the mode of the program
+    SERVER, CLIENT,
+    INVALID_LISTENER
 };
 
 enum event_type_t 
@@ -25,6 +27,7 @@ enum event_type_t
     EXIT_CONSOLE,
     REQUEST_USERNAME,
     ENTERED_USERNAME,
+    CACHE_PLAYER_COMMAND,
     INVALID_EVENT_TYPE
 };
 
@@ -41,18 +44,28 @@ struct event_t
     void *data;
 };
 
-struct event_receiver_list_t
-{
-    uint32_t listening_receivers = 0;
+typedef void(*listener_callback_t)(void *object, event_t *);
 
-    event_t events[receiver_t::INVALID_RECEIVER] = {};
-    stack_dynamic_container_t<receiver_t, receiver_t::INVALID_RECEIVER> event_indices;
+struct listener_subscriptions_t
+{
+    uint32_t count = 0;
+    listener_t listeners[listener_t::INVALID_LISTENER] = {};
 };
 
 struct event_dispatcher_t
 {
-    event_receiver_list_t event_map[event_type_t::INVALID_EVENT_TYPE] = {};
 
-    void subscribe(event_type_t type, receiver_t receiver);
-    void dispatch_event(event_type_t type, void *data);
+    void set_callback(listener_t listener, listener_callback_t callback, void *object);
+    void subscribe(event_type_t type, listener_t listener);
+    void submit_event(event_type_t type, void *data);
+    void dispatch_events();
+
+private:
+    listener_callback_t callbacks[listener_t::INVALID_LISTENER] = {};
+    void *listener_objects[listener_t::INVALID_LISTENER] = {};
+
+    listener_subscriptions_t subscriptions[event_type_t::INVALID_EVENT_TYPE] = {};
+
+    uint32_t pending_event_count = 0;
+    event_t pending_events[MAX_EVENTS] = {};
 };

@@ -26,5 +26,5 @@ application_mode_t get_app_mode(void);
 
 
 
-void initialize_net(application_mode_t app_mode);
+void initialize_net(application_mode_t app_mode, event_dispatcher_t *dispatcher);
 void tick_net(raw_input_t *raw_input, float32_t dt);

@@ -6,6 +6,7 @@
 #include "ui.hpp"
 #include "script.hpp"
 #include "net.hpp"
+#include "event_system.hpp"
 
 // This just decides whether the game should be run with a console, or with graphics. For servers, it would be better (if not debugging, to use console instead of having to initialize a vulkan context, graphics state, ui, etc...)
 // The client will always use WINDOW_APPLICATION_MODE
@@ -47,6 +48,9 @@ struct game_memory_t
 
     // Which screen has the focus (3D scene screen, ui console screen, ui menu screen, ...)
     focus_stack_t focus_stack;
+
+
+    event_dispatcher_t event_dispatcher;
 };
 
 void load_game(game_memory_t *memory);

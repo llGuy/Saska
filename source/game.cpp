@@ -12,6 +12,7 @@
 #include <ctime>
 
 static game_memory_t *g_game_memory;
+static event_dispatcher_t dispatcher;
 
 void load_game(game_memory_t *memory)
 {
@@ -43,7 +44,7 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
             
             // Initialize graphics api, atmosphere, shadow, skeletal animation...
             initialize_scripting();
-            initialize_net(app_mode);
+            initialize_net(app_mode, &dispatcher);
             graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, raw_input);
             initialize_game_3d_graphics(graphics.command_pool, raw_input);
             initialize_game_2d_graphics(graphics.command_pool);
@@ -62,7 +63,7 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
-            initialize_net(app_mode);
+            initialize_net(app_mode, &dispatcher);
             initialize_scripting();
             initialize_gamestate(raw_input);
         } break;

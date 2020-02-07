@@ -125,7 +125,7 @@ void reset_fences(const memory_buffer_view_t<VkFence> &fences)
 
 uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size)
 {
-    uint32_t alignment = g_context->gpu.properties.limits.nonCoherentAtomSize;
+    uint32_t alignment = (uint32_t)(g_context->gpu.properties.limits.nonCoherentAtomSize);
 
     uint32_t mod = size % alignment;
 	
@@ -612,7 +612,7 @@ void init_image_sampler(VkFilter mag_filter, VkFilter min_filter, VkSamplerAddre
     sampler_info.addressModeV = v_sampler_address_mode;
     sampler_info.addressModeW = w_sampler_address_mode;
     sampler_info.anisotropyEnable = anisotropy_enable;
-    sampler_info.maxAnisotropy = max_anisotropy;
+    sampler_info.maxAnisotropy = (float32_t)(max_anisotropy);
     sampler_info.borderColor = clamp_border_color; // when clamping
     sampler_info.compareEnable = compare_enable;
     sampler_info.compareOp = compare_op;

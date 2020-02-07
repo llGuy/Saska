@@ -449,7 +449,7 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     init_pipeline_input_assembly_info(0, topology, primitive_restart, &assembly);
     VkPipelineViewportStateCreateInfo view_info = {};
     VkViewport view = {};
-    init_viewport(0.0f, 0.0f, viewport.width, viewport.height, 0.0f, 1.0f, &view);
+    init_viewport(0, 0, viewport.width, viewport.height, 0.0f, 1.0f, &view);
     VkRect2D scissor = {};
     init_rect2D(VkOffset2D{}, VkExtent2D{viewport.width, viewport.height}, &scissor);
     init_pipeline_viewport_info({1, &view}, {1, &scissor}, &view_info);
@@ -479,7 +479,7 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     VkPipelineDepthStencilStateCreateInfo depth = {};
     init_pipeline_depth_stencil_info(enable_depth, enable_depth, 0.0f, 1.0f, VK_FALSE, &depth);
     VkPipelineRasterizationStateCreateInfo raster = {};
-    init_pipeline_rasterization_info(polygonmode, culling, 2.0f, 0, &raster, depth_bias);
+    init_pipeline_rasterization_info(polygonmode, culling, 2.0f, 0, &raster);
 
     VkPushConstantRange pk_range = {};
     init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
@@ -621,7 +621,7 @@ void update_3d_output_camera_transforms(uint32_t image_index)
 camera_handle_t add_camera(raw_input_t *raw_input, resolution_t resolution)
 {
     uint32_t index = g_cameras->camera_count;
-    g_cameras->cameras[index].set_default(resolution.width, resolution.height, raw_input->cursor_pos_x, raw_input->cursor_pos_y);
+    g_cameras->cameras[index].set_default((float32_t)(resolution.width), (float32_t)(resolution.height), raw_input->cursor_pos_x, raw_input->cursor_pos_y);
     ++g_cameras->camera_count;
     return(index);
 }
@@ -747,8 +747,8 @@ void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
     
     for (uint32_t mip = 0; mip < 5; ++mip)
     {
-        uint32_t width = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W * pow(0.5, mip);
-        uint32_t height = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H * pow(0.5, mip);
+        uint32_t width = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_W * (uint32_t)pow(0.5, mip);
+        uint32_t height = atmosphere_t::PREFILTERED_ENVIRONMENT_CUBEMAP_H * (uint32_t)pow(0.5, mip);
 
         float32_t roughness = (float32_t)mip / (float32_t)(5 - 1);
         
@@ -776,7 +776,7 @@ void update_atmosphere_prefiltered_cubemap(gpu_command_queue_t *queue)
 
             pk.roughness = roughness;
             pk.mvp = projection_matrix * view_matrices[layer];
-            pk.layer = layer;
+            pk.layer = (float32_t)layer;
 
             command_buffer_push_constant(&pk, sizeof(pk), 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, prefiltered_environment_ppln->layout, &queue->q);
             
@@ -1727,11 +1727,11 @@ void begin_deferred_rendering(uint32_t image_index /* to_t remove in the future 
                              g_dfr_rendering->dfr_framebuffer,
                              VK_SUBPASS_CONTENTS_INLINE,
                              // Clear values hre
-                             init_clear_color_color(0, 0.4, 0.7, 0),
-                             init_clear_color_color(0, 0.4, 0.7, 0),
-                             init_clear_color_color(0, 0.4, 0.7, 0),
-                             init_clear_color_color(0, 0.4, 0.7, 0),
-                             init_clear_color_color(0, 0.0, 0.0, 1),
+                             init_clear_color_color(0.0f, 0.4f, 0.7f, 0.0f),
+                             init_clear_color_color(0.0f, 0.4f, 0.7f, 0.0f),
+                             init_clear_color_color(0.0f, 0.4f, 0.7f, 0.0f),
+                             init_clear_color_color(0.0f, 0.4f, 0.7f, 0.0f),
+                             init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f),
                              init_clear_color_depth(1.0f, 0));
 
     command_buffer_set_viewport(g_dfr_rendering->backbuffer_res.width, g_dfr_rendering->backbuffer_res.height, 0.0f, 1.0f, &queue->q);
@@ -1958,7 +1958,7 @@ void dbg_handle_input(raw_input_t *raw_input)
 
                         // Print cursor position and the color of the pixel
             static char buffer[100];
-            sprintf(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
+            sprintf_s(buffer, "sh_out = 0x%08x db_out = 0x%08x\n", pixel_color, final_color_ui);
             console_out(buffer);
 
             raw_input->buttons[button_type_t::MOUSE_LEFT].state = button_state_t::NOT_DOWN;
@@ -2411,7 +2411,7 @@ static void make_cube_model(gpu_command_queue_pool_t *pool)
     {
         struct vertex_t { vector3_t pos, color; vector2_t uvs; };
         
-        vector3_t gray = vector3_t(0.2);
+        vector3_t gray = vector3_t(0.2f);
 	
         float32_t radius = 1.0f;
 	
@@ -2965,7 +2965,7 @@ skeleton_t load_skeleton(const char *path)
     uint32_t char_count = 0;
     for (uint32_t joint = 0; joint < skeleton.joint_count; ++joint)
     {
-        uint32_t length = strlen(names_bytes + char_count);
+        uint32_t length = (uint32_t)strlen(names_bytes + char_count);
         char *name = (char *)allocate_free_list(length + 1);
 
         memcpy(name, names_bytes + char_count, length + 1);
@@ -3003,7 +3003,7 @@ animation_cycles_t load_animations(const char *path)
     {
         animation_cycle_t *current_cycle = &animation_cycles.cycles[i];
 
-        uint32_t name_length = sizeof(char) * strlen((char *)current_byte) + 1;
+        uint32_t name_length = sizeof(char) * (uint32_t)strlen((char *)current_byte) + 1;
         current_cycle->name = (char *)allocate_linear(name_length);
         memcpy((void *)current_cycle->name, current_byte, name_length);
         current_byte += name_length;

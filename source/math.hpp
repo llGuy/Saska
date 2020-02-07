@@ -70,9 +70,9 @@ template <typename T, typename Compare> struct smooth_exponential_interpolation_
 // Some grid math
 inline bool is_within_boundaries(const ivector3_t &coord, uint32_t edge_length)
 {
-    return(coord.x >= 0 && coord.x < edge_length &&
-           coord.y >= 0 && coord.y < edge_length &&
-           coord.z >= 0 && coord.z < edge_length);
+    return(coord.x >= 0 && coord.x < (int32_t)edge_length &&
+           coord.y >= 0 && coord.y < (int32_t)edge_length &&
+           coord.z >= 0 && coord.z < (int32_t)edge_length);
 }
 
 

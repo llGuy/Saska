@@ -137,7 +137,7 @@ bool send_to(network_address_t address, char *buffer, uint32_t buffer_size)
     if (sendto_ret == SOCKET_ERROR)
     {
         char error_n[32];
-        sprintf(error_n, "sendto failed: %d\n", WSAGetLastError());
+        sprintf_s(error_n, "sendto failed: %d\n", WSAGetLastError());
         OutputDebugString(error_n);
         assert(0);
     }

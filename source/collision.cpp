@@ -41,7 +41,7 @@ collision_t collide(const vector3_t &ws_center, const vector3_t &ws_size, const 
     }
 
     uint32_t collision_vertex_count = 0;
-    uint32_t max_vertices = 3 * 5 * glm::dot(vector3_t(xs_cube_range), vector3_t(xs_cube_range)) / 2;
+    uint32_t max_vertices = 3 * 5 * (uint32_t)glm::dot(vector3_t(xs_cube_range), vector3_t(xs_cube_range)) / 2;
     vector3_t *triangle_vertices = (vector3_t *)allocate_linear(sizeof(vector3_t) * max_vertices);
     
     for (int32_t z = xs_cube_min.z; z < xs_cube_min.z + xs_cube_range.z; ++z)

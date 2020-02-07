@@ -6,7 +6,7 @@
 inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
 {
     byte_t *byte_cast_ptr = (byte_t *)ptr;
-    uint8_t adjustment = alignment - reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1);
+    uint8_t adjustment = alignment - (uint8_t)(reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1));
     if (adjustment == 0) return(0);
     
     return(adjustment);
@@ -166,7 +166,7 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 	if (current_header->free_block_size + (byte_t *)current_header >= (byte_t *)new_free_block_header
 	    && (byte_t *)current_header < (byte_t *)new_free_block_header)
 	{
-	    current_header->free_block_size = ((byte_t *)new_free_block_header + new_free_block_header->free_block_size) - (byte_t *)current_header;
+	    current_header->free_block_size = (uint32_t)(((byte_t *)new_free_block_header + new_free_block_header->free_block_size) - (byte_t *)current_header);
 	    new_free_block_header = current_header;
 	    previous = current_header;
 	    merged = true;
@@ -177,7 +177,7 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 	    && (byte_t *)current_header > (byte_t *)new_free_block_header)
 	{
 	    // if current header is not the head of the list
-	    new_free_block_header->free_block_size = (byte_t *)((byte_t *)current_header + current_header->free_block_size) - (byte_t *)new_free_block_header; 
+        new_free_block_header->free_block_size = (uint32_t)((byte_t *)((byte_t *)current_header + current_header->free_block_size) - (byte_t *)new_free_block_header);
 	    /*if (previous)
 	      {
 	      previous->next_free_block = new_free_block_header;

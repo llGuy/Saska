@@ -80,7 +80,7 @@ static const char *get_string_value(variable_t *var)
 
 static void associate_address_with_variable(void *address, const char *var_name)
 {
-    variable_t *var = &variables[*variable_key_map.get(make_constant_string(var_name, strlen(var_name)).hash)];
+    variable_t *var = &variables[*variable_key_map.get(make_constant_string(var_name, (uint32_t)strlen(var_name)).hash)];
 
     var->data = address;
 }
@@ -173,7 +173,7 @@ void load_variables(void)
             
             go_to_next_line = 1;
             
-            constant_string_t kstr = make_constant_string(current_variable_name_buffer, strlen(current_variable_name_buffer));
+            constant_string_t kstr = make_constant_string(current_variable_name_buffer, (uint32_t)strlen(current_variable_name_buffer));
             
 
             variable_t var = { VT_INTEGER, name_start };
@@ -233,9 +233,9 @@ void save_variables(void)
 
             char cbuffer[10] = {};
 
-            itoa(*ptr, cbuffer, 10);
+            _itoa(*ptr, cbuffer, 10);
 
-            uint32_t str_len = strlen(cbuffer);
+            uint32_t str_len = (uint32_t)strlen(cbuffer);
             
             memcpy(&buffer[current_byte], cbuffer, str_len);
 
@@ -245,7 +245,7 @@ void save_variables(void)
         case VT_STRING: {
             const char **ptr = (const char **)var->data;
 
-            uint32_t str_len = strlen(*ptr);
+            uint32_t str_len = (uint32_t)strlen(*ptr);
             
             memcpy(&buffer[current_byte], *ptr, str_len);
 

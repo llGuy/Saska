@@ -513,8 +513,8 @@ inline VkRect2D make_rect2D(int32_t startx,int32_t starty,uint32_t width,uint32_
     
 inline void init_viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height, float32_t min_depth, float32_t max_depth, VkViewport *viewport)
 {
-    viewport->x = x;
-    viewport->y = y;
+    viewport->x = (float32_t)x;
+    viewport->y = (float32_t)y;
     viewport->width = (float32_t)width;
     viewport->height = (float32_t)height;
     viewport->minDepth = min_depth;

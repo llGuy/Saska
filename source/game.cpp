@@ -16,7 +16,7 @@ static event_dispatcher_t dispatcher;
 
 void load_game(game_memory_t *memory)
 {
-    srand(time(NULL));
+    srand((uint32_t)time((time_t)NULL));
     
     g_game_memory = memory;
 

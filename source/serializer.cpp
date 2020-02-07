@@ -173,9 +173,9 @@ uint64_t serializer_t::deserialize_uint64(void)
 
 void serializer_t::serialize_string(const char *string)
 {
-    uint32_t string_length = strlen(string);
+    uint32_t string_length = (uint32_t)strlen(string);
     
-    uint8_t *pointer = grow_data_buffer(strlen(string) + 1);
+    uint8_t *pointer = grow_data_buffer((uint32_t)strlen(string) + 1);
     memcpy(pointer, string, string_length + 1);
 }
 
@@ -183,7 +183,7 @@ void serializer_t::serialize_string(const char *string)
 const char *serializer_t::deserialize_string(void)
 {
     uint8_t *pointer = &data_buffer[data_buffer_head];
-    uint32_t string_length = strlen((char *)pointer);
+    uint32_t string_length = (uint32_t)strlen((char *)pointer);
     grow_data_buffer(string_length + 1);
 
     char *ret = (char *)allocate_free_list(string_length + 1);

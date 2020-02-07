@@ -45,7 +45,7 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
     int32_t char_count = 0;
     char *current_char = fnt_get_char_count((char *)fnt.content, &char_count);
     // Ready to start parsing the file
-    for (uint32_t i = 0; i < char_count; ++i)
+    for (uint32_t i = 0; i < (uint32_t)char_count; ++i)
     {
         // Char ID value
         int32_t char_id = 0;
@@ -58,7 +58,7 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
         // X value
         int32_t y = 0;
         current_char = fnt_get_font_attribute_value(current_char, &y);
-        y = FNT_MAP_H - y;
+        y = (int32_t)FNT_MAP_H - y;
         
         // Width value
         int32_t width = 0;
@@ -127,7 +127,7 @@ void ui_text_t::draw_char(char character, uint32_t color)
 
 void ui_text_t::draw_string(const char *string, uint32_t color)
 {
-    uint32_t string_length = strlen(string);
+    uint32_t string_length = (uint32_t)strlen(string);
     memcpy(characters + char_count, string, sizeof(char) * string_length);
     for (uint32_t i = 0; i < string_length; ++i)
     {
@@ -221,7 +221,7 @@ static char *fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
     if (dst_word)
     {
         dst_word->pointer = pointer;
-        dst_word->size = new_pointer - pointer;
+        dst_word->size = (int16_t)(new_pointer - pointer);
     }
     return(new_pointer);
 }

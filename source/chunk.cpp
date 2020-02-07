@@ -23,7 +23,6 @@ void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, b
     make_unmappable_gpu_buffer(&chunk_mesh_gpu_buffer, buffer_size, mesh_vertices, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
 
     draw_indexed_data_t indexed_data = init_draw_indexed_data_default(1, vertex_count);
-    model_index_data_t model_indexed_data;
     memory_buffer_view_t<VkBuffer> buffers{1, &chunk_mesh_gpu_buffer.buffer};
     
     gpu_mesh = initialize_mesh(buffers, &indexed_data, &chunk_model->index_data);

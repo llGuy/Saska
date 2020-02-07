@@ -262,7 +262,7 @@ void deinitialize_entities_state(void)
 
 
     // Deinitialize entities:
-    for (uint32_t i = 0; i < player_count; ++i)
+    for (uint32_t i = 0; i < (uint32_t)player_count; ++i)
     {
         player_t *player = &player_list[i];
         deallocate_free_list(player->animation.animation_instance.interpolated_transforms);
@@ -289,7 +289,7 @@ void fill_game_state_initialize_packet_with_entities_state(struct game_state_ini
     packet->player_count = player_count;
     packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * player_count);
 
-    for (uint32_t player = 0; player < player_count; ++player)
+    for (uint32_t player = 0; player < (uint32_t)player_count; ++player)
     {
         player_t *p_player = &player_list[player];
 
@@ -331,7 +331,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
     {
         still_have_commands_to_go_through = 0;
         
-        for (uint32_t player_index = 0; player_index < player_count; ++player_index)
+        for (uint32_t player_index = 0; player_index < (uint32_t)player_count; ++player_index)
         {
             player_t *player = &player_list[player_index];
 
@@ -426,7 +426,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
         }
     }
 
-    for (uint32_t bullet_index = 0; bullet_index < bullet_count; ++bullet_index)
+    for (uint32_t bullet_index = 0; bullet_index < (uint32_t)bullet_count; ++bullet_index)
     {
         bullet_t *bullet = &bullet_list[bullet_index];
 
@@ -495,7 +495,7 @@ void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t 
 
 void sync_gpu_with_entities_state(gpu_command_queue_t *queue)
 {
-    for (uint32_t i = 0; i < player_count; ++i)
+    for (uint32_t i = 0; i < (uint32_t)player_count; ++i)
     {
         player_t *player = &player_list[i];
         animation_component_t *animation = &player->animation;
@@ -510,7 +510,7 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
     bool is_current_client = (player_init_packet->client_id == local_user_client_index);
         
     player_create_info_t player_create_info = {};
-    player_create_info.name = make_constant_string(player_init_packet->player_name, strlen(player_init_packet->player_name));
+    player_create_info.name = make_constant_string(player_init_packet->player_name, (uint32_t)strlen(player_init_packet->player_name));
     player_create_info.ws_position = vector3_t(player_init_packet->ws_position_x, player_init_packet->ws_position_y, player_init_packet->ws_position_z);
     player_create_info.ws_direction = vector3_t(player_init_packet->ws_view_direction_x, player_init_packet->ws_view_direction_y, player_init_packet->ws_view_direction_z);
     player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
@@ -553,7 +553,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
 {
     // Spawns a player at the edge of a world
     player_create_info_t player_create_info = {};
-    player_create_info.name = make_constant_string(player_name, strlen(player_name));
+    player_create_info.name = make_constant_string(player_name, (uint32_t)strlen(player_name));
     // TODO: Spawn player in a random position on the edge of the chunk grid
     player_create_info.ws_position = vector3_t(-140, 140, -140);
     player_create_info.ws_direction = -glm::normalize(player_create_info.ws_position);
@@ -674,7 +674,7 @@ player_t *get_user_player(void)
 
 player_t *get_player(const char *name)
 {
-    return(get_player(make_constant_string(name, strlen(name))));
+    return(get_player(make_constant_string(name, (uint32_t)strlen(name))));
 }
 
 
@@ -700,7 +700,7 @@ static void handle_main_player_mouse_movement(player_t *player, game_input_t *ga
         vector3_t up = player->camera.ws_current_up_vector;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
-        static constexpr uint32_t SENSITIVITY = 15.0f;
+        static constexpr float32_t SENSITIVITY = 15.0f;
     
         vector3_t res = player->ws_direction;
 	    

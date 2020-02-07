@@ -412,9 +412,9 @@ void animation_component_t::tick(player_t *affected_player, float32_t dt)
             new_state = player_t::animated_state_t::WALK; moving = 1;
         }
     }
-    if (affected_player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
-    if (affected_player->action_flags & (1 << action_flags_t::ACTION_DOWN));
-    if (affected_player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
+    //if (affected_player->action_flags & (1 << action_flags_t::ACTION_LEFT)); 
+    //if (affected_player->action_flags & (1 << action_flags_t::ACTION_DOWN));
+    //if (affected_player->action_flags & (1 << action_flags_t::ACTION_RIGHT));
         
     if (!moving)
     {
@@ -685,7 +685,7 @@ float32_t network_component_t::tick(player_t *affected_player, float32_t dt)
 
             affected_player->camera.mouse_diff = d;
 
-            static constexpr uint32_t SENSITIVITY = 15.0f;
+            static constexpr float32_t SENSITIVITY = 15.0f;
         
             float32_t x_angle = glm::radians(-d.x) * SENSITIVITY * dt;// *elapsed;
             float32_t y_angle = glm::radians(-d.y) * SENSITIVITY * dt;// *elapsed;

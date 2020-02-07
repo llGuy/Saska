@@ -686,9 +686,9 @@ void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, b
                         int32_t current_voxel_value = (int32_t)*voxel;
                         int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                        if (new_value > MAX_VOXEL_VALUE)
+                        if (new_value > (int32_t)MAX_VOXEL_VALUE)
                         {
-                            *voxel = MAX_VOXEL_VALUE;
+                            *voxel = (uint8_t)MAX_VOXEL_VALUE;
                         }
                         else if (new_value < 0)
                         {
@@ -716,9 +716,9 @@ void terraform_client(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, b
                             int32_t current_voxel_value = (int32_t)*voxel;
                             int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                            if (new_value > MAX_VOXEL_VALUE)
+                            if (new_value > (int32_t)MAX_VOXEL_VALUE)
                             {
-                                *voxel = MAX_VOXEL_VALUE;
+                                *voxel = (uint8_t)MAX_VOXEL_VALUE;
                             }
                             else if (new_value < 0)
                             {
@@ -825,7 +825,7 @@ chunk_t **get_modified_chunks(uint32_t *count)
 
 float32_t get_chunk_grid_size(void)
 {
-    return grid_edge_size;
+    return (float32_t)grid_edge_size;
 }
 
 
@@ -870,7 +870,7 @@ static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
 
             if (is_within_boundaries(cs_vcoord, CHUNK_EDGE_LENGTH))
             {
-                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = MAX_VOXEL_VALUE;
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint8_t)MAX_VOXEL_VALUE;
             }
             else
             {
@@ -880,7 +880,7 @@ static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
                 
                 cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
 
-                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = MAX_VOXEL_VALUE;
+                chunk->voxels[(uint32_t)cs_vcoord.x][(uint32_t)cs_vcoord.y][(uint32_t)cs_vcoord.z] = (uint8_t)MAX_VOXEL_VALUE;
             }
         }
     }
@@ -986,9 +986,9 @@ static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t vo
                         int32_t current_voxel_value = (int32_t)*voxel;
                         int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                        if (new_value > MAX_VOXEL_VALUE)
+                        if (new_value > (int32_t)MAX_VOXEL_VALUE)
                         {
-                            *voxel = MAX_VOXEL_VALUE;
+                            *voxel = (int32_t)MAX_VOXEL_VALUE;
                         }
                         else if (new_value < 0)
                         {
@@ -1030,9 +1030,9 @@ static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t vo
                             int32_t current_voxel_value = (int32_t)*voxel;
                             int32_t new_value = (int32_t)(proportion * coefficient * dt * speed) + current_voxel_value;
 
-                            if (new_value > MAX_VOXEL_VALUE)
+                            if (new_value > (int32_t)MAX_VOXEL_VALUE)
                             {
-                                *voxel = MAX_VOXEL_VALUE;
+                                *voxel = (int32_t)MAX_VOXEL_VALUE;
                             }
                             else if (new_value < 0)
                             {

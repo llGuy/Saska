@@ -21,11 +21,11 @@ void event_dispatcher_t::dispatch_events()
     for (uint32_t i = 0; i < pending_event_count; ++i)
     {
         event_t *current_event = &pending_events[i];
-        listener_subscriptions_t *subscriptions = &subscriptions[current_event->type];
+        listener_subscriptions_t *subscription = &subscriptions[current_event->type];
 
-        for (uint32_t event_listener = 0; event_listener < subscriptions->count; ++event_listener)
+        for (uint32_t event_listener = 0; event_listener < subscription->count; ++event_listener)
         {
-            listener_callback_t callback = callbacks[subscriptions->listeners[event_listener]];
+            listener_callback_t callback = callbacks[subscription->listeners[event_listener]];
             void *object = listener_objects[event_listener];
 
             (*callback)(object, current_event);

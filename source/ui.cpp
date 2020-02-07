@@ -126,7 +126,7 @@ void push_text_to_render(ui_text_t *text, const resolution_t &resolution)
         if (chars_since_new_line % text->chars_per_line == 0)
         {
             px_cursor_position.y -= px_char_height;
-            px_cursor_position.x = text->x_start + box->px_position.ix;
+            px_cursor_position.x = (uint32_t)(text->x_start + box->px_position.ix);
         }
     }
 }
@@ -211,7 +211,7 @@ bool console_is_receiving_input(void)
 
 static void output_to_input_section(const char *string, uint32_t color)
 {
-    g_console->cursor_position += strlen(string);
+    g_console->cursor_position += (uint32_t)strlen(string);
     g_console->console_input.draw_string(string, color);
 }
 
@@ -233,7 +233,7 @@ void console_out_i(const char *string)
 void console_out_i(int32_t i)
 {
     char buffer[15] = {};
-    sprintf(buffer, "%i\0", i);
+    sprintf_s(buffer, "%i\0", i);
     
     g_console->console_output.draw_string(buffer, g_console->output_color);
 }
@@ -241,7 +241,7 @@ void console_out_i(int32_t i)
 void console_out_i(float32_t f)
 {
     char buffer[15] = {};
-    sprintf(buffer, "%f\0", f);
+    sprintf_s(buffer, "%f\0", f);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
 }
@@ -249,7 +249,7 @@ void console_out_i(float32_t f)
 void console_out_i(const vector2_t &v2)
 {
     char buffer[40] = {};
-    sprintf(buffer, "%f %f\0", v2.x, v2.y);
+    sprintf_s(buffer, "%f %f\0", v2.x, v2.y);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
 }
@@ -257,7 +257,7 @@ void console_out_i(const vector2_t &v2)
 void console_out_i(const vector3_t &v3)
 {
     char buffer[40] = {};
-    sprintf(buffer, "%f %f %f\0", v3.x, v3.y, v3.z);
+    sprintf_s(buffer, "%f %f %f\0", v3.x, v3.y, v3.z);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
 }
@@ -423,7 +423,7 @@ static void push_console_to_render(raw_input_t *raw_input)
         uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
         uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
         px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
-        uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
+        uint32_t px_char_height = (uint32_t)((text->line_height * (float32_t)px_char_width) * magic);
         ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, get_backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console->cursor_position;
         
@@ -465,7 +465,7 @@ void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const res
         input->cursor_fade -= (int32_t)(console_t::BLINK_SPEED * dt * 1000.0f);
         if (input->cursor_fade < 0.0f)
         {
-            input->cursor_fade = 0.0f;
+            input->cursor_fade = 0;
             input->fade_in_or_out ^= 1;
         }
         //cursor_color >>= 8;
@@ -479,7 +479,7 @@ void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const res
         input->cursor_fade += (int32_t)(console_t::BLINK_SPEED * dt * 1000.0f);
         if (input->cursor_fade > 1.0f)
         {
-            input->cursor_fade = 1.0f;
+            input->cursor_fade = 1;
             input->fade_in_or_out ^= 1;
         }
         
@@ -502,7 +502,7 @@ void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const res
         uint32_t px_char_width = (box->px_current_size.ix) / text->chars_per_line;
         uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
         px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
-        uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
+        uint32_t px_char_height = (uint32_t)((text->line_height * (float32_t)px_char_width) * magic);
         ivector2_t px_cursor_start = get_px_cursor_position(box, &input->text, get_backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)input->cursor_position;
         
@@ -839,9 +839,9 @@ static int32_t lua_console_out(lua_State *state)
     {
     case LUA_TNUMBER:
         {
-            int32_t number =  lua_tonumber(state, -1);
+            int32_t number = (uint32_t)lua_tonumber(state, -1);
             char buffer[20] = {};
-            sprintf(buffer, "%d", number);
+            sprintf_s(buffer, "%d", number);
             output_to_output_section(buffer, g_console->output_color);
             break;
         }

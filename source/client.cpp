@@ -459,7 +459,7 @@ void join_server(const char *ip_address, const char *client_name)
         packet.client_name = client_name;
     }
     header.total_packet_size = sizeof_packet_header();
-    header.total_packet_size += strlen(packet.client_name) + 1;
+    header.total_packet_size += (uint32_t)strlen(packet.client_name) + 1;
 
     header.current_packet_id = get_user_client()->current_packet_count = 0;
 
@@ -480,7 +480,7 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
     const char *ip_address = "127.0.0.1";
     
     char client_name[10];
-    sprintf(client_name, "%d", client_index);
+    sprintf_s(client_name, "%d", client_index);
     
     packet_header_t header = {};
     client_join_packet_t packet = {};
@@ -490,7 +490,7 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
         packet.client_name = client_name;
     }
     header.total_packet_size = sizeof_packet_header();
-    header.total_packet_size += strlen(packet.client_name) + 1;
+    header.total_packet_size += (uint32_t)strlen(packet.client_name) + 1;
     header.current_packet_id = get_user_client()->current_packet_count = 0;
 
 
@@ -542,7 +542,7 @@ static void send_commands(void)
         chunk_t *chunk = chunks[chunk_index];
         client_modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
 
-        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, (uint32_t)(get_chunk_grid_size()));
         modified_chunk->modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * chunk->modified_voxels_list_count);
         modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
 
@@ -712,7 +712,7 @@ static int32_t lua_join_server(lua_State *state)
 
 static int32_t lua_join_loop_back(lua_State *state)
 {
-    int32_t index = lua_tonumber(state, -1);
+    int32_t index = (int32_t)lua_tonumber(state, -1);
     
     join_loop_back(index);
 

@@ -139,13 +139,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 	}
 
     // Initialize game's dynamic memory
-    linear_allocator_global.capacity = megabytes(30);
+    linear_allocator_global.capacity = (uint32_t)megabytes(30);
     linear_allocator_global.start = linear_allocator_global.current = malloc(linear_allocator_global.capacity);
 	
-    stack_allocator_global.capacity = megabytes(10);
+    stack_allocator_global.capacity = (uint32_t)megabytes(10);
     stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-    free_list_allocator_global.available_bytes = megabytes(30);
+    free_list_allocator_global.available_bytes = (uint32_t)megabytes(30);
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
 
@@ -264,7 +264,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 }*/
         
                 // Render
-                game_tick(&game, &raw_input, dt);
+                game_tick(&game, &raw_input, (float32_t)dt);
                 RedrawWindow(window, NULL, NULL, RDW_INTERNALPAINT);
                 
                 raw_input.cursor_moved = false;
@@ -286,7 +286,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             } break;
         case application_type_t::CONSOLE_APPLICATION_MODE:
             {
-                game_tick(&game, &raw_input, dt);
+                game_tick(&game, &raw_input, (float32_t)dt);
             } break;
         }
         
@@ -322,7 +322,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             }
 
             dt = TICK_TIME;
-            raw_input.dt = dt;
+            raw_input.dt = (float32_t)dt;
         }
     }
 
@@ -340,7 +340,7 @@ static void set_mouse_move_button_state(float32_t value, bool active, button_typ
     if (active)
     {
         raw_input.buttons[button].state = (button_state_t)1;
-        raw_input.buttons[button].down_amount += dt;
+        raw_input.buttons[button].down_amount += (float32_t)dt;
         raw_input.buttons[button].value = value;
     }
     else
@@ -382,8 +382,8 @@ static void handle_mouse_move_event(LPARAM lparam)
     // Virtual "infinite" cursor space
     if (raw_input.show_cursor)
     {
-        raw_input.cursor_pos_x = cursor_pos.x;
-        raw_input.cursor_pos_y = cursor_pos.y;
+        raw_input.cursor_pos_x = (float32_t)cursor_pos.x;
+        raw_input.cursor_pos_y = (float32_t)cursor_pos.y;
     }
     else
     {
@@ -393,8 +393,8 @@ static void handle_mouse_move_event(LPARAM lparam)
 
 
     // Calculate difference
-    int32_t dx = raw_input.cursor_pos_x - raw_input.previous_cursor_pos_x;
-    int32_t dy = raw_input.cursor_pos_y - raw_input.previous_cursor_pos_y;
+    int32_t dx = (int32_t)(raw_input.cursor_pos_x - raw_input.previous_cursor_pos_x);
+    int32_t dy = (int32_t)(raw_input.cursor_pos_y - raw_input.previous_cursor_pos_y);
 
     //output_to_debug_console(dx, " ", dy, "\n");
     
@@ -482,7 +482,7 @@ static void set_key_state(raw_input_t *raw_input, button_type_t button, int32_t 
         case button_state_t::NOT_DOWN: {key->state = button_state_t::INSTANT;} break;
         case button_state_t::INSTANT: {key->state = button_state_t::REPEAT;} break;
         }
-        key->down_amount += dt;
+        key->down_amount += (float32_t)dt;
         key->value = 1.0f;
     }
     else if (action == key_action_t::KEY_ACTION_UP)
@@ -505,7 +505,7 @@ static void set_mouse_button_state(raw_input_t *raw_input, button_type_t button,
         case button_state_t::NOT_DOWN: {mouse_button->state = button_state_t::INSTANT;} break;
         case button_state_t::INSTANT: case button_state_t::REPEAT: {mouse_button->state = button_state_t::REPEAT;} break;
         }
-        mouse_button->down_amount += dt;
+        mouse_button->down_amount += (float32_t)dt;
         mouse_button->value = 0.0f;
     }
     else if (action == key_action_t::KEY_ACTION_UP)
@@ -662,7 +662,7 @@ static void set_gamepad_button_state(raw_input_t *raw_input, gamepad_button_type
 {
     if (active)
     {
-        raw_input->gamepad_buttons[button].down_amount += dt;
+        raw_input->gamepad_buttons[button].down_amount += (float32_t)dt;
         raw_input->gamepad_buttons[button].state = (button_state_t)1;
         raw_input->gamepad_buttons[button].value = value;
     }
@@ -888,7 +888,7 @@ raw_input_t *get_raw_input(void)
 void output_to_debug_console_i(int32_t i)
 {
     char buffer[15] = {};
-    sprintf(buffer, "%i\0", i);
+    sprintf_s(buffer, "%i\0", i);
     OutputDebugString(buffer);
 }
 
@@ -896,7 +896,7 @@ void output_to_debug_console_i(int32_t i)
 void output_to_debug_console_i(float32_t f)
 {
     char buffer[15] = {};
-    sprintf(buffer, "%f\0", f);
+    sprintf_s(buffer, "%f\0", f);
     OutputDebugString(buffer);
 }
 

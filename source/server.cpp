@@ -117,7 +117,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 packet_header_t header = {};
                 in_serializer.deserialize_packet_header(&header);
 
-                uint32_t client_current_packet_count = header.current_packet_id;
+                uint64_t client_current_packet_count = header.current_packet_id;
                 client_t *client = get_client(header.client_id);
 
                 //if (client_current_packet_count >= client->last_received_correction_packet_count)
@@ -151,7 +151,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     local_player_data_ptr->network.client_state_index = client->client_id;
 
                                     ++client_count;
-                                    constant_string_t constant_str_name = make_constant_string(client_join.client_name, strlen(client_join.client_name));
+                                    constant_string_t constant_str_name = make_constant_string(client_join.client_name, (uint32_t)strlen(client_join.client_name));
                                     client_table_by_name.insert(constant_str_name.hash, client->client_id);
                                     client_table_by_address.insert(received_address.ipv4_address, client->client_id);
 
@@ -358,7 +358,7 @@ static void receiver_thread_process(void *receiver_thread_data)
 
 static void initialize_receiver_thread(void)
 {
-    receiver_thread.packet_allocator.capacity = megabytes(30);
+    receiver_thread.packet_allocator.capacity = (uint32_t)megabytes(30);
     receiver_thread.packet_allocator.start = receiver_thread.packet_allocator.current = malloc(receiver_thread.packet_allocator.capacity);
 
     receiver_thread.mutex = request_mutex();
@@ -517,7 +517,7 @@ static void dispatch_snapshot_to_clients(void)
         chunk_t *chunk = chunks[chunk_index];
         modified_chunk_t *modified_chunk = &voxel_packet.modified_chunks[chunk_index];
 
-        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, get_chunk_grid_size());
+        modified_chunk->chunk_index = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, (uint32_t)get_chunk_grid_size());
         modified_chunk->modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * chunk->modified_voxels_list_count);
         modified_chunk->modified_voxel_count = chunk->modified_voxels_list_count;
         for (uint32_t voxel = 0; voxel < chunk->modified_voxels_list_count; ++voxel)

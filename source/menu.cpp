@@ -383,14 +383,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.0f, current_button_y),
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
-                                                                   0x1616161636,
+                                                                   (uint32_t)0x1616161636,
                                                                    get_backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
-                                                       0xFFFFFF36,
+                                                       (uint32_t)0xFFFFFF36,
                                                        get_backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/play_icon.png", &main_menu.widgets[button].image);
@@ -405,14 +405,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.0f, current_button_y),
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
-                                                                   0x1616161636,
+                                                                   (uint32_t)0x1616161636,
                                                                    get_backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
-                                                       0xFFFFFF36,
+                                                       (uint32_t)0xFFFFFF36,
                                                        get_backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/host_icon.png", &main_menu.widgets[button].image);
@@ -427,14 +427,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.0f, current_button_y),
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
-                                                                   0x1616161636,
+                                                                   (uint32_t)0x1616161636,
                                                                    get_backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
-                                                       0xFFFFFF36,
+                                                       (uint32_t)0xFFFFFF36,
                                                        get_backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/settings_icon.png", &main_menu.widgets[button].image);
@@ -449,14 +449,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.0f, current_button_y),
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
-                                                                   0x1616161636,
+                                                                   (uint32_t)0x1616161636,
                                                                    get_backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
-                                                       0xFFFFFF36,
+                                                       (uint32_t)0xFFFFFF36,
                                                        get_backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/quit_icon.png", &main_menu.widgets[button].image);

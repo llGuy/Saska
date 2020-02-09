@@ -54,7 +54,8 @@ struct chunk_t
 
 
     
-    void initialize(const vector3_t &position, ivector3_t chunk_coord, bool allocate_history, const vector3_t &size, model_t *chunk_model);
+    void initialize(const vector3_t &position, ivector3_t chunk_coord, bool allocate_history, const vector3_t &size);
+    void initialize_for_rendering(model_t *model);
     void deinitialize(void);
     // TODO: Defer triangles that are between chunks to a higher level function
     void update_mesh(uint8_t surface_level, struct gpu_command_queue_t *queue);

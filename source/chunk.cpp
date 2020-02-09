@@ -7,8 +7,7 @@
 
 
 
-// Public
-void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, bool allocate_history, const vector3_t &size, model_t *chunk_model)
+void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, bool allocate_history, const vector3_t &size)
 {
     should_do_gpu_sync = 0;
     
@@ -18,15 +17,6 @@ void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, b
     memset(voxels, 0, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
     memset(mesh_vertices, 0, sizeof(vector3_t) * MAX_VERTICES_PER_CHUNK);
     
-    uint32_t buffer_size = sizeof(vector3_t) * MAX_VERTICES_PER_CHUNK;
-
-    make_unmappable_gpu_buffer(&chunk_mesh_gpu_buffer, buffer_size, mesh_vertices, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
-
-    draw_indexed_data_t indexed_data = init_draw_indexed_data_default(1, vertex_count);
-    memory_buffer_view_t<VkBuffer> buffers{1, &chunk_mesh_gpu_buffer.buffer};
-    
-    gpu_mesh = initialize_mesh(buffers, &indexed_data, &chunk_model->index_data);
-
     push_k.model_matrix = glm::scale(size) * glm::translate(position);
     //push_k.color = vector4_t(122.0 / 255.0, 177.0 / 255.0, 213.0 / 255.0, 1.0f);
     push_k.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1.0f);
@@ -38,6 +28,19 @@ void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, b
         modified_voxels_list_count = 0;
         list_of_modified_voxels = (uint16_t *)allocate_free_list(sizeof(uint16_t) * (CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH) / 4);
     }
+}
+
+
+void chunk_t::initialize_for_rendering(model_t *chunk_model)
+{
+    uint32_t buffer_size = sizeof(vector3_t) * MAX_VERTICES_PER_CHUNK;
+
+    make_unmappable_gpu_buffer(&chunk_mesh_gpu_buffer, buffer_size, mesh_vertices, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
+
+    draw_indexed_data_t indexed_data = init_draw_indexed_data_default(1, vertex_count);
+    memory_buffer_view_t<VkBuffer> buffers{ 1, &chunk_mesh_gpu_buffer.buffer };
+
+    gpu_mesh = initialize_mesh(buffers, &indexed_data, &chunk_model->index_data);
 }
 
 

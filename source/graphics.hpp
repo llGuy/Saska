@@ -20,42 +20,42 @@ enum invalid_t {INVALID_HANDLE = -1};
 template <typename T, uint32_t Max = 40> struct object_manager_t
 {
     using Type = T;
-    uint32_t count {0};
-    T objects[ Max ];
-    hash_table_inline_t<uint32_t, Max, 4, 4> object_name_map {""}; // To be used during initialization only
-
+    uint32_t count{ 0 };
+    T objects[Max];
+    hash_table_inline_t<uint32_t, Max, 4, 4> object_name_map{ "" }; // To be used during initialization only
+    
     int32_t add(const constant_string_t &name, uint32_t allocation_count = 1)
     {
-	object_name_map.insert(name.hash, count);
+        object_name_map.insert(name.hash, count);
 
-	uint32_t prev = count;
-	count += allocation_count;
-	
-	return(prev);
+        uint32_t prev = count;
+        count += allocation_count;
+    
+        return(prev);
     }
 
     inline int32_t get_handle(const constant_string_t &name)
     {
-	return(*object_name_map.get(name.hash));
+        return(*object_name_map.get(name.hash));
     }
     
     inline T *get(int32_t handle)
     {
-	return(&objects[handle]);
+        return(&objects[handle]);
     }
 
     // To use for convenience, not for performance
     inline T *get(const constant_string_t &name)
     {
-	return(&objects[ *object_name_map.get(name.hash) ]);
+        return(&objects[*object_name_map.get(name.hash)]);
     }
 
     inline void clean_up(void)
     {
-	for (uint32_t i = 0; i < count; ++i)
-	{
-	    objects[i].destroy();
-	}
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            objects[i].destroy();
+        }
     }
 };
 
@@ -105,7 +105,7 @@ struct shader_pk_data_t
 
 enum blend_type_t { NO_BLENDING, ONE_MINUS_SRC_ALPHA, ADDITIVE_BLENDING };
 
-struct shader_blend_states_t
+struct shader_blend_states_t 
 {
     static constexpr uint32_t MAX_BLEND_STATES = 10;
     // For now, is just boolean
@@ -114,7 +114,7 @@ struct shader_blend_states_t
     
     template <typename ...T>
     shader_blend_states_t(T ...states)
-        : blend_states{states...}, count(sizeof...(states))
+        : blend_states{states...}, count(sizeof...(states)) 
     {
     }
 };
@@ -181,6 +181,25 @@ struct graphics_pipeline_t
 };
 
 void make_graphics_pipeline(graphics_pipeline_t *pipeline);
+
+void initialize_3d_unanimated_shader(graphics_pipeline_t *pipeline,
+                                     const char *base_shader_path,
+                                     model_t *model);
+
+void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
+                                            const char *base_shader_path,
+                                            model_t *model);
+
+void initialize_3d_animated_shader(graphics_pipeline_t *pipeline,
+                                   const char *base_shader_path,
+                                   model_t *model,
+                                   uniform_layout_handle_t animation_layout);
+
+void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
+                                          const char *base_shader_path,
+                                          model_t *model,
+                                          uniform_layout_handle_t animation_layout);
+
 
 typedef VkCommandPool gpu_command_queue_pool_t;
 typedef VkCommandBufferLevel submit_level_t;
@@ -526,8 +545,8 @@ void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near,
 camera_t *get_camera(camera_handle_t handle);
 camera_t *get_camera_bound_to_3d_output(void);
 void bind_camera_to_3d_scene_output(camera_handle_t handle);
-memory_buffer_view_t<gpu_buffer_t> get_camera_transform_ubos(void);
-memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void);
+gpu_buffer_t get_camera_transform_ubo(void);
+uniform_group_t get_camera_transform_uniform_group(void);
 
 struct camera_transform_uniform_data_t
 {
@@ -542,7 +561,7 @@ struct camera_transform_uniform_data_t
     vector4_t view_direction;
 };
 
-void update_3d_output_camera_transforms(uint32_t image_index);
+void update_3d_output_camera_transforms(gpu_command_queue_t *queue);
 void clean_up_cameras(void);
 
 struct shadow_matrices_t
@@ -830,9 +849,8 @@ struct cameras_t
     camera_handle_t camera_bound_to_3d_output = -1;
     camera_t spectator_camera = {};
 
-    gpu_buffer_handle_t camera_transforms_ubos;
-    uniform_group_handle_t camera_transforms_uniform_groups;
-    uint32_t ubo_count;
+    gpu_buffer_handle_t camera_transforms_ubo;
+    uniform_group_handle_t camera_transforms_uniform_group;
 };
 
 bool is_in_spectator_mode(void);

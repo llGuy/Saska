@@ -36,7 +36,7 @@ struct swapchain_details_t
     VkPresentModeKHR *available_present_modes;
 };
     
-struct gpu_t
+struct gpu_t 
 {
     VkPhysicalDevice hardware;
     VkDevice logical_device;
@@ -756,13 +756,6 @@ void destroy_descriptor_set(VkDescriptorSet *set);
 
 VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout *layout, VkDescriptorPool *descriptor_pool);
     
-inline void init_descriptor_set_buffer_info(gpu_buffer_t *buffer, uint32_t offset_in_ubo, VkDescriptorBufferInfo *buffer_info)
-{
-    buffer_info->buffer = buffer->buffer;
-    buffer_info->offset = offset_in_ubo;
-    buffer_info->range = buffer->size;
-}
-
 inline void init_buffer_descriptor_set_write(VkDescriptorSet *set, uint32_t binding, uint32_t dst_array_element, uint32_t count, VkDescriptorBufferInfo *infos, VkWriteDescriptorSet *write)
 {
     write->sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -796,13 +789,6 @@ inline void init_image_descriptor_set_write(VkDescriptorSet *set, uint32_t bindi
     write->pImageInfo = infos;
 }
     
-inline void init_descriptor_set_image_info(VkSampler sampler, VkImageView image_view, VkImageLayout expected_layout, VkDescriptorImageInfo *image_info)
-{
-    image_info->imageLayout = expected_layout;
-    image_info->imageView = image_view;
-    image_info->sampler = sampler;
-}
-
 inline void init_descriptor_pool_size(VkDescriptorType type, uint32_t count, VkDescriptorPoolSize *size)
 {
     size->type = type;

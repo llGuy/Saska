@@ -205,7 +205,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                             client->needs_to_acknowledge_prediction_error = 0;
 
                                             client->just_received_correction = 1;
-                                            client->last_received_correction_packet_count = client_current_packet_count;
+                                            client->last_received_correction_packet_count = (uint32_t)client_current_packet_count;
 
                                             player_t *player = get_player(client->player_handle);
 

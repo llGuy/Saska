@@ -16,4 +16,4 @@ void sync_gpu_with_camera_view(uint32_t image_index);
 camera_t *get_camera(camera_handle_t handle);
 camera_t *get_camera_bound_to_3d_output(void);
 void bind_camera_to_3d_scene_output(camera_handle_t handle);
-memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void);
+uniform_group_t get_camera_transform_uniform_group(void);

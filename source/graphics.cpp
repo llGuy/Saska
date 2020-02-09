@@ -201,7 +201,7 @@ void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffe
 
     if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
     {
-	end_command_buffer(&dst_command_queue->q);
+        end_command_buffer(&dst_command_queue->q);
     }
 }
 
@@ -507,6 +507,160 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     }
 }
 
+void initialize_3d_unanimated_shader(graphics_pipeline_t *pipeline,
+                                     const char *base_shader_path,
+                                     model_t *model)
+{
+    uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
+    uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
+
+    char *vbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *gbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *fbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+
+    memcpy(vbuffer, base_shader_path, length_of_base_path);
+    memcpy(gbuffer, base_shader_path, length_of_base_path);
+    memcpy(fbuffer, base_shader_path, length_of_base_path);
+
+    memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
+    shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+    
+    memcpy(gbuffer + length_of_base_path, ".geom.spv", length_of_extension);
+    shader_module_info_t gsh = { gbuffer, VK_SHADER_STAGE_GEOMETRY_BIT };
+
+    memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
+    shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };
+    
+    graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+    render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+    shader_modules_t modules(vsh, gsh, fsh);
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                     g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash));
+    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+    shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
+    dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+    fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model,
+                                true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+    pipeline->info = info;
+    make_graphics_pipeline(pipeline);
+}
+
+void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
+                                            const char *base_shader_path,
+                                            model_t *model)
+{
+    uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
+    uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
+
+    char *vbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *fbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+
+    memcpy(vbuffer, base_shader_path, length_of_base_path);
+    memcpy(fbuffer, base_shader_path, length_of_base_path);
+
+    memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
+    shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+
+    memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
+    shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };
+    
+    graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+    auto shadow_display = get_shadow_display();
+    VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+    render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
+    shader_modules_t modules(vsh, fsh);
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
+    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+    shader_blend_states_t blending(blend_type_t::NO_BLENDING);
+    dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
+    fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model,
+                                true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+    pipeline->info = info;
+    make_graphics_pipeline(pipeline);
+}
+
+void initialize_3d_animated_shader(graphics_pipeline_t *pipeline,
+                                   const char *base_shader_path,
+                                   model_t *model,
+                                   uniform_layout_handle_t animation_layout)
+{
+    uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
+    uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
+
+    char *vbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *gbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *fbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+
+    memcpy(vbuffer, base_shader_path, length_of_base_path);
+    memcpy(gbuffer, base_shader_path, length_of_base_path);
+    memcpy(fbuffer, base_shader_path, length_of_base_path);
+
+    memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
+    shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+    
+    memcpy(gbuffer + length_of_base_path, ".geom.spv", length_of_extension);
+    shader_module_info_t gsh = { gbuffer, VK_SHADER_STAGE_GEOMETRY_BIT };
+
+    memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
+    shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };
+    
+    graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+    render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+    shader_modules_t modules(vsh, gsh, fsh);
+    shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                     g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                     animation_layout);
+    shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+    shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
+    dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+    fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, model,
+                                true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+    pipeline->info = info;
+    make_graphics_pipeline(pipeline);
+}
+
+void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
+                                          const char *base_shader_path,
+                                          model_t *model,
+                                          uniform_layout_handle_t animation_layout)
+
+{ 
+    uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
+    uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
+
+    char *vbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *gbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *fbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+
+    memcpy(vbuffer, base_shader_path, length_of_base_path);
+    memcpy(gbuffer, base_shader_path, length_of_base_path);
+    memcpy(fbuffer, base_shader_path, length_of_base_path);
+
+    memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
+    shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+    
+    memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
+    shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };   
+    
+    graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+        auto shadow_display = get_shadow_display();
+        VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
+        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
+        shader_modules_t modules(vsh, fsh);
+        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                                         animation_layout);
+        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
+        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
+        dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
+        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, model,
+                                    true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+        pipeline->info = info;
+        make_graphics_pipeline(pipeline);
+}
 
 
 
@@ -521,31 +675,22 @@ static void make_camera_data(VkDescriptorPool *pool)
         *ubo_layout_ptr = make_uniform_layout(&blueprint);
     }
 
-    g_cameras->camera_transforms_ubos = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash, swapchain_image_count);
-    auto *camera_ubos = g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos);
+    g_cameras->camera_transforms_ubo = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash);
+    auto *camera_ubo = g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
     {
-        uint32_t uniform_buffer_count = swapchain_image_count;
-
-        g_cameras->ubo_count = uniform_buffer_count;
-	
         VkDeviceSize buffer_size = sizeof(camera_transform_uniform_data_t);
 
-        for (uint32_t i = 0; i < uniform_buffer_count; ++i)
-        {
-            init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &camera_ubos[i]);
-        }
+        init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, camera_ubo);
     }
 
-    g_cameras->camera_transforms_uniform_groups = g_uniform_group_manager->add("uniform_group.camera_transforms_ubo"_hash, swapchain_image_count);
-    auto *transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_groups);
+    g_cameras->camera_transforms_uniform_group = g_uniform_group_manager->add("uniform_group.camera_transforms_ubo"_hash);
+    auto *transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_group);
     {
         uniform_layout_handle_t layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         auto *layout_ptr = g_uniform_layout_manager->get(layout_hdl);
-        for (uint32_t i = 0; i < swapchain_image_count; ++i)
-        {
-            transforms[i] = make_uniform_group(layout_ptr, pool);
-            update_uniform_group(&transforms[i], update_binding_t{BUFFER, &camera_ubos[i], 0});
-        }
+
+        *transforms = make_uniform_group(layout_ptr, pool);
+        update_uniform_group(transforms, update_binding_t{ BUFFER, camera_ubo, 0 });
     }
 
     g_cameras->spectator_camera.set_default((float32_t)get_backbuffer_resolution().width, (float32_t)get_backbuffer_resolution().height, 0.0f, 0.0f);
@@ -588,7 +733,7 @@ void clean_up_cameras(void)
     g_cameras->camera_bound_to_3d_output = -1;
 }
 
-void update_3d_output_camera_transforms(uint32_t image_index)
+void update_3d_output_camera_transforms(gpu_command_queue_t *queue)
 {
     camera_t *camera = get_camera_bound_to_3d_output();
 
@@ -609,12 +754,9 @@ void update_3d_output_camera_transforms(uint32_t image_index)
                                        glm::inverse(camera->v_m), // TODO: Get rid of glm::inverse call
                                        vector4_t(camera->d, 1.0));
     
-    gpu_buffer_t &current_ubo = *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos + image_index);
+    gpu_buffer_t &ubo = *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
 
-    auto map = current_ubo.construct_map();
-    map.begin();
-    map.fill(memory_byte_buffer_t{sizeof(camera_transform_uniform_data_t), &transform_data});
-    map.end();
+    update_gpu_buffer(&ubo, &transform_data, sizeof(camera_transform_uniform_data_t), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
 }
 
 
@@ -656,14 +798,14 @@ void bind_camera_to_3d_scene_output(camera_handle_t handle)
     g_cameras->camera_bound_to_3d_output = handle;
 }
 
-memory_buffer_view_t<gpu_buffer_t> get_camera_transform_ubos(void)
+gpu_buffer_t get_camera_transform_ubo(void)
 {
-    return {g_cameras->ubo_count, g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubos)};
+    return *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
 }
 
-memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void)
+uniform_group_t get_camera_transform_uniform_group(void)
 {
-    return {g_cameras->ubo_count, g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_groups)};
+    return *g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_group);
 }
 
 resolution_t get_backbuffer_resolution(void)
@@ -1364,7 +1506,7 @@ static void render_debug_frustum(gpu_command_queue_t *queue, VkDescriptorSet ubo
 
 void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline)
 {
-    auto *camera_transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_ubos);
+    auto *camera_transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_ubo);
     render_debug_frustum(queue, *group, graphics_pipeline);
 }
 

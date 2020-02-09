@@ -59,7 +59,7 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
     tick_particles_state(dt);
 
     // GPU operations are separate from ticking
-    update_3d_output_camera_transforms(image_index);
+    update_3d_output_camera_transforms(queue);
     sync_gpu_with_entities_state(queue);
     sync_gpu_with_chunks_state(queue);
     sync_gpu_with_particles_state(queue);
@@ -81,18 +81,18 @@ uint64_t *get_current_tick(void)
 static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue)
 {
     // Fetch some data needed to render
-    auto transforms_ubo_uniform_groups = get_camera_transform_uniform_groups();
+    auto transforms_ubo_uniform_group = get_camera_transform_uniform_group();
     shadow_display_t shadow_display_data = get_shadow_display();
     
-    uniform_group_t uniform_groups[2] = {transforms_ubo_uniform_groups[image_index], shadow_display_data.texture};
+    uniform_group_t uniform_groups[2] = {transforms_ubo_uniform_group, shadow_display_data.texture};
 
     camera_t *camera = get_camera_bound_to_3d_output();
 
     // Rendering to the shadow map
     begin_shadow_offscreen(lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, queue);
     {
-        render_entities_to_shadowmap(&transforms_ubo_uniform_groups[image_index], queue);
-        render_chunks_to_shadowmap(&transforms_ubo_uniform_groups[image_index], queue);
+        render_entities_to_shadowmap(&transforms_ubo_uniform_group, queue);
+        render_chunks_to_shadowmap(&transforms_ubo_uniform_group, queue);
     }
     end_shadow_offscreen(queue);
 
@@ -114,5 +114,5 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
     }
     end_deferred_rendering(queue);
 
-    apply_pfx_on_scene(queue, &transforms_ubo_uniform_groups[image_index], camera->v_m, camera->p_m);
+    apply_pfx_on_scene(queue, &transforms_ubo_uniform_group, camera->v_m, camera->p_m);
 }

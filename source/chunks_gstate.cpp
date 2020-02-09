@@ -3,6 +3,7 @@
 #include "graphics.hpp"
 #include "packets.hpp"
 #include "chunk.hpp"
+#include "game.hpp"
 #include "net.hpp"
 
 
@@ -11,7 +12,7 @@ constexpr float32_t MAX_VOXEL_VALUE = 254.0f;
 constexpr uint32_t MAX_VOXEL_COLOR_BEACON_COUNT = 50;
 
 
-struct alignas(16) voxel_color_beacon_t
+struct alignas(16) voxel_color_beacon_t 
 {
     vector4_t ws_position;
     vector4_t color;
@@ -144,11 +145,8 @@ void initialize_chunks_state(void)
 
     gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 
-
-
     chunk_size = 9.0f;
     grid_edge_size = 5;
-
 
     max_chunks = 20 * 20 * 20;
     chunks = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * max_chunks);
@@ -170,7 +168,15 @@ void initialize_chunks_state(void)
                 vector3_t position = vector3_t(x, y, z) * (float32_t)(CHUNK_EDGE_LENGTH) - vector3_t((float32_t)grid_edge_size / 2) * (float32_t)(CHUNK_EDGE_LENGTH);
 
                 chunk_t *chunk_ptr = *chunk_pptr;
-                chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size), &chunk_model);
+                chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size));
+
+                switch (get_app_type())
+                {
+                case application_type_t::WINDOW_APPLICATION_MODE: {
+                    chunk_ptr->initialize_for_rendering(&chunk_model);
+                } break;
+                default: break;
+                }
 
                 ++i;
             }    
@@ -183,34 +189,26 @@ void initialize_chunks_state(void)
     construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
 
 
-    // Initialize voxel color beacons - will update this uniform buffer every time game gets initialized
-    make_unmappable_gpu_buffer(&voxel_color_beacon_uniform_buffer, sizeof(voxel_beacons), &voxel_beacons, gpu_buffer_usage_t::UNIFORM_BUFFER, get_global_command_pool());
-
-    update_uniform_group(&voxel_color_beacon_uniform, update_binding_t{BUFFER, &voxel_color_beacon_uniform_buffer, 0});
-
-    //voxel_beacons.default_voxel_color.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1);
     voxel_beacons.default_voxel_color.color = vector4_t(0);
     voxel_beacons.default_voxel_color.metalness = 0.3f;
     voxel_beacons.default_voxel_color.roughness = 0.5f;
 
     voxel_beacons.beacon_count = 0;
-    //voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0.8, 0.1, 1), 10.0f, 0.8, 0.2, 5.0f };
+
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        // Initialize voxel color beacons - will update this uniform buffer every time game gets initialized
+        make_unmappable_gpu_buffer(&voxel_color_beacon_uniform_buffer, sizeof(voxel_beacons), &voxel_beacons, gpu_buffer_usage_t::UNIFORM_BUFFER, get_global_command_pool());
+        update_uniform_group(&voxel_color_beacon_uniform, update_binding_t{ BUFFER, &voxel_color_beacon_uniform_buffer, 0 });
+        VkCommandBuffer cmdbuf;
+        init_single_use_command_buffer(get_global_command_pool(), &cmdbuf);
+        update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons), 0, VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &cmdbuf);
+        destroy_single_use_command_buffer(&cmdbuf, get_global_command_pool());
+    } break;
+    default: break;
+    }
     
-    /*voxel_beacons.voxel_color_beacons[0] = { vector4_t(-20.0f, 70.0f, -120.0f, 1), vector4_t(1, 0, 0, 1), 30.0f, 0.2, 0.8, 60.0f };
-    voxel_beacons.voxel_color_beacons[1] = { vector4_t(-80.0f, -50.0f, 0.0f, 1), vector4_t(0, 0, 1, 1), 30.0f, 0.8, 0.4, 60.0f };
-    voxel_beacons.voxel_color_beacons[2] = { vector4_t(80.0f, 50.0f, 0.0f, 1), vector4_t(1, 0, 1, 1), 30.0f, 0.1, 0.9, 60.0f };*/
-
-
-    // Update voxel color beacons uniform buffer
-    VkCommandBuffer cmdbuf;
-    init_single_use_command_buffer(get_global_command_pool(), &cmdbuf);
-
-    update_gpu_buffer(&voxel_color_beacon_uniform_buffer, &voxel_beacons, sizeof(voxel_beacons), 0, VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &cmdbuf);
-
-    destroy_single_use_command_buffer(&cmdbuf, get_global_command_pool());
-    
-    
-
     voxel_linear_allocator_front.current = voxel_linear_allocator_front.start = allocate_free_list(sizeof(uint8_t) * 5000);
     voxel_linear_allocator_front.capacity = sizeof(uint8_t) * 5000;
 
@@ -229,14 +227,14 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
         grid_edge_size = packet->voxels.grid_edge_size;
 
         chunks_to_render_count = 0;
-        chunks_to_update = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * grid_edge_size * grid_edge_size * grid_edge_size);
+        chunks_to_update = (chunk_t * *)allocate_free_list(sizeof(chunk_t *) * grid_edge_size * grid_edge_size * grid_edge_size);
 
         max_chunks = packet->voxels.max_chunks;
-        chunks = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * max_chunks);
+        chunks = (chunk_t * *)allocate_free_list(sizeof(chunk_t *) * max_chunks);
         memset(chunks, 0, sizeof(chunk_t *) * max_chunks);
 
         uint32_t i = 0;
-    
+
         for (uint32_t z = 0; z < grid_edge_size; ++z)
         {
             for (uint32_t y = 0; y < grid_edge_size; ++y)
@@ -246,10 +244,18 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
                     chunk_t **chunk_pptr = get_chunk((int32_t)i);
                     *chunk_pptr = (chunk_t *)allocate_free_list(sizeof(chunk_t));
 
-                    vector3_t position = vector3_t(x, y, z) * (float32_t)(CHUNK_EDGE_LENGTH) - vector3_t((float32_t)grid_edge_size / 2) * (float32_t)(CHUNK_EDGE_LENGTH);
+                    vector3_t position = vector3_t(x, y, z) * (float32_t)(CHUNK_EDGE_LENGTH)-vector3_t((float32_t)grid_edge_size / 2) * (float32_t)(CHUNK_EDGE_LENGTH);
 
                     chunk_t *chunk_ptr = *chunk_pptr;
-                    chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size), &chunk_model);
+                    chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size));
+
+                    switch (get_app_type())
+                    {
+                    case application_type_t::WINDOW_APPLICATION_MODE: {
+                        chunk_ptr->initialize_for_rendering(&chunk_model);
+                    } break;
+                    default: break;
+                    }
 
                     ++i;
                 }
@@ -262,14 +268,14 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
         grid_edge_size = 5;
 
         chunks_to_render_count = 0;
-        chunks_to_update = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * grid_edge_size * grid_edge_size * grid_edge_size);
+        chunks_to_update = (chunk_t * *)allocate_free_list(sizeof(chunk_t *) * grid_edge_size * grid_edge_size * grid_edge_size);
 
         max_chunks = 32;
-        chunks = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * max_chunks);
+        chunks = (chunk_t * *)allocate_free_list(sizeof(chunk_t *) * max_chunks);
         memset(chunks, 0, sizeof(chunk_t *) * max_chunks);
 
         uint32_t i = 0;
-    
+
         for (uint32_t z = 0; z < grid_edge_size; ++z)
         {
             for (uint32_t y = 0; y < grid_edge_size; ++y)
@@ -279,12 +285,20 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
                     chunk_t **chunk_pptr = get_chunk((int32_t)i);
                     *chunk_pptr = (chunk_t *)allocate_free_list(sizeof(chunk_t));
 
-                    vector3_t position = vector3_t(x, y, z) * (float32_t)(CHUNK_EDGE_LENGTH) - vector3_t((float32_t)grid_edge_size / 2) * (float32_t)(CHUNK_EDGE_LENGTH);
+                    vector3_t position = vector3_t(x, y, z) * (float32_t)(CHUNK_EDGE_LENGTH)-vector3_t((float32_t)grid_edge_size / 2) * (float32_t)(CHUNK_EDGE_LENGTH);
 
                     chunk_t *chunk_ptr = *chunk_pptr;
-                    chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size), &chunk_model);
+                    chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(chunk_size));
 
-                    ++i;
+                    switch (get_app_type())
+                    {
+                    case application_type_t::WINDOW_APPLICATION_MODE: {
+                        chunk_ptr->initialize_for_rendering(&chunk_model);
+                    } break;
+                    default: break;
+
+                        ++i;
+                    }
                 }
             }
         }

@@ -11,6 +11,8 @@
 #include "menu.hpp"
 #include <ctime>
 
+#include "deferred_renderer.hpp"
+
 static game_memory_t *g_game_memory;
 static event_dispatcher_t dispatcher;
 
@@ -48,7 +50,7 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
             graphics_api_initialize_ret_t graphics = initialize_graphics_api(create_surface_proc, raw_input);
             initialize_game_3d_graphics(graphics.command_pool, raw_input);
             initialize_game_2d_graphics(graphics.command_pool);
-            initialize_game_ui(graphics.command_pool, g_uniform_pool, get_backbuffer_resolution());
+            initialize_game_ui(graphics.command_pool, g_uniform_pool, backbuffer_resolution());
 
             if (app_mode == application_mode_t::CLIENT_MODE)
             {
@@ -146,7 +148,7 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
             gpu_command_queue_t queue{frame.command_buffer};
             {
                 // Important function: may need to change structure of world API to incorporate networking
-                tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->focus_stack.get_current_focus(), frame.image_index);
+                tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->focus_stack.get_current_focus());
 
                 dbg_handle_input(raw_input);
                 update_game_ui(get_pfx_framebuffer_hdl(), raw_input, memory->focus_stack.get_current_focus());
@@ -159,7 +161,7 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             tick_net(nullptr, dt);
-            tick_gamestate(nullptr, dt, nullptr, memory->app_type, (element_focus_t)0, 0);
+            tick_gamestate(nullptr, dt, nullptr, memory->app_type, (element_focus_t)0);
         } break;
     }
 }

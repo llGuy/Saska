@@ -1,5 +1,6 @@
 #include "graphics.hpp"
 #include "atmosphere.hpp"
+#include "deferred_renderer.hpp"
 
 static constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
 static constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
@@ -328,7 +329,7 @@ static void s_atmosphere_presenter_init()
     {
         render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        resolution_t backbuffer_res = get_backbuffer_resolution();
+        resolution_t backbuffer_res = backbuffer_resolution();
         model_handle_t cube_hdl = g_model_manager->get_handle("model.cube_model"_hash);
         auto *model_ptr = g_model_manager->get(cube_hdl);
         shader_modules_t modules(shader_module_info_t{ "shaders/SPV/render_atmosphere.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },

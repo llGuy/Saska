@@ -2,6 +2,7 @@
 #include "ui.hpp"
 #include "menu.hpp"
 #include "core.hpp"
+#include "deferred_renderer.hpp"
 
 
 // Main menu
@@ -112,7 +113,7 @@ void prompt_user_for_name(void)
                                                      ui_vector2_t(0.3f, 0.3f),
                                                      nullptr,
                                                      0x46464646,
-                                                     get_backbuffer_resolution());
+                                                     backbuffer_resolution());
 
     main_menu.user_name_prompt.input_text.text.initialize(&main_menu.user_name_prompt.background,
                                                           menus_font,
@@ -164,7 +165,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
 
         VkExtent2D swapchain_extent = get_swapchain_extent();
 
-        resolution_t backbuffer_res = get_backbuffer_resolution();
+        resolution_t backbuffer_res = backbuffer_resolution();
     
         float32_t backbuffer_asp = (float32_t)backbuffer_res.width / (float32_t)backbuffer_res.height;
         float32_t swapchain_asp = (float32_t)get_swapchain_extent().width / (float32_t)get_swapchain_extent().height;
@@ -327,7 +328,7 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
             {
                 push_input_text_to_render(&main_menu.user_name_prompt.input_text,
                                           &main_menu.user_name_prompt.background,
-                                          get_backbuffer_resolution(),
+                                          backbuffer_resolution(),
                                           main_menu.user_name_prompt.input_text.text_color,
                                           dt,
                                           1);
@@ -348,7 +349,7 @@ static void initialize_main_menu(void)
                                    ui_vector2_t(0.8f, 0.8f),
                                    nullptr,
                                    0xFF000036,
-                                   get_backbuffer_resolution());
+                                   backbuffer_resolution());
     
     main_menu.main_menu_slider_x.in_animation = 0;
 
@@ -357,7 +358,7 @@ static void initialize_main_menu(void)
                                           ui_vector2_t(1.0f, 1.0f),
                                           &main_menu.main_menu,
                                           0x76767636,
-                                          get_backbuffer_resolution());
+                                          backbuffer_resolution());
 
 
     initialize_menu_windows();
@@ -384,14 +385,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
                                                                    (uint32_t)0x1616161636,
-                                                                   get_backbuffer_resolution());
+                                                                   backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
                                                        (uint32_t)0xFFFFFF36,
-                                                       get_backbuffer_resolution());
+                                                       backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/play_icon.png", &main_menu.widgets[button].image);
 
@@ -406,14 +407,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
                                                                    (uint32_t)0x1616161636,
-                                                                   get_backbuffer_resolution());
+                                                                   backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
                                                        (uint32_t)0xFFFFFF36,
-                                                       get_backbuffer_resolution());
+                                                       backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/host_icon.png", &main_menu.widgets[button].image);
 
@@ -428,14 +429,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
                                                                    (uint32_t)0x1616161636,
-                                                                   get_backbuffer_resolution());
+                                                                   backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
                                                        (uint32_t)0xFFFFFF36,
-                                                       get_backbuffer_resolution());
+                                                       backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/settings_icon.png", &main_menu.widgets[button].image);
 
@@ -450,14 +451,14 @@ static void initialize_main_menu(void)
                                                                    ui_vector2_t(0.25f, 0.25f),
                                                                    &main_menu.main_menu,
                                                                    (uint32_t)0x1616161636,
-                                                                   get_backbuffer_resolution());
+                                                                   backbuffer_resolution());
     
         main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
                                                        ui_vector2_t(0.0f, 0.0f),
                                                        ui_vector2_t(0.8f, 0.8f),
                                                        &main_menu.main_menu_buttons_backgrounds[button],
                                                        (uint32_t)0xFFFFFF36,
-                                                       get_backbuffer_resolution());
+                                                       backbuffer_resolution());
 
         main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/quit_icon.png", &main_menu.widgets[button].image);
 
@@ -490,7 +491,7 @@ static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_li
             push_box_to_render(&main_menu.browse_menu.ip_address_input_box);
 
             textured_render_list->mark_section(font_uniform);
-            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, get_backbuffer_resolution(), 0xFFFFFFC0, dt, 1);
+            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, backbuffer_resolution(), 0xFFFFFFC0, dt, 1);
         } break;
             
         }
@@ -625,7 +626,7 @@ static void initialize_menu_windows(void)
                                                           ui_vector2_t(0.6f, 0.6f),
                                                           &main_menu.main_menu_slider,
                                                           0x16161646,
-                                                          get_backbuffer_resolution());
+                                                          backbuffer_resolution());
 
     main_menu.browse_menu.input_text.text.initialize(&main_menu.browse_menu.ip_address_input_box,
                                                      menus_font,

@@ -600,11 +600,6 @@ void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspe
 void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue);
 void end_shadow_offscreen(gpu_command_queue_t *queue);
 
-resolution_t get_backbuffer_resolution(void);
-void begin_deferred_rendering(uint32_t image_index /* to remove in the future */, gpu_command_queue_t *queue);
-void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue);
-void end_deferred_rendering(gpu_command_queue_t *queue);
-
 void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue);
 
 void make_postfx_data(swapchain_t *swapchain);
@@ -922,6 +917,8 @@ struct lighting_t
 
     sun_t suns[2];
 };
+
+sun_t *get_sun();
 
 
 struct pfx_stage_t

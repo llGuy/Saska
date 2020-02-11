@@ -6,6 +6,7 @@
 #include "game.hpp"
 #include "net.hpp"
 
+#include "deferred_renderer.hpp"
 
 constexpr uint8_t VOXEL_HAS_NOT_BEEN_APPENDED_TO_HISTORY = 255;
 constexpr float32_t MAX_VOXEL_VALUE = 254.0f;
@@ -117,7 +118,7 @@ void initialize_chunks_state(void)
         shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, get_backbuffer_resolution(), blending, &chunk_model,
+                                    VK_CULL_MODE_NONE, layouts, push_k, backbuffer_resolution(), blending, &chunk_model,
                                     true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
         voxel_mesh_pipeline->info = info;
         make_graphics_pipeline(voxel_mesh_pipeline);

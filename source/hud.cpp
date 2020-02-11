@@ -3,6 +3,8 @@
 #include "hud.hpp"
 #include "math.hpp"
 
+#include "deferred_renderer.hpp"
+
 
 struct crosshair_t
 {
@@ -101,7 +103,7 @@ static void initialize_crosshair(void)
     update_uniform_group(&crosshair.png_image_uniform,
                          update_binding_t{ TEXTURE, &crosshair.crosshair_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
 
-    crosshair.crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.02f, -0.02f), ui_vector2_t(0.04f, 0.04f), nullptr, 0xffffffff, get_backbuffer_resolution());
+    crosshair.crosshair_box.initialize(CENTER, 1.0f, ui_vector2_t(-0.02f, -0.02f), ui_vector2_t(0.04f, 0.04f), nullptr, 0xffffffff, backbuffer_resolution());
 }
 
 

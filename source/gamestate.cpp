@@ -6,6 +6,7 @@
 #include "particles_gstate.hpp"
 
 #include "atmosphere.hpp"
+#include "deferred_renderer.hpp"
 
 
 // Global
@@ -14,7 +15,7 @@ static uint64_t current_tick;
 
 
 
-static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue);
+static void render_world(gpu_command_queue_t *queue);
 
 
 
@@ -54,7 +55,7 @@ void fill_game_state_initialize_packet(game_state_initialize_packet_t *packet, p
 }
 
 
-void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_queue_t *queue, enum application_type_t app_type, enum element_focus_t focus, uint32_t image_index)
+void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_queue_t *queue, enum application_type_t app_type, enum element_focus_t focus)
 {
     tick_chunks_state(dt);
     tick_entities_state(game_input, dt, app_type);
@@ -66,7 +67,7 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
     sync_gpu_with_chunks_state(queue);
     sync_gpu_with_particles_state(queue);
     
-    render_world(image_index, 0, queue);
+    render_world(queue);
 
     // Increment current tick
     ++(current_tick);
@@ -80,7 +81,7 @@ uint64_t *get_current_tick(void)
 
 
 
-static void render_world(uint32_t image_index, uint32_t current_frame, gpu_command_queue_t *queue)
+static void render_world(gpu_command_queue_t *queue)
 {
     // Fetch some data needed to render
     auto transforms_ubo_uniform_group = get_camera_transform_uniform_group();
@@ -99,7 +100,7 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
     end_shadow_offscreen(queue);
 
     // Rendering the scene with lighting and everything
-    begin_deferred_rendering(image_index, queue);
+    begin_deferred_rendering(queue);
     {
         render_entities(uniform_groups, queue);
         render_chunks(uniform_groups, queue);
@@ -107,7 +108,7 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
         render_atmosphere(&transforms_ubo_uniform_group, camera->p, queue);
         render_sun(uniform_groups, queue);
     }
-    do_lighting_and_transition_to_alpha_rendering(camera->v_m, queue);
+    do_lighting_and_begin_alpha_rendering(get_sun(), camera->v_m, queue);
     {
         // Render particles
         // TODO: In future, render skybox and sun here

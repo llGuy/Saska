@@ -13,6 +13,8 @@
 #include "gui_box.hpp"
 #include "gui_render_list.hpp"
 
+#include "deferred_renderer.hpp"
+
 
 
 static gui_textured_vertex_render_list_t textured_vertex_render_list = {};
@@ -290,7 +292,7 @@ static void initialize_console(void)
                                      ui_vector2_t(1.0f, 0.9f),
                                      nullptr,
                                      0x16161636,
-                                     get_backbuffer_resolution());
+                                     backbuffer_resolution());
 
     font_t *font_ptr = load_font("liberation_mono.font"_hash, "fonts/liberation_mono.fnt", "");
 
@@ -402,7 +404,7 @@ static void push_console_to_render(raw_input_t *raw_input)
         g_console->cursor_color |= g_console->cursor_fade;
     }
     
-    resolution_t resolution = get_backbuffer_resolution();
+    resolution_t resolution = backbuffer_resolution();
     
     // Push input text
     push_box_to_render(&g_console->back_box);
@@ -416,7 +418,7 @@ static void push_console_to_render(raw_input_t *raw_input)
         /*        uint32_t px_char_width = (box->px_current_size.ix - 2 * text->x_start) / text->chars_per_line;
         // TODO: get rid of magic
         uint32_t px_char_height = (uint32_t)(text->line_height * (float32_t)px_char_width) * magic;
-        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, get_backbuffer_resolution());
+        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console->cursor_position;*/
 
         float32_t magic = 1.4f;
@@ -424,7 +426,7 @@ static void push_console_to_render(raw_input_t *raw_input)
         uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
         px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
         uint32_t px_char_height = (uint32_t)((text->line_height * (float32_t)px_char_width) * magic);
-        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, get_backbuffer_resolution());
+        ivector2_t px_cursor_start = get_px_cursor_position(&g_console->back_box, &g_console->console_input, backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)g_console->cursor_position;
         
         vector2_t px_cursor_size = vector2_t((float32_t)px_char_width, (float32_t)px_char_height);
@@ -503,7 +505,7 @@ void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const res
         uint32_t x_start = (uint32_t)((float32_t)px_char_width * text->x_start);
         px_char_width = (box->px_current_size.ix - 2 * x_start) / text->chars_per_line;
         uint32_t px_char_height = (uint32_t)((text->line_height * (float32_t)px_char_width) * magic);
-        ivector2_t px_cursor_start = get_px_cursor_position(box, &input->text, get_backbuffer_resolution());
+        ivector2_t px_cursor_start = get_px_cursor_position(box, &input->text, backbuffer_resolution());
         ivector2_t px_cursor_position = px_cursor_start + ivector2_t(px_char_width, 0.0f) * (int32_t)input->cursor_position;
         
         vector2_t px_cursor_size = vector2_t((float32_t)px_char_width, (float32_t)px_char_height);

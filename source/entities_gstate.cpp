@@ -6,6 +6,7 @@
 #include "entities_gstate.hpp"
 
 #include "atmosphere.hpp"
+#include "deferred_renderer.hpp"
 
 
 #define MAX_PLAYERS 30
@@ -107,7 +108,7 @@ void initialize_entities_state(void)
         shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-            VK_CULL_MODE_BACK_BIT, layouts, push_k, get_backbuffer_resolution(), blending, &rolling_player_model,
+            VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &rolling_player_model,
             true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
         rolling_player_alpha_ppln_ptr->info = info;
         make_graphics_pipeline(rolling_player_alpha_ppln_ptr);
@@ -133,7 +134,7 @@ void initialize_entities_state(void)
         shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
         dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
         fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-            VK_CULL_MODE_BACK_BIT, layouts, push_k, get_backbuffer_resolution(), blending, &player_model,
+            VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &player_model,
             true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
         player_alpha_ppln_ptr->info = info;
         make_graphics_pipeline(player_alpha_ppln_ptr);
@@ -152,7 +153,7 @@ void initialize_entities_state(void)
 
 void populate_entities_state(game_state_initialize_packet_t *packet, raw_input_t *raw_input)
 {
-    camera_handle_t main_camera = add_camera(raw_input, get_backbuffer_resolution());
+    camera_handle_t main_camera = add_camera(raw_input, backbuffer_resolution());
     bind_camera_to_3d_scene_output(main_camera);
     
     for (uint32_t i = 0; i < packet->player_count; ++i)

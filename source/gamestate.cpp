@@ -5,6 +5,8 @@
 #include "entities_gstate.hpp"
 #include "particles_gstate.hpp"
 
+#include "atmosphere.hpp"
+
 
 // Global
 static bool initialized_world;
@@ -102,7 +104,7 @@ static void render_world(uint32_t image_index, uint32_t current_frame, gpu_comma
         render_entities(uniform_groups, queue);
         render_chunks(uniform_groups, queue);
 
-        render_atmosphere({1, uniform_groups}, camera->p, queue);
+        render_atmosphere(&transforms_ubo_uniform_group, camera->p, queue);
         render_sun(uniform_groups, queue);
     }
     do_lighting_and_transition_to_alpha_rendering(camera->v_m, queue);

@@ -12,6 +12,7 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+
 #include "file_system.hpp"
 
 enum invalid_t {INVALID_HANDLE = -1};
@@ -604,9 +605,6 @@ void begin_deferred_rendering(uint32_t image_index /* to remove in the future */
 void do_lighting_and_transition_to_alpha_rendering(const matrix4_t &view_matrix, gpu_command_queue_t *queue);
 void end_deferred_rendering(gpu_command_queue_t *queue);
 
-void render_atmosphere(const memory_buffer_view_t<uniform_group_t> &sets, const vector3_t &camera_position, gpu_command_queue_t *queue);
-void update_atmosphere(gpu_command_queue_t *queue);
-
 void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue);
 
 void make_postfx_data(swapchain_t *swapchain);
@@ -925,53 +923,6 @@ struct lighting_t
     sun_t suns[2];
 };
 
-struct atmosphere_t
-{
-    static constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
-    static constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
-    static constexpr uint32_t PREFILTERED_ENVIRONMENT_CUBEMAP_W = 128, PREFILTERED_ENVIRONMENT_CUBEMAP_H = 128;
-
-    // gpu_t objects needed to create the atmosphere skybox cubemap
-    render_pass_handle_t make_render_pass;
-    framebuffer_handle_t make_fbo;
-    pipeline_handle_t make_pipeline;
-
-    // Irradiance
-    render_pass_handle_t generate_irradiance_pass;
-    framebuffer_handle_t generate_irradiance_fbo;
-    pipeline_handle_t generate_irradiance_pipeline;
-
-    // Prefiltered environment
-    render_pass_handle_t generate_prefiltered_environment_pass;
-    framebuffer_handle_t generate_prefiltered_environment_fbo;
-    
-    pipeline_handle_t generate_prefiltered_environment_pipeline;
-
-    // pipeline needed to render the cubemap to the screen
-    pipeline_handle_t render_pipeline;
-
-    image_handle_t cubemap_handle;
-    image_handle_t prefiltered_environment_handle;
-    // This is the image that gets attached to the framebuffer
-    image_handle_t prefiltered_environment_interm_handle;
-    image_handle_t integrate_lookup;
-
-    render_pass_handle_t integrate_lookup_pass;
-    framebuffer_handle_t integrate_lookup_fbo;
-    pipeline_handle_t integrate_pipeline_handle;
-    uniform_group_handle_t integrate_lookup_uniform_group;
-    
-    // Descriptor set that will be used to sample (should not be used in world.cpp)
-    uniform_group_handle_t cubemap_uniform_group;
-    uniform_group_handle_t atmosphere_irradiance_uniform_group;
-    uniform_group_handle_t atmosphere_prefiltered_environment_uniform_group;
-
-    model_handle_t cube_handle;
-};
-
-uniform_group_t get_irradiance_group(void);
-uniform_group_t get_prefiltered_group(void);
-uniform_group_t get_integrate_lookup_group(void);
 
 struct pfx_stage_t
 {
@@ -1084,7 +1035,6 @@ struct graphics_t
     
     cameras_t cameras;
     lighting_t lighting;
-    atmosphere_t atmosphere;
 
     particle_rendering_t particle_rendering;
 };

@@ -5,6 +5,8 @@
 #include "game_input.hpp"
 #include "entities_gstate.hpp"
 
+#include "atmosphere.hpp"
+
 
 #define MAX_PLAYERS 30
 #define MAX_BULLETS 100
@@ -381,7 +383,7 @@ void render_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
 
 void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
 {
-    uniform_group_t groups[] = { uniforms[0], uniforms[1], get_irradiance_group(), get_prefiltered_group(), get_integrate_lookup_group() };
+    uniform_group_t groups[] = { uniforms[0], uniforms[1], *atmosphere_irradiance_uniform(), *atmosphere_integrate_lookup_uniform(), *atmosphere_integrate_lookup_uniform() };
     
     auto *player_ppln_alpha_ptr = g_pipeline_manager->get(player_alpha_ppln);
     player_submission_alpha_queue.submit_queued_materials({5, groups}, player_ppln_alpha_ptr, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);

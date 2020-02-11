@@ -5,6 +5,8 @@
 #include "packets.hpp"
 #include "graphics.hpp"
 
+#include "camera_view.hpp"
+
 
 void initialize_entities_state(void);
 void populate_entities_state(struct game_state_initialize_packet_t *packet, struct raw_input_t *raw_input);

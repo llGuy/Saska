@@ -1,28 +1,27 @@
-/*#include "camera_view.hpp"
+#include "deferred_renderer.hpp"
+#include "camera_view.hpp"
+
+#undef near
+#undef far
 
 
-struct camera_transforms_data_t
+struct cameras_t
 {
-    alignas(16) matrix4_t view_matrix;
-    alignas(16) matrix4_t projection_matrix;
-    alignas(16) matrix4_t shadow_projection_matrix;
-    alignas(16) matrix4_t shadow_view_matrix;
-    
-    alignas(16) vector4_t debug_vector;
+    static constexpr uint32_t MAX_CAMERAS = 10;
+    uint32_t camera_count = 0;
+    camera_t cameras[MAX_CAMERAS] = {};
+    camera_handle_t camera_bound_to_3d_output = -1;
+    camera_t spectator_camera = {};
+
+    gpu_buffer_handle_t camera_transforms_ubo;
+    uniform_group_handle_t camera_transforms_uniform_group;
 };
 
 
-// Global
-static uint32_t camera_count = 0;
-static camera_t cameras[10] = {};
-static camera_handle_t camera_bound_to_3d_output = -1;
-static camera_t spectator_camera = {};
-static gpu_buffer_handle_t camera_transforms_ubos;
-static uniform_group_handle_t camera_transforms_uniform_groups;
-static uint32_t ubo_count;
+static cameras_t cameras;
 
 
-void initialize_camera_view(raw_input_t *raw_input)
+static void s_cameras_init()
 {
     uint32_t swapchain_image_count = get_swapchain_image_count();
     uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
@@ -33,100 +32,149 @@ void initialize_camera_view(raw_input_t *raw_input)
         *ubo_layout_ptr = make_uniform_layout(&blueprint);
     }
 
-    camera_transforms_ubos = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash, swapchain_image_count);
-    auto *camera_ubos = g_gpu_buffer_manager->get(camera_transforms_ubos);
+    cameras.camera_transforms_ubo = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash);
+    auto *camera_ubo = g_gpu_buffer_manager->get(cameras.camera_transforms_ubo);
     {
-        uint32_t uniform_buffer_count = swapchain_image_count;
-
-        ubo_count = uniform_buffer_count;
-	
         VkDeviceSize buffer_size = sizeof(camera_transform_uniform_data_t);
 
-        for (uint32_t i = 0; i < uniform_buffer_count; ++i)
-        {
-            init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &camera_ubos[i]);
-        }
+        init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, camera_ubo);
     }
 
-    camera_transforms_uniform_groups = g_uniform_group_manager->add("uniform_group.camera_transforms_ubo"_hash, swapchain_image_count);
-    auto *transforms = g_uniform_group_manager->get(camera_transforms_uniform_groups);
+    cameras.camera_transforms_uniform_group = g_uniform_group_manager->add("uniform_group.camera_transforms_ubo"_hash);
+    auto *transforms = g_uniform_group_manager->get(cameras.camera_transforms_uniform_group);
     {
         uniform_layout_handle_t layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
         auto *layout_ptr = g_uniform_layout_manager->get(layout_hdl);
-        for (uint32_t i = 0; i < swapchain_image_count; ++i)
-        {
-            transforms[i] = make_uniform_group(layout_ptr, g_uniform_pool);
-            update_uniform_group(&transforms[i], update_binding_t{BUFFER, &camera_ubos[i], 0});
-        }
+
+        *transforms = make_uniform_group(layout_ptr, g_uniform_pool);
+        update_uniform_group(transforms, update_binding_t{ BUFFER, camera_ubo, 0 });
     }
 
-    spectator_camera.set_default((float32_t)get_backbuffer_resolution().width, (float32_t)get_backbuffer_resolution().height, 0.0f, 0.0f);
-    
-    spectator_camera.compute_projection();
-    spectator_camera.v_m = matrix4_t(1.0f);
+    cameras.spectator_camera.set_default((float32_t)backbuffer_resolution().width, (float32_t)backbuffer_resolution().height, 0.0f, 0.0f);
+
+    cameras.spectator_camera.compute_projection();
+    cameras.spectator_camera.v_m = matrix4_t(1.0f);
 }
 
-void deinitialize_camera_view(void)
+
+void initialize_cameras()
 {
-    camera_count = 0;
-    camera_bound_to_3d_output = -1;
+    s_cameras_init();
 }
 
-camera_handle_t add_camera(raw_input_t *raw_input, uint32_t window_width, uint32_t window_height)
+
+camera_handle_t add_camera(raw_input_t *input, resolution_t resolution)
 {
-    uint32_t index = camera_count;
-    cameras[index].set_default(window_width, window_height, raw_input->cursor_pos_x, raw_input->cursor_pos_y);
-    ++camera_count;
+    uint32_t index = cameras.camera_count;
+    cameras.cameras[index].set_default((float32_t)(resolution.width), (float32_t)(resolution.height), input->cursor_pos_x, input->cursor_pos_y);
+    ++cameras.camera_count;
     return(index);
 }
 
-void remove_all_cameras(void)
+
+void remove_all_cameras()
 {
-    camera_count = 0;
+    cameras.camera_count = 0;
 }
 
-void sync_gpu_with_camera_view(uint32_t image_index)
-{
-    camera_t *camera = get_camera_bound_to_3d_output();
 
-    update_shadows(150.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u, &g_lighting->shadows.shadow_boxes[0]);
+void initialize_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t nearp, float32_t farp)
+{
+    camera->fov = camera->current_fov = fov;
+    camera->asp = asp;
+    camera->n = nearp;
+    camera->f = farp;
+}
+
+
+static void s_camera_transforms_init(camera_transform_uniform_data_t *data,
+    const matrix4_t &view_matrix,
+    const matrix4_t &projection_matrix,
+    const matrix4_t &shadow_view_matrix,
+    const matrix4_t &shadow_projection_matrix,
+    const vector4_t &debug_vector,
+    const vector4_t &light_direction,
+    const matrix4_t &inverse_view_matrix,
+    const vector4_t &view_direction)
+{
+    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector, light_direction, inverse_view_matrix, view_direction };
+}
+
+
+void update_camera_transforms(gpu_command_queue_t *queue)
+{
+    camera_t *camera = camera_bound_to_3d_output();
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
     camera_transform_uniform_data_t transform_data = {};
     matrix4_t projection_matrix = camera->p_m;
     projection_matrix[1][1] *= -1.0f;
-    make_camera_transform_uniform_data(&transform_data, camera->v_m, projection_matrix, shadow_data.light_view_matrix, shadow_data.projection_matrix, vector4_t(1.0f, 0.0f, 0.0f, 1.0f));
-    
-    gpu_buffer_t &current_ubo = *g_gpu_buffer_manager->get(camera_transforms_ubos + image_index);
 
-    auto map = current_ubo.construct_map();
-    map.begin();
-    map.fill(memory_byte_buffer_t{sizeof(camera_transform_uniform_data_t), &transform_data});
-    map.end();
-    }
+    s_camera_transforms_init(&transform_data,
+        camera->v_m,
+        projection_matrix,
+        shadow_data.light_view_matrix,
+        shadow_data.projection_matrix,
+        vector4_t(1.0f, 0.0f, 0.0f, 1.0f),
+        vector4_t(glm::normalize(-get_sun()->ws_position), 1.0),
+        glm::inverse(camera->v_m), // TODO: Get rid of glm::inverse call
+        vector4_t(camera->d, 1.0));
+
+    gpu_buffer_t ubo = camera_transforms();
+
+    update_gpu_buffer(&ubo, &transform_data, sizeof(camera_transform_uniform_data_t), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
+}
+
+
+void deinitialize_cameras()
+{
+    cameras.camera_count = 0;
+    cameras.camera_bound_to_3d_output = -1;
+}
+
 
 camera_t *get_camera(camera_handle_t handle)
 {
-    return(&cameras[handle]);
+    return &cameras.cameras[handle];
 }
 
-camera_t *get_camera_bound_to_3d_output(void)
+
+camera_t *camera_bound_to_3d_output()
 {
-    switch (camera_bound_to_3d_output)
+    switch (cameras.camera_bound_to_3d_output)
     {
-    case -1: return &spectator_camera;
-    default: return &cameras[camera_bound_to_3d_output];
+    case -1: return &cameras.spectator_camera;
+    default: return &cameras.cameras[cameras.camera_bound_to_3d_output];
     }
 }
 
-void bind_camera_to_3d_scene_output(camera_handle_t handle)
+
+void bind_camera_to_3d_output(camera_handle_t handle)
 {
-    camera_bound_to_3d_output = handle;
+    cameras.camera_bound_to_3d_output = handle;
 }
 
-memory_buffer_view_t<uniform_group_t> get_camera_transform_uniform_groups(void)
+
+gpu_buffer_t camera_transforms()
 {
-    return {ubo_count, g_uniform_group_manager->get(camera_transforms_uniform_groups)};
+    return *g_gpu_buffer_manager->get(cameras.camera_transforms_ubo);
 }
-*/
+
+
+uniform_group_t camera_transforms_uniform()
+{
+    return *g_uniform_group_manager->get(cameras.camera_transforms_uniform_group);
+}
+
+
+bool is_in_spectator_mode(void)
+{
+    return !cameras.camera_count;
+}
+
+
+void update_spectator_camera(const matrix4_t &view_matrix)
+{
+    cameras.spectator_camera.v_m = view_matrix;
+}

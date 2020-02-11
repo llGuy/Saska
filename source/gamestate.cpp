@@ -62,7 +62,8 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
     tick_particles_state(dt);
 
     // GPU operations are separate from ticking
-    update_3d_output_camera_transforms(queue);
+    update_lighting();
+    update_camera_transforms(queue);
     sync_gpu_with_entities_state(queue);
     sync_gpu_with_chunks_state(queue);
     sync_gpu_with_particles_state(queue);
@@ -84,12 +85,12 @@ uint64_t *get_current_tick(void)
 static void render_world(gpu_command_queue_t *queue)
 {
     // Fetch some data needed to render
-    auto transforms_ubo_uniform_group = get_camera_transform_uniform_group();
+    auto transforms_ubo_uniform_group = camera_transforms_uniform();
     shadow_display_t shadow_display_data = get_shadow_display();
     
     uniform_group_t uniform_groups[2] = {transforms_ubo_uniform_group, shadow_display_data.texture};
 
-    camera_t *camera = get_camera_bound_to_3d_output();
+    camera_t *camera = camera_bound_to_3d_output();
 
     // Rendering to the shadow map
     begin_shadow_offscreen(lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, queue);

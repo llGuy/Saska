@@ -5,6 +5,8 @@
 #include "entity.hpp"
 #include "graphics.hpp"
 
+#include "camera_view.hpp"
+
 
 struct hitbox_t
 {

@@ -154,7 +154,7 @@ void initialize_entities_state(void)
 void populate_entities_state(game_state_initialize_packet_t *packet, raw_input_t *raw_input)
 {
     camera_handle_t main_camera = add_camera(raw_input, backbuffer_resolution());
-    bind_camera_to_3d_scene_output(main_camera);
+    bind_camera_to_3d_output(main_camera);
     
     for (uint32_t i = 0; i < packet->player_count; ++i)
     {
@@ -194,7 +194,7 @@ void deinitialize_entities_state(void)
     bullet_count = 0;
     removed_bullets_stack_head = 0;
 
-    bind_camera_to_3d_scene_output(-1);
+    bind_camera_to_3d_output(-1);
     remove_all_cameras();
 }
 

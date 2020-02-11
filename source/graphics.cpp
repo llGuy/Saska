@@ -17,6 +17,11 @@
 
 #include "game.hpp"
 
+#include "camera_view.hpp"
+
+#undef far
+#undef near
+
 // TODO: Move this to Vulkan module
 gpu_buffer_manager_t *g_gpu_buffer_manager;
 image_manager_t *g_image_manager;
@@ -32,7 +37,6 @@ uniform_pool_t *g_uniform_pool;
 static gpu_material_submission_queue_manager_t *g_material_queue_manager;
 
 // Stuff more linked to rendering the scene: cameras, lighting, ...
-static cameras_t *g_cameras;
 static lighting_t *g_lighting;
 
 // Post processing pipeline stuff:
@@ -665,152 +669,6 @@ void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
 }
 
 
-
-static void make_camera_data(VkDescriptorPool *pool)
-{
-    uint32_t swapchain_image_count = get_swapchain_image_count();
-    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
-    auto *ubo_layout_ptr = g_uniform_layout_manager->get(ubo_layout_hdl);
-    {
-        uniform_layout_info_t blueprint = {};
-        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        *ubo_layout_ptr = make_uniform_layout(&blueprint);
-    }
-
-    g_cameras->camera_transforms_ubo = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash);
-    auto *camera_ubo = g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
-    {
-        VkDeviceSize buffer_size = sizeof(camera_transform_uniform_data_t);
-
-        init_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, camera_ubo);
-    }
-
-    g_cameras->camera_transforms_uniform_group = g_uniform_group_manager->add("uniform_group.camera_transforms_ubo"_hash);
-    auto *transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_group);
-    {
-        uniform_layout_handle_t layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
-        auto *layout_ptr = g_uniform_layout_manager->get(layout_hdl);
-
-        *transforms = make_uniform_group(layout_ptr, pool);
-        update_uniform_group(transforms, update_binding_t{ BUFFER, camera_ubo, 0 });
-    }
-
-    g_cameras->spectator_camera.set_default((float32_t)backbuffer_resolution().width, (float32_t)backbuffer_resolution().height, 0.0f, 0.0f);
-    
-    g_cameras->spectator_camera.compute_projection();
-    g_cameras->spectator_camera.v_m = matrix4_t(1.0f);
-}
-
-void remove_all_cameras(void)
-{
-    g_cameras->camera_count = 0;
-}
-
-bool is_in_spectator_mode(void)
-{
-    return(!g_cameras->camera_count);
-}
-
-void update_spectator_camera(const matrix4_t &view_matrix)
-{
-    g_cameras->spectator_camera.v_m = view_matrix;
-}
-
-void make_camera_transform_uniform_data(camera_transform_uniform_data_t *data,
-                                        const matrix4_t &view_matrix,
-                                        const matrix4_t &projection_matrix,
-                                        const matrix4_t &shadow_view_matrix,
-                                        const matrix4_t &shadow_projection_matrix,
-                                        const vector4_t &debug_vector,
-                                        const vector4_t &light_direction,
-                                        const matrix4_t &inverse_view_matrix,
-                                        const vector4_t &view_direction)
-{
-    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector, light_direction, inverse_view_matrix, view_direction };
-}
-
-void clean_up_cameras(void)
-{
-    g_cameras->camera_count = 0;
-    g_cameras->camera_bound_to_3d_output = -1;
-}
-
-void update_3d_output_camera_transforms(gpu_command_queue_t *queue)
-{
-    camera_t *camera = get_camera_bound_to_3d_output();
-
-    update_shadows(150.0f, 1.0f, camera->fov, camera->asp, camera->p, camera->d, camera->u, &g_lighting->shadows.shadow_boxes[0]);
-
-    shadow_matrices_t shadow_data = get_shadow_matrices();
-
-    camera_transform_uniform_data_t transform_data = {};
-    matrix4_t projection_matrix = camera->p_m;
-    projection_matrix[1][1] *= -1.0f;
-    make_camera_transform_uniform_data(&transform_data,
-                                       camera->v_m,
-                                       projection_matrix,
-                                       shadow_data.light_view_matrix,
-                                       shadow_data.projection_matrix,
-                                       vector4_t(1.0f, 0.0f, 0.0f, 1.0f),
-                                       vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 1.0),
-                                       glm::inverse(camera->v_m), // TODO: Get rid of glm::inverse call
-                                       vector4_t(camera->d, 1.0));
-    
-    gpu_buffer_t &ubo = *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
-
-    update_gpu_buffer(&ubo, &transform_data, sizeof(camera_transform_uniform_data_t), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);
-}
-
-
-camera_handle_t add_camera(raw_input_t *raw_input, resolution_t resolution)
-{
-    uint32_t index = g_cameras->camera_count;
-    g_cameras->cameras[index].set_default((float32_t)(resolution.width), (float32_t)(resolution.height), raw_input->cursor_pos_x, raw_input->cursor_pos_y);
-    ++g_cameras->camera_count;
-    return(index);
-}
-
-#undef near
-#undef far
-
-void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far)
-{
-    camera->fov = camera->current_fov = fov;
-    camera->asp = asp;
-    camera->n = near;
-    camera->f = far;
-}
-
-camera_t *get_camera(camera_handle_t handle)
-{
-    return(&g_cameras->cameras[handle]);
-}
-
-camera_t *get_camera_bound_to_3d_output(void)
-{
-    switch (g_cameras->camera_bound_to_3d_output)
-    {
-    case -1: return &g_cameras->spectator_camera;
-    default: return &g_cameras->cameras[g_cameras->camera_bound_to_3d_output];
-    }
-}
-
-void bind_camera_to_3d_scene_output(camera_handle_t handle)
-{
-    g_cameras->camera_bound_to_3d_output = handle;
-}
-
-gpu_buffer_t get_camera_transform_ubo(void)
-{
-    return *g_gpu_buffer_manager->get(g_cameras->camera_transforms_ubo);
-}
-
-uniform_group_t get_camera_transform_uniform_group(void)
-{
-    return *g_uniform_group_manager->get(g_cameras->camera_transforms_uniform_group);
-}
-
-
 sun_t *get_sun()
 {
     return &g_lighting->suns[0];
@@ -959,7 +817,7 @@ static void calculate_ws_frustum_corners(vector4_t *corners, vector4_t *shadow_c
 {
     shadow_matrices_t shadow_data = get_shadow_matrices();
 
-    camera_t *camera = get_camera_bound_to_3d_output();
+    camera_t *camera = camera_bound_to_3d_output();
     
     corners[0] = shadow_data.inverse_light_view * camera->captured_frustum_corners[0];
     corners[1] = shadow_data.inverse_light_view * camera->captured_frustum_corners[1];
@@ -982,7 +840,7 @@ static void calculate_ws_frustum_corners(vector4_t *corners, vector4_t *shadow_c
 
 static void render_debug_frustum(gpu_command_queue_t *queue, VkDescriptorSet ubo, graphics_pipeline_t *graphics_pipeline)
 {
-    if (get_camera_bound_to_3d_output()->captured)
+    if (camera_bound_to_3d_output()->captured)
     {
         command_buffer_bind_pipeline(&graphics_pipeline->pipeline, &queue->q);
 
@@ -1011,7 +869,6 @@ static void render_debug_frustum(gpu_command_queue_t *queue, VkDescriptorSet ubo
 
 void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline)
 {
-    auto *camera_transforms = g_uniform_group_manager->get(g_cameras->camera_transforms_ubo);
     render_debug_frustum(queue, *group, graphics_pipeline);
 }
 
@@ -1144,6 +1001,14 @@ void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspe
                                                                      0.0f, 0.0f, 0.0f, 1.0f));
 }
 
+
+void update_lighting()
+{
+    camera_t *main_camera = camera_bound_to_3d_output();
+    update_shadows(150.0f, 1.0f, main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &g_lighting->shadows.shadow_boxes[0]);
+}
+
+
 void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
 {
     auto *sun_pipeline = g_pipeline_manager->get(g_lighting->sun_ppln);
@@ -1172,7 +1037,7 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
 
     matrix4_t model_matrix_transpose_rotation = push_k.model_matrix;
 
-    camera_t *camera = get_camera_bound_to_3d_output();
+    camera_t *camera = camera_bound_to_3d_output();
 
     matrix4_t view_matrix_no_translation = camera->v_m;
     matrix3_t rotation_part = matrix3_t(view_matrix_no_translation);
@@ -1352,7 +1217,7 @@ void dbg_handle_input(raw_input_t *raw_input)
             vector4_t final_color = invoke_glsl_code(&g_postfx->dbg_capture,
                                                      vector2_t((g_postfx->dbg_capture.backbuffer_cursor_position.x + 1.0f) / 2.0f,
                                                                (g_postfx->dbg_capture.backbuffer_cursor_position.y + 1.0f) / 2.0f),
-                                                     get_camera_bound_to_3d_output());
+                                                     camera_bound_to_3d_output());
             uint32_t final_color_ui = vec4_color_to_ui32b(final_color);
             
             
@@ -1906,7 +1771,8 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *ra
 
     initialize_deferred_renderer();
 
-    make_camera_data(g_uniform_pool);
+    initialize_cameras();
+
     make_shadow_data();
     make_cube_model(pool);
 
@@ -2743,7 +2609,7 @@ void particle_spawner_t::push_for_render(uint32_t index)
     particle_t *particle = &particles[index];
     rendered_particle_data_t *rendered_particle = &rendered_particles[rendered_particles_stack_head];
     float32_t *distance_to_camera = &distances_from_camera[rendered_particles_stack_head++];
-    camera_t *bound_camera = get_camera_bound_to_3d_output();
+    camera_t *bound_camera = camera_bound_to_3d_output();
     vector3_t direction_to_camera = bound_camera->p - particle->ws_position;
     *distance_to_camera = glm::dot(direction_to_camera, direction_to_camera);
     rendered_particle->ws_position = particle->ws_position;
@@ -2884,7 +2750,6 @@ void initialize_graphics_translation_unit(game_memory_t *memory)
     g_material_queue_manager = &memory->graphics_state.material_queue_manager;
 
     // Stuff more linked to rendering the scene: cameras, lighting, ...
-    g_cameras = &memory->graphics_state.cameras;
     g_lighting = &memory->graphics_state.lighting;
     g_postfx = &memory->graphics_state.postfx;
 

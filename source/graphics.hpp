@@ -498,57 +498,6 @@ enum gpu_buffer_usage_t { VERTEX_BUFFER = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 
 void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool);
 
-// Rendering pipeline
-struct camera_t
-{
-    bool captured = 0;
-    
-    vector2_t mp;
-    vector3_t p; // position
-    vector3_t d; // direction
-    vector3_t u; // up
-
-    float32_t fov, current_fov;
-    float32_t asp; // aspect ratio
-    float32_t n, f; // near and far planes
-    
-    vector4_t captured_frustum_corners[8] {};
-    vector4_t captured_shadow_corners[8] {};
-    
-    matrix4_t p_m;
-    matrix4_t v_m;
-    
-    void set_default(float32_t w, float32_t h, float32_t m_x, float32_t m_y)
-    {
-	mp = vector2_t(m_x, m_y);
-	p = vector3_t(50.0f, 10.0f, 280.0f);
-	d = vector3_t(+1, 0.0f, +1);
-	u = vector3_t(0, 1, 0);
-
-	fov = current_fov = glm::radians(80.0f);
-	asp = w / h;
-	n = 1.0f;
-	f = 10000000.0f;
-    }
-    
-    void compute_projection(void)
-    {
-	p_m = glm::perspective(current_fov, asp, n, f);
-    } 
-};
-
-using camera_handle_t = int32_t;
-enum { CAMERA_BOUND_TO_3D_OUTPUT = -1 };
-
-camera_handle_t add_camera(raw_input_t *raw_input, resolution_t resolution);
-void remove_all_cameras(void);
-void make_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t near, float32_t far);
-camera_t *get_camera(camera_handle_t handle);
-camera_t *get_camera_bound_to_3d_output(void);
-void bind_camera_to_3d_scene_output(camera_handle_t handle);
-gpu_buffer_t get_camera_transform_ubo(void);
-uniform_group_t get_camera_transform_uniform_group(void);
-
 struct camera_transform_uniform_data_t
 {
     alignas(16) matrix4_t view_matrix;
@@ -561,9 +510,6 @@ struct camera_transform_uniform_data_t
     matrix4_t inverse_view_matrix;
     vector4_t view_direction;
 };
-
-void update_3d_output_camera_transforms(gpu_command_queue_t *queue);
-void clean_up_cameras(void);
 
 struct shadow_matrices_t
 {
@@ -834,21 +780,6 @@ struct gpu_material_submission_queue_manager_t // maybe in the future this will 
 };
 
 
-struct cameras_t
-{
-    static constexpr uint32_t MAX_CAMERAS = 10;
-    uint32_t camera_count = 0;
-    camera_t cameras[MAX_CAMERAS] = {};
-    camera_handle_t camera_bound_to_3d_output = -1;
-    camera_t spectator_camera = {};
-
-    gpu_buffer_handle_t camera_transforms_ubo;
-    uniform_group_handle_t camera_transforms_uniform_group;
-};
-
-bool is_in_spectator_mode(void);
-void update_spectator_camera(const matrix4_t &view_matrix);
-
 struct deferred_rendering_t
 {
     resolution_t backbuffer_res = {1280, 720};
@@ -918,6 +849,8 @@ struct lighting_t
     sun_t suns[2];
 };
 
+
+void update_lighting();
 sun_t *get_sun();
 
 
@@ -1030,7 +963,7 @@ struct graphics_t
     deferred_rendering_t deferred_rendering;
     post_processing_t postfx;
     
-    cameras_t cameras;
+
     lighting_t lighting;
 
     particle_rendering_t particle_rendering;

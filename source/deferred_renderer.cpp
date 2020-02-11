@@ -1,4 +1,5 @@
 #include "atmosphere.hpp"
+#include "camera_view.hpp"
 #include "deferred_renderer.hpp"
 
 
@@ -259,7 +260,7 @@ void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_mat
     deferred_push_k.view_matrix = view_matrix;
     deferred_push_k.inverse_view_matrix = glm::inverse(view_matrix);
 
-    camera_t *camera = get_camera_bound_to_3d_output();
+    camera_t *camera = camera_bound_to_3d_output();
 
     deferred_push_k.ws_view_direction = vector4_t(camera->d, 1.0f);
 

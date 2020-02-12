@@ -511,48 +511,11 @@ struct camera_transform_uniform_data_t
     vector4_t view_direction;
 };
 
-struct shadow_matrices_t
-{
-    matrix4_t projection_matrix;
-    matrix4_t light_view_matrix;
-    matrix4_t inverse_light_view;
-};
-
-struct shadow_debug_t
-{
-    // For debugging the frustum
-    union
-    {
-        struct {float32_t x_min, x_max, y_min, y_max, z_min, z_max;};
-        float32_t corner_values[6];
-    };
-
-    vector4_t frustum_corners[8];
-};
-
-struct shadow_display_t
-{
-    uint32_t shadowmap_w, shadowmap_h;
-    uniform_group_t texture;
-};
-
-void render_3d_frustum_debug_information(uniform_group_t *group, gpu_command_queue_t *queue, uint32_t image_index, graphics_pipeline_t *graphics_pipeline /* Llne renderer */);
-shadow_matrices_t get_shadow_matrices(void);
-shadow_debug_t get_shadow_debug(void);
-shadow_display_t get_shadow_display(void);
-
-void update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, struct shadow_box_t *shadow_box);
-
-void begin_shadow_offscreen(uint32_t shadow_map_width, uint32_t shadow_map_height, gpu_command_queue_t *queue);
-void end_shadow_offscreen(gpu_command_queue_t *queue);
-
-void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue);
 
 void make_postfx_data(swapchain_t *swapchain);
 framebuffer_handle_t get_pfx_framebuffer_hdl(void);
 
 void dbg_handle_input(raw_input_t *raw_input);
-void dbg_render_shadow_map_quad(gpu_command_queue_t *queue);
 
 void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix);
 
@@ -780,79 +743,6 @@ struct gpu_material_submission_queue_manager_t // maybe in the future this will 
 };
 
 
-struct deferred_rendering_t
-{
-    resolution_t backbuffer_res = {1280, 720};
-    
-    render_pass_handle_t dfr_render_pass;
-    // at the moment, dfr_framebuffer points to multiple because it is the bound to swapchain - in future, change
-    framebuffer_handle_t dfr_framebuffer;
-    pipeline_handle_t dfr_lighting_ppln;
-    uniform_group_handle_t dfr_subpass_group;
-    uniform_group_handle_t dfr_g_buffer_group;
-};
-
-#define SHADOW_BOX_COUNT 4
-
-struct shadow_box_t
-{
-    matrix4_t light_view_matrix;
-    matrix4_t projection_matrix;
-    matrix4_t inverse_light_view;
-
-    vector4_t ls_corners[8];
-    union
-    {
-        struct {float32_t x_min, x_max, y_min, y_max, z_min, z_max;};
-        float32_t corner_values[6];
-    };
-};
-
-struct sun_t
-{
-    vector3_t ws_position;
-    vector3_t color;
-
-    vector2_t ss_light_pos;
-
-    // Shadow data for each sun
-    image_handle_t shadow_map;
-    uniform_group_handle_t uniform;
-
-    shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
-};
-
-struct lighting_t
-{
-    // Later, need to add PSSM
-    struct shadows_t
-    {
-        static constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
-        static constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
-        
-        framebuffer_handle_t fbo;
-        render_pass_handle_t pass;
-        image_handle_t map;
-        uniform_group_handle_t set;
-        uniform_layout_handle_t ulayout;
-
-        graphics_pipeline_t dbg_shadow_tx_quad_ppln;
-        pipeline_handle_t debug_frustum_ppln;
-    
-        shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
-    } shadows;
-
-    pipeline_handle_t sun_ppln;
-    image2d_t sun_texture;
-    uniform_group_t sun_group;
-
-    sun_t suns[2];
-};
-
-
-void update_lighting();
-sun_t *get_sun();
-
 
 struct pfx_stage_t
 {
@@ -960,11 +850,8 @@ struct graphics_t
 
     gpu_material_submission_queue_manager_t material_queue_manager;
     
-    deferred_rendering_t deferred_rendering;
     post_processing_t postfx;
     
-
-    lighting_t lighting;
 
     particle_rendering_t particle_rendering;
 };

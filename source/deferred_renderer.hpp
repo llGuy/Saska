@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lighting.hpp"
 #include "graphics.hpp"
 
 void initialize_deferred_renderer();

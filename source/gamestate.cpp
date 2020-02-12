@@ -93,7 +93,7 @@ static void render_world(gpu_command_queue_t *queue)
     camera_t *camera = camera_bound_to_3d_output();
 
     // Rendering to the shadow map
-    begin_shadow_offscreen(lighting_t::shadows_t::SHADOWMAP_W, lighting_t::shadows_t::SHADOWMAP_H, queue);
+    begin_shadow_offscreen(queue);
     {
         render_entities_to_shadowmap(&transforms_ubo_uniform_group, queue);
         render_chunks_to_shadowmap(&transforms_ubo_uniform_group, queue);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics.hpp"
+#include "lighting.hpp"
 
 void initialize_atmosphere(sun_t *light_pos, uint32_t light_count);
 void update_atmosphere(sun_t *light_pos, uint32_t light_count, gpu_command_queue_t *queue);

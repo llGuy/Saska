@@ -81,70 +81,78 @@ static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk);
 // "Public" definitions
 void initialize_chunks_state(void)
 {
-    voxel_color_beacon_ulayout = g_uniform_layout_manager->add("uniform_layout.voxel_color_beacon"_hash);
-    auto *layout_ptr = g_uniform_layout_manager->get(voxel_color_beacon_ulayout);
-    
-    uniform_layout_info_t voxel_color_beacon_ulayout_blueprint = {};
-    voxel_color_beacon_ulayout_blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);
-    *layout_ptr = make_uniform_layout(&voxel_color_beacon_ulayout_blueprint);
-
-    voxel_color_beacon_uniform = make_uniform_group(layout_ptr, g_uniform_pool);
-
-    chunk_model.attribute_count = 1;
-    chunk_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
-    chunk_model.binding_count = 1;
-    chunk_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
-
-    model_binding_t *binding = chunk_model.bindings;
-    binding->begin_attributes_creation(chunk_model.attributes_buffer);
-
-    // There is only one attribute for now
-    binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
-
-    binding->end_attributes_creation();
-
-    chunk_mesh_pipeline = g_pipeline_manager->add("pipeline.chunk_mesh"_hash);
-    graphics_pipeline_t *voxel_mesh_pipeline = g_pipeline_manager->get(chunk_mesh_pipeline);
+    switch(get_app_type())
     {
-        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/voxel_mesh.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                                 shader_module_info_t{"shaders/SPV/voxel_mesh.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT},
-                                 shader_module_info_t{"shaders/SPV/voxel_mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
-                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
-                                         voxel_color_beacon_ulayout);
-        shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT };
-        shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
-        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, backbuffer_resolution(), blending, &chunk_model,
-                                    true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
-        voxel_mesh_pipeline->info = info;
-        make_graphics_pipeline(voxel_mesh_pipeline);
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        voxel_color_beacon_ulayout = g_uniform_layout_manager->add("uniform_layout.voxel_color_beacon"_hash);
+        auto *layout_ptr = g_uniform_layout_manager->get(voxel_color_beacon_ulayout);
+
+        uniform_layout_info_t voxel_color_beacon_ulayout_blueprint = {};
+        voxel_color_beacon_ulayout_blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_GEOMETRY_BIT);
+        *layout_ptr = make_uniform_layout(&voxel_color_beacon_ulayout_blueprint);
+
+        voxel_color_beacon_uniform = make_uniform_group(layout_ptr, g_uniform_pool);
+
+        chunk_model.attribute_count = 1;
+        chunk_model.attributes_buffer = (VkVertexInputAttributeDescription *)allocate_free_list(sizeof(VkVertexInputAttributeDescription));
+        chunk_model.binding_count = 1;
+        chunk_model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t));
+
+        model_binding_t *binding = chunk_model.bindings;
+        binding->begin_attributes_creation(chunk_model.attributes_buffer);
+
+        // There is only one attribute for now
+        binding->push_attribute(0, VK_FORMAT_R32G32B32_SFLOAT, sizeof(vector3_t));
+
+        binding->end_attributes_creation();
+
+        chunk_mesh_pipeline = g_pipeline_manager->add("pipeline.chunk_mesh"_hash);
+        graphics_pipeline_t *voxel_mesh_pipeline = g_pipeline_manager->get(chunk_mesh_pipeline);
+        {
+            graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+            render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+            shader_modules_t modules(shader_module_info_t{ "shaders/SPV/voxel_mesh.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
+                shader_module_info_t{ "shaders/SPV/voxel_mesh.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
+                shader_module_info_t{ "shaders/SPV/voxel_mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
+            shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                voxel_color_beacon_ulayout);
+            shader_pk_data_t push_k = { 160, 0, VK_SHADER_STAGE_VERTEX_BIT };
+            shader_blend_states_t blending(blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING, blend_type_t::NO_BLENDING);
+            dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+            fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                VK_CULL_MODE_NONE, layouts, push_k, backbuffer_resolution(), blending, &chunk_model,
+                true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 0, info);
+            voxel_mesh_pipeline->info = info;
+            make_graphics_pipeline(voxel_mesh_pipeline);
+        }
+
+        chunk_mesh_shadow_pipeline = g_pipeline_manager->add("pipeline.chunk_mesh_shadow"_hash);
+        graphics_pipeline_t *voxel_mesh_shadow_pipeline = g_pipeline_manager->get(chunk_mesh_shadow_pipeline);
+        {
+            graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+            auto shadow_display = get_shadow_display();
+            VkExtent2D shadow_extent{ shadow_display.shadowmap_w, shadow_display.shadowmap_h };
+            render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
+            shader_modules_t modules(shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
+                shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
+            shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
+            shader_pk_data_t push_k = { 240, 0, VK_SHADER_STAGE_VERTEX_BIT };
+            shader_blend_states_t blending(blend_type_t::NO_BLENDING);
+            dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
+            fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &chunk_model,
+                true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
+            voxel_mesh_shadow_pipeline->info = info;
+            make_graphics_pipeline(voxel_mesh_shadow_pipeline);
+        }
+
+        gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
+    } break;
+
+    default: break;
     }
 
-    chunk_mesh_shadow_pipeline = g_pipeline_manager->add("pipeline.chunk_mesh_shadow"_hash);
-    graphics_pipeline_t *voxel_mesh_shadow_pipeline = g_pipeline_manager->get(chunk_mesh_shadow_pipeline);
-    {
-        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        auto shadow_display = get_shadow_display();
-        VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
-        render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{"shaders/SPV/voxel_mesh_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT},
-                                 shader_module_info_t{"shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT});
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
-        shader_pk_data_t push_k = {240, 0, VK_SHADER_STAGE_VERTEX_BIT};
-        shader_blend_states_t blending(blend_type_t::NO_BLENDING);
-        dynamic_states_t dynamic(VK_DYNAMIC_STATE_DEPTH_BIAS, VK_DYNAMIC_STATE_VIEWPORT);
-        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-                                    VK_CULL_MODE_NONE, layouts, push_k, shadow_extent, blending, &chunk_model,
-                                    true, 0.0f, dynamic, g_render_pass_manager->get(shadow_render_pass), 0, info);
-        voxel_mesh_shadow_pipeline->info = info;
-        make_graphics_pipeline(voxel_mesh_shadow_pipeline);
-    }
-
-    gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 
     chunk_size = 9.0f;
     grid_edge_size = 5;
@@ -190,9 +198,9 @@ void initialize_chunks_state(void)
     construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
 
 
-    voxel_beacons.default_voxel_color.color = vector4_t(0);
-    voxel_beacons.default_voxel_color.metalness = 0.3f;
-    voxel_beacons.default_voxel_color.roughness = 0.5f;
+    voxel_beacons.default_voxel_color.color = vector4_t(52.0f, 150.0f, 2.0f, 255.0f) / 255.0f;
+    voxel_beacons.default_voxel_color.metalness = 0.1f;
+    voxel_beacons.default_voxel_color.roughness = 0.9f;
 
     voxel_beacons.beacon_count = 0;
 

@@ -1,3 +1,4 @@
+#include "game.hpp"
 #include "graphics.hpp"
 #include "particles_gstate.hpp"
 
@@ -18,30 +19,41 @@ static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt);
 // Public definitions
 void initialize_particles_state(void)
 {
-    uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
-    
-    pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv", single_tx_layout_hdl);
-    explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f, "textures/particles/explosion.png", 4, 4, 14);
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
 
+        pipeline_handle_t explosion_shader_handle = initialize_particle_rendering_shader("pipeline.explosion_particle_effect"_hash, "shaders/SPV/explosion_particle.vert.spv", "shaders/SPV/explosion_particle.frag.spv", single_tx_layout_hdl);
+        explosion_particle_spawner = initialize_particle_spawner(50, &particle_effect_explosion, explosion_shader_handle, 0.9f, "textures/particles/explosion.png", 4, 4, 14);
+        fire_particle_spawner = initialize_particle_spawner(50, &particle_effect_fire, explosion_shader_handle, 2.0f, "textures/particles/smoke.png", 6, 5, 30);
+    } break;
 
-    
-    fire_particle_spawner = initialize_particle_spawner(50, &particle_effect_fire, explosion_shader_handle, 2.0f, "textures/particles/smoke.png", 6, 5, 30);
+    default: break;
+    }
 }
 
 
 void tick_particles_state(float32_t dt)
 {
-    explosion_particle_spawner.clear();
+    switch (get_app_type())
     {
-        (*explosion_particle_spawner.update)(&explosion_particle_spawner, dt);
-    }
-    explosion_particle_spawner.sort_for_render();
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        explosion_particle_spawner.clear();
+        {
+            (*explosion_particle_spawner.update)(&explosion_particle_spawner, dt);
+        }
+        explosion_particle_spawner.sort_for_render();
 
-    fire_particle_spawner.clear();
-    {
-        (*fire_particle_spawner.update)(&fire_particle_spawner, dt);
+        fire_particle_spawner.clear();
+        {
+            (*fire_particle_spawner.update)(&fire_particle_spawner, dt);
+        }
+        fire_particle_spawner.sort_for_render();
+    } break;
+
+    default: break;
     }
-    fire_particle_spawner.sort_for_render();
 }
 
 

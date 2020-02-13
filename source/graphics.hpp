@@ -37,7 +37,14 @@ template <typename T, uint32_t Max = 40> struct object_manager_t
 
     inline int32_t get_handle(const constant_string_t &name)
     {
-        return(*object_name_map.get(name.hash));
+        if (auto *p = object_name_map.get(name.hash); p)
+        {
+            return *p;
+        }
+        else
+        {
+            return -1;
+        }
     }
     
     inline T *get(int32_t handle)

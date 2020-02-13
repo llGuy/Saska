@@ -56,98 +56,105 @@ static player_handle_t add_player(const player_t &player);
 // "Public" definitions
 void initialize_entities_state(void)
 {
-    VkCommandPool *cmdpool = get_global_command_pool();
-    
-    rolling_player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
-    rolling_player_model = make_mesh_attribute_and_binding_information(&rolling_player_mesh);
-    rolling_player_model.index_data = rolling_player_mesh.index_data;
-    
-    player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
-    player_model = make_mesh_attribute_and_binding_information(&player_mesh);
-    player_model.index_data = player_mesh.index_data;
-    player_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
-    player_mesh_cycles = load_animations("models/spaceman.animations_custom");
-
-    uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager->add("uniform_layout.joint_ubo"_hash);
-    uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager->get(animation_layout_hdl);
-    uniform_layout_info_t animation_ubo_info = {};
-    animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-    *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
-    
-    player_ppln = g_pipeline_manager->add("pipeline.model"_hash);
-    auto *player_ppln_ptr = g_pipeline_manager->get(player_ppln);
-    initialize_3d_animated_shader(player_ppln_ptr, "shaders/SPV/lp_notex_animated", &player_model, animation_layout_hdl);
-    
-    rolling_player_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
-    auto *rolling_player_ppln_ptr = g_pipeline_manager->get(rolling_player_ppln);
-    initialize_3d_unanimated_shader(rolling_player_ppln_ptr, "shaders/SPV/lp_notex_model", &rolling_player_model);
-
-    player_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
-    auto *player_shadow_ppln_ptr = g_pipeline_manager->get(player_shadow_ppln);
-    initialize_3d_animated_shadow_shader(player_shadow_ppln_ptr, "shaders/SPV/lp_notex_model_shadow", &player_model, animation_layout_hdl);
-
-    rolling_player_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
-    auto *rolling_player_shadow_ppln_ptr = g_pipeline_manager->get(rolling_player_shadow_ppln);
-    initialize_3d_unanimated_shadow_shader(rolling_player_shadow_ppln_ptr, "shaders/SPV/model_shadow", &rolling_player_model);
-
-    rolling_player_alpha_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
-    auto *rolling_player_alpha_ppln_ptr = g_pipeline_manager->get(rolling_player_alpha_ppln);
+    switch (get_app_type())
     {
-        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{ "shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
-            shader_module_info_t{ "shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
-            shader_module_info_t{ "shaders/SPV/lp_notex_model_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
-            // Lighting stuff
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
-        shader_pk_data_t push_k = { 160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
-        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-            VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &rolling_player_model,
-            true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
-        rolling_player_alpha_ppln_ptr->info = info;
-        make_graphics_pipeline(rolling_player_alpha_ppln_ptr);
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        VkCommandPool *cmdpool = get_global_command_pool();
+
+        rolling_player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/icosphere.mesh_custom", cmdpool);
+        rolling_player_model = make_mesh_attribute_and_binding_information(&rolling_player_mesh);
+        rolling_player_model.index_data = rolling_player_mesh.index_data;
+
+        player_mesh = load_mesh(mesh_file_format_t::CUSTOM_MESH, "models/spaceman.mesh_custom", cmdpool);
+        player_model = make_mesh_attribute_and_binding_information(&player_mesh);
+        player_model.index_data = player_mesh.index_data;
+        player_mesh_skeleton = load_skeleton("models/spaceman_walk.skeleton_custom");
+        player_mesh_cycles = load_animations("models/spaceman.animations_custom");
+
+        uniform_layout_handle_t animation_layout_hdl = g_uniform_layout_manager->add("uniform_layout.joint_ubo"_hash);
+        uniform_layout_t *animation_layout_ptr = g_uniform_layout_manager->get(animation_layout_hdl);
+        uniform_layout_info_t animation_ubo_info = {};
+        animation_ubo_info.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+        *animation_layout_ptr = make_uniform_layout(&animation_ubo_info);
+
+        player_ppln = g_pipeline_manager->add("pipeline.model"_hash);
+        auto *player_ppln_ptr = g_pipeline_manager->get(player_ppln);
+        initialize_3d_animated_shader(player_ppln_ptr, "shaders/SPV/lp_notex_animated", &player_model, animation_layout_hdl);
+
+        rolling_player_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
+        auto *rolling_player_ppln_ptr = g_pipeline_manager->get(rolling_player_ppln);
+        initialize_3d_unanimated_shader(rolling_player_ppln_ptr, "shaders/SPV/lp_notex_model", &rolling_player_model);
+
+        player_shadow_ppln = g_pipeline_manager->add("pipeline.model_shadow"_hash);
+        auto *player_shadow_ppln_ptr = g_pipeline_manager->get(player_shadow_ppln);
+        initialize_3d_animated_shadow_shader(player_shadow_ppln_ptr, "shaders/SPV/lp_notex_model_shadow", &player_model, animation_layout_hdl);
+
+        rolling_player_shadow_ppln = g_pipeline_manager->add("pipeline.ball_shadow"_hash);
+        auto *rolling_player_shadow_ppln_ptr = g_pipeline_manager->get(rolling_player_shadow_ppln);
+        initialize_3d_unanimated_shadow_shader(rolling_player_shadow_ppln_ptr, "shaders/SPV/model_shadow", &rolling_player_model);
+
+        rolling_player_alpha_ppln = g_pipeline_manager->add("pipeline.ball"_hash);
+        auto *rolling_player_alpha_ppln_ptr = g_pipeline_manager->get(rolling_player_alpha_ppln);
+        {
+            graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+            render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+            shader_modules_t modules(shader_module_info_t{ "shaders/SPV/lp_notex_model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
+                shader_module_info_t{ "shaders/SPV/lp_notex_model.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
+                shader_module_info_t{ "shaders/SPV/lp_notex_model_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
+            shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                // Lighting stuff
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
+            shader_pk_data_t push_k = { 160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+            shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
+            dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+            fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &rolling_player_model,
+                true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
+            rolling_player_alpha_ppln_ptr->info = info;
+            make_graphics_pipeline(rolling_player_alpha_ppln_ptr);
+        }
+
+        player_alpha_ppln = g_pipeline_manager->add("pipeline.model_alpha"_hash);
+        // Uses forward-rendering style for lighting
+        auto *player_alpha_ppln_ptr = g_pipeline_manager->get(player_alpha_ppln);
+        {
+            graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
+            render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
+            shader_modules_t modules(shader_module_info_t{ "shaders/SPV/lp_notex_animated_alpha.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
+                shader_module_info_t{ "shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
+                shader_module_info_t{ "shaders/SPV/lp_notex_animated_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
+            shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                // Lighting stuff
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                animation_layout_hdl);
+            shader_pk_data_t push_k = { 160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
+            shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
+            dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
+            fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
+                VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &player_model,
+                true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
+            player_alpha_ppln_ptr->info = info;
+            make_graphics_pipeline(player_alpha_ppln_ptr);
+        }
+
+        rolling_player_submission_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+        player_submission_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+
+        rolling_player_submission_alpha_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+        player_submission_alpha_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+
+        rolling_player_submission_shadow_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+        player_submission_shadow_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
+    } break;
+
+    default: break;
     }
-
-    player_alpha_ppln = g_pipeline_manager->add("pipeline.model_alpha"_hash);
-    // Uses forward-rendering style for lighting
-    auto *player_alpha_ppln_ptr = g_pipeline_manager->get(player_alpha_ppln);
-    {
-        graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
-        render_pass_handle_t dfr_render_pass = g_render_pass_manager->get_handle("render_pass.deferred_render_pass"_hash);
-        shader_modules_t modules(shader_module_info_t{ "shaders/SPV/lp_notex_animated_alpha.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
-            shader_module_info_t{ "shaders/SPV/lp_notex_animated.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
-            shader_module_info_t{ "shaders/SPV/lp_notex_animated_alpha.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
-        shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
-            // Lighting stuff
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            animation_layout_hdl);
-        shader_pk_data_t push_k = { 160, 0, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT };
-        shader_blend_states_t blending(blend_type_t::ONE_MINUS_SRC_ALPHA);
-        dynamic_states_t dynamic(VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH);
-        fill_graphics_pipeline_info(modules, VK_FALSE, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, VK_POLYGON_MODE_FILL,
-            VK_CULL_MODE_BACK_BIT, layouts, push_k, backbuffer_resolution(), blending, &player_model,
-            true, 0.0f, dynamic, g_render_pass_manager->get(dfr_render_pass), 2, info);
-        player_alpha_ppln_ptr->info = info;
-        make_graphics_pipeline(player_alpha_ppln_ptr);
-    }
-
-    rolling_player_submission_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-    player_submission_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-
-    rolling_player_submission_alpha_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-    player_submission_alpha_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-
-    rolling_player_submission_shadow_queue = make_gpu_material_submission_queue(10, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
-    player_submission_shadow_queue = make_gpu_material_submission_queue(20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdpool);
 }
 
 

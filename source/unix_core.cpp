@@ -1,4 +1,4 @@
-#if defined (UNIX_BUILD)
+/*#if defined (UNIX_BUILD)
 
 // For the moment, unix build is just for server stuff
 
@@ -108,4 +108,4 @@ void disable_cursor_display(void)
 }
 
 
-#endif
+#endif*/

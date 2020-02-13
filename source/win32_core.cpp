@@ -1,4 +1,4 @@
-#if defined (WIN32_BUILD)
+//#if defined (WIN32_BUILD)
 
 #define NOMINMAX
 
@@ -132,6 +132,8 @@ void send_vibration_to_gamepad(void)
 // Win32 entry point
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
+    printf("Starting session\n");
+
 	if (strlen(cmdline) == 0)
 	{
 		cmdline = "cl";
@@ -931,4 +933,4 @@ void disable_cursor_display(void)
     ShowCursor(0);
 }
 
-#endif
+//#endif

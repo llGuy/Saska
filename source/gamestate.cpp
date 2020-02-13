@@ -62,13 +62,22 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
     tick_particles_state(dt);
 
     // GPU operations are separate from ticking
-    update_lighting();
-    update_camera_transforms(queue);
-    sync_gpu_with_entities_state(queue);
-    sync_gpu_with_chunks_state(queue);
-    sync_gpu_with_particles_state(queue);
-    
-    render_world(queue);
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        update_lighting();
+        update_camera_transforms(queue);
+
+        sync_gpu_with_entities_state(queue);
+        sync_gpu_with_chunks_state(queue);
+        sync_gpu_with_particles_state(queue);
+
+
+        render_world(queue);
+    } break;
+
+    default: break;
+    }
 
     // Increment current tick
     ++(current_tick);

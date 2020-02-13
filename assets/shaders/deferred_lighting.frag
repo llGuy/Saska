@@ -127,14 +127,15 @@ vec4 pbr(void)
     float substitute_shadow_factor = 1.0;
     if (n_dot_l < 0.6) substitute_shadow_factor = shadow_factor;
     
-    vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * irradiance * n_dot_l;
+    vec3 result = (substitute_shadow_factor * kd * vec3(albedo) / PI + substitute_shadow_factor * spec) * radiance * n_dot_l;
 
     vec2 env_brdf = texture(integrate_lookup, vec2(max(dot(ws_normal.xyz, push_k.ws_view_direction.xyz), 0.0), roughness)).rg;
     vec3 specular = prefiltered_color * (F * env_brdf.x + env_brdf.y);
     
     vec3 diffuse = irradiance * albedo.rgb;
     vec3 ambient = (kd * diffuse + specular);
-    
+
+    //vec3 ambient = vec3(0.03) * vec3(albedo);
 
     result += ambient;
     
@@ -144,7 +145,7 @@ vec4 pbr(void)
     result = pow(result, vec3(1.0 / 2.2));
 
     result = clamp(result, ambient, vec3(1.0));
-    
+
     return vec4(result * shadow_factor, 1.0);
 }
 

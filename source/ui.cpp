@@ -220,6 +220,7 @@ static void output_to_input_section(const char *string, uint32_t color)
 static void output_to_output_section(const char *string, uint32_t color)
 {
     g_console->console_output.draw_string(string, color);
+    output_to_debug_console(string);
 }
 
 void console_clear(void)
@@ -230,6 +231,7 @@ void console_clear(void)
 void console_out_i(const char *string)
 {
     g_console->console_output.draw_string(string, g_console->output_color);
+    output_to_debug_console(string);
 }
 
 void console_out_i(int32_t i)
@@ -238,6 +240,7 @@ void console_out_i(int32_t i)
     sprintf_s(buffer, "%i\0", i);
     
     g_console->console_output.draw_string(buffer, g_console->output_color);
+    output_to_debug_console(buffer);
 }
 
 void console_out_i(float32_t f)
@@ -246,6 +249,7 @@ void console_out_i(float32_t f)
     sprintf_s(buffer, "%f\0", f);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
+    output_to_debug_console(buffer);
 }
 
 void console_out_i(const vector2_t &v2)
@@ -254,6 +258,7 @@ void console_out_i(const vector2_t &v2)
     sprintf_s(buffer, "%f %f\0", v2.x, v2.y);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
+    output_to_debug_console(buffer);
 }
 
 void console_out_i(const vector3_t &v3)
@@ -262,11 +267,13 @@ void console_out_i(const vector3_t &v3)
     sprintf_s(buffer, "%f %f %f\0", v3.x, v3.y, v3.z);
 
     g_console->console_output.draw_string(buffer, g_console->output_color);
+    output_to_debug_console(buffer);
 }
 
 void console_out_color_override(const char *string, uint32_t color)
 {
     g_console->console_output.draw_string(string, color);
+    output_to_debug_console(string);
 }
 
 static void output_char_to_output_section(char character)

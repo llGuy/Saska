@@ -154,6 +154,8 @@ template <typename T, uint32_t Bucket_Count, uint32_t Bucket_Size, uint32_t Buck
 
     T *get(uint32_t hash)
     {
+        static int32_t invalid = -1;
+
 	uint32_t start_index = hash % Bucket_Count;
 	uint32_t limit = start_index + ITEM_POUR_LIMIT;
 	for (bucket_t *bucket = &buckets[start_index]; bucket->bucket_usage_count != Bucket_Size && start_index < limit; ++bucket)
@@ -168,7 +170,7 @@ template <typename T, uint32_t Bucket_Count, uint32_t Bucket_Size, uint32_t Buck
 	    }
 	}
 	//OUTPUT_DEBUG_LOG("%s -> %s\n", map_debug_name, "failed to find value requested from hash");
-	assert(false);
+	//assert(false);
 	return(nullptr);
     }
 };

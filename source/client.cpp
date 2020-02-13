@@ -461,6 +461,8 @@ void join_server(const char *ip_address, const char *client_name)
     header.total_packet_size = sizeof_packet_header();
     header.total_packet_size += (uint32_t)strlen(packet.client_name) + 1;
 
+    header.client_id = 0xFFFF;
+
     header.current_packet_id = get_user_client()->current_packet_count = 0;
 
     serializer_t serializer = {};
@@ -492,6 +494,8 @@ static void join_loop_back(uint32_t client_index /* Will be the client name */)
     header.total_packet_size = sizeof_packet_header();
     header.total_packet_size += (uint32_t)strlen(packet.client_name) + 1;
     header.current_packet_id = get_user_client()->current_packet_count = 0;
+
+    header.client_id = 0xFFFF;
 
 
     serializer_t serializer = {};

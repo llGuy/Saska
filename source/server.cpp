@@ -118,7 +118,18 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                 in_serializer.deserialize_packet_header(&header);
 
                 uint64_t client_current_packet_count = header.current_packet_id;
-                client_t *client = get_client(header.client_id);
+                uint64_t actual_current_packet_count = 0;
+
+                client_t *client = 0;
+                if (header.client_id == 0xFFFF)
+                {
+                    output_to_debug_console("New client\n");
+                }
+                else
+                {
+                    client = get_client(header.client_id);
+                    actual_current_packet_count = client->current_packet_count;
+                }
 
                 //if (client_current_packet_count >= client->last_received_correction_packet_count)
                 {
@@ -126,9 +137,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                     {
                         if (header.packet_mode == packet_mode_t::PM_CLIENT_MODE)
                         {
-                            client_t *client = get_client(header.client_id);
-
-                            if (client_current_packet_count >= client->current_packet_count)
+                            if (client_current_packet_count >= actual_current_packet_count || header.client_id  == 0xFFFF)
                             {
                                 switch (header.packet_type)
                                 {
@@ -139,11 +148,12 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     in_serializer.deserialize_client_join_packet(&client_join);
 
                                     // Add client
-                                    client_t *client = get_client(client_count);
+                                    client = get_client(client_count);
                                     client->name = client_join.client_name;
                                     client->client_id = client_count;
                                     client->network_address = received_address;
                                     client->current_packet_count = 0;
+
 
                                     // Add the player to the actual entities list (spawn the player in the world)
                                     client->player_handle = spawn_player(client->name, player_color_t::GRAY, client->client_id);
@@ -296,7 +306,6 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                 } break;
                                 }
 
-                                client_t *client = get_client(header.client_id);
                                 client->current_packet_count = client_current_packet_count;
                             }
                             else

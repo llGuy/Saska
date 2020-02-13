@@ -1,5 +1,8 @@
 #include "math.hpp"
 #include "chunk.hpp"
+
+#include "game.hpp"
+
 #include "chunks_gstate.hpp"
 
 // For updating mesh
@@ -186,15 +189,20 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
 
 
 
-    gpu_mesh.indexed_data.index_count = vertex_count;
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        gpu_mesh.indexed_data.index_count = vertex_count;
 
-    update_gpu_buffer(&chunk_mesh_gpu_buffer,
-                      mesh_vertices,
-                      sizeof(vector3_t) * vertex_count,
-                      0,
-                      VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
-                      VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
-                      &queue->q);
+        update_gpu_buffer(&chunk_mesh_gpu_buffer,
+            mesh_vertices,
+            sizeof(vector3_t) * vertex_count,
+            0,
+            VK_PIPELINE_STAGE_VERTEX_INPUT_BIT,
+            VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT,
+            &queue->q);
+    } break;
+    }
 
     should_do_gpu_sync = 0;
 }

@@ -76,7 +76,9 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
         render_world(queue);
     } break;
 
-    default: break;
+    default: {
+        sync_gpu_with_chunks_state(queue);
+    } break;
     }
 
     // Increment current tick

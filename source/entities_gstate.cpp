@@ -478,7 +478,13 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     //    player_create_info.camera_info.camera_index = main_camera;
     player_create_info.camera_info.is_third_person = 1;
     player_create_info.camera_info.distance_from_player = 15.0f;
-    player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    } break;
+    default: break;
+    }
     player_create_info.animation_info.skeleton = &player_mesh_skeleton;
     player_create_info.animation_info.cycles = &player_mesh_cycles;
     player_create_info.shoot_info.cool_off = 0.0f;

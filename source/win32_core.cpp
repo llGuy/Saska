@@ -132,11 +132,9 @@ void send_vibration_to_gamepad(void)
 // Win32 entry point
 int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
 {
-    printf("Starting session\n");
-
 	if (strlen(cmdline) == 0)
 	{
-		cmdline = "cl";
+		cmdline = "sv";
 	}
 
     // Initialize game's dynamic memory
@@ -206,6 +204,8 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     create_surface_proc_win32.window_ptr = &window;
 
     load_game(&game);
+
+    output_to_debug_console("Starting session\n");
     initialize_game(&game, &raw_input, &create_surface_proc_win32, app_mode, app_type);
     
     running = 1;
@@ -326,6 +326,8 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
             raw_input.dt = (float32_t)dt;
         }
     }
+
+    output_to_debug_console("Stopping session\n");
 
     //ReleaseCapture();
     ShowWindow(window, SW_HIDE);
@@ -844,6 +846,7 @@ static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type,
     if (strcmp("sv", parameter) == 0)
     {
         *app_type = application_type_t::WINDOW_APPLICATION_MODE;
+        //*app_type = application_type_t::CONSOLE_APPLICATION_MODE;
         *app_mode = application_mode_t::SERVER_MODE;
 
         *application_name = "Server";

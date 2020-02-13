@@ -1,4 +1,5 @@
 #include "math.hpp"
+#include "game.hpp"
 #include "player.hpp"
 #include "graphics.hpp"
 
@@ -43,8 +44,14 @@ void player_t::initialize(player_create_info_t *info)
     
     physics.enabled = info->physics_info.enabled;
     animation.cycles = info->animation_info.cycles;
-    animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
-    switch_to_cycle(&animation.animation_instance, player_t::animated_state_t::IDLE, 1);
+
+    switch (get_app_type())
+    {
+    case application_type_t::WINDOW_APPLICATION_MODE: {
+        animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
+        switch_to_cycle(&animation.animation_instance, player_t::animated_state_t::IDLE, 1);
+    } break;
+    }
     
     rendering.push_k.color = colors[info->color];
     rendering.push_k.roughness = 0.0f;

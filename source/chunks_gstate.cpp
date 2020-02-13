@@ -146,13 +146,12 @@ void initialize_chunks_state(void)
             voxel_mesh_shadow_pipeline->info = info;
             make_graphics_pipeline(voxel_mesh_shadow_pipeline);
         }
-
-        gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
     } break;
 
     default: break;
     }
 
+    gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 
     chunk_size = 9.0f;
     grid_edge_size = 5;
@@ -534,14 +533,13 @@ void sync_gpu_with_chunks_state(gpu_command_queue_t *queue)
     }
 
     
-
     // Update vertex buffers of chunks that just had their vertices updated
     if (flags.should_update_chunk_meshes_from_now)
     {
         for (uint32_t i = 0; i < to_sync_count; ++i)
         {
             chunk_t *chunk = *get_chunk((int32_t)chunks_to_gpu_sync[i]);
-
+            
             chunk->update_mesh(60, queue);
         }
 

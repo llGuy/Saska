@@ -148,9 +148,14 @@ static void s_shadow_boxes_init()
     light_pos_normalized.x *= -1.0f;
     light_pos_normalized.z *= -1.0f;
 
-    shadow_boxes[0].light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    matrix4_t light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
+    matrix4_t inverse_light_view_matrix = glm::inverse(light_view_matrix);
     
-    shadow_boxes[0].inverse_light_view = glm::inverse(shadow_boxes[0].light_view_matrix);
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
+    {
+        shadow_boxes[i].light_view_matrix = light_view_matrix;
+        shadow_boxes[i].inverse_light_view = inverse_light_view_matrix;
+    }
 }
 
 void initialize_lighting()
@@ -161,7 +166,7 @@ void initialize_lighting()
 }
 
 // TODO: Make this update PSSM shadows
-static void s_update_shadows(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, shadow_box_t *shadow_box)
+static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, shadow_box_t *shadow_box)
 {
     float32_t far_width, near_width, far_height, near_height;
     
@@ -239,7 +244,14 @@ static void s_update_shadows(float32_t far, float32_t near, float32_t fov, float
 void update_lighting()
 {
     camera_t *main_camera = camera_bound_to_3d_output();
-    s_update_shadows(150.0f, 1.0f, main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &shadow_boxes[0]);
+
+    float32_t nears[] = {1.0f, 20.0f, 50.0f, 150.0f };
+    float32_t fars[] = { 20.0f, 50.0f, 150.0f, 500.0f };
+    
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
+    {
+        s_update_shadow_box(fars[i], nears[i], main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &shadow_boxes[i]);
+    }
 }
 
 void begin_shadow_offscreen(gpu_command_queue_t *queue)
@@ -328,8 +340,13 @@ shadow_display_t get_shadow_display()
 shadow_matrices_t get_shadow_matrices()
 {
     shadow_matrices_t ret;
-    ret.projection_matrix = shadow_boxes[0].projection_matrix;
-    ret.light_view_matrix = shadow_boxes[0].light_view_matrix;
-    ret.inverse_light_view = shadow_boxes[0].inverse_light_view;
+
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
+    {
+        ret.boxes[i].projection_matrix = shadow_boxes[i].projection_matrix;
+        ret.boxes[i].light_view_matrix = shadow_boxes[i].light_view_matrix;
+        ret.boxes[i].inverse_light_view = shadow_boxes[i].inverse_light_view;
+    }
+    
     return(ret);
 }

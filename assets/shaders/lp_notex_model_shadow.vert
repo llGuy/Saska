@@ -10,8 +10,8 @@ layout(set = 0, binding = 0) uniform Uniform_Buffer_Object
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_view;
-    mat4 shadow_proj;
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
     
     vec4 debug_vector;
 } ubo;
@@ -53,5 +53,5 @@ main(void)
 	
     vec3 ws_position = vec3(push_k.model * ( accumulated_local));
     
-    gl_Position = ubo.shadow_proj * ubo.shadow_view * vec4(ws_position, 1.0);
+    gl_Position = ubo.shadow_proj[0] * ubo.shadow_view[0] * vec4(ws_position, 1.0);
 }

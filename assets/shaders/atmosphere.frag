@@ -163,8 +163,6 @@ void main(void)
 {
     AIR_COLOR = push_k.light_color[0].rgb;
     vec4 color_light0 = calculate_atmosphere_color_for_sun(push_k.ws_light_direction[0]);
-    AIR_COLOR = push_k.light_color[1].rgb;
-    vec4 color_light1 = calculate_atmosphere_color_for_sun(push_k.ws_light_direction[1]);
     
-    out_color = (color_light0 + color_light1) / 2.0;
+    out_color = (color_light0);
 }

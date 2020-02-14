@@ -9,8 +9,8 @@ layout(set = 0, binding = 0) uniform camera_information_t
     mat4 proj;
 
     // Will have to be an array
-    mat4 shadow_view;
-    mat4 shadow_proj;
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
 
     vec4 debug_vector;
 } camera_transforms;
@@ -32,7 +32,7 @@ void main(void)
         {
             for (int v = 0; v < 3; ++v)
             {
-                gl_Position = camera_transforms.shadow_proj * camera_transforms.shadow_view * push_k.model * vec4(gl_in[v].gl_Position.xyz, 1.0);
+                gl_Position = camera_transforms.shadow_proj[0] * camera_transforms.shadow_view[0] * push_k.model * vec4(gl_in[v].gl_Position.xyz, 1.0);
 
                 EmitVertex();
             }

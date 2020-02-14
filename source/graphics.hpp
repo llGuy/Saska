@@ -509,8 +509,9 @@ struct camera_transform_uniform_data_t
 {
     alignas(16) matrix4_t view_matrix;
     alignas(16) matrix4_t projection_matrix;
-    alignas(16) matrix4_t shadow_projection_matrix;
-    alignas(16) matrix4_t shadow_view_matrix;
+    
+    alignas(16) matrix4_t shadow_view_matrix[4];
+    alignas(16) matrix4_t shadow_projection_matrix[4];
     
     vector4_t debug_vector;
     vector4_t light_direction;

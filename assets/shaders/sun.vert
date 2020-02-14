@@ -10,8 +10,8 @@ layout(set = 0, binding = 0) uniform camera_information_t
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_view;
-    mat4 shadow_proj;
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
 
     vec4 debug_vector;
 } camera_transforms;

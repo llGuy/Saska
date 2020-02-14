@@ -38,11 +38,16 @@ struct sun_t
     shadow_box_t shadow_boxes[4];
 };
 
+#define SHADOW_BOX_COUNT 4
+
 struct shadow_matrices_t
 {
-    matrix4_t projection_matrix;
-    matrix4_t light_view_matrix;
-    matrix4_t inverse_light_view;
+    struct
+    {
+        matrix4_t projection_matrix;
+        matrix4_t light_view_matrix;
+        matrix4_t inverse_light_view;
+    } boxes[SHADOW_BOX_COUNT] = {};
 };
 
 void initialize_lighting();

@@ -8,8 +8,8 @@ layout(binding = 0) uniform Uniform_Buffer_Object
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_view;
-    mat4 shadow_proj;
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
     
     vec4 debug_vector;
 } ubo;
@@ -22,5 +22,5 @@ layout(push_constant) uniform Push_Constants
 void
 main(void)
 {
-    gl_Position = ubo.shadow_proj * ubo.shadow_view * push_k.model * vec4(vertex_position, 1.0);
+    gl_Position = ubo.shadow_proj[0] * ubo.shadow_view[0] * push_k.model * vec4(vertex_position, 1.0);
 }

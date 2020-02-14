@@ -87,20 +87,6 @@ void initialize_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t
 }
 
 
-static void s_camera_transforms_init(camera_transform_uniform_data_t *data,
-    const matrix4_t &view_matrix,
-    const matrix4_t &projection_matrix,
-    const matrix4_t &shadow_view_matrix,
-    const matrix4_t &shadow_projection_matrix,
-    const vector4_t &debug_vector,
-    const vector4_t &light_direction,
-    const matrix4_t &inverse_view_matrix,
-    const vector4_t &view_direction)
-{
-    *data = { view_matrix, projection_matrix, shadow_view_matrix, shadow_projection_matrix, debug_vector, light_direction, inverse_view_matrix, view_direction };
-}
-
-
 void update_camera_transforms(gpu_command_queue_t *queue)
 {
     camera_t *camera = camera_bound_to_3d_output();
@@ -111,16 +97,21 @@ void update_camera_transforms(gpu_command_queue_t *queue)
     matrix4_t projection_matrix = camera->p_m;
     projection_matrix[1][1] *= -1.0f;
 
-    s_camera_transforms_init(&transform_data,
-        camera->v_m,
-        projection_matrix,
-        shadow_data.light_view_matrix,
-        shadow_data.projection_matrix,
-        vector4_t(1.0f, 0.0f, 0.0f, 1.0f),
-        vector4_t(glm::normalize(-get_sun()->ws_position), 1.0),
-        glm::inverse(camera->v_m), // TODO: Get rid of glm::inverse call
-        vector4_t(camera->d, 1.0));
+    
+    transform_data.view_matrix = camera->v_m;
+    transform_data.projection_matrix = projection_matrix;
 
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
+    {
+        transform_data.shadow_projection_matrix[i] = shadow_data.boxes[i].projection_matrix;
+        transform_data.shadow_view_matrix[i] = shadow_data.boxes[i].light_view_matrix;
+    }
+    
+    transform_data.debug_vector = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);
+    transform_data.light_direction = vector4_t(glm::normalize(-get_sun()->ws_position), 1.0f);
+    transform_data.inverse_view_matrix = glm::inverse(camera->v_m);
+    transform_data.view_direction = vector4_t(camera->d, 1.0f);
+    
     gpu_buffer_t ubo = camera_transforms();
 
     update_gpu_buffer(&ubo, &transform_data, sizeof(camera_transform_uniform_data_t), 0, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT, &queue->q);

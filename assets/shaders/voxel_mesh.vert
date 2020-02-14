@@ -17,8 +17,8 @@ layout(set = 0, binding = 0) uniform camera_information_t
     mat4 view;
     mat4 proj;
 
-    mat4 shadow_view;
-    mat4 shadow_proj;
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
 
     vec4 debug_vector;
 } camera_transforms;
@@ -41,6 +41,6 @@ void main(void)
     vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
 
-    vs_out.shadow_coord = camera_transforms.shadow_proj * camera_transforms.shadow_view * ws_position;
+    vs_out.shadow_coord = camera_transforms.shadow_proj[0] * camera_transforms.shadow_view[0] * ws_position;
     vs_out.vs_position = vs_position.xyz;
 }

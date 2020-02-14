@@ -619,9 +619,7 @@ static void dispatch_snapshot_to_clients(void)
                     if (actual_voxel_value != voxel_ptr->value)
                     {
                         force_client_to_do_voxel_correction = 1;
-
                         client->needs_to_do_voxel_correction = 1;
-                        client->needs_to_acknowledge_prediction_error = 1;
                         
                         out_serializer.serialize_uint8(client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].x);
                         out_serializer.serialize_uint8(client->previous_received_voxel_modifications[chunk].modified_voxels[voxel].y);
@@ -643,7 +641,6 @@ static void dispatch_snapshot_to_clients(void)
             {
                 player_snapshot_packet->need_to_do_voxel_correction = 1;
                 player_snapshot_packet->need_to_do_correction = 1;
-                client->needs_to_acknowledge_prediction_error = 1;
             }
             
             for (uint32_t i = 0; i < client_count; ++i)
@@ -675,7 +672,7 @@ static void dispatch_snapshot_to_clients(void)
                             output_to_debug_console("dir-");
                         }
                         
-                        if (position_is_different || direction_is_different)
+                        if (position_is_different || direction_is_different || player_snapshot_packet->need_to_do_voxel_correction)
                         {
                             output_to_debug_console("correction ########################################################\n");
                             
@@ -706,6 +703,8 @@ static void dispatch_snapshot_to_clients(void)
                     else
                     {
                         player_snapshot_packet->is_to_ignore = 1;
+
+                        output_to_debug_console("needs to do correction\n");
                     }
                 }
 

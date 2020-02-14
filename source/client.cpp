@@ -326,8 +326,6 @@ void tick_client(raw_input_t *raw_input, float32_t dt)
                                         }
                                     }
 
-                                    console_out("Did voxel correction\n");
-                                    
                                     *get_current_tick() = previous_tick;
                                     client->just_received_correction = 1;
                                 }

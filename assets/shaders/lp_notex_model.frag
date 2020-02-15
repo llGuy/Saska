@@ -6,7 +6,7 @@ layout(location = 0) in GS_DATA
     vec3 final;
     vec3 position;
     vec3 normal;
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
     
 } fs_in;
 
@@ -25,7 +25,22 @@ layout(push_constant) uniform Push_Constants
     float metalness;
 } push_k;
 
-layout(set = 1, binding = 0) uniform sampler2D shadow_map;
+layout(set = 0, binding = 0) uniform camera_information_t
+{
+    mat4 view;
+    mat4 proj;
+
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
+
+    vec4 debug_vector;
+    vec4 light_direction;
+    mat4 inverse_view_matrix;
+    vec4 view_direction;
+    vec4 far_planes;
+} camera_transforms;
+
+layout(set = 1, binding = 0) uniform sampler2DArray shadow_map;
 
 void
 set_roughness(float v)
@@ -39,12 +54,12 @@ set_metalness(float v)
     out_position.a = v;
 }
 
-const float MAP_SIZE = 4000.0;
+const float MAP_SIZE = 2000.0;
 const float PCF_COUNT = 1.0;
 const float TRANSITION_DISTANCE = 20.0;
 const float SHADOW_DISTANCE = 1000.0;
 
-float get_shadow_light_factor(float dist, in vec4 shadow_coord)
+float get_shadow_light_factor(float dist, in vec4 shadow_coord, int layer)
 {
     float total_texels = (PCF_COUNT * 2.0f + 1.0f) * (PCF_COUNT * 2.0f + 1.0f);
 
@@ -66,7 +81,7 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
 	{
 	    for (int y = int(-PCF_COUNT); y <= int(PCF_COUNT); ++y)
 	    {
-		float object_nearest_light = texture(shadow_map, shadow_space_pos.xy + vec2(x, y) * texel_size).x;
+		float object_nearest_light = texture(shadow_map, vec3(shadow_space_pos.xy + vec2(x, y) * texel_size, layer)).x;
 		if (shadow_space_pos.z - 0.005 > object_nearest_light)
 		{
 		    total += 0.8f;
@@ -83,7 +98,18 @@ float get_shadow_light_factor(float dist, in vec4 shadow_coord)
 
 void main(void)
 {
-    float shadow_factor = get_shadow_light_factor(length(fs_in.position), fs_in.shadow_coord);
+    float shadow_factor = 1;
+
+    float pixel_to_cam_length = length(fs_in.position);
+
+    for (int i = 0; i < 4; ++i)
+    {
+        if (pixel_to_cam_length < camera_transforms.far_planes[i])
+        {
+            shadow_factor = get_shadow_light_factor(pixel_to_cam_length, fs_in.shadow_coord[i], i);
+            break;
+        }
+    }
 
     out_final = vec4(0.0, 0.0, 0.0, 1.0);
     out_albedo = vec4(fs_in.final, shadow_factor);

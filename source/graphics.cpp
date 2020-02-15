@@ -262,6 +262,10 @@ void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkForma
     if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+    if (dimensions == 2 && layer_count > 1)
+    {
+        view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    }
     
     init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count, mip_levels);
 
@@ -558,13 +562,18 @@ void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
     uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
 
     char *vbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
+    char *gbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
     char *fbuffer = (char *)allocate_free_list(length_of_extension + length_of_base_path + 1);
 
     memcpy(vbuffer, base_shader_path, length_of_base_path);
+    memcpy(gbuffer, base_shader_path, length_of_base_path);
     memcpy(fbuffer, base_shader_path, length_of_base_path);
 
     memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
     shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+    
+    memcpy(gbuffer + length_of_base_path, ".geom.spv", length_of_extension);
+    shader_module_info_t gsh = { gbuffer, VK_SHADER_STAGE_GEOMETRY_BIT };
 
     memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
     shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };
@@ -573,7 +582,7 @@ void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
     auto shadow_display = get_shadow_display();
     VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
     render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
-    shader_modules_t modules(vsh, fsh);
+    shader_modules_t modules(vsh, gsh, fsh);
     shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
     shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
     shader_blend_states_t blending(blend_type_t::NO_BLENDING);
@@ -645,6 +654,9 @@ void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
 
     memcpy(vbuffer + length_of_base_path, ".vert.spv", length_of_extension);
     shader_module_info_t vsh = { vbuffer, VK_SHADER_STAGE_VERTEX_BIT };
+
+    memcpy(gbuffer + length_of_base_path, ".geom.spv", length_of_extension);
+    shader_module_info_t gsh = { gbuffer, VK_SHADER_STAGE_GEOMETRY_BIT };
     
     memcpy(fbuffer + length_of_base_path, ".frag.spv", length_of_extension);
     shader_module_info_t fsh = { fbuffer, VK_SHADER_STAGE_FRAGMENT_BIT };   
@@ -653,7 +665,7 @@ void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
         auto shadow_display = get_shadow_display();
         VkExtent2D shadow_extent {shadow_display.shadowmap_w, shadow_display.shadowmap_h};
         render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
-        shader_modules_t modules(vsh, fsh);
+        shader_modules_t modules(vsh, gsh, fsh);
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash),
                                          animation_layout);
         shader_pk_data_t push_k = {160, 0, VK_SHADER_STAGE_VERTEX_BIT};
@@ -1438,6 +1450,15 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *ra
         uniform_layout_info_t layout_info = {};
         layout_info.push(1, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
         *sampler2D_layout_ptr = make_uniform_layout(&layout_info);
+    }
+
+    uint32_t swapchain_image_count = get_swapchain_image_count();
+    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
+    auto *ubo_layout_ptr = g_uniform_layout_manager->get(ubo_layout_hdl);
+    {
+        uniform_layout_info_t blueprint = {};
+        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+        *ubo_layout_ptr = make_uniform_layout(&blueprint);
     }
     
     

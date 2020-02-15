@@ -517,6 +517,7 @@ struct camera_transform_uniform_data_t
     vector4_t light_direction;
     matrix4_t inverse_view_matrix;
     vector4_t view_direction;
+    vector4_t far_planes;
 };
 
 

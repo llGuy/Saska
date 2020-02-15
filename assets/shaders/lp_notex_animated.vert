@@ -42,7 +42,7 @@ layout(location = 0) out VS_DATA
     vec3 final;
     vec3 position;
     vec3 normal;
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
     
 } vs_out;
 
@@ -84,5 +84,8 @@ void main(void)
     vs_out.position = vs_position.xyz;
     vs_out.normal = vs_normal.xyz;
 
-    vs_out.shadow_coord = ubo.shadow_proj[0] * ubo.shadow_view[0] * vec4(ws_position, 1.0);
+    for (int i = 0; i < 4; ++i)
+    {
+        vs_out.shadow_coord[i] = ubo.shadow_proj[i] * ubo.shadow_view[i] * vec4(ws_position, 1.0);
+    }
 }

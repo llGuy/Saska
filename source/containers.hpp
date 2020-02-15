@@ -293,6 +293,11 @@ template <typename T, uint32_t Max, typename Index_Type = uint32_t> struct stack
         return &data[index];
     }
 
+    T &operator[](uint32_t i)
+    {
+        return data[i];
+    }
+
     void remove(Index_Type index)
     {
         removed[removed_count++] = index;

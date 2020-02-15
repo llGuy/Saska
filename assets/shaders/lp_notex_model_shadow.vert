@@ -53,5 +53,6 @@ main(void)
 	
     vec3 ws_position = vec3(push_k.model * ( accumulated_local));
     
-    gl_Position = ubo.shadow_proj[0] * ubo.shadow_view[0] * vec4(ws_position, 1.0);
+    //gl_Position = ubo.shadow_proj[0] * ubo.shadow_view[0] * vec4(ws_position, 1.0);
+    gl_Position = vec4(ws_position, 1.0);
 }

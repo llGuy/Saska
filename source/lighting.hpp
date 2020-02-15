@@ -48,6 +48,8 @@ struct shadow_matrices_t
         matrix4_t light_view_matrix;
         matrix4_t inverse_light_view;
     } boxes[SHADOW_BOX_COUNT] = {};
+
+    float32_t far_planes[4];
 };
 
 void initialize_lighting();

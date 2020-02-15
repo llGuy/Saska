@@ -23,14 +23,8 @@ static cameras_t cameras;
 
 static void s_cameras_init()
 {
-    uint32_t swapchain_image_count = get_swapchain_image_count();
-    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
+    uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
     auto *ubo_layout_ptr = g_uniform_layout_manager->get(ubo_layout_hdl);
-    {
-        uniform_layout_info_t blueprint = {};
-        blueprint.push(1, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-        *ubo_layout_ptr = make_uniform_layout(&blueprint);
-    }
 
     cameras.camera_transforms_ubo = g_gpu_buffer_manager->add("gpu_buffer.camera_transforms_ubos"_hash);
     auto *camera_ubo = g_gpu_buffer_manager->get(cameras.camera_transforms_ubo);
@@ -105,6 +99,7 @@ void update_camera_transforms(gpu_command_queue_t *queue)
     {
         transform_data.shadow_projection_matrix[i] = shadow_data.boxes[i].projection_matrix;
         transform_data.shadow_view_matrix[i] = shadow_data.boxes[i].light_view_matrix;
+        transform_data.far_planes[i] = shadow_data.far_planes[i];
     }
     
     transform_data.debug_vector = vector4_t(1.0f, 0.0f, 0.0f, 1.0f);

@@ -10,7 +10,7 @@ layout(location = 0) in VS_DATA
     vec3 ws_normal;
 
     vec3 vs_position;
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
 } gs_in[];
 
 layout(location = 0) out GS_DATA
@@ -19,7 +19,7 @@ layout(location = 0) out GS_DATA
     vec3 vs_normal;
 
     vec3 vs_position;
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
 
     vec3 color;
     float roughness;
@@ -88,7 +88,11 @@ void main(void)
 	gs_out.vs_normal = normal;
 	
 	gs_out.vs_position = gs_in[i].vs_position;
-	gs_out.shadow_coord = gs_in[i].shadow_coord;
+
+        for (int c = 0; c < 4; ++c)
+        {
+            gs_out.shadow_coord[c] = gs_in[i].shadow_coord[c];
+        }
 
         gs_out.color = color;
         gs_out.roughness = roughness;

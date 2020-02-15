@@ -190,9 +190,11 @@ static void s_renderer_init()
         shader_modules_t modules(shader_module_info_t{ "shaders/SPV/deferred_lighting.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
             shader_module_info_t{ "shaders/SPV/deferred_lighting.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
         shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("descriptor_set_layout.deferred_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
-            g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash));
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.render_atmosphere_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash),
+                                         g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
         shader_pk_data_t push_k{ 160, 0, VK_SHADER_STAGE_FRAGMENT_BIT };
         shader_blend_states_t blend_states(blend_type_t::NO_BLENDING);
         dynamic_states_t dynamic_states(VK_DYNAMIC_STATE_VIEWPORT);
@@ -243,10 +245,11 @@ void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_mat
     auto *irradiance_cubemap = atmosphere_irradiance_uniform();
     auto *prefiltered_env_group = atmosphere_prefiltered_uniform();
     auto *integrate_lookup_group = atmosphere_integrate_lookup_uniform();
+    auto transforms = camera_transforms_uniform();
 
-    VkDescriptorSet deferred_sets[] = { *dfr_subpass_group, *irradiance_cubemap, *prefiltered_env_group, *integrate_lookup_group };
+    VkDescriptorSet deferred_sets[] = { *dfr_subpass_group, *irradiance_cubemap, *prefiltered_env_group, *integrate_lookup_group, get_shadow_display().texture, transforms };
 
-    command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, { 4, deferred_sets }, &queue->q);
+    command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, { 6, deferred_sets }, &queue->q);
 
     struct deferred_lighting_push_k_t
     {

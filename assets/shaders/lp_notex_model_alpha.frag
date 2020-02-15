@@ -41,7 +41,7 @@ layout(set = 2, binding = 0) uniform samplerCube irradiance_cubemap;
 layout(set = 3, binding = 0) uniform samplerCube prefiltered_environment;
 layout(set = 4, binding = 0) uniform sampler2D integrate_lookup;
 
-const float MAP_SIZE = 4000.0;
+const float MAP_SIZE = 2000.0;
 const float PCF_COUNT = 1.0;
 const float TRANSITION_DISTANCE = 20.0;
 const float SHADOW_DISTANCE = 1000.0;

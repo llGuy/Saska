@@ -61,3 +61,11 @@ void initialize_net(application_mode_t app_mode, event_dispatcher_t *dispatcher)
     case application_mode_t::SERVER_MODE: { initialize_server(message_buffer); } break;
     }
 }
+
+void deinitialize_net()
+{
+    switch(current_app_mode)
+    {
+    case application_mode_t::CLIENT_MODE: { deinitialize_client(); } break;
+    }
+}

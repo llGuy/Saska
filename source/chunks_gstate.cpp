@@ -135,7 +135,8 @@ void initialize_chunks_state(void)
             VkExtent2D shadow_extent{ shadow_display.shadowmap_w, shadow_display.shadowmap_h };
             render_pass_handle_t shadow_render_pass = g_render_pass_manager->get_handle("render_pass.shadow_render_pass"_hash);
             shader_modules_t modules(shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.vert.spv", VK_SHADER_STAGE_VERTEX_BIT },
-                shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
+                                     shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.geom.spv", VK_SHADER_STAGE_GEOMETRY_BIT },
+                                     shader_module_info_t{ "shaders/SPV/voxel_mesh_shadow.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT });
             shader_uniform_layouts_t layouts(g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash));
             shader_pk_data_t push_k = { 240, 0, VK_SHADER_STAGE_VERTEX_BIT };
             shader_blend_states_t blending(blend_type_t::NO_BLENDING);

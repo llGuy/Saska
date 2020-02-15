@@ -16,6 +16,7 @@ layout(input_attachment_index = 2, set = 0, binding = 2) uniform subpassInput g_
 layout(set = 1, binding = 0) uniform samplerCube irradiance_cubemap;
 layout(set = 2, binding = 0) uniform samplerCube prefiltered_environment;
 layout(set = 3, binding = 0) uniform sampler2D integrate_lookup;
+layout(set = 4, binding = 0) uniform sampler2DArray shadow_map;
 
 //layout(set = 1, binding = 0) uniform samplerCube cubemap_sampler;
 
@@ -26,6 +27,21 @@ layout(push_constant) uniform Push_K
     mat4 inverse_view_matrix;
     vec4 ws_view_direction;
 } push_k;
+
+layout(set = 5, binding = 0) uniform camera_information_t
+{
+    mat4 view;
+    mat4 proj;
+
+    mat4 shadow_view[4];
+    mat4 shadow_proj[4];
+
+    vec4 debug_vector;
+    vec4 light_direction;
+    mat4 inverse_view_matrix;
+    vec4 view_direction;
+    vec4 far_planes;
+} camera_transforms;
 
 const float PI = 3.14159265359;
 
@@ -73,14 +89,59 @@ vec3 fresnel_schlick(float cos_theta, vec3 F0)
 }
 
 
+const float MAP_SIZE = 2000.0;
+const float PCF_COUNT = 1.0;
+const float TRANSITION_DISTANCE = 20.0;
+const float SHADOW_DISTANCE = 1000.0;
+
+float get_shadow_light_factor(float dist, in vec4 shadow_coord, int layer)
+{
+    float total_texels = (PCF_COUNT * 2.0f + 1.0f) * (PCF_COUNT * 2.0f + 1.0f);
+
+    dist = dist - (SHADOW_DISTANCE - TRANSITION_DISTANCE);
+    dist = dist / TRANSITION_DISTANCE;
+    dist = clamp(1.0 - dist, 0.0, 1.0);
+
+    float texel_size = 1.0f / MAP_SIZE;
+    float total = 0.0f;
+
+    vec3 shadow_space_pos = shadow_coord.xyz / shadow_coord.w;
+    shadow_space_pos.xy = shadow_space_pos.xy * 0.5 + 0.5;
+    
+    if (shadow_space_pos.z > -1.0 && shadow_space_pos.z < 1.0
+	&& shadow_space_pos.x > 0.0 && shadow_space_pos.x < 1.0
+	&& shadow_space_pos.y > 0.0 && shadow_space_pos.y < 1.0)
+    {
+	for (int x = int(-PCF_COUNT); x <= int(PCF_COUNT); ++x)
+	{
+	    for (int y = int(-PCF_COUNT); y <= int(PCF_COUNT); ++y)
+	    {
+		float object_nearest_light = texture(shadow_map, vec3(shadow_space_pos.xy + vec2(x, y) * texel_size, layer)).x;
+		if (shadow_space_pos.z - 0.005 > object_nearest_light)
+		{
+		    total += 0.8f;
+		}
+	    }
+	}
+	total /= total_texels;
+    }
+
+    float light_factor = 1.0f - (total * dist);
+
+    return light_factor;
+}
+
+
 // roughness of the material controlled in normal.a and the metalness in the position.a
 vec4 pbr(void)
 {
     vec4 albedo = subpassLoad(g_buffer_albedo);
-    float shadow_factor = albedo.a;
+
     albedo.xyz = pow(albedo.xyz, vec3(2.2));
     vec4 gposition = subpassLoad(g_buffer_position);
     vec3 vs_position = gposition.xyz;
+    
+    float shadow_factor = albedo.a;
 
     vec4 gnormal = -subpassLoad(g_buffer_normal);
     vec3 vs_normal = gnormal.xyz;
@@ -146,6 +207,8 @@ vec4 pbr(void)
 
     result = clamp(result, ambient, vec3(1.0));
 
+    
+    
     return vec4(result * shadow_factor, 1.0);
 }
 

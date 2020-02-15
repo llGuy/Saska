@@ -12,7 +12,7 @@ layout(location = 0) in VS_DATA
 
     vec3 normal;
 
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
     
 } gs_in[];
 
@@ -24,7 +24,7 @@ layout(location = 0) out GS_DATA
     vec3 position;
     vec3 normal;
 
-    vec4 shadow_coord;
+    vec4 shadow_coord[4];
     
 } gs_out;
 
@@ -63,7 +63,11 @@ main(void)
 	gs_out.position = gs_in[i].position;
 	gs_out.normal = normal;
 	gs_out.final = gs_in[i].final;
-	gs_out.shadow_coord = gs_in[i].shadow_coord;
+
+        for (int c = 0; c < 4; ++c)
+        {
+            gs_out.shadow_coord[c] = gs_in[i].shadow_coord[c];
+        }
 
 	gl_Position = gl_in[i].gl_Position;
 

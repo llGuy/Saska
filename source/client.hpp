@@ -74,6 +74,7 @@ struct client_t
 
 
 void initialize_client(char *message_buffer, event_dispatcher_t *dispatcher);
+void deinitialize_client();
 void tick_client(raw_input_t *raw_input, float32_t dt);
 
 

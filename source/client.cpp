@@ -87,6 +87,32 @@ void initialize_client(char *msg_buffer, event_dispatcher_t *dispatcher)
 }
 
 
+void deinitialize_client()
+{
+    // Send disconnect packet if in game
+    if (is_connected_to_server)
+    {
+        // Send disconnect packet
+        packet_header_t header = {};
+
+        player_t *user = get_user_player();
+        
+        header.packet_mode = packet_mode_t::PM_CLIENT_MODE;
+        header.packet_type = client_packet_type_t::CPT_DISCONNECT;
+        header.total_packet_size = sizeof_packet_header();
+        header.client_id = user->network.client_state_index;
+        header.current_packet_id = ++(get_user_client()->current_packet_count);
+
+        serializer_t serializer = {};
+        serializer.initialize(header.total_packet_size);
+    
+        serializer.serialize_packet_header(&header);
+
+        serializer.send_serialized_message(server_address);
+    }
+}
+
+
 #define MAX_MESSAGE_BUFFER_SIZE 40000
 
 

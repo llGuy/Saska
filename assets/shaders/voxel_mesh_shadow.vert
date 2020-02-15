@@ -21,5 +21,5 @@ layout(push_constant) uniform push_constant_t
 
 void main(void)
 {
-    gl_Position = camera_transforms.shadow_proj[0] * camera_transforms.shadow_view[0] * push_k.model * vec4(vertex_position, 1.0);
+    gl_Position = push_k.model * vec4(vertex_position, 1.0);
 }

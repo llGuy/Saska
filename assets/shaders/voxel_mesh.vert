@@ -9,7 +9,8 @@ layout(location = 0) out VS_DATA
     vec3 ws_normal;
 
     vec3 vs_position;
-    vec4 shadow_coord;
+    
+    vec4 shadow_coord[4];
 } vs_out;
 
 layout(set = 0, binding = 0) uniform camera_information_t
@@ -21,6 +22,8 @@ layout(set = 0, binding = 0) uniform camera_information_t
     mat4 shadow_proj[4];
 
     vec4 debug_vector;
+
+    float far_planes[4];
 } camera_transforms;
 
 layout(push_constant) uniform push_constant_t
@@ -41,6 +44,10 @@ void main(void)
     vs_out.ws_normal = normalize(vs_position.xyz);
     vs_out.color = push_k.color;
 
-    vs_out.shadow_coord = camera_transforms.shadow_proj[0] * camera_transforms.shadow_view[0] * ws_position;
+    for (int i = 0; i < 4; ++i)
+    {
+        vs_out.shadow_coord[i] = camera_transforms.shadow_proj[i] * camera_transforms.shadow_view[i] * ws_position;
+    }
+    
     vs_out.vs_position = vs_position.xyz;
 }

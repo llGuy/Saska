@@ -34,8 +34,8 @@ struct receiver_thread_t
 
 
 // Global
-static uint32_t client_count = {};
-static client_t clients[MAX_CLIENTS] = {};
+//static client_t clients[MAX_CLIENTS] = {};
+static stack_dynamic_container_t<client_t, MAX_CLIENTS> clients;
 static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_name;
 static hash_table_inline_t<uint16_t, MAX_CLIENTS * 2, 3, 3> client_table_by_address;
 static uint16_t client_id_stack[MAX_CLIENTS] = {};
@@ -97,7 +97,7 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
         receiver_thread.receiver_thread_loop_count = 0;
 
         //        for (uint32_t packet_index = 0; packet_index < receiver_thread.packet_count; ++packet_index)
-        for (uint32_t i = 0; i < 1 + 2 * client_count; ++i)
+        for (uint32_t i = 0; i < 1 + 2 * clients.data_count; ++i)
         {
             //network_address_t received_address = receiver_thread.addresses[packet_index];
             
@@ -148,6 +148,8 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     in_serializer.deserialize_client_join_packet(&client_join);
 
                                     // Add client
+                                    uint32_t client_count = clients.add();
+                                    
                                     client = get_client(client_count);
                                     client->name = client_join.client_name;
                                     client->client_id = client_count;
@@ -299,11 +301,18 @@ void tick_server(raw_input_t *raw_input, float32_t dt)
                                     //client->received_input_commands = 0;
                                 } break;*/
                                 case client_packet_type_t::CPT_ACKNOWLEDGED_GAME_STATE_RECEPTION:
-                                {
-                                    uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
-                                    client_t *client = get_client(header.client_id);
+                                    {
+                                        uint64_t game_state_acknowledged_tick = in_serializer.deserialize_uint64();
+                                        client_t *client = get_client(header.client_id);
+                                    } break;
+                                case client_packet_type_t::CPT_DISCONNECT:
+                                    {
+                                        constant_string_t str = make_constant_string(client->name, (uint32_t)strlen(client->name));
+                                        client_table_by_name.remove(str.hash);
+                                        client_table_by_address.remove(client->network_address.ipv4_address);
 
-                                } break;
+                                        clients.remove(client->client_id);
+                                    } break;
                                 }
 
                                 client->current_packet_count = client_current_packet_count;
@@ -495,7 +504,7 @@ static void dispatch_newcoming_client_to_clients(uint32_t new_client_index)
     
     serializer.serialize_player_state_initialize_packet(&player_initialize_packet);
 
-    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    for (uint32_t client_index = 0; client_index < clients.data_count; ++client_index)
     {
         client_t *current_client = get_client(client_index);
 
@@ -540,7 +549,7 @@ static void dispatch_snapshot_to_clients(void)
     }
 
     // Prepare the player snapshot packets
-    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    for (uint32_t client_index = 0; client_index < clients.data_count; ++client_index)
     {
         client_t *client = get_client(client_index);
         player_t *player = get_player(client->player_handle);
@@ -563,13 +572,13 @@ static void dispatch_snapshot_to_clients(void)
     out_serializer.initialize(sizeof_packet_header() +
                               sizeof(uint64_t) +
                               sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
-                              sizeof_game_snapshot_player_state_packet() * client_count);
+                              sizeof_game_snapshot_player_state_packet() * clients.data_count);
 
     // TODO: FIX THIS IS NOT THE ACTUAL PACKET SIZE: IT VARIES DEPENDING ON THE CLIENT
     header.total_packet_size = sizeof_packet_header() +
         sizeof(uint64_t) +
         sizeof_game_snapshot_voxel_delta_packet(modified_chunks_count, voxel_packet.modified_chunks) +
-        sizeof_game_snapshot_player_state_packet() * client_count;
+        sizeof_game_snapshot_player_state_packet() * clients.data_count;
         
     out_serializer.serialize_packet_header(&header);
 
@@ -583,7 +592,7 @@ static void dispatch_snapshot_to_clients(void)
     uint32_t player_snapshots_start = out_serializer.data_buffer_head;
 
     // TODO: Find way so that sending packets to each client does not need packets to be reserialized
-    for (uint32_t client_index = 0; client_index < client_count; ++client_index)
+    for (uint32_t client_index = 0; client_index < clients.data_count; ++client_index)
     {
         client_t *client = get_client(client_index);
         player_t *player = get_player(client->player_handle);
@@ -643,7 +652,7 @@ static void dispatch_snapshot_to_clients(void)
                 player_snapshot_packet->need_to_do_correction = 1;
             }
             
-            for (uint32_t i = 0; i < client_count; ++i)
+            for (uint32_t i = 0; i < clients.data_count; ++i)
             {
                 if (i == client_index)
                 {

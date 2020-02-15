@@ -134,7 +134,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 {
 	if (strlen(cmdline) == 0)
 	{
-		cmdline = "sv";
+		cmdline = "cl";
 	}
 
     // Initialize game's dynamic memory
@@ -297,14 +297,17 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         QueryPerformanceCounter(&tick_end);
         float32_t new_dt = measure_time_difference(tick_start, tick_end, clock_frequency);
 
-        
-        if (new_dt > TICK_TIME)
-        {
-//            dt = new_dt;
-//            raw_input.dt = new_dt;
 
-            dt = TICK_TIME;
-            raw_input.dt = TICK_TIME;
+        dt = new_dt;
+        raw_input.dt = new_dt;
+        
+        /*if (new_dt > TICK_TIME)
+        {
+            dt = new_dt;
+            raw_input.dt = new_dt;
+
+            //dt = TICK_TIME;
+            //raw_input.dt = TICK_TIME;
         }
         else
         {
@@ -324,7 +327,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 
             dt = TICK_TIME;
             raw_input.dt = (float32_t)dt;
-        }
+            }*/
     }
 
     output_to_debug_console("Stopping session\n");

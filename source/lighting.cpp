@@ -84,8 +84,7 @@ static void s_lights_init()
 
 struct shadow_target_t
 {
-    static constexpr float32_t SHADOW_BOX_DISTNACES[4] = { 30.0f, 100.0f, 170.0f, 500.0f };
-    static constexpr uint32_t SHADOWMAP_W = 4000, SHADOWMAP_H = 4000;
+    static constexpr uint32_t SHADOWMAP_W = 3000, SHADOWMAP_H = 3000;
         
     framebuffer_handle_t framebuffer;
     render_pass_handle_t render_pass;
@@ -141,6 +140,7 @@ static void s_targets_init()
 #define SHADOW_BOX_COUNT 4
 
 static shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
+static float32_t far_planes[4];
 
 static void s_shadow_boxes_init()
 {
@@ -156,6 +156,11 @@ static void s_shadow_boxes_init()
         shadow_boxes[i].light_view_matrix = light_view_matrix;
         shadow_boxes[i].inverse_light_view = inverse_light_view_matrix;
     }
+
+    far_planes[0] = 20.0f;
+    far_planes[1] = 50.0f;
+    far_planes[2] = 150.0f;
+    far_planes[3] = 500.0f;
 }
 
 void initialize_lighting()
@@ -245,12 +250,11 @@ void update_lighting()
 {
     camera_t *main_camera = camera_bound_to_3d_output();
 
-    float32_t nears[] = {1.0f, 20.0f, 50.0f, 150.0f };
-    float32_t fars[] = { 20.0f, 50.0f, 150.0f, 500.0f };
+    float32_t nears[] = {1.0f, far_planes[0], far_planes[1], far_planes[2] };
     
     for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
     {
-        s_update_shadow_box(fars[i], nears[i], main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &shadow_boxes[i]);
+        s_update_shadow_box(far_planes[i], nears[i], main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &shadow_boxes[i]);
     }
 }
 
@@ -346,6 +350,7 @@ shadow_matrices_t get_shadow_matrices()
         ret.boxes[i].projection_matrix = shadow_boxes[i].projection_matrix;
         ret.boxes[i].light_view_matrix = shadow_boxes[i].light_view_matrix;
         ret.boxes[i].inverse_light_view = shadow_boxes[i].inverse_light_view;
+        ret.far_planes[i] = far_planes[i];
     }
     
     return(ret);

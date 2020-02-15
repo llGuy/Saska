@@ -283,6 +283,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 raw_input.buttons[button_type_t::ENTER].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::ESCAPE].state = button_state_t::NOT_DOWN;
                 raw_input.buttons[button_type_t::LEFT_CONTROL].state = button_state_t::NOT_DOWN;
+                raw_input.buttons[button_type_t::F3].state = button_state_t::NOT_DOWN;
                 // TODO: Set input state's normalized cursor position
             } break;
         case application_type_t::CONSOLE_APPLICATION_MODE:
@@ -619,6 +620,7 @@ static void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
     case VK_RETURN: { set_key_state(&raw_input, button_type_t::ENTER, action); } break;
     case VK_BACK: { set_key_state(&raw_input, button_type_t::BACKSPACE, action); } break;
     case VK_ESCAPE: { set_key_state(&raw_input, button_type_t::ESCAPE, action); } break;
+    case VK_F3: { set_key_state(&raw_input, button_type_t::F3, action); } break;
     case VK_F11: { if (action == key_action_t::KEY_ACTION_UP) raw_input.toggled_fullscreen = 0; else toggle_fullscreen(); } break;
     }
 }
@@ -724,27 +726,25 @@ static void get_gamepad_state(void)
 
         // 32767
 
-        #define INPUT_DEADZONE 10000
+        #define INPUT_DEADZONE 10000.0f
+        #define INPUT_DEADZONEF 0.1f
 
         {
-            float lx = gamepad->sThumbLX;
-            float ly = gamepad->sThumbLY;
+            //float lx = gamepad->sThumbLX;
+            //float ly = gamepad->sThumbLY;
 
-            //determine how far the controller is pushed
-            float magnitude = sqrt(lx * lx + ly * ly);
-
-            //determine the direction the controller is pushed
-            float normalized_lx = lx / magnitude;
-            float normalized_ly = ly / magnitude;
-
-            float normalized_magnitude = 0;
+            vector2_t left_thumb = vector2_t(gamepad->sThumbLX, gamepad->sThumbLY);
+            vector2_t normalized_left = glm::normalize(left_thumb);
+            float32_t magnitude = glm::length(left_thumb);
+            
+            float32_t normalized_magnitude = 0;
 
             if (magnitude > INPUT_DEADZONE)
             {
-                if (magnitude > 32767) magnitude = 32767;
-  
                 magnitude -= INPUT_DEADZONE;
-                normalized_magnitude = magnitude / (32767 - INPUT_DEADZONE);
+                left_thumb -= normalized_left * INPUT_DEADZONE;
+                left_thumb /= (32767.0f - INPUT_DEADZONE);
+                //normalized_magnitude = magnitude / (32767.0f - INPUT_DEADZONE);
             }
             else
             {
@@ -752,15 +752,10 @@ static void get_gamepad_state(void)
                 normalized_magnitude = 0.0;
             }
 
-            magnitude /= 100.0f;
-
-            lx /= 1000.0f;
-            ly /= 1000.0f;
-            
-            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_RIGHT, magnitude > 0 && lx > 0, ((float32_t)lx));
-            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_LEFT, magnitude > 0 && lx < 0, ((float32_t)lx));
-            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_UP, magnitude > 0 && ly > 0, ((float32_t)ly));
-            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_DOWN, magnitude > 0 && ly < 0, ((float32_t)ly));
+            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_RIGHT, magnitude > 0 && left_thumb.x > 0, ((float32_t)left_thumb.x));
+            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_LEFT, magnitude > 0 && left_thumb.x < 0, ((float32_t)left_thumb.x));
+            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_UP, magnitude > 0 && left_thumb.y > 0, ((float32_t)left_thumb.y));
+            set_gamepad_button_state(&raw_input, gamepad_button_type_t::LTHUMB_MOVE_DOWN, magnitude > 0 && left_thumb.y < 0, ((float32_t)left_thumb.y));
         }
 
 

@@ -118,7 +118,6 @@ uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *p
 
 
 // --------------------- Rendering stuff ---------------------
-
 uint32_t gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size, mesh_t *mesh, uniform_group_t *ubo)
 {
     material_t new_mtrl = {};

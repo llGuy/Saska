@@ -1,3 +1,4 @@
+#include "debug_overlay.hpp"
 #include "core.hpp"
 #include "utils.hpp"
 #include "script.hpp"
@@ -23,6 +24,10 @@ static render_pass_t gui_render_pass;
 static gpu_command_queue_t gui_secondary_queue;
 static uniform_group_t font_png_image_uniform;
 
+uniform_group_t debug_font_uniform()
+{
+    return font_png_image_uniform;
+}
 
 static ivector2_t get_px_cursor_position(ui_box_t *box, ui_text_t *text, const resolution_t &resolution)
 {
@@ -788,10 +793,14 @@ void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform
 
     initialize_ui_rendering_state(get_swapchain_format(), uniform_pool, resolution, qpool);
     initialize_ui_elements(resolution);
+    initialize_debug_overlay();
 }
 
 void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus)
 {
+    handle_debug_overlay_input(raw_input);
+    render_debug_overlay(&textured_vertex_render_list);
+    
     if (focus == element_focus_t::UI_ELEMENT_CONSOLE)
     {
         handle_console_input(raw_input, focus);

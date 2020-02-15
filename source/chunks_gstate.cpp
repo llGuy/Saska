@@ -199,8 +199,8 @@ void initialize_chunks_state(void)
 
 
     voxel_beacons.default_voxel_color.color = vector4_t(52.0f, 150.0f, 2.0f, 255.0f) / 255.0f;
-    voxel_beacons.default_voxel_color.metalness = 0.1f;
-    voxel_beacons.default_voxel_color.roughness = 0.9f;
+    voxel_beacons.default_voxel_color.metalness = 0.15f;
+    voxel_beacons.default_voxel_color.roughness = 0.7f;
 
     voxel_beacons.beacon_count = 0;
 

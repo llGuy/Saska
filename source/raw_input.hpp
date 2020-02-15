@@ -4,7 +4,7 @@
 
 enum button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
                      ZERO, ONE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, UP, LEFT, DOWN, RIGHT,
-                     SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE,
+                     SPACE, LEFT_SHIFT, LEFT_CONTROL, ENTER, BACKSPACE, ESCAPE, F1, F2, F3, F4, F5,
                      MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE, MOUSE_MOVE_UP, MOUSE_MOVE_LEFT, MOUSE_MOVE_DOWN, MOUSE_MOVE_RIGHT, INVALID_KEY };
 
 enum button_state_t : bool { NOT_DOWN, INSTANT, REPEAT, RELEASE };

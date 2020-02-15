@@ -82,7 +82,7 @@ void destroy_game(game_memory_t *memory)
     {
         save_variables();
     }
-    
+
     destroy_swapchain();
     
     g_render_pass_manager->clean_up();
@@ -91,6 +91,8 @@ void destroy_game(game_memory_t *memory)
     g_pipeline_manager->clean_up();
     g_gpu_buffer_manager->clean_up();
 
+    deinitialize_net();
+    
     destroy_graphics();
 
     destroy_vulkan_state();

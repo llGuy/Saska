@@ -82,3 +82,4 @@ void push_input_text_to_render(ui_input_text_t *input, ui_box_t *back, const res
 void push_box_to_render(ui_box_t *box);
 void push_box_to_render_reversed(ui_box_t *box, const vector2_t &size);
 void push_box_to_render_with_texture(ui_box_t *box, uniform_group_t group);
+uniform_group_t debug_font_uniform();

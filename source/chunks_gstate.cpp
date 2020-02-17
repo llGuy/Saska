@@ -66,14 +66,14 @@ static game_snapshot_voxel_delta_packet_t *previous_voxel_delta_packet_front = n
 
 
 // Static declarations
-static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
-static void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
-static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed);
-static void append_chunk_to_history_of_modified_chunks_if_not_already(chunk_t *chunk);
-static void flag_chunks_previously_modified_by_client(client_t *user_client);
-static void unflag_chunks_previously_modified_by_client(client_t *user_client);
-static void fill_dummy_voxels(client_modified_chunk_nl_t *chunk);
-static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk);
+static void s_construct_plane(const vector3_t &ws_plane_origin, float32_t radius);
+static void s_construct_sphere(const vector3_t &ws_sphere_position, float32_t radius);
+static void s_terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed);
+static void s_append_chunk_to_history_of_modified_chunks_if_not_already(chunk_t *chunk);
+static void s_flag_chunks_previously_modified_by_client(client_t *user_client);
+static void s_unflag_chunks_previously_modified_by_client(client_t *user_client);
+static void s_fill_dummy_voxels(client_modified_chunk_nl_t *chunk);
+static void s_unfill_dummy_voxels(client_modified_chunk_nl_t *chunk);
 
 
 
@@ -192,10 +192,10 @@ void initialize_chunks_state(void)
         }    
     }
 
-    construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
-    construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 70.0f);
-    construct_sphere(vector3_t(80.0f, 50.0f, 0.0f), 70.0f);
-    construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
+    s_construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
+    s_construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 70.0f);
+    s_construct_sphere(vector3_t(80.0f, 50.0f, 0.0f), 70.0f);
+    s_construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
 
 
     voxel_beacons.default_voxel_color.color = vector4_t(52.0f, 150.0f, 2.0f, 255.0f) / 255.0f;
@@ -392,7 +392,7 @@ void ray_cast_terraform(const vector3_t &ws_position, const vector3_t &ws_direct
 
             if (chunk->voxels[voxel_coord.x][voxel_coord.y][voxel_coord.z] > surface_level)
             {
-                terraform_with_history(ivector3_t(current_ray_position), 2, destructive, dt, speed);
+                s_terraform_with_history(ivector3_t(current_ray_position), 2, destructive, dt, speed);
                 
                 break;
             }
@@ -425,7 +425,7 @@ void tick_chunks_state(float32_t dt)
         client_t *user_client = get_user_client();
 
         // Flag chunks that have been modified by the client
-        flag_chunks_previously_modified_by_client(user_client);
+        s_flag_chunks_previously_modified_by_client(user_client);
         {
             game_snapshot_voxel_delta_packet_t *voxel_delta = get_previous_voxel_delta_packet();
 
@@ -441,7 +441,7 @@ void tick_chunks_state(float32_t dt)
                     client_modified_chunk_nl_t *local_chunk_modifications = &user_client->previous_received_voxel_modifications[modified_chunk_ptr->index_of_modified_chunk /* Was filled in by flag_chunks_modified_by_client() */];
                 
                     // Fill dummy voxels (temporarily)
-                    fill_dummy_voxels(local_chunk_modifications);
+                    s_fill_dummy_voxels(local_chunk_modifications);
                     {
                         for (uint32_t sm_voxel = 0; sm_voxel < voxel_delta->modified_chunks[modified_chunk_index].modified_voxel_count; ++sm_voxel)
                         {
@@ -471,7 +471,7 @@ void tick_chunks_state(float32_t dt)
                         }
                     }
                     // Unfill dummy voxels
-                    unfill_dummy_voxels(local_chunk_modifications);
+                    s_unfill_dummy_voxels(local_chunk_modifications);
                 }
                 else
                 {
@@ -491,7 +491,7 @@ void tick_chunks_state(float32_t dt)
             }
         }
         // Unflag chunks that have been modified by the client
-        unflag_chunks_previously_modified_by_client(user_client);
+        s_unflag_chunks_previously_modified_by_client(user_client);
     }
     else
     {
@@ -562,7 +562,7 @@ void reset_voxel_interpolation(void)
         client_t *user_client = get_user_client();
 
         // Flag chunks that have been modified by the client
-        flag_chunks_previously_modified_by_client(user_client);
+        s_flag_chunks_previously_modified_by_client(user_client);
         {
             game_snapshot_voxel_delta_packet_t *voxel_delta = get_previous_voxel_delta_packet();
         
@@ -578,7 +578,7 @@ void reset_voxel_interpolation(void)
                     client_modified_chunk_nl_t *local_chunk_modifications = &user_client->previous_received_voxel_modifications[modified_chunk_ptr->index_of_modified_chunk /* Was filled in by flag_chunks_modified_by_client() */];
                 
                     // Fill dummy voxels (temporarily)
-                    fill_dummy_voxels(local_chunk_modifications);
+                    s_fill_dummy_voxels(local_chunk_modifications);
                     {
                         for (uint32_t sm_voxel = 0; sm_voxel < voxel_delta->modified_chunks[modified_chunk_index].modified_voxel_count; ++sm_voxel)
                         {
@@ -605,7 +605,7 @@ void reset_voxel_interpolation(void)
                         }
                     }
                     // Unfill dummy voxels
-                    unfill_dummy_voxels(local_chunk_modifications);
+                    s_unfill_dummy_voxels(local_chunk_modifications);
                 }
                 else
                 {
@@ -622,7 +622,7 @@ void reset_voxel_interpolation(void)
             }
         }
         // Unflag chunks that have been modified by the client
-        unflag_chunks_previously_modified_by_client(user_client);
+        s_unflag_chunks_previously_modified_by_client(user_client);
     }
     else
     {
@@ -864,7 +864,7 @@ struct linear_allocator_t *get_voxel_linear_allocator(void)
 
 
 // Static definitions
-static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
+static void s_construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
 {
     vector3_t xs_plane_origin = ws_to_xs(ws_plane_origin);
 
@@ -909,7 +909,7 @@ static void construct_plane(const vector3_t &ws_plane_origin, float32_t radius)
 }
 
 
-static void construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
+static void s_construct_sphere(const vector3_t &ws_sphere_position, float32_t radius)
 {
     vector3_t xs_sphere_position = ws_to_xs(ws_sphere_position);
     
@@ -966,7 +966,7 @@ static void construct_sphere(const vector3_t &ws_sphere_position, float32_t radi
 }
 
 
-static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
+static void s_terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t voxel_radius, bool destructive, float32_t dt, float32_t speed)
 {
     ivector3_t voxel_coord = xs_voxel_coord;
     chunk_t *chunk = get_chunk_encompassing_point(voxel_coord);
@@ -984,7 +984,7 @@ static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t vo
 
     uint32_t diameter = (uint32_t)radius * 2 + 1;
 
-    append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
+    s_append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
     
     for (uint32_t z = 0; z < diameter; ++z)
     {
@@ -1041,7 +1041,7 @@ static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t vo
                             chunk = new_chunk;
                             history = (uint8_t *)chunk->voxel_history;
 
-                            append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
+                            s_append_chunk_to_history_of_modified_chunks_if_not_already(chunk);
                             
                             ready_chunk_for_gpu_sync(chunk);
                             cs_vcoord = ivector3_t(v_f) - chunk->xs_bottom_corner;
@@ -1085,7 +1085,7 @@ static void terraform_with_history(const ivector3_t &xs_voxel_coord, uint32_t vo
 }
 
 
-static void append_chunk_to_history_of_modified_chunks_if_not_already(chunk_t *chunk)
+static void s_append_chunk_to_history_of_modified_chunks_if_not_already(chunk_t *chunk)
 {
     if (!chunk->added_to_history)
     {
@@ -1095,7 +1095,7 @@ static void append_chunk_to_history_of_modified_chunks_if_not_already(chunk_t *c
 }
 
 
-static void flag_chunks_previously_modified_by_client(client_t *user_client)
+static void s_flag_chunks_previously_modified_by_client(client_t *user_client)
 {
     if (user_client->modified_chunks_count == 0)
     {
@@ -1111,7 +1111,7 @@ static void flag_chunks_previously_modified_by_client(client_t *user_client)
 }
 
 
-static void unflag_chunks_previously_modified_by_client(client_t *user_client)
+static void s_unflag_chunks_previously_modified_by_client(client_t *user_client)
 {
     // Flag chunks that have been modified by the client
     for (uint32_t previously_modified_chunk = 0; previously_modified_chunk < user_client->modified_chunks_count; ++previously_modified_chunk)
@@ -1123,7 +1123,7 @@ static void unflag_chunks_previously_modified_by_client(client_t *user_client)
 }
 
 
-static void fill_dummy_voxels(client_modified_chunk_nl_t *chunk)
+static void s_fill_dummy_voxels(client_modified_chunk_nl_t *chunk)
 {
     for (uint32_t modified_voxel = 0; modified_voxel < chunk->modified_voxel_count; ++modified_voxel)
     {
@@ -1133,7 +1133,7 @@ static void fill_dummy_voxels(client_modified_chunk_nl_t *chunk)
 }
 
 
-static void unfill_dummy_voxels(client_modified_chunk_nl_t *chunk)
+static void s_unfill_dummy_voxels(client_modified_chunk_nl_t *chunk)
 {
     for (uint32_t modified_voxel = 0; modified_voxel < chunk->modified_voxel_count; ++modified_voxel)
     {

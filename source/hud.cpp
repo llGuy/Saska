@@ -41,14 +41,14 @@ struct crosshair_t
 static crosshair_t crosshair;
 
 
-static void initialize_crosshair(void);
-static void push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list);
+static void s_initialize_crosshair(void);
+static void s_push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list);
 
 
 
 void initialize_hud(void)
 {
-    initialize_crosshair();
+    s_initialize_crosshair();
 }
 
 
@@ -56,12 +56,12 @@ void push_hud_to_render(gui_textured_vertex_render_list_t *render_list, element_
 {
     if (focus == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
     {
-        push_crosshair_for_render(render_list);
+        s_push_crosshair_for_render(render_list);
     }
 }
 
 
-static void initialize_crosshair(void)
+static void s_initialize_crosshair(void)
 {
     // Just a dot
     crosshair.selected_crosshair = 1;
@@ -107,7 +107,7 @@ static void initialize_crosshair(void)
 }
 
 
-static void push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list)
+static void s_push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list)
 {
     render_list->mark_section(crosshair.png_image_uniform);
     

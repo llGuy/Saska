@@ -82,15 +82,15 @@ static uniform_group_t font_uniform;
 static image2d_t font_image;
 
 
-static void initialize_main_menu(void);
-static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
+static void s_initialize_main_menu(void);
+static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
                            gui_colored_vertex_render_list_t *colored_render_list, float32_t dt);
 
-static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
+static bool s_detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
 
-static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt);
-static void open_menu(main_menu_t::buttons_t button);
-static void initialize_menu_windows(void);
+static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt);
+static void s_open_menu(main_menu_t::buttons_t button);
+static void s_initialize_menu_windows(void);
 
 
 void initialize_menus(void)
@@ -101,7 +101,7 @@ void initialize_menus(void)
     menus_font = load_font("menu.font"_hash, "fonts/liberation_mono.fnt", "");
     font_uniform = create_texture_uniform("fonts/liberation_mono.png", &font_image);
     
-    initialize_main_menu();
+    s_initialize_main_menu();
 }
 
 
@@ -202,7 +202,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
     
         for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
         {
-            if (detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
+            if (s_detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
             {
                 hovered_over_button = 1;
             
@@ -272,7 +272,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
             case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::HOST_SERVER: case main_menu_t::buttons_t::SETTINGS: {
                 if (!clicked_previous_frame)
                 {
-                    open_menu(main_menu.hovering_over);
+                    s_open_menu(main_menu.hovering_over);
                 }
             } break;
             
@@ -288,7 +288,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
             clicked_previous_frame = 0;
         }
 
-        update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
+        s_update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
     }
 }
 
@@ -336,13 +336,13 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
         }
         else
         {
-            push_main_menu(textured_render_list, colored_render_list, dt);
+            s_push_main_menu(textured_render_list, colored_render_list, dt);
         }
     }
 }
 
 
-static void initialize_main_menu(void)
+static void s_initialize_main_menu(void)
 {
     main_menu.main_menu.initialize(CENTER, 2.0f,
                                    ui_vector2_t(0.0f, 0.0f),
@@ -361,7 +361,7 @@ static void initialize_main_menu(void)
                                           backbuffer_resolution());
 
 
-    initialize_menu_windows();
+    s_initialize_menu_windows();
     
     
     main_menu.slider_x_max_size = main_menu.main_menu_slider.gls_current_size.to_fvec2().x;
@@ -467,7 +467,7 @@ static void initialize_main_menu(void)
 }
 
 
-static void push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
+static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
                            gui_colored_vertex_render_list_t *colored_render_list,
                            float32_t dt)
 {
@@ -521,13 +521,13 @@ static bool detect_if_user_clicked_on_widget(ui_box_t *box, float32_t cursor_x, 
 }
 
 
-static bool detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y)
+static bool s_detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y)
 {
     return detect_if_user_clicked_on_widget(&main_menu.main_menu_buttons_backgrounds[button], cursor_x, cursor_y);
 }
 
 
-static void open_menu(main_menu_t::buttons_t button)
+static void s_open_menu(main_menu_t::buttons_t button)
 {
     if (button != main_menu.selected_menu)
     {
@@ -573,7 +573,7 @@ static void open_menu(main_menu_t::buttons_t button)
 }
 
 
-static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt)
+static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt)
 {
     main_menu.main_menu_slider_x.animate(dt);
 
@@ -619,7 +619,7 @@ static void update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_inp
 }
 
 
-static void initialize_menu_windows(void)
+static void s_initialize_menu_windows(void)
 {
     main_menu.browse_menu.ip_address_input_box.initialize(LEFT_DOWN, 15.0f,
                                                           ui_vector2_t(0.05f, 0.05f),

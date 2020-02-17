@@ -15,7 +15,7 @@ static uint64_t current_tick;
 
 
 
-static void render_world(gpu_command_queue_t *queue);
+static void s_render_world(gpu_command_queue_t *queue);
 
 
 
@@ -73,7 +73,7 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
         sync_gpu_with_particles_state(queue);
 
 
-        render_world(queue);
+        s_render_world(queue);
     } break;
 
     default: {
@@ -93,7 +93,7 @@ uint64_t *get_current_tick(void)
 
 
 
-static void render_world(gpu_command_queue_t *queue)
+static void s_render_world(gpu_command_queue_t *queue)
 {
     // Fetch some data needed to render
     auto transforms_ubo_uniform_group = camera_transforms_uniform();

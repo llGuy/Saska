@@ -99,7 +99,7 @@ void destroy_game(game_memory_t *memory)
 }
 
 // Decides which element gets input focus
-static void handle_global_game_input(game_memory_t *memory, raw_input_t *raw_input)
+static void s_handle_global_game_input(game_memory_t *memory, raw_input_t *raw_input)
 {
     if (raw_input->char_stack[0] == '/' && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_CONSOLE && memory->focus_stack.get_current_focus() != element_focus_t::UI_ELEMENT_INPUT)
     {
@@ -139,7 +139,7 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
             
             
             
-            handle_global_game_input(memory, raw_input);
+            s_handle_global_game_input(memory, raw_input);
             tick_net(raw_input, dt);
             hotreload_assets_if_changed();
 

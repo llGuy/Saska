@@ -30,7 +30,7 @@ static hash_table_inline_t<uint32_t, 30, 3, 4> variable_key_map;
 static const char *user_name;
 
 
-static int32_t get_int_value(variable_t *var)
+static int32_t s_get_int_value(variable_t *var)
 {
     const char *value_start = var->start;
 
@@ -54,7 +54,7 @@ static int32_t get_int_value(variable_t *var)
     return atoi(str_buffer);
 }
 
-static const char *get_string_value(variable_t *var)
+static const char *s_get_string_value(variable_t *var)
 {
     const char *value_start = var->start;
 
@@ -78,7 +78,7 @@ static const char *get_string_value(variable_t *var)
 }
 
 
-static void associate_address_with_variable(void *address, const char *var_name)
+static void s_associate_address_with_variable(void *address, const char *var_name)
 {
     variable_t *var = &variables[*variable_key_map.get(make_constant_string(var_name, (uint32_t)strlen(var_name)).hash)];
 
@@ -86,7 +86,7 @@ static void associate_address_with_variable(void *address, const char *var_name)
 }
 
 
-static void fill_variables_with_values(void)
+static void s_fill_variables_with_values(void)
 {
     for (uint32_t var_index = 0; var_index < variable_count; ++var_index)
     {
@@ -117,13 +117,13 @@ static void fill_variables_with_values(void)
         case VT_INTEGER: {
             int32_t *ptr = (int32_t *)var->data;
 
-            *ptr = get_int_value(var);
+            *ptr = s_get_int_value(var);
         } break;
 
         case VT_STRING: {
             const char **ptr = (const char **)var->data;
 
-            *ptr = get_string_value(var);
+            *ptr = s_get_string_value(var);
         } break;
             
         }
@@ -193,9 +193,9 @@ void load_variables(void)
     }
 
 
-    associate_address_with_variable(&user_name, "user_name");
+    s_associate_address_with_variable(&user_name, "user_name");
 
-    fill_variables_with_values();
+    s_fill_variables_with_values();
 }
 
 void save_variables(void)

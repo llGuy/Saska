@@ -302,7 +302,7 @@ void main(void)
     vec2 current_uvs = fs_in.uvs;
 
     float illumination_decay = 1.0;
-
+    
     for (int i = 0; i < SAMPLES; ++i)
     {
         current_uvs += blur_vector;
@@ -315,5 +315,4 @@ void main(void)
 
         illumination_decay *= DECAY;
     }
-
 }

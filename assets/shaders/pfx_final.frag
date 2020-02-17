@@ -17,4 +17,7 @@ layout(binding = 0, set = 0) uniform sampler2D previous;
 void main(void)
 {
     final_color = texture(previous, fs_in.uvs);
+
+    //float vignette_factor = 1.0 / 4.0;
+    //final_color.rgb *= pow(cos(length(fs_in.uvs * 2 - 1) * vignette_factor), 2);
 }

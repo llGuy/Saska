@@ -1451,6 +1451,26 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *ra
         *sampler2D_layout_ptr = make_uniform_layout(&layout_info);
     }
 
+
+    // Load texture which will hold the colors for objects in the game (trees, players, etc...)
+    image_handle_t colors_hdl = g_image_manager->add("image2D.colors"_hash);
+    auto *colors_ptr = g_image_manager->get(colors_hdl);
+    file_handle_t colors_texture = create_file("textures/player/colors.png", file_type_flags_t::IMAGE | file_type_flags_t::ASSET);
+    external_image_data_t image_data = read_image(colors_texture);
+    make_texture(colors_ptr, image_data.width, image_data.height, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, 2,
+                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_FILTER_NEAREST);
+    transition_image_layout(&colors_ptr->image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, get_global_command_pool());
+    invoke_staging_buffer_for_device_local_image({ (uint32_t)(4 * image_data.width * image_data.height), image_data.pixels },
+                                                 get_global_command_pool(),
+                                                 colors_ptr,
+                                                 (uint32_t)image_data.width, (uint32_t)image_data.height);
+    transition_image_layout(&colors_ptr->image, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            get_global_command_pool());
+    free_external_image_data(&image_data);
+    
+
     uint32_t swapchain_image_count = get_swapchain_image_count();
     uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->add("uniform_layout.camera_transforms_ubo"_hash, swapchain_image_count);
     auto *ubo_layout_ptr = g_uniform_layout_manager->get(ubo_layout_hdl);

@@ -9,40 +9,6 @@
 
 #define _WINSOCKAPI_ 
 
-#if defined (UNITY_BUILD)
-
-#include "allocators.cpp"
-#include "bullet.cpp"
-#include "camera.cpp"
-#include "camera_view.cpp"
-#include "chunk.cpp"
-#include "chunks_gstate.cpp"
-#include "client.cpp"
-#include "collision.cpp"
-#include "component.cpp"
-#include "containers.hpp"
-#include "core.cpp"
-#include "entities_gstate.cpp"
-#include "file_system.cpp"
-#include "game.cpp"
-#include "game_input.cpp"
-#include "gamestate.cpp"
-#include "graphics.cpp"
-#include "memory.cpp"
-#include "net.cpp"
-#include "particles_gstate.cpp"
-#include "player.cpp"
-#include "script.cpp"
-#include "serializer.cpp"
-#include "server.cpp"
-#include "sockets.cpp"
-#include "thread_pool.cpp"
-#include "ui.cpp"
-#include "utility.hpp"
-#include "vulkan.cpp"
-
-#else
-
 #include "thread_pool.hpp"
 #include "memory.hpp"
 #include "vulkan.hpp"
@@ -57,9 +23,6 @@
 #include <xinput.h>
 
 #include "raw_input.hpp"
-
-#endif
-
 
 // Global
 static bool running;

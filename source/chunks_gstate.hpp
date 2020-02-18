@@ -36,6 +36,7 @@ void sync_gpu_with_chunks_state(struct gpu_command_queue_t *queue);
 
 void reset_voxel_interpolation(void);
 void ready_chunk_for_gpu_sync(chunk_t *chunk);
+void ready_chunk_for_gpu_sync(chunk_t *chunk, uint32_t chunk_index);
 void clear_chunk_history(void);
 
 

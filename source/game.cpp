@@ -11,6 +11,8 @@
 #include "menu.hpp"
 #include <ctime>
 
+#include "chunks_gstate.hpp"
+
 #include "deferred_renderer.hpp"
 
 static game_memory_t *g_game_memory;
@@ -90,6 +92,8 @@ void destroy_game(game_memory_t *memory)
     g_framebuffer_manager->clean_up();
     g_pipeline_manager->clean_up();
     g_gpu_buffer_manager->clean_up();
+
+    deinitialize_chunks_state();
 
     deinitialize_net();
     

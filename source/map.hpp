@@ -9,9 +9,9 @@ struct map_data_t
     float32_t chunk_size;
     uint32_t to_update_count;
 
-    chunk_t **chunks;
-    chunk_t **to_update;
+    struct chunk_t **chunks;
+    struct chunk_t **to_update;
 };
 
-void load_map(const map_data_t &data, const char *src_path, model_t *model);
-void save_map(const char *dst_path);
+void load_map(map_data_t *data, const char *src_path, struct model_t *model);
+void save_map(map_data_t *data, const char *dst_path);

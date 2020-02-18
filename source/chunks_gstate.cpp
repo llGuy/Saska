@@ -5,6 +5,7 @@
 #include "chunk.hpp"
 #include "game.hpp"
 #include "net.hpp"
+#include "map.hpp"
 
 #include "deferred_renderer.hpp"
 
@@ -154,7 +155,17 @@ void initialize_chunks_state(void)
 
     gpu_queue = make_gpu_material_submission_queue(20 * 20 * 20, VK_SHADER_STAGE_VERTEX_BIT, VK_COMMAND_BUFFER_LEVEL_PRIMARY, get_global_command_pool());
 
-    chunk_size = 9.0f;
+    map_data_t map_data;
+    load_map(&map_data, "maps/sandbox.map", &chunk_model);
+
+    chunk_size = map_data.chunk_size;
+    grid_edge_size = map_data.grid_edge_size;
+    max_chunks = 20 * 20 * 20;
+    chunks = map_data.chunks;
+    chunks_to_update = map_data.to_update;
+    chunks_to_render_count = map_data.to_update_count;
+
+    /*chunk_size = 9.0f;
     grid_edge_size = 5;
 
     max_chunks = 20 * 20 * 20;
@@ -195,7 +206,7 @@ void initialize_chunks_state(void)
     s_construct_sphere(vector3_t(-20.0f, 70.0f, -120.0f), 60.0f);
     s_construct_sphere(vector3_t(-80.0f, -50.0f, 0.0f), 70.0f);
     s_construct_sphere(vector3_t(80.0f, 50.0f, 0.0f), 70.0f);
-    s_construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);
+    s_construct_plane(vector3_t(0.0f, -100.0f, 0.0f), 60.0f);*/
 
 
     voxel_beacons.default_voxel_color.color = vector4_t(52.0f, 150.0f, 2.0f, 255.0f) / 255.0f;
@@ -317,6 +328,15 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
 
 void deinitialize_chunks_state(void)
 {
+    map_data_t data = {};
+    data.grid_edge_size = grid_edge_size;
+    data.chunk_size = chunk_size;
+    data.to_update_count = chunks_to_render_count;
+    data.chunks = chunks;
+    data.to_update = chunks_to_update;
+
+    save_map(&data, "maps/sandbox.map");
+
     uint32_t i = 0;
     for (uint32_t z = 0; z < grid_edge_size; ++z)
     {
@@ -645,6 +665,17 @@ void ready_chunk_for_gpu_sync(chunk_t *chunk)
     if (!chunk->should_do_gpu_sync)
     {
         chunks_to_gpu_sync[to_sync_count++] = convert_3d_to_1d_index(chunk->chunk_coord.x, chunk->chunk_coord.y, chunk->chunk_coord.z, grid_edge_size);
+        chunk->should_do_gpu_sync = 1;
+    }
+}
+
+
+void ready_chunk_for_gpu_sync(chunk_t *chunk, uint32_t chunk_index)
+{
+    // If it is already scheduled for GPU sync, don't push to the update stack
+    if (!chunk->should_do_gpu_sync)
+    {
+        chunks_to_gpu_sync[to_sync_count++] = chunk_index;
         chunk->should_do_gpu_sync = 1;
     }
 }

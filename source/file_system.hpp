@@ -13,6 +13,8 @@ file_handle_t create_file(const char *file, file_type_t type);
 file_handle_t create_writeable_file(const char *file, file_type_t type);
 void remove_and_destroy_file(file_handle_t handle);
 
+void delete_file(const char *file);
+
 bool has_file_changed(file_handle_t handle);
 
 struct file_contents_t

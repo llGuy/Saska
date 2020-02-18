@@ -13,11 +13,18 @@ struct widget_t
     uniform_group_t uniform;
 };
 
+struct text_input_t
+{
+    bool typing_in_input = 0;
+    ui_box_t input_box;
+    ui_input_text_t input_text;
+};
+
 struct main_menu_t
 {
-    enum buttons_t { BROWSE_SERVER, HOST_SERVER, SETTINGS, QUIT, INVALID_MENU_BUTTON };
+    enum buttons_t { BROWSE_SERVER, BUILD_MAP, SETTINGS, QUIT, INVALID_MENU_BUTTON };
 
-    const char *button_names[5] = { "BROWSE_SERVER", "HOST_SERVER", "SETTINGS", "QUIT", "INVALID" };
+    const char *button_names[5] = { "BROWSE_SERVER", "BUILD_MAP", "SETTINGS", "QUIT", "INVALID" };
     
     font_t *main_menu_font;
 
@@ -50,12 +57,15 @@ struct main_menu_t
     // For the browse server menu
     struct
     {
-        bool typing_in_input = 0;
-        ui_box_t ip_address_input_box;
-        ui_input_text_t input_text;
+        text_input_t input;
 
         bool joining = 0;
     } browse_menu;
+
+    struct
+    {
+        text_input_t input;
+    } build_menu;
 
 
     struct
@@ -269,7 +279,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
         {
             switch(main_menu.hovering_over)
             {
-            case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::HOST_SERVER: case main_menu_t::buttons_t::SETTINGS: {
+            case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::BUILD_MAP: case main_menu_t::buttons_t::SETTINGS: {
                 if (!clicked_previous_frame)
                 {
                     s_open_menu(main_menu.hovering_over);
@@ -342,6 +352,28 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
 }
 
 
+static void s_main_menu_button_init(main_menu_t::buttons_t button, const char *image_path, float32_t current_button_y, float32_t button_size)
+{
+    main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
+                                                               ui_vector2_t(0.0f, current_button_y),
+                                                               ui_vector2_t(button_size, button_size),
+                                                               &main_menu.main_menu,
+                                                               (uint32_t)0x1616161636,
+                                                               backbuffer_resolution());
+    
+    main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
+                                                   ui_vector2_t(0.0f, 0.0f),
+                                                   ui_vector2_t(0.8f, 0.8f),
+                                                   &main_menu.main_menu_buttons_backgrounds[button],
+                                                   (uint32_t)0xFFFFFF36,
+                                                   backbuffer_resolution());
+
+    main_menu.widgets[button].uniform = create_texture_uniform(image_path, &main_menu.widgets[button].image);
+
+    
+}
+
+
 static void s_initialize_main_menu(void)
 {
     main_menu.main_menu.initialize(CENTER, 2.0f,
@@ -372,98 +404,22 @@ static void s_initialize_main_menu(void)
     main_menu.background_color_interpolation.in_animation = 0;
     main_menu.background_color_interpolation.current = vector3_t(0);
     
-    float32_t button_size = 0.25;
+    float32_t button_size = 0.25f;
 
     // Relative to top right
     float32_t current_button_y = 0.0f;
     
-    {
-        main_menu_t::buttons_t button = main_menu_t::buttons_t::BROWSE_SERVER;
-    
-        main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(0.0f, current_button_y),
-                                                                   ui_vector2_t(0.25f, 0.25f),
-                                                                   &main_menu.main_menu,
-                                                                   (uint32_t)0x1616161636,
-                                                                   backbuffer_resolution());
-    
-        main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
-                                                       ui_vector2_t(0.0f, 0.0f),
-                                                       ui_vector2_t(0.8f, 0.8f),
-                                                       &main_menu.main_menu_buttons_backgrounds[button],
-                                                       (uint32_t)0xFFFFFF36,
-                                                       backbuffer_resolution());
+    s_main_menu_button_init(main_menu_t::buttons_t::BROWSE_SERVER, "textures/gui/play_icon.png", current_button_y, button_size);
+    current_button_y -= button_size;
 
-        main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/play_icon.png", &main_menu.widgets[button].image);
+    s_main_menu_button_init(main_menu_t::buttons_t::BUILD_MAP, "textures/gui/build_icon.png", current_button_y, button_size);
+    current_button_y -= button_size;
 
-        current_button_y -= button_size;
-    }
+    s_main_menu_button_init(main_menu_t::buttons_t::SETTINGS, "textures/gui/settings_icon.png", current_button_y, button_size);
+    current_button_y -= button_size;
 
-    {
-        main_menu_t::buttons_t button = main_menu_t::buttons_t::HOST_SERVER;
-    
-        main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(0.0f, current_button_y),
-                                                                   ui_vector2_t(0.25f, 0.25f),
-                                                                   &main_menu.main_menu,
-                                                                   (uint32_t)0x1616161636,
-                                                                   backbuffer_resolution());
-    
-        main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
-                                                       ui_vector2_t(0.0f, 0.0f),
-                                                       ui_vector2_t(0.8f, 0.8f),
-                                                       &main_menu.main_menu_buttons_backgrounds[button],
-                                                       (uint32_t)0xFFFFFF36,
-                                                       backbuffer_resolution());
-
-        main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/host_icon.png", &main_menu.widgets[button].image);
-
-        current_button_y -= button_size;
-    }
-    
-    {
-        main_menu_t::buttons_t button = main_menu_t::buttons_t::SETTINGS;
-    
-        main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(0.0f, current_button_y),
-                                                                   ui_vector2_t(0.25f, 0.25f),
-                                                                   &main_menu.main_menu,
-                                                                   (uint32_t)0x1616161636,
-                                                                   backbuffer_resolution());
-    
-        main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
-                                                       ui_vector2_t(0.0f, 0.0f),
-                                                       ui_vector2_t(0.8f, 0.8f),
-                                                       &main_menu.main_menu_buttons_backgrounds[button],
-                                                       (uint32_t)0xFFFFFF36,
-                                                       backbuffer_resolution());
-
-        main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/settings_icon.png", &main_menu.widgets[button].image);
-
-        current_button_y -= button_size;
-    }
-
-    {
-        main_menu_t::buttons_t button = main_menu_t::buttons_t::QUIT;
-    
-        main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
-                                                                   ui_vector2_t(0.0f, current_button_y),
-                                                                   ui_vector2_t(0.25f, 0.25f),
-                                                                   &main_menu.main_menu,
-                                                                   (uint32_t)0x1616161636,
-                                                                   backbuffer_resolution());
-    
-        main_menu.main_menu_buttons[button].initialize(CENTER, 1.0f,
-                                                       ui_vector2_t(0.0f, 0.0f),
-                                                       ui_vector2_t(0.8f, 0.8f),
-                                                       &main_menu.main_menu_buttons_backgrounds[button],
-                                                       (uint32_t)0xFFFFFF36,
-                                                       backbuffer_resolution());
-
-        main_menu.widgets[button].uniform = create_texture_uniform("textures/gui/quit_icon.png", &main_menu.widgets[button].image);
-
-        current_button_y -= button_size;
-    }
+    s_main_menu_button_init(main_menu_t::buttons_t::QUIT, "textures/gui/quit_icon.png", current_button_y, button_size);
+    current_button_y -= button_size;
 }
 
 
@@ -488,10 +444,17 @@ static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_
             
             // Render the selected menu
         case main_menu_t::buttons_t::BROWSE_SERVER: {
-            push_box_to_render(&main_menu.browse_menu.ip_address_input_box);
+            push_box_to_render(&main_menu.browse_menu.input.input_box);
 
             textured_render_list->mark_section(font_uniform);
-            push_input_text_to_render(&main_menu.browse_menu.input_text, &main_menu.browse_menu.ip_address_input_box, backbuffer_resolution(), 0xFFFFFFC0, dt, 1);
+            push_input_text_to_render(&main_menu.browse_menu.input.input_text, &main_menu.browse_menu.input.input_box, backbuffer_resolution(), 0xFFFFFFFF, dt, 1);
+        } break;
+
+        case main_menu_t::buttons_t::BUILD_MAP: {
+            push_box_to_render(&main_menu.build_menu.input.input_box);
+
+            textured_render_list->mark_section(font_uniform);
+            push_input_text_to_render(&main_menu.build_menu.input.input_text, &main_menu.build_menu.input.input_box, backbuffer_resolution(), 0xFFFFFFFF, dt, 1);
         } break;
             
         }
@@ -598,20 +561,34 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
             // Render the selected menu
         case main_menu_t::buttons_t::BROWSE_SERVER: {
 
-            main_menu.browse_menu.input_text.input(raw_input);
+            main_menu.browse_menu.input.input_text.input(raw_input);
 
             if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
             {
+                // Launch an event
+
                 // Join server
                 main_menu.browse_menu.joining = 1;
                 
-                main_menu.browse_menu.input_text.text.null_terminate();
+                main_menu.browse_menu.input.input_text.text.null_terminate();
                 
-                const char *ip_address = main_menu.browse_menu.input_text.text.characters;
+                const char *ip_address = main_menu.browse_menu.input.input_text.text.characters;
                 
                 join_server(ip_address, variables_get_user_name());
             }
             
+        } break;
+
+        case main_menu_t::buttons_t::BUILD_MAP: {
+
+            main_menu.build_menu.input.input_text.input(raw_input);
+
+            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
+            {
+                // Launch an event
+                main_menu.build_menu.input.input_text.text.null_terminate();
+            }
+
         } break;
             
         }
@@ -621,18 +598,19 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
 
 static void s_initialize_menu_windows(void)
 {
-    main_menu.browse_menu.ip_address_input_box.initialize(LEFT_DOWN, 15.0f,
-                                                          ui_vector2_t(0.05f, 0.05f),
-                                                          ui_vector2_t(0.6f, 0.6f),
-                                                          &main_menu.main_menu_slider,
-                                                          0x16161646,
-                                                          backbuffer_resolution());
+    main_menu.browse_menu.input.input_box.initialize(LEFT_DOWN, 15.0f, ui_vector2_t(0.05f, 0.05f), ui_vector2_t(0.6f, 0.6f),
+        &main_menu.main_menu_slider, 0x16161646, backbuffer_resolution());
 
-    main_menu.browse_menu.input_text.text.initialize(&main_menu.browse_menu.ip_address_input_box,
-                                                     menus_font,
-                                                     ui_text_t::font_stream_box_relative_to_t::BOTTOM,
-                                                     0.8f, 1.0f,
-                                                     55, 1.8f);
+    main_menu.browse_menu.input.input_text.text.initialize(&main_menu.browse_menu.input.input_box, menus_font,
+        ui_text_t::font_stream_box_relative_to_t::BOTTOM, 0.8f, 1.0f, 55, 1.8f);
 
-    main_menu.browse_menu.input_text.text_color = 0xFFFFFFC0;
+    main_menu.browse_menu.input.input_text.text_color = 0xFFFFFFFF;
+
+    main_menu.build_menu.input.input_box.initialize(LEFT_DOWN, 15.0f, ui_vector2_t(0.05f, 0.05f), ui_vector2_t(0.6f, 0.6f),
+        &main_menu.main_menu_slider, 0x16161646, backbuffer_resolution());
+
+    main_menu.build_menu.input.input_text.text.initialize(&main_menu.build_menu.input.input_box, menus_font,
+        ui_text_t::font_stream_box_relative_to_t::BOTTOM, 0.8f, 1.0f, 55, 1.8f);
+
+    main_menu.build_menu.input.input_text.text_color = 0xFFFFFFFF;
 }

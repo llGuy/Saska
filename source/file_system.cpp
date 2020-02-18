@@ -31,6 +31,11 @@ void close_file(file_object_t *object)
     CloseHandle(object->handle);
 }
 
+void sys_delete_file(const char *file)
+{
+    DeleteFileA(file);
+}
+
 FILETIME get_last_file_write(file_object_t *object)
 {
     FILETIME creation, last_access, last_write;
@@ -247,4 +252,9 @@ external_image_data_t read_image(file_handle_t handle)
 void free_external_image_data(external_image_data_t *data)
 {
     stbi_image_free(data->pixels);
+}
+
+void delete_file(const char *file)
+{
+    sys_delete_file(file);
 }

@@ -4,7 +4,7 @@
 #include "graphics.hpp"
 #include "player.hpp"
 
-void initialize_gamestate(struct raw_input_t *raw_input);
+void initialize_gamestate(struct raw_input_t *raw_input, struct event_dispatcher_t *dispatcher);
 void populate_gamestate(struct game_state_initialize_packet_t *packet, struct raw_input_t *raw_input);
 void deinitialize_gamestate(void);
 

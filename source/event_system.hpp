@@ -21,6 +21,7 @@ enum event_type_t
 { 
     REQUEST_TO_JOIN_SERVER,
     ENTER_SERVER_WORLD,
+    LAUNCH_MAP_EDITOR,
     OPEN_MENU,
     EXIT_MENU,
     OPEN_CONSOLE,
@@ -34,6 +35,11 @@ enum event_type_t
 struct event_data_request_to_join_server_t
 {
     const char *ip_address;
+};
+
+struct event_data_launch_map_editor_t
+{
+    char *map_name;
 };
 
 struct event_t
@@ -54,7 +60,6 @@ struct listener_subscriptions_t
 
 struct event_dispatcher_t
 {
-
     void set_callback(listener_t listener, listener_callback_t callback, void *object);
     void subscribe(event_type_t type, listener_t listener);
     void submit_event(event_type_t type, void *data);

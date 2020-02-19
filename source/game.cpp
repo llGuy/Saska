@@ -63,13 +63,13 @@ void initialize_game(game_memory_t *memory, raw_input_t *raw_input, create_vulka
                 }
             }
             
-            initialize_gamestate(raw_input);
+            initialize_gamestate(raw_input, &dispatcher);
         } break;
     case application_type_t::CONSOLE_APPLICATION_MODE:
         {
             initialize_net(app_mode, &dispatcher);
             initialize_scripting();
-            initialize_gamestate(raw_input);
+            initialize_gamestate(raw_input, &dispatcher);
         } break;
     }
 
@@ -157,7 +157,7 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
                 tick_gamestate(&game_input, dt, &queue, memory->app_type, memory->focus_stack.get_current_focus());
 
                 dbg_handle_input(raw_input);
-                update_game_ui(get_pfx_framebuffer_hdl(), raw_input, memory->focus_stack.get_current_focus());
+                update_game_ui(get_pfx_framebuffer_hdl(), raw_input, memory->focus_stack.get_current_focus(), &dispatcher);
                 render_game_ui(get_pfx_framebuffer_hdl(), &queue);
         
                 render_final_output(frame.image_index, &queue);
@@ -170,6 +170,8 @@ void game_tick(game_memory_t *memory, raw_input_t *raw_input, float32_t dt)
             tick_gamestate(nullptr, dt, nullptr, memory->app_type, (element_focus_t)0);
         } break;
     }
+
+    dispatcher.dispatch_events();
 }
 
 application_type_t get_app_type(void)

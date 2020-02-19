@@ -796,7 +796,7 @@ void initialize_game_ui(gpu_command_queue_pool_t *qpool, uniform_pool_t *uniform
     initialize_debug_overlay();
 }
 
-void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus)
+void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_input, element_focus_t focus, event_dispatcher_t *dispatcher)
 {
     handle_debug_overlay_input(raw_input);
     render_debug_overlay(&textured_vertex_render_list);
@@ -816,7 +816,7 @@ void update_game_ui(framebuffer_handle_t dst_framebuffer_hdl, raw_input_t *raw_i
 
     if (focus == element_focus_t::UI_ELEMENT_MENU)
     {
-        update_menus(raw_input, focus);
+        update_menus(raw_input, focus, dispatcher);
         push_menus_to_render(&textured_vertex_render_list, &colored_vertex_render_list, focus, raw_input->dt);
     }
     

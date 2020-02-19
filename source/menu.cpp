@@ -4,6 +4,9 @@
 #include "core.hpp"
 #include "deferred_renderer.hpp"
 
+#include "event_system.hpp"
+#include "allocators.hpp"
+
 
 // Main menu
 
@@ -98,7 +101,7 @@ static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_
 
 static bool s_detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y);
 
-static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt);
+static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt, event_dispatcher_t *dispatcher);
 static void s_open_menu(main_menu_t::buttons_t button);
 static void s_initialize_menu_windows(void);
 
@@ -140,7 +143,7 @@ void prompt_user_for_name(void)
 }
 
 
-void update_menus(raw_input_t *raw_input, element_focus_t focus)
+void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatcher_t *dispatcher)
 {
     if (main_menu.user_name_prompt.prompting_user_name)
     {
@@ -298,7 +301,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus)
             clicked_previous_frame = 0;
         }
 
-        s_update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt);
+        s_update_open_menu(main_menu.selected_menu, raw_input, raw_input->dt, dispatcher);
     }
 }
 
@@ -536,7 +539,7 @@ static void s_open_menu(main_menu_t::buttons_t button)
 }
 
 
-static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt)
+static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt, event_dispatcher_t *dispatcher)
 {
     main_menu.main_menu_slider_x.animate(dt);
 
@@ -587,6 +590,13 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
             {
                 // Launch an event
                 main_menu.build_menu.input.input_text.text.null_terminate();
+
+                auto *data = LN_MALLOC(event_data_launch_map_editor_t, 1);
+                uint32_t str_len = (uint32_t)strlen(main_menu.build_menu.input.input_text.text.characters);
+                data->map_name = FL_MALLOC(char, str_len * 2);
+                for (int i = 0; i < str_len + 1; ++i) data->map_name[i] = main_menu.build_menu.input.input_text.text.characters[i];
+                //memcpy_s(data->map_name, str_len + 1, main_menu.build_menu.input.input_text.text.characters, str_len + 1);
+                dispatcher->submit_event(event_type_t::LAUNCH_MAP_EDITOR, data);
             }
 
         } break;

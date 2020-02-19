@@ -21,6 +21,7 @@ struct chunks_state_flags_t
 void initialize_chunks_state(void);
 // Happens whenever voxels need to be filled (when client joins server, loads map, launches editor, ...)
 void populate_chunks_state(struct game_state_initialize_packet_t *packet);
+void populate_chunks_state(const char *map_path);
 void deinitialize_chunks_state(void);
 
 void fill_game_state_initialize_packet_with_chunk_state(struct game_state_initialize_packet_t *packet);

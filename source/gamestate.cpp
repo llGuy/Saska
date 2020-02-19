@@ -8,6 +8,8 @@
 #include "atmosphere.hpp"
 #include "deferred_renderer.hpp"
 
+#include "event_system.hpp"
+
 
 // Global
 static bool initialized_world;
@@ -18,9 +20,48 @@ static uint64_t current_tick;
 static void s_render_world(gpu_command_queue_t *queue);
 
 
-
-void initialize_gamestate(struct raw_input_t *raw_input)
+struct gamestate_event_data_cache_t
 {
+};
+
+static gamestate_event_data_cache_t event_data_cache;
+
+static void s_gamestate_event_callback(void *object, event_t *e)
+{
+    switch(e->type)
+    {
+
+    case event_type_t::LAUNCH_MAP_EDITOR:
+    {
+        auto *data = (event_data_launch_map_editor_t *)e->data;
+
+        deinitialize_entities_state();
+        deinitialize_chunks_state();
+
+        uint32_t pre_length = (uint32_t)strlen("maps/");
+        uint32_t name_length = (uint32_t)strlen(data->map_name);
+        uint32_t post_length = (uint32_t)strlen(".map");
+        uint32_t path_length = pre_length + name_length + post_length;
+        auto *full_path = LN_MALLOC(char, path_length + 1);
+        memcpy_s(full_path, pre_length, "maps/", pre_length);
+        memcpy_s(full_path + pre_length, name_length, data->map_name, name_length);
+        memcpy_s(full_path + pre_length + name_length, post_length, ".map", post_length);
+        full_path[path_length] = 0;
+        populate_chunks_state(full_path);
+
+        clear_and_request_focus(element_focus_t::WORLD_3D_ELEMENT_FOCUS);
+    } break;
+
+    }
+}
+
+
+void initialize_gamestate(struct raw_input_t *raw_input, event_dispatcher_t *dispatcher)
+{
+    // Subscribe to events
+    dispatcher->set_callback(listener_t::WORLD, &s_gamestate_event_callback, &event_data_cache);
+    dispatcher->subscribe(event_type_t::LAUNCH_MAP_EDITOR, listener_t::WORLD);
+    
     initialize_entities_state();
     initialize_chunks_state();
     initialize_particles_state();

@@ -42,3 +42,7 @@ inline void deallocate_free_list(void *pointer, free_list_allocator_t *allocator
 {
     deallocate_free_list_impl(pointer, allocator);
 }
+
+
+#define FL_MALLOC(type, n) (type *)allocate_free_list(sizeof(type) * n)
+#define LN_MALLOC(type, n) (type *)allocate_linear(sizeof(type) * n)

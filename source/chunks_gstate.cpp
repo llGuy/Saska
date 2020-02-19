@@ -165,7 +165,7 @@ void initialize_chunks_state(void)
     chunks_to_update = map_data.to_update;
     chunks_to_render_count = map_data.to_update_count;
 
-    /*chunk_size = 9.0f;
+/*    chunk_size = 9.0f;
     grid_edge_size = 5;
 
     max_chunks = 20 * 20 * 20;
@@ -326,16 +326,29 @@ void populate_chunks_state(game_state_initialize_packet_t *packet)
 }
 
 
+void populate_chunks_state(const char *map_path)
+{
+    map_data_t map_data;
+    load_map(&map_data, map_path, &chunk_model);
+
+    chunk_size = map_data.chunk_size;
+    grid_edge_size = map_data.grid_edge_size;
+    max_chunks = 20 * 20 * 20;
+    chunks = map_data.chunks;
+    chunks_to_update = map_data.to_update;
+    chunks_to_render_count = map_data.to_update_count;
+}
+
+
 void deinitialize_chunks_state(void)
 {
-    map_data_t data = {};
+    /*map_data_t data = {};
     data.grid_edge_size = grid_edge_size;
     data.chunk_size = chunk_size;
     data.to_update_count = chunks_to_render_count;
     data.chunks = chunks;
     data.to_update = chunks_to_update;
-
-    save_map(&data, "maps/sandbox.map");
+    save_map(&data, "maps/sandbox.map");*/
 
     uint32_t i = 0;
     for (uint32_t z = 0; z < grid_edge_size; ++z)

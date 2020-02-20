@@ -47,7 +47,11 @@ static void s_gamestate_event_callback(void *object, event_t *e)
         memcpy_s(full_path + pre_length, name_length, data->map_name, name_length);
         memcpy_s(full_path + pre_length + name_length, post_length, ".map", post_length);
         full_path[path_length] = 0;
+
+        // When entering this function, break at allocate_free_list
         populate_chunks_state(full_path);
+
+        create_map_editor_entity(get_raw_input());
 
         clear_and_request_focus(element_focus_t::WORLD_3D_ELEMENT_FOCUS);
     } break;

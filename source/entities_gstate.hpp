@@ -23,6 +23,8 @@ void sync_gpu_with_entities_state(struct gpu_command_queue_t *queue);
 
 player_handle_t create_player_from_player_init_packet(uint32_t local_user_client_index, player_state_initialize_packet_t *player_init_packet, camera_handle_t main_camera = 0);
 
+void create_map_editor_entity(raw_input_t *raw_input);
+
 // Spawns player in random location of the world
 player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id /* Index into the clients array */);
 void spawn_bullet(player_t *shooter);

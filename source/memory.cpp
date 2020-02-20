@@ -102,11 +102,12 @@ void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, c
     // TODO(luc) : make free list allocator adjust the smallest free block according to the alignment as well
     free_block_header_t *previous_free_block = nullptr;
     free_block_header_t *smallest_free_block = allocator->free_block_head;
+
     for (free_block_header_t *header = allocator->free_block_head; header; header = header->next_free_block)
     {
 	if (header->free_block_size >= total_allocation_size)
 	{
-	    if (smallest_free_block->free_block_size >= header->free_block_size)
+	    if (smallest_free_block->free_block_size >= header->free_block_size || smallest_free_block->free_block_size < total_allocation_size)
 	    {
 		smallest_free_block = header;
 		break;
@@ -144,6 +145,8 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
     free_list_allocation_header_t *allocation_header = (free_list_allocation_header_t *)((byte_t *)pointer - sizeof(free_list_allocation_header_t));
     free_block_header_t *new_free_block_header = (free_block_header_t *)allocation_header;
     new_free_block_header->free_block_size = allocation_header->size + sizeof(free_block_header_t);
+
+    allocator->used_memory -= new_free_block_header->free_block_size;
 
     free_block_header_t *previous = nullptr;
     free_block_header_t *current_header = allocator->free_block_head;
@@ -219,5 +222,10 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
     {
 	// at the end of the loop, previous is that last current before current = nullptr
 	previous->next_free_block = new_free_block_header;
+    }
+
+    if (new_free_block_header->free_block_size == 2033)
+    {
+        __debugbreak();
     }
 }

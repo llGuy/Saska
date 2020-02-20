@@ -460,6 +460,45 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
 }
 
 
+void create_map_editor_entity(raw_input_t *raw_input)
+{
+    camera_handle_t main_camera = add_camera(raw_input, backbuffer_resolution());
+    bind_camera_to_3d_output(main_camera);
+
+    player_create_info_t player_create_info = {};
+    player_create_info.name = "editor"_hash;
+    player_create_info.ws_position = vector3_t(0);
+    player_create_info.ws_direction = vector3_t(0, 0, -1);
+    player_create_info.ws_rotation = quaternion_t(glm::radians(45.0f), vector3_t(0, 1, 0));
+    player_create_info.ws_size = vector3_t(2);
+    player_create_info.starting_velocity = 15.0f;
+    player_create_info.color = player_color_t::DARK_GRAY;
+    player_create_info.physics_info.enabled = 0;
+    player_create_info.terraform_power_info.speed = 300.0f;
+    player_create_info.terraform_power_info.terraform_radius = 20.0f;
+
+    player_create_info.camera_info.camera_index = main_camera;
+    player_create_info.camera_info.is_third_person = 0;
+    player_create_info.camera_info.distance_from_player = 15.0f;
+
+    player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
+    player_create_info.animation_info.skeleton = &player_mesh_skeleton;
+    player_create_info.animation_info.cycles = &player_mesh_cycles;
+    player_create_info.shoot_info.cool_off = 0.0f;
+    player_create_info.shoot_info.shoot_speed = 0.3f;
+    player_create_info.network_info.client_state_index = 0;
+
+    player_t user;
+    user.initialize(&player_create_info);
+
+    user.rolling_mode = 0;
+
+    player_handle_t user_handle = add_player(user);
+
+    main_player = user_handle;
+}
+
+
 player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id /* Index into the clients array */)
 {
     // Spawns a player at the edge of a world

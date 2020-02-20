@@ -107,7 +107,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     stack_allocator_global.capacity = (uint32_t)megabytes(10);
     stack_allocator_global.start = stack_allocator_global.current = malloc(stack_allocator_global.capacity);
 
-    free_list_allocator_global.available_bytes = (uint32_t)megabytes(30);
+    free_list_allocator_global.available_bytes = (uint32_t)megabytes(50);
     free_list_allocator_global.start = malloc(free_list_allocator_global.available_bytes);
     init_free_list_allocator_head(&free_list_allocator_global);
 

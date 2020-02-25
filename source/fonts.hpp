@@ -2,8 +2,7 @@
 
 #include "gui_box.hpp"
 
-struct font_character_t
-{
+struct font_character_t {
     char character_value;
     vector2_t uvs_base;
     vector2_t uvs_size;
@@ -12,8 +11,7 @@ struct font_character_t
     float32_t advance;
 };
 
-struct font_t
-{
+struct font_t {
     uint32_t char_count;
     image_handle_t font_img;
 
@@ -22,8 +20,7 @@ struct font_t
 
 typedef int32_t font_handle_t;
 
-struct ui_text_t
-{
+struct ui_text_t {
     ui_box_t *dst_box;
     font_t *font;
     
@@ -59,8 +56,7 @@ struct ui_text_t
 };
 
 
-struct ui_input_text_t
-{
+struct ui_input_text_t {
     uint32_t cursor_position = 0;
     ui_text_t text;
 

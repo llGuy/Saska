@@ -5,8 +5,7 @@
 #include "debug_overlay.hpp"
 
 
-struct overlay_t
-{
+struct overlay_t {
     ui_box_t overlay;
     font_t *debug_font;
 
@@ -19,8 +18,7 @@ struct overlay_t
 static overlay_t debug_overlay;
 
 
-void initialize_debug_overlay()
-{
+void initialize_debug_overlay() {
     debug_overlay.debug_font = get_font("liberation_mono.font"_hash);
 
     debug_overlay.overlay.initialize(LEFT_UP, 0.8f,
@@ -40,10 +38,8 @@ void initialize_debug_overlay()
 }
 
 
-void render_debug_overlay(gui_textured_vertex_render_list_t *textured_render_list)
-{
-    if (debug_overlay.display)
-    {
+void render_debug_overlay(gui_textured_vertex_render_list_t *textured_render_list) {
+    if (debug_overlay.display) {
         textured_render_list->mark_section(debug_font_uniform());
         push_box_to_render(&debug_overlay.overlay);
         push_text_to_render(&debug_overlay.fps_counter, backbuffer_resolution());
@@ -51,20 +47,16 @@ void render_debug_overlay(gui_textured_vertex_render_list_t *textured_render_lis
 }
 
 
-void handle_debug_overlay_input(raw_input_t *raw_input)
-{
-    if (raw_input->buttons[button_type_t::F3].state != button_state_t::NOT_DOWN)
-    {
+void handle_debug_overlay_input(raw_input_t *raw_input) {
+    if (raw_input->buttons[button_type_t::F3].state != button_state_t::NOT_DOWN) {
         debug_overlay.display ^= 1;
     }
 
     static float32_t fps_update_elapsed = 0.0f;
-    if (raw_input->dt > 0)
-    {
+    if (raw_input->dt > 0) {
         fps_update_elapsed += raw_input->dt;
 
-        if (fps_update_elapsed > 0.05f)
-        {
+        if (fps_update_elapsed > 0.05f) {
             fps_update_elapsed = 0.0f;
             debug_overlay.fps = (int32_t)(1.0f / raw_input->dt);
             char buffer[4] = {};

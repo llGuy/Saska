@@ -9,8 +9,7 @@
 enum variable_type_t { VT_INTEGER, VT_STRING };
 
 
-struct variable_t
-{
+struct variable_t {
     variable_type_t type;
 
     const char *start;
@@ -30,19 +29,16 @@ static hash_table_inline_t<uint32_t, 30, 3, 4> variable_key_map;
 static const char *user_name;
 
 
-static int32_t s_get_int_value(variable_t *var)
-{
+static int32_t s_get_int_value(variable_t *var) {
     const char *value_start = var->start;
 
-    for (; *value_start != ' '; ++value_start)
-    {
+    for (; *value_start != ' '; ++value_start) {
     }
 
     ++value_start;
     
     uint32_t int_length = 0;
-    for (; value_start[int_length] != '\n' && value_start[int_length] != '\r'; ++int_length)
-    {
+    for (; value_start[int_length] != '\n' && value_start[int_length] != '\r'; ++int_length) {
     }
 
 
@@ -54,19 +50,16 @@ static int32_t s_get_int_value(variable_t *var)
     return atoi(str_buffer);
 }
 
-static const char *s_get_string_value(variable_t *var)
-{
+static const char *s_get_string_value(variable_t *var) {
     const char *value_start = var->start;
 
-    for (; *value_start != ' '; ++value_start)
-    {
+    for (; *value_start != ' '; ++value_start) {
     }
 
     ++value_start;
 
     uint32_t string_length = 0;
-    for (; value_start[string_length] != '\n' && value_start[string_length] != '\r'; ++string_length)
-    {
+    for (; value_start[string_length] != '\n' && value_start[string_length] != '\r'; ++string_length) {
     }
 
     char *str_buffer = (char *)allocate_free_list(string_length + 1);
@@ -78,18 +71,15 @@ static const char *s_get_string_value(variable_t *var)
 }
 
 
-static void s_associate_address_with_variable(void *address, const char *var_name)
-{
+static void s_associate_address_with_variable(void *address, const char *var_name) {
     variable_t *var = &variables[*variable_key_map.get(make_constant_string(var_name, (uint32_t)strlen(var_name)).hash)];
 
     var->data = address;
 }
 
 
-static void s_fill_variables_with_values(void)
-{
-    for (uint32_t var_index = 0; var_index < variable_count; ++var_index)
-    {
+static void s_fill_variables_with_values(void) {
+    for (uint32_t var_index = 0; var_index < variable_count; ++var_index) {
         variable_t *var = &variables[var_index];
 
         static auto is_number = [](const char *buffer) -> bool { return (buffer[0] >= 48 && buffer[0] <= 57); };
@@ -97,22 +87,18 @@ static void s_fill_variables_with_values(void)
         // Determine type
         const char *value_start = var->start;
 
-        for (; *value_start != ' '; ++value_start)
-        {
+        for (; *value_start != ' '; ++value_start) {
         }
         ++value_start;
 
-        if (is_number(value_start))
-        {
+        if (is_number(value_start)) {
             var->type = VT_INTEGER;
         }
-        else
-        {
+        else {
             var->type = VT_STRING;
         }
         
-        switch(var->type)
-        {
+        switch(var->type) {
             
         case VT_INTEGER: {
             int32_t *ptr = (int32_t *)var->data;
@@ -131,8 +117,7 @@ static void s_fill_variables_with_values(void)
 }
 
 
-void load_variables(void)
-{
+void load_variables(void) {
     file = create_writeable_file("game.variables", file_type_flags_t::ASSET);
     file_data = read_file(file);
 
@@ -144,27 +129,21 @@ void load_variables(void)
 
     bool go_to_next_line = 0;
     
-    for (char *current = (char *)file_data.content; *current; ++current)
-    {
-        if (strcmp("end", current_variable_name_buffer) == 0)
-        {
+    for (char *current = (char *)file_data.content; *current; ++current) {
+        if (strcmp("end", current_variable_name_buffer) == 0) {
             break;
         }
         
-        if (stack_pointer == 0)
-        {
+        if (stack_pointer == 0) {
             name_start = current;
         }
         
-        if (go_to_next_line)
-        {
-            if (*current == '\n')
-            {
+        if (go_to_next_line) {
+            if (*current == '\n') {
                 go_to_next_line = 0;
             }
         }
-        else if (*current == ' ')
-        {
+        else if (*current == ' ') {
             current_variable_name_buffer[stack_pointer] = 0;
 
             uint32_t length = stack_pointer;
@@ -186,8 +165,7 @@ void load_variables(void)
 
             memset(current_variable_name_buffer, 0, length);
         }
-        else
-        {
+        else {
             current_variable_name_buffer[stack_pointer++] = *current;
         }
     }
@@ -198,23 +176,20 @@ void load_variables(void)
     s_fill_variables_with_values();
 }
 
-void save_variables(void)
-{
+void save_variables(void) {
     // Loop through all the variables
     char *buffer = (char *)allocate_linear(5000);
 
     uint32_t current_byte = 0;
 
-    for (uint32_t var_index = 0; var_index < variable_count; ++var_index)
-    {
+    for (uint32_t var_index = 0; var_index < variable_count; ++var_index) {
         variable_t *var = &variables[var_index];
 
         // Append variable name
         const char *var_name = var->start;
 
         uint32_t var_name_length = 0;
-        for (; *var_name != ' '; ++var_name)
-        {
+        for (; *var_name != ' '; ++var_name) {
             buffer[current_byte + var_name_length] = *var_name;
             
             ++var_name_length;
@@ -225,8 +200,7 @@ void save_variables(void)
         current_byte += var_name_length + 1;
 
         // Push variable value
-        switch (var->type)
-        {
+        switch (var->type) {
             
         case VT_INTEGER: {
             int32_t *ptr = (int32_t *)var->data;
@@ -267,7 +241,6 @@ void save_variables(void)
 }
 
 // A bunch of variables
-const char *&variables_get_user_name(void)
-{
+const char *&variables_get_user_name(void) {
     return user_name;
 }

@@ -3,14 +3,12 @@
 
 
 // Settings
-struct action_bound_mouse_keyboard_button_t
-{
+struct action_bound_mouse_keyboard_button_t {
     // Keyboard/Mouse button
     button_type_t bound_button;
 };
 
-struct action_bound_gamepad_button_t
-{
+struct action_bound_gamepad_button_t {
     gamepad_button_type_t bound_button;
 };
 
@@ -22,8 +20,7 @@ static action_bound_gamepad_button_t bound_gamepad_buttons[game_input_action_typ
 
 
 
-void initialize_game_input_settings(void)
-{
+void initialize_game_input_settings(void) {
     bound_key_mouse_buttons[OK].bound_button = button_type_t::ENTER;
     bound_key_mouse_buttons[CANCEL].bound_button = button_type_t::ESCAPE;
     bound_key_mouse_buttons[MENU].bound_button = button_type_t::ESCAPE;
@@ -70,8 +67,7 @@ void initialize_game_input_settings(void)
 }
 
 
-static void set_button_action_state(uint32_t action, raw_input_t *raw_input, game_input_t *dst, float32_t dt)
-{
+static void set_button_action_state(uint32_t action, raw_input_t *raw_input, game_input_t *dst, float32_t dt) {
     button_input_t *raw_key_mouse_input = &raw_input->buttons[bound_key_mouse_buttons[action].bound_button];
     gamepad_button_input_t *raw_gamepad_input = &raw_input->gamepad_buttons[bound_gamepad_buttons[action].bound_button];
 
@@ -92,8 +88,7 @@ void translate_raw_to_game_input(raw_input_t *raw_input, game_input_t *dst, floa
 {
     if (focus == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
     // For buttons
-    for (uint32_t action = 0; action < game_input_action_type_t::INVALID_ACTION; ++action)
-    {
-        set_button_action_state(action, raw_input, dst, dt);
-    }
+        for (uint32_t action = 0; action < game_input_action_type_t::INVALID_ACTION; ++action) {
+            set_button_action_state(action, raw_input, dst, dt);
+        }
 }

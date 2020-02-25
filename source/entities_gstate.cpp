@@ -12,7 +12,6 @@
 #define MAX_PLAYERS 30
 #define MAX_BULLETS 100
 
-// Global
 static int32_t player_count = 0;
 static player_t player_list[MAX_PLAYERS];
 static int32_t bullet_count = 0;
@@ -54,10 +53,8 @@ static player_handle_t add_player(const player_t &player);
 
 
 // "Public" definitions
-void initialize_entities_state(void)
-{
-    switch (get_app_type())
-    {
+void initialize_entities_state(void) {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         VkCommandPool *cmdpool = get_global_command_pool();
 
@@ -158,13 +155,11 @@ void initialize_entities_state(void)
 }
 
 
-void populate_entities_state(game_state_initialize_packet_t *packet, raw_input_t *raw_input)
-{
+void populate_entities_state(game_state_initialize_packet_t *packet, raw_input_t *raw_input) {
     camera_handle_t main_camera = add_camera(raw_input, backbuffer_resolution());
     bind_camera_to_3d_output(main_camera);
     
-    for (uint32_t i = 0; i < packet->player_count; ++i)
-    {
+    for (uint32_t i = 0; i < packet->player_count; ++i) {
         player_state_initialize_packet_t *player_init_packet = &packet->player[i];
 
         create_player_from_player_init_packet(packet->client_index, &packet->player[i], main_camera);
@@ -172,8 +167,7 @@ void populate_entities_state(game_state_initialize_packet_t *packet, raw_input_t
 }
 
 
-void deinitialize_entities_state(void)
-{
+void deinitialize_entities_state(void) {
     // Gets rid of all the entities, terrains, etc..., but not rendering stuff.
     player_count = 0;
     
@@ -185,8 +179,7 @@ void deinitialize_entities_state(void)
 
 
     // Deinitialize entities:
-    for (uint32_t i = 0; i < (uint32_t)player_count; ++i)
-    {
+    for (uint32_t i = 0; i < (uint32_t)player_count; ++i) {
         player_t *player = &player_list[i];
         deallocate_free_list(player->animation.animation_instance.interpolated_transforms);
         deallocate_free_list(player->animation.animation_instance.current_joint_transforms);
@@ -206,14 +199,12 @@ void deinitialize_entities_state(void)
 }
 
 
-void fill_game_state_initialize_packet_with_entities_state(struct game_state_initialize_packet_t *packet, player_handle_t new_client_index)
-{
+void fill_game_state_initialize_packet_with_entities_state(struct game_state_initialize_packet_t *packet, player_handle_t new_client_index) {
     packet->client_index = new_client_index;
     packet->player_count = player_count;
     packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * player_count);
 
-    for (uint32_t player = 0; player < (uint32_t)player_count; ++player)
-    {
+    for (uint32_t player = 0; player < (uint32_t)player_count; ++player) {
         player_t *p_player = &player_list[player];
 
         packet->player[player].client_id = p_player->network.client_state_index;
@@ -232,15 +223,11 @@ void fill_game_state_initialize_packet_with_entities_state(struct game_state_ini
 }
 
 
-void tick_entities_state(game_input_t *game_input, float32_t dt, application_type_t app_type)
-{
-    switch (app_type)
-    {
-    case application_type_t::WINDOW_APPLICATION_MODE: 
-    {
+void tick_entities_state(game_input_t *game_input, float32_t dt, application_type_t app_type) {
+    switch (app_type) {
+    case application_type_t::WINDOW_APPLICATION_MODE:  {
         player_t *main_player_ptr = get_user_player();
-        if (main_player_ptr)
-        {
+        if (main_player_ptr) {
             handle_main_player_keyboard_input(main_player_ptr, game_input, dt);
             handle_main_player_mouse_movement(main_player_ptr, game_input, dt);
             handle_main_player_mouse_button_input(main_player_ptr, game_input, dt);
@@ -258,21 +245,16 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
     // TODO: FIND OUT WHY SOMETIMES TERRAFORMING ISN'T THE SAME FOR SERVER AND CLIENT (THEY DON'T AMOUNT TO THE SAME RESULTS!)
     bool still_have_commands_to_go_through = 1;
 
-    while (still_have_commands_to_go_through)
-    {
+    while (still_have_commands_to_go_through) {
         still_have_commands_to_go_through = 0;
         
-        for (uint32_t player_index = 0; player_index < (uint32_t)player_count; ++player_index)
-        {
+        for (uint32_t player_index = 0; player_index < (uint32_t)player_count; ++player_index) {
             player_t *player = &player_list[player_index];
 
             // Commands to flush basically equals the amount of player_states that the player has left
-            if (player->network.commands_to_flush > 0)
-            {
-                switch (app_type)
-                {
-                case application_type_t::WINDOW_APPLICATION_MODE:
-                    {
+            if (player->network.commands_to_flush > 0) {
+                switch (app_type) {
+                case application_type_t::WINDOW_APPLICATION_MODE: {
                         
                         float32_t client_local_dt = player->network.tick(player, 0.0f);
                         player->physics.tick(player, client_local_dt);
@@ -283,8 +265,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                         player->shoot.tick(player, client_local_dt);
                         
                     } break;
-                case application_type_t::CONSOLE_APPLICATION_MODE:
-                    {
+                case application_type_t::CONSOLE_APPLICATION_MODE: {
                         float32_t client_local_dt = player->network.tick(player, 0.0f);
                         player->physics.tick(player, client_local_dt);
                         player->camera.tick(player, client_local_dt);
@@ -297,8 +278,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                 still_have_commands_to_go_through |= (player->network.commands_to_flush > 0);
             }
             // Basically if it is the client program running
-            else if (player_index == main_player)
-            {
+            else if (player_index == main_player) {
                 // Print to console player state before
                 player->network.tick(player, 0.0f);
                 player->physics.tick(player, dt);
@@ -309,17 +289,13 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                 player->shoot.tick(player, dt);
             }
             // Local client (if entity is not controlled by user) or server when there are no commands to flush
-            else
-            {
-                if (player->network.is_remote)
-                {
+            else {
+                if (player->network.is_remote) {
                     player->network.tick(player, dt);
                 }
             
-                switch (app_type)
-                {
-                case application_type_t::WINDOW_APPLICATION_MODE:
-                {
+                switch (app_type) {
+                case application_type_t::WINDOW_APPLICATION_MODE: {
                     player->rendering.tick(player, dt);
                     player->animation.tick(player, dt);
                 } break;
@@ -328,8 +304,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
                 }
             }
 
-            if (player_index == main_player)
-            {
+            if (player_index == main_player) {
                 cache_player_state(dt);
             }
 
@@ -337,22 +312,17 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
         }
     }
 
-    for (uint32_t bullet_index = 0; bullet_index < (uint32_t)bullet_count; ++bullet_index)
-    {
+    for (uint32_t bullet_index = 0; bullet_index < (uint32_t)bullet_count; ++bullet_index) {
         bullet_t *bullet = &bullet_list[bullet_index];
 
-        if (!bullet->dead)
-        {
-            switch (app_type)
-            {
-            case application_type_t::WINDOW_APPLICATION_MODE:
-                {
+        if (!bullet->dead) {
+            switch (app_type) {
+            case application_type_t::WINDOW_APPLICATION_MODE: {
                     bullet->rendering.tick(bullet, dt);
                     bullet->bounce_physics.tick(bullet, dt);
                     bullet->burnable.tick(bullet, dt);
                 } break;
-            case application_type_t::CONSOLE_APPLICATION_MODE:
-                {
+            case application_type_t::CONSOLE_APPLICATION_MODE: {
                     bullet->bounce_physics.tick(bullet, dt);
                     bullet->burnable.tick(bullet, dt);
                 } break;
@@ -362,8 +332,7 @@ void tick_entities_state(game_input_t *game_input, float32_t dt, application_typ
 }
 
 
-void render_entities_to_shadowmap(uniform_group_t *transforms, gpu_command_queue_t *queue)
-{
+void render_entities_to_shadowmap(uniform_group_t *transforms, gpu_command_queue_t *queue) {
     // TODO: Make sure this uses the shadow submission queue
     auto *model_ppln = g_pipeline_manager->get(player_shadow_ppln);
     player_submission_shadow_queue.submit_queued_materials({1, transforms}, model_ppln, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -376,8 +345,7 @@ void render_entities_to_shadowmap(uniform_group_t *transforms, gpu_command_queue
 }
 
 
-void render_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
-{
+void render_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue) {
     auto *player_ppln_ptr = g_pipeline_manager->get(player_ppln);
     player_submission_queue.submit_queued_materials({2, uniforms}, player_ppln_ptr, queue, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     
@@ -389,8 +357,7 @@ void render_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
 }
 
 
-void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue)
-{
+void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t *queue) {
     uniform_group_t groups[] = { uniforms[0], uniforms[1], *atmosphere_irradiance_uniform(), *atmosphere_integrate_lookup_uniform(), *atmosphere_integrate_lookup_uniform() };
     
     auto *player_ppln_alpha_ptr = g_pipeline_manager->get(player_alpha_ppln);
@@ -404,10 +371,8 @@ void render_transparent_entities(uniform_group_t *uniforms, gpu_command_queue_t 
 }
 
 
-void sync_gpu_with_entities_state(gpu_command_queue_t *queue)
-{
-    for (uint32_t i = 0; i < (uint32_t)player_count; ++i)
-    {
+void sync_gpu_with_entities_state(gpu_command_queue_t *queue) {
+    for (uint32_t i = 0; i < (uint32_t)player_count; ++i) {
         player_t *player = &player_list[i];
         animation_component_t *animation = &player->animation;
 
@@ -416,8 +381,7 @@ void sync_gpu_with_entities_state(gpu_command_queue_t *queue)
 }
 
 
-player_handle_t create_player_from_player_init_packet(uint32_t local_user_client_index, player_state_initialize_packet_t *player_init_packet, camera_handle_t main_camera)
-{
+player_handle_t create_player_from_player_init_packet(uint32_t local_user_client_index, player_state_initialize_packet_t *player_init_packet, camera_handle_t main_camera) {
     bool is_current_client = (player_init_packet->client_id == local_user_client_index);
         
     player_create_info_t player_create_info = {};
@@ -432,8 +396,7 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
     player_create_info.terraform_power_info.speed = 300.0f;
     player_create_info.terraform_power_info.terraform_radius = 20.0f;
         
-    if (is_current_client)
-    {
+    if (is_current_client) {
         player_create_info.camera_info.camera_index = main_camera;
         player_create_info.camera_info.is_third_person = 1;
         player_create_info.camera_info.distance_from_player = 15.0f;
@@ -451,8 +414,7 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
         
     player_handle_t user_handle = add_player(user);
     
-    if (is_current_client)
-    {
+    if (is_current_client) {
         main_player = user_handle;
     }
 
@@ -460,8 +422,7 @@ player_handle_t create_player_from_player_init_packet(uint32_t local_user_client
 }
 
 
-void create_map_editor_entity(raw_input_t *raw_input)
-{
+void create_map_editor_entity(raw_input_t *raw_input) {
     camera_handle_t main_camera = add_camera(raw_input, backbuffer_resolution());
     bind_camera_to_3d_output(main_camera);
 
@@ -499,8 +460,7 @@ void create_map_editor_entity(raw_input_t *raw_input)
 }
 
 
-player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id /* Index into the clients array */)
-{
+player_handle_t spawn_player(const char *player_name, player_color_t color, uint32_t client_id /* Index into the clients array */) {
     // Spawns a player at the edge of a world
     player_create_info_t player_create_info = {};
     player_create_info.name = make_constant_string(player_name, (uint32_t)strlen(player_name));
@@ -517,8 +477,7 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
     //    player_create_info.camera_info.camera_index = main_camera;
     player_create_info.camera_info.is_third_person = 1;
     player_create_info.camera_info.distance_from_player = 15.0f;
-    switch (get_app_type())
-    {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         player_create_info.animation_info.ubo_layout = g_uniform_layout_manager->get(g_uniform_layout_manager->get_handle("uniform_layout.joint_ubo"_hash));
     } break;
@@ -538,18 +497,15 @@ player_handle_t spawn_player(const char *player_name, player_color_t color, uint
 }
 
 
-void spawn_bullet(player_t *shooter)
-{
+void spawn_bullet(player_t *shooter) {
     bullet_t *new_bullet;
     uint32_t bullet_index;
-    if (removed_bullets_stack_head > 0)
-    {
+    if (removed_bullets_stack_head > 0) {
         bullet_index = removed_bullets_stack_head;
         new_bullet = &bullet_list[removed_bullets_stack[removed_bullets_stack_head--]];
         new_bullet->dead = 0;
     }
-    else
-    {
+    else {
         bullet_index = bullet_count;
         new_bullet = &bullet_list[bullet_count++];
     }
@@ -569,90 +525,75 @@ void spawn_bullet(player_t *shooter)
 }
 
 
-void destroy_bullet(bullet_t *bullet)
-{
+void destroy_bullet(bullet_t *bullet) {
     bullet->dead = 1;
     removed_bullets_stack[removed_bullets_stack_head++] = bullet->bullet_index;
 }
 
 
-void push_entity_to_skeletal_animation_queue(rendering_component_t *rendering, animation_component_t *animation)
-{
+void push_entity_to_skeletal_animation_queue(rendering_component_t *rendering, animation_component_t *animation) {
     uniform_group_t *group = &animation->animation_instance.group;
     player_submission_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &player_mesh, group);
 }
 
 
-void push_entity_to_skeletal_animation_alpha_queue(rendering_component_t *rendering, animation_component_t *animation)
-{
+void push_entity_to_skeletal_animation_alpha_queue(rendering_component_t *rendering, animation_component_t *animation) {
     uniform_group_t *group = &animation->animation_instance.group;
     player_submission_alpha_queue.push_material(&rendering->push_k_alpha, sizeof(rendering->push_k_alpha), &player_mesh, group);
 }
 
 
-void push_entity_to_skeletal_animation_shadow_queue(rendering_component_t *rendering, animation_component_t *animation)
-{
+void push_entity_to_skeletal_animation_shadow_queue(rendering_component_t *rendering, animation_component_t *animation) {
     uniform_group_t *group = &animation->animation_instance.group;
     player_submission_shadow_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &player_mesh, group);
 }
 
 
-void push_entity_to_rolling_queue(rendering_component_t *rendering)
-{
+void push_entity_to_rolling_queue(rendering_component_t *rendering) {
     rolling_player_submission_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &rolling_player_mesh, nullptr);
 }
 
 
-void push_entity_to_rolling_alpha_queue(rendering_component_t *rendering)
-{
+void push_entity_to_rolling_alpha_queue(rendering_component_t *rendering) {
     rolling_player_submission_alpha_queue.push_material(&rendering->push_k_alpha, sizeof(rendering->push_k_alpha), &rolling_player_mesh, nullptr);
 }
 
 
-void push_entity_to_rolling_shadow_queue(rendering_component_t *rendering)
-{
+void push_entity_to_rolling_shadow_queue(rendering_component_t *rendering) {
     rolling_player_submission_shadow_queue.push_material(&rendering->push_k, sizeof(rendering->push_k), &rolling_player_mesh, nullptr);
 }
 
 
-player_t *get_user_player(void)
-{
-    if (main_player == -1)
-    {
+player_t *get_user_player(void) {
+    if (main_player == -1) {
         return nullptr;
     }
-    else
-    {
+    else {
         return &player_list[main_player];
     }
 }
 
 
-player_t *get_player(const char *name)
-{
+player_t *get_player(const char *name) {
     return(get_player(make_constant_string(name, (uint32_t)strlen(name))));
 }
 
 
-player_t *get_player(const constant_string_t &kstring)
-{
+player_t *get_player(const constant_string_t &kstring) {
     player_handle_t v = *name_map.get(kstring.hash);
     return(&player_list[v]);
 }
 
 
-player_t *get_player(player_handle_t handle)
-{
+player_t *get_player(player_handle_t handle) {
     return(&player_list[handle]);
 }
 
 
 
 // Static definitions
-static void handle_main_player_mouse_movement(player_t *player, game_input_t *game_input, float32_t dt)
-{
-    if (game_input->actions[game_input_action_type_t::LOOK_RIGHT].state || game_input->actions[game_input_action_type_t::LOOK_LEFT].state || game_input->actions[game_input_action_type_t::LOOK_UP].state || game_input->actions[game_input_action_type_t::LOOK_DOWN].state)
-    {
+static void handle_main_player_mouse_movement(player_t *player, game_input_t *game_input, float32_t dt) {
+    if (game_input->actions[game_input_action_type_t::LOOK_RIGHT].state || game_input->actions[game_input_action_type_t::LOOK_LEFT].state || game_input->actions[game_input_action_type_t::LOOK_UP].state || game_input->actions[game_input_action_type_t::LOOK_DOWN].state) {
         vector3_t up = player->camera.ws_current_up_vector;
         
         // TODO: Make sensitivity configurable with a file or something, and later menu
@@ -677,23 +618,20 @@ static void handle_main_player_mouse_movement(player_t *player, game_input_t *ga
                 
         player->ws_direction = res;
     }
-    else
-    {
+    else {
         player->camera.mouse_diff = vector2_t(0.0f);
     }
 }
 
 
-static void handle_main_player_mouse_button_input(player_t *player, game_input_t *game_input, float32_t dt)
-{
+static void handle_main_player_mouse_button_input(player_t *player, game_input_t *game_input, float32_t dt) {
     uint32_t *action_flags = &player->action_flags;
     if (game_input->actions[game_input_action_type_t::TRIGGER2].state) *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_ADD);
-    if (game_input->actions[game_input_action_type_t::TRIGGER1].state) *action_flags |= (1 << action_flags_t::SHOOT);
+    if (game_input->actions[game_input_action_type_t::TRIGGER1].state) *action_flags |= (1 << action_flags_t::ACTION_TERRAFORM_DESTROY);
 }
 
 
-static void handle_main_player_keyboard_input(player_t *player, game_input_t *game_input, float32_t dt)
-{
+static void handle_main_player_keyboard_input(player_t *player, game_input_t *game_input, float32_t dt) {
     uint32_t *action_flags = &player->action_flags;
     
     vector3_t up = player->ws_up;
@@ -714,12 +652,10 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
     if (game_input->actions[game_input_action_type_t::MOVE_RIGHT].state) {acc_v(glm::cross(d, up), res); *action_flags |= (1 << action_flags_t::ACTION_RIGHT);}
     if (game_input->actions[game_input_action_type_t::TRIGGER4].state) *action_flags |= (1 << action_flags_t::ACTION_UP);
     if (game_input->actions[game_input_action_type_t::TRIGGER6].state) *action_flags |= (1 << action_flags_t::ACTION_DOWN);
-    if (game_input->actions[game_input_action_type_t::TRIGGER5].state && !player->toggled_rolling_previous_frame)
-    {
+    if (game_input->actions[game_input_action_type_t::TRIGGER5].state && !player->toggled_rolling_previous_frame) {
         player->toggled_rolling_previous_frame = 1;
         player->rolling_mode ^= 1;
-        if (!player->rolling_mode)
-        {
+        if (!player->rolling_mode) {
             player->rolling_rotation = matrix4_t(1.0f);
             player->current_rolling_rotation_angle = 0.0f;
 
@@ -733,8 +669,7 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
             player->camera.transition_first_third.current_time = 0.0f;
             player->camera.transition_first_third.in_animation = 1;
         }
-        else
-        {
+        else {
             // Going from rolling to standing
             player->camera.transition_first_third.max_time = 0.3f;
             player->camera.transition_first_third.current = 1.0f;
@@ -746,27 +681,23 @@ static void handle_main_player_keyboard_input(player_t *player, game_input_t *ga
             player->camera.transition_first_third.in_animation = 1;
         }
     }
-    else if (!game_input->actions[game_input_action_type_t::TRIGGER5].state)
-    {
+    else if (!game_input->actions[game_input_action_type_t::TRIGGER5].state) {
         player->toggled_rolling_previous_frame = 0;
     }
             
 
-    if (movements > 0)
-    {
+    if (movements > 0) {
         res = res * 15.0f;
 
         player->ws_input_velocity = res;
     }
-    else
-    {
+    else {
         player->ws_input_velocity = vector3_t(0.0f);
     }
 }
 
 
-static player_handle_t add_player(const player_t &player)
-{
+static player_handle_t add_player(const player_t &player) {
     player_handle_t view;
     view = player_count;
 

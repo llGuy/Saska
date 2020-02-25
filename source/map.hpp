@@ -2,8 +2,7 @@
 
 #include "utility.hpp"
 
-struct map_data_t
-{
+struct map_data_t {
     uint32_t max_chunks;
     uint32_t grid_edge_size;
     float32_t chunk_size;

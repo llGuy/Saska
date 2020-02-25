@@ -17,8 +17,7 @@ void delete_file(const char *file);
 
 bool has_file_changed(file_handle_t handle);
 
-struct file_contents_t
-{
+struct file_contents_t {
     uint32_t size;
     byte_t *content;
 };
@@ -28,8 +27,7 @@ file_contents_t read_file(file_handle_t handle);
 
 void write_file(file_handle_t, byte_t *bytes, uint32_t size);
 
-struct external_image_data_t
-{
+struct external_image_data_t {
     int32_t width;
     int32_t height;
     void *pixels;

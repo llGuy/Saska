@@ -2,8 +2,7 @@
 
 #include "utility.hpp"
 
-struct entity_t
-{
+struct entity_t {
     bool dead = false;
     
     vector3_t ws_up = vector3_t(0, 1, 0);

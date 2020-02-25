@@ -10,8 +10,7 @@
 
 
 
-void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, bool allocate_history, const vector3_t &size)
-{
+void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, bool allocate_history, const vector3_t &size) {
     should_do_gpu_sync = 0;
     
     xs_bottom_corner = in_chunk_coord * CHUNK_EDGE_LENGTH;
@@ -24,8 +23,7 @@ void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, b
     //push_k.color = vector4_t(122.0 / 255.0, 177.0 / 255.0, 213.0 / 255.0, 1.0f);
     push_k.color = vector4_t(122.0 / 255.0, 213.0 / 255.0, 77.0 / 255.0, 1.0f);
 
-    if (allocate_history)
-    {
+    if (allocate_history) {
         voxel_history = (uint8_t *)allocate_free_list(sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
         memset(voxel_history, 255, sizeof(uint8_t) * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH * CHUNK_EDGE_LENGTH);
         modified_voxels_list_count = 0;
@@ -34,8 +32,7 @@ void chunk_t::initialize(const vector3_t &position, ivector3_t in_chunk_coord, b
 }
 
 
-void chunk_t::initialize_for_rendering(model_t *chunk_model)
-{
+void chunk_t::initialize_for_rendering(model_t *chunk_model) {
     uint32_t buffer_size = sizeof(vector3_t) * MAX_VERTICES_PER_CHUNK;
 
     make_unmappable_gpu_buffer(&chunk_mesh_gpu_buffer, buffer_size, mesh_vertices, gpu_buffer_usage_t::VERTEX_BUFFER, get_global_command_pool());
@@ -47,25 +44,21 @@ void chunk_t::initialize_for_rendering(model_t *chunk_model)
 }
 
 
-void chunk_t::deinitialize(void)
-{
+void chunk_t::deinitialize(void) {
     chunk_mesh_gpu_buffer.destroy();
     deallocate_free_list(gpu_mesh.raw_buffer_list.buffer);
 
-    if (voxel_history)
-    {
+    if (voxel_history) {
         deallocate_free_list(voxel_history);
     }
-    if (list_of_modified_voxels)
-    {
+    if (list_of_modified_voxels) {
         modified_voxels_list_count = 0;
         deallocate_free_list(list_of_modified_voxels);
     }
 }
 
 
-void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
-{
+void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue) {
     vertex_count = 0;
 
     chunk_t *x_superior = *get_chunk(chunk_coord.x + 1, chunk_coord.y, chunk_coord.z);
@@ -79,13 +72,10 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
 
     // First do the vertices that will need information from other chunks
     bool doesnt_exist = 0;
-    if (x_superior)
-    {
+    if (x_superior) {
         // x_superior
-        for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH; ++z)
-        {
-            for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y)
-            {
+        for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH; ++z) {
+            for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y) {
                 doesnt_exist = 0;
                 
                 uint32_t x = CHUNK_EDGE_LENGTH - 1;
@@ -100,21 +90,17 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
                                             chunk_edge_voxel_value(x + 1, y + 1, z + 1, &doesnt_exist),//voxels[x + 1][y + 1][z + 1],
                                             chunk_edge_voxel_value(x,     y + 1, z + 1, &doesnt_exist) };//voxels[x]    [y + 1][z + 1] };
 
-                if (!doesnt_exist)
-                {
+                if (!doesnt_exist) {
                     update_chunk_mesh_voxel_pair(voxel_values, x, y, z, surface_level);
                 }
             }
         }
     }
 
-    if (y_superior)
-    {
+    if (y_superior) {
         // y_superior    
-        for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH; ++z)
-        {
-            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH; ++x)
-            {
+        for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH; ++z) {
+            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH; ++x) {
                 doesnt_exist = 0;
                 
                 uint32_t y = CHUNK_EDGE_LENGTH - 1;
@@ -129,21 +115,17 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
                                             chunk_edge_voxel_value(x + 1, y + 1, z + 1, &doesnt_exist),//voxels[x + 1][y + 1][z + 1],
                                             chunk_edge_voxel_value(x,     y + 1, z + 1, &doesnt_exist) };//voxels[x]    [y + 1][z + 1] };
 
-                if (!doesnt_exist)
-                {
+                if (!doesnt_exist) {
                     update_chunk_mesh_voxel_pair(voxel_values, x, y, z, surface_level);
                 }
             }
         }
     }
 
-    if (z_superior)
-    {
+    if (z_superior) {
         // z_superior
-        for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y)
-        {
-            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH - 1; ++x)
-            {
+        for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y) {
+            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH - 1; ++x) {
                 doesnt_exist = 0;
                 
                 uint32_t z = CHUNK_EDGE_LENGTH - 1;
@@ -158,20 +140,16 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
                                             chunk_edge_voxel_value(x + 1, y + 1, z + 1, &doesnt_exist),//voxels[x + 1][y + 1][z + 1],
                                             chunk_edge_voxel_value(x,     y + 1, z + 1, &doesnt_exist) };//voxels[x]    [y + 1][z + 1] };
 
-                if (!doesnt_exist)
-                {
+                if (!doesnt_exist) {
                     update_chunk_mesh_voxel_pair(voxel_values, x, y, z, surface_level);
                 }
             }
         }
     }
     
-    for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH - 1; ++z)
-    {
-        for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y)
-        {
-            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH - 1; ++x)
-            {
+    for (uint32_t z = 0; z < CHUNK_EDGE_LENGTH - 1; ++z) {
+        for (uint32_t y = 0; y < CHUNK_EDGE_LENGTH - 1; ++y) {
+            for (uint32_t x = 0; x < CHUNK_EDGE_LENGTH - 1; ++x) {
                 uint8_t voxel_values[8] = { voxels[x]    [y][z],
                                             voxels[x + 1][y][z],
                                             voxels[x + 1][y][z + 1],
@@ -189,8 +167,7 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
 
 
 
-    switch (get_app_type())
-    {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         gpu_mesh.indexed_data.index_count = vertex_count;
 
@@ -209,10 +186,8 @@ void chunk_t::update_mesh(uint8_t surface_level, gpu_command_queue_t *queue)
 
 
 
-uint8_t chunk_t::chunk_edge_voxel_value(int32_t x, int32_t y, int32_t z, bool *doesnt_exist)
-{
-    if (x < 0 || y < 0 || z < 0)
-    {
+uint8_t chunk_t::chunk_edge_voxel_value(int32_t x, int32_t y, int32_t z, bool *doesnt_exist) {
+    if (x < 0 || y < 0 || z < 0) {
         //OutputDebugString("Weird\n");
     }
     
@@ -220,18 +195,15 @@ uint8_t chunk_t::chunk_edge_voxel_value(int32_t x, int32_t y, int32_t z, bool *d
     int32_t chunk_coord_offset_x = 0, chunk_coord_offset_y = 0, chunk_coord_offset_z = 0;
     int32_t final_x = x, final_y = y, final_z = z;
 
-    if (x == CHUNK_EDGE_LENGTH)
-    {
+    if (x == CHUNK_EDGE_LENGTH) {
         final_x = 0;
         chunk_coord_offset_x = 1;
     }
-    if (y == CHUNK_EDGE_LENGTH)
-    {
+    if (y == CHUNK_EDGE_LENGTH) {
         final_y = 0;
         chunk_coord_offset_y = 1;
     }
-    if (z == CHUNK_EDGE_LENGTH)
-    {
+    if (z == CHUNK_EDGE_LENGTH) {
         final_z = 0;
         chunk_coord_offset_z = 1;
     }
@@ -240,8 +212,7 @@ uint8_t chunk_t::chunk_edge_voxel_value(int32_t x, int32_t y, int32_t z, bool *d
                                     chunk_coord.y + chunk_coord_offset_y,
                                     chunk_coord.z + chunk_coord_offset_z);
     *doesnt_exist = (bool)(*chunk_ptr == nullptr);
-    if (*doesnt_exist)
-    {
+    if (*doesnt_exist) {
         return 0;
     }
     
@@ -270,11 +241,9 @@ static constexpr ivector3_t NORMALIZED_CUBE_VERTEX_INDICES[8] = { ivector3_t(0, 
                                                                   ivector3_t(0, 1, 1) };
 
 
-void chunk_t::update_chunk_mesh_voxel_pair(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level)
-{    
+void chunk_t::update_chunk_mesh_voxel_pair(uint8_t *voxel_values, uint32_t x, uint32_t y, uint32_t z, uint8_t surface_level) {
     uint8_t bit_combination = 0;
-    for (uint32_t i = 0; i < 8; ++i)
-    {
+    for (uint32_t i = 0; i < 8; ++i) {
         bool is_over_surface = (voxel_values[i] > surface_level);
         bit_combination |= is_over_surface << i;
     }
@@ -285,23 +254,18 @@ void chunk_t::update_chunk_mesh_voxel_pair(uint8_t *voxel_values, uint32_t x, ui
 
     int8_t edge_pair[3] = {};
                 
-    while(triangle_entry[edge] != -1)
-    {
+    while(triangle_entry[edge] != -1) {
         int8_t edge_index = triangle_entry[edge];
         edge_pair[edge % 3] = edge_index;
 
-        if (edge % 3 == 2)
-        {
+        if (edge % 3 == 2) {
             vector3_t vertices[8] = {};
-            for (uint32_t i = 0; i < 8; ++i)
-            {
+            for (uint32_t i = 0; i < 8; ++i) {
                 vertices[i] = NORMALIZED_CUBE_VERTICES[i] + vector3_t(0.5f) + vector3_t((float32_t)x, (float32_t)y, (float32_t)z);
             }
 
-            for (uint32_t i = 0; i < 3; ++i)
-            {
-                switch(edge_pair[i])
-                {
+            for (uint32_t i = 0; i < 3; ++i) {
+                switch(edge_pair[i]) {
                 case 0: { push_vertex_to_triangle_array(0, 1, vertices, voxel_values, surface_level); } break;
                 case 1: { push_vertex_to_triangle_array(1, 2, vertices, voxel_values, surface_level); } break;
                 case 2: { push_vertex_to_triangle_array(2, 3, vertices, voxel_values, surface_level); } break;
@@ -323,14 +287,12 @@ void chunk_t::update_chunk_mesh_voxel_pair(uint8_t *voxel_values, uint32_t x, ui
 }
 
 
-void chunk_t::push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level)
-{
+void chunk_t::push_vertex_to_triangle_array(uint8_t v0, uint8_t v1, vector3_t *vertices, uint8_t *voxel_values, uint8_t surface_level) {
     float32_t surface_level_f = (float32_t)surface_level;
     float32_t voxel_value0 = (float32_t)voxel_values[v0];
     float32_t voxel_value1 = (float32_t)voxel_values[v1];
 
-    if (voxel_value0 > voxel_value1)
-    {
+    if (voxel_value0 > voxel_value1) {
         float32_t tmp = voxel_value0;
         voxel_value0 = voxel_value1;
         voxel_value1 = tmp;

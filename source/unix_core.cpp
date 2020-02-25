@@ -13,8 +13,7 @@ static bool running;
 static double dt = 0.0f;
 static game_memory_t game;
 
-int32_t main(int32_t argc, char *argv[])
-{
+int32_t main(int32_t argc, char *argv[]) {
     output_to_debug_console("Starting session ----\n");
 
     // Initialize game's dynamic memory
@@ -37,8 +36,7 @@ int32_t main(int32_t argc, char *argv[])
 
     initialize_game(&game, nullptr, nullptr, app_mode, app_type);
 
-    while (running)
-    {
+    while (running) {
         clock_t start = clock();
 
         game_tick(&game, nullptr, dt);
@@ -51,60 +49,50 @@ int32_t main(int32_t argc, char *argv[])
     return(0);
 }
 
-void request_quit(void)
-{
+void request_quit(void) {
     running = 0;
 }
 
-raw_input_t *get_raw_input(void)
-{
+raw_input_t *get_raw_input(void) {
     return nullptr;
 }
 
-void output_to_debug_console_i(int32_t i)
-{
+void output_to_debug_console_i(int32_t i) {
     char buffer[15] = {};
     sprintf_s(buffer, "%i\0", i);
     printf(buffer);
 }
 
 
-void output_to_debug_console_i(float32_t f)
-{
+void output_to_debug_console_i(float32_t f) {
     char buffer[15] = {};
     sprintf_s(buffer, "%f\0", f);
     printf(buffer);
 }
 
 
-void output_to_debug_console_i(const vector3_t &v3)
-{
+void output_to_debug_console_i(const vector3_t &v3) {
     output_to_debug_console((float32_t)(v3[0]), "|", (float32_t)(v3[1]), "|", (float32_t)(v3[2]));
 }
 
 
-void output_to_debug_console_i(const quaternion_t &q4)
-{
+void output_to_debug_console_i(const quaternion_t &q4) {
     output_to_debug_console((float32_t)(q4[0]), "|", (float32_t)(q4[1]), "|", (float32_t)(q4[2]), "|", (float32_t)(q4[3]));
 }
 
 
-void output_to_debug_console_i(const char *string)
-{
+void output_to_debug_console_i(const char *string) {
     printf(string);
 }
 
-void send_vibration_to_gamepad(void)
-{
+void send_vibration_to_gamepad(void) {
 }
 
-void enable_cursor_display(void)
-{
+void enable_cursor_display(void) {
 }
 
 
-void disable_cursor_display(void)
-{
+void disable_cursor_display(void) {
 }
 
 

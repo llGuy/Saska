@@ -17,10 +17,8 @@ static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt);
 
 
 // Public definitions
-void initialize_particles_state(void)
-{
-    switch (get_app_type())
-    {
+void initialize_particles_state(void) {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         uniform_layout_handle_t single_tx_layout_hdl = g_uniform_layout_manager->get_handle("descriptor_set_layout.2D_sampler_layout"_hash);
 
@@ -34,10 +32,8 @@ void initialize_particles_state(void)
 }
 
 
-void tick_particles_state(float32_t dt)
-{
-    switch (get_app_type())
-    {
+void tick_particles_state(float32_t dt) {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         explosion_particle_spawner.clear();
         {
@@ -57,10 +53,8 @@ void tick_particles_state(float32_t dt)
 }
 
 
-void render_alpha_particles(uniform_group_t *uniform_groups, gpu_command_queue_t *queue)
-{
-    struct particle_push_constant_t
-    {
+void render_alpha_particles(uniform_group_t *uniform_groups, gpu_command_queue_t *queue) {
+    struct particle_push_constant_t {
         float32_t max_time;
         uint32_t atlas_width;
         uint32_t atlas_height;
@@ -80,16 +74,14 @@ void render_alpha_particles(uniform_group_t *uniform_groups, gpu_command_queue_t
 }
 
 
-void sync_gpu_with_particles_state(gpu_command_queue_t *queue)
-{
+void sync_gpu_with_particles_state(gpu_command_queue_t *queue) {
     update_gpu_buffer(&explosion_particle_spawner.gpu_particles_buffer, explosion_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * explosion_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 
     update_gpu_buffer(&fire_particle_spawner.gpu_particles_buffer, fire_particle_spawner.rendered_particles, sizeof(rendered_particle_data_t) * fire_particle_spawner.rendered_particles_stack_head, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
 }
 
 
-int32_t spawn_fire(const vector3_t &position)
-{
+int32_t spawn_fire(const vector3_t &position) {
     uint32_t index = 0;
     particle_t *particle = fire_particle_spawner.particle(&index);
     particle->ws_position = position;
@@ -100,14 +92,12 @@ int32_t spawn_fire(const vector3_t &position)
 }
 
 
-void declare_fire_dead(uint32_t index)
-{
+void declare_fire_dead(uint32_t index) {
     fire_particle_spawner.declare_dead(index);
 }
 
 
-int32_t spawn_explosion(const vector3_t &position)
-{
+int32_t spawn_explosion(const vector3_t &position) {
     uint32_t index;
     particle_t *particle = explosion_particle_spawner.particle(&index);
     particle->ws_position = position;
@@ -118,41 +108,33 @@ int32_t spawn_explosion(const vector3_t &position)
 }
 
 
-particle_t *get_fire_particle(uint32_t index)
-{
+particle_t *get_fire_particle(uint32_t index) {
     return &fire_particle_spawner.particles[index];
 }
 
 
 
 // Static definitions
-static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt)
-{
-    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
-    {
+static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt) {
+    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i) {
         particle_t *particle = &spawner->particles[i];
 
-        if (particle->life >= 0.0f)
-        {        
-            if (particle->life < spawner->max_life_length)
-            {
+        if (particle->life >= 0.0f) {
+            if (particle->life < spawner->max_life_length) {
                 float32_t direction = 1.0f;
 
-                if (particle->flag0)
-                {
+                if (particle->flag0) {
                     direction = -1.0f;
                 }
                 
                 particle->life += dt * direction;
 
                 // Doesn't die unless from another source
-                if (particle->life > spawner->max_life_length)
-                {
+                if (particle->life > spawner->max_life_length) {
                     particle->flag0 = 1;
                     particle->life -= dt * direction;
                 }
-                else if (particle->life < 0.0f)
-                {
+                else if (particle->life < 0.0f) {
                     particle->flag0 = 0;
                     particle->life += dt * direction;
                 }
@@ -164,26 +146,20 @@ static void particle_effect_fire(particle_spawner_t *spawner, float32_t dt)
 }
 
 
-static void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt)
-{
-    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i)
-    {
+static void particle_effect_explosion(particle_spawner_t *spawner, float32_t dt) {
+    for (uint32_t i = 0; i < spawner->particles_stack_head; ++i) {
         particle_t *particle = &spawner->particles[i];
 
-        if (particle->life >= 0)
-        {
+        if (particle->life >= 0) {
         
-            if (particle->life < spawner->max_life_length)
-            {
+            if (particle->life < spawner->max_life_length) {
                 particle->life += dt;
             
-                if (particle->life > spawner->max_life_length)
-                {
+                if (particle->life > spawner->max_life_length) {
                     particle->life += 10.0f;
                     spawner->declare_dead(i);
                 }
-                else
-                {
+                else {
                     spawner->push_for_render(i);
                 }
             }

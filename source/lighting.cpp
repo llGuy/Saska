@@ -8,8 +8,7 @@
 #undef far
 #undef near
 
-struct lights_t
-{
+struct lights_t {
     sun_t suns[2];
 
     pipeline_handle_t sun_ppln;
@@ -19,8 +18,7 @@ struct lights_t
 
 static lights_t lights;
 
-static void s_lights_init()
-{
+static void s_lights_init() {
     lights.suns[0].ws_position = vector3_t(10.0000001f, 10.0000000001f, 10.00000001f);
     lights.suns[0].color = vector3_t(0.18867780, 0.5784429, 0.6916065);
     
@@ -82,8 +80,7 @@ static void s_lights_init()
     }
 }
 
-struct shadow_target_t
-{
+struct shadow_target_t {
     static constexpr uint32_t SHADOWMAP_W = 3000, SHADOWMAP_H = 3000;
         
     framebuffer_handle_t framebuffer;
@@ -95,8 +92,7 @@ struct shadow_target_t
 
 static shadow_target_t target;
 
-static void s_targets_init()
-{
+static void s_targets_init() {
     // ---- Make shadow render pass ----
     target.render_pass = g_render_pass_manager->add("render_pass.shadow_render_pass"_hash);
     auto *shadow_pass = g_render_pass_manager->get(target.render_pass);
@@ -142,8 +138,7 @@ static void s_targets_init()
 static shadow_box_t shadow_boxes[SHADOW_BOX_COUNT];
 static float32_t far_planes[4];
 
-static void s_shadow_boxes_init()
-{
+static void s_shadow_boxes_init() {
     vector3_t light_pos_normalized = glm::normalize(lights.suns[0].ws_position);
     light_pos_normalized.x *= -1.0f;
     light_pos_normalized.z *= -1.0f;
@@ -151,8 +146,7 @@ static void s_shadow_boxes_init()
     matrix4_t light_view_matrix = glm::lookAt(vector3_t(0.0f), light_pos_normalized, vector3_t(0.0f, 1.0f, 0.0f));
     matrix4_t inverse_light_view_matrix = glm::inverse(light_view_matrix);
     
-    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i) {
         shadow_boxes[i].light_view_matrix = light_view_matrix;
         shadow_boxes[i].inverse_light_view = inverse_light_view_matrix;
     }
@@ -163,16 +157,14 @@ static void s_shadow_boxes_init()
     far_planes[3] = 500.0f;
 }
 
-void initialize_lighting()
-{
+void initialize_lighting() {
     s_lights_init();
     s_shadow_boxes_init();
     s_targets_init();
 }
 
 // TODO: Make this update PSSM shadows
-static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, shadow_box_t *shadow_box)
-{
+static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, float32_t aspect, const vector3_t &ws_p, const vector3_t &ws_d, const vector3_t &ws_up, shadow_box_t *shadow_box) {
     float32_t far_width, near_width, far_height, near_height;
     
     far_width = 2.0f * far * tan(fov);
@@ -192,8 +184,7 @@ static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, fl
     float32_t near_height_half = near_height / 2.0f;
 
     // f = far, n = near, l = left, r = right, t = top, b = bottom
-    enum ortho_corner_t : int32_t
-    {
+    enum ortho_corner_t : int32_t {
 	flt, flb,
 	frt, frb,
 	nlt, nlb,
@@ -219,8 +210,7 @@ static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, fl
     y_min = y_max = shadow_box->ls_corners[0].y;
     z_min = z_max = shadow_box->ls_corners[0].z;
 
-    for (uint32_t i = 1; i < 8; ++i)
-    {
+    for (uint32_t i = 1; i < 8; ++i) {
 	if (x_min > shadow_box->ls_corners[i].x) x_min = shadow_box->ls_corners[i].x;
 	if (x_max < shadow_box->ls_corners[i].x) x_max = shadow_box->ls_corners[i].x;
 
@@ -246,20 +236,17 @@ static void s_update_shadow_box(float32_t far, float32_t near, float32_t fov, fl
                                                                      0.0f, 0.0f, 0.0f, 1.0f));
 }
 
-void update_lighting()
-{
+void update_lighting() {
     camera_t *main_camera = camera_bound_to_3d_output();
 
     float32_t nears[] = {1.0f, far_planes[0], far_planes[1], far_planes[2] };
     
-    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i) {
         s_update_shadow_box(far_planes[i], nears[i], main_camera->fov, main_camera->asp, main_camera->p, main_camera->d, main_camera->u, &shadow_boxes[i]);
     }
 }
 
-void begin_shadow_offscreen(gpu_command_queue_t *queue)
-{
+void begin_shadow_offscreen(gpu_command_queue_t *queue) {
     queue->begin_render_pass(target.render_pass, target.framebuffer, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_depth(1.0f, 0));
     
     VkViewport viewport = {};
@@ -271,13 +258,11 @@ void begin_shadow_offscreen(gpu_command_queue_t *queue)
     // Render the world to the shadow map
 }
 
-void end_shadow_offscreen(gpu_command_queue_t *queue)
-{
+void end_shadow_offscreen(gpu_command_queue_t *queue) {
     command_buffer_end_render_pass(&queue->q);
 }
 
-void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
-{
+void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue) {
     auto *sun_pipeline = g_pipeline_manager->get(lights.sun_ppln);
     command_buffer_bind_pipeline(&sun_pipeline->pipeline, &queue->q);
 
@@ -285,8 +270,7 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     
     command_buffer_bind_descriptor_sets(&sun_pipeline->layout, {3, groups}, &queue->q);
 
-    struct sun_push_constant_t
-    {
+    struct sun_push_constant_t {
 	matrix4_t model_matrix;
         vector3_t ws_light_direction;
     } push_k;
@@ -310,10 +294,8 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     matrix3_t rotation_part = matrix3_t(view_matrix_no_translation);
     rotation_part = glm::transpose(rotation_part);
 
-    for (int i = 0; i < 3; ++i)
-    {
-        for (int j = 0; j < 3; ++j)
-        {
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
             model_matrix_transpose_rotation[i][j] = rotation_part[i][j];
         }
     }
@@ -329,24 +311,20 @@ void render_sun(uniform_group_t *camera_transforms, gpu_command_queue_t *queue)
     lights.suns[0].ss_light_pos.y = 1.0f - lights.suns[0].ss_light_pos.y;
 }
 
-sun_t *get_sun()
-{
+sun_t *get_sun() {
     return &lights.suns[0];
 }
 
-shadow_display_t get_shadow_display()
-{
+shadow_display_t get_shadow_display() {
     auto *texture = g_uniform_group_manager->get(target.set);
     shadow_display_t ret{shadow_target_t::SHADOWMAP_W, shadow_target_t::SHADOWMAP_H, *texture};
     return(ret);
 }
 
-shadow_matrices_t get_shadow_matrices()
-{
+shadow_matrices_t get_shadow_matrices() {
     shadow_matrices_t ret;
 
-    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i) {
         ret.boxes[i].projection_matrix = shadow_boxes[i].projection_matrix;
         ret.boxes[i].light_view_matrix = shadow_boxes[i].light_view_matrix;
         ret.boxes[i].inverse_light_view = shadow_boxes[i].inverse_light_view;

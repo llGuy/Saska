@@ -20,19 +20,15 @@ static uint64_t current_tick;
 static void s_render_world(gpu_command_queue_t *queue);
 
 
-struct gamestate_event_data_cache_t
-{
+struct gamestate_event_data_cache_t {
 };
 
 static gamestate_event_data_cache_t event_data_cache;
 
-static void s_gamestate_event_callback(void *object, event_t *e)
-{
-    switch(e->type)
-    {
+static void s_gamestate_event_callback(void *object, event_t *e) {
+    switch(e->type) {
 
-    case event_type_t::LAUNCH_MAP_EDITOR:
-    {
+    case event_type_t::LAUNCH_MAP_EDITOR: {
         auto *data = (event_data_launch_map_editor_t *)e->data;
 
         deinitialize_entities_state();
@@ -53,6 +49,8 @@ static void s_gamestate_event_callback(void *object, event_t *e)
 
         create_map_editor_entity(get_raw_input());
 
+        start_map_editor_mode();
+
         clear_and_request_focus(element_focus_t::WORLD_3D_ELEMENT_FOCUS);
     } break;
 
@@ -60,8 +58,7 @@ static void s_gamestate_event_callback(void *object, event_t *e)
 }
 
 
-void initialize_gamestate(struct raw_input_t *raw_input, event_dispatcher_t *dispatcher)
-{
+void initialize_gamestate(struct raw_input_t *raw_input, event_dispatcher_t *dispatcher) {
     // Subscribe to events
     dispatcher->set_callback(listener_t::WORLD, &s_gamestate_event_callback, &event_data_cache);
     dispatcher->subscribe(event_type_t::LAUNCH_MAP_EDITOR, listener_t::WORLD);
@@ -76,8 +73,7 @@ void initialize_gamestate(struct raw_input_t *raw_input, event_dispatcher_t *dis
 }
 
 
-void populate_gamestate(game_state_initialize_packet_t *packet, struct raw_input_t *raw_input)
-{
+void populate_gamestate(game_state_initialize_packet_t *packet, struct raw_input_t *raw_input) {
     current_tick = 0;
 
     populate_entities_state(packet, raw_input);
@@ -85,30 +81,26 @@ void populate_gamestate(game_state_initialize_packet_t *packet, struct raw_input
 }
 
 
-void deinitialize_gamestate(void)
-{
+void deinitialize_gamestate(void) {
     deinitialize_chunks_state();
     deinitialize_entities_state();
 }
 
 
-void fill_game_state_initialize_packet(game_state_initialize_packet_t *packet, player_handle_t new_client_index)
-{
+void fill_game_state_initialize_packet(game_state_initialize_packet_t *packet, player_handle_t new_client_index) {
     fill_game_state_initialize_packet_with_chunk_state(packet);
 
     fill_game_state_initialize_packet_with_entities_state(packet, new_client_index);
 }
 
 
-void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_queue_t *queue, enum application_type_t app_type, enum element_focus_t focus)
-{
+void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_queue_t *queue, enum application_type_t app_type, enum element_focus_t focus) {
     tick_chunks_state(dt);
     tick_entities_state(game_input, dt, app_type);
     tick_particles_state(dt);
 
     // GPU operations are separate from ticking
-    switch (get_app_type())
-    {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         update_lighting();
         update_camera_transforms(queue);
@@ -131,15 +123,13 @@ void tick_gamestate(struct game_input_t *game_input, float32_t dt, gpu_command_q
 }
 
 
-uint64_t *get_current_tick(void)
-{
+uint64_t *get_current_tick(void) {
     return(&current_tick);
 }
 
 
 
-static void s_render_world(gpu_command_queue_t *queue)
-{
+static void s_render_world(gpu_command_queue_t *queue) {
     // Fetch some data needed to render
     auto transforms_ubo_uniform_group = camera_transforms_uniform();
     shadow_display_t shadow_display_data = get_shadow_display();

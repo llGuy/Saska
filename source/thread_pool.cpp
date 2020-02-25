@@ -2,13 +2,11 @@
 #include "thread_pool.hpp"
 #include "utils.hpp"
 
-struct mutex_t
-{
+struct mutex_t {
     HANDLE mutex_handle;
 };
 
-struct thread_t
-{
+struct thread_t {
     HANDLE thread_handle;
     DWORD thread_id;
 
@@ -23,8 +21,7 @@ struct thread_t
 #define MAX_THREAD_COUNT 5
 #define MAX_MUTEX_COUNT 10
 
-struct thread_pool_t
-{
+struct thread_pool_t {
     uint32_t active_thread_count = 0;
     thread_t active_threads[MAX_THREAD_COUNT];
 
@@ -33,15 +30,12 @@ struct thread_pool_t
     mutex_t mutexes[MAX_MUTEX_COUNT];
 } g_thread_pool;
 
-DWORD WINAPI thread_process_impl(LPVOID lp_parameter)
-{
+DWORD WINAPI thread_process_impl(LPVOID lp_parameter) {
     thread_t *thread = (thread_t *)lp_parameter;
     
-    for (;;)
-    {
+    for (;;) {
         wait_for_mutex_and_own(&thread->mutex, "thread->requested"); // Mutex which acts on thread->requested
-        if (thread->requested)
-        {
+        if (thread->requested) {
             thread->process(thread->input_data);
             thread->requested = 0;
         }
@@ -51,33 +45,26 @@ DWORD WINAPI thread_process_impl(LPVOID lp_parameter)
     return(0);
 }
 
-thread_t *get_next_available_thread(void)
-{
-    for (uint32_t i = 0; i < g_thread_pool.active_thread_count; ++i)
-    {
+thread_t *get_next_available_thread(void) {
+    for (uint32_t i = 0; i < g_thread_pool.active_thread_count; ++i) {
         thread_t *current_thread = &g_thread_pool.active_threads[i];
-        if (!current_thread->requested)
-        {
+        if (!current_thread->requested) {
             return(current_thread);
         }
     }
     return(nullptr);
 }
 
-void create_mutex(mutex_t *mutex)
-{
+void create_mutex(mutex_t *mutex) {
     mutex->mutex_handle = CreateMutex(NULL, FALSE, NULL);
 }
 
-mutex_t *request_mutex(void)
-{
-    if (g_thread_pool.used_mutexes_count < MAX_MUTEX_COUNT)
-    {
+mutex_t *request_mutex(void) {
+    if (g_thread_pool.used_mutexes_count < MAX_MUTEX_COUNT) {
         mutex_t *mutex = &g_thread_pool.mutexes[g_thread_pool.used_mutexes_count++];
         create_mutex(mutex);
 
-        if (mutex->mutex_handle)
-        {
+        if (mutex->mutex_handle) {
             return(mutex);
         }
         return(nullptr);
@@ -86,18 +73,14 @@ mutex_t *request_mutex(void)
     return(nullptr);
 }
 
-bool wait_for_mutex_and_own(mutex_t *mutex, const char *mutex_name)
-{
+bool wait_for_mutex_and_own(mutex_t *mutex, const char *mutex_name) {
     DWORD result = WaitForSingleObject(mutex->mutex_handle, INFINITE);
 
-    switch(result)
-    {
-    case WAIT_OBJECT_0:
-        {
+    switch(result) {
+    case WAIT_OBJECT_0: {
             return(1);
         } break;
-    case WAIT_ABANDONED:
-        {
+    case WAIT_ABANDONED: {
             return(0);
         } break;
     }
@@ -105,24 +88,19 @@ bool wait_for_mutex_and_own(mutex_t *mutex, const char *mutex_name)
     return(0);
 }
 
-void release_mutex(mutex_t *mutex, const char *mutex_name)
-{
+void release_mutex(mutex_t *mutex, const char *mutex_name) {
     ReleaseMutex(mutex->mutex_handle);
 }
 
-void request_thread_for_process(thread_process_t process, void *input_data)
-{
+void request_thread_for_process(thread_process_t process, void *input_data) {
     thread_t *thread = get_next_available_thread();
-    if (!thread)
-    {
-        if (g_thread_pool.active_thread_count < MAX_THREAD_COUNT)
-        {
+    if (!thread) {
+        if (g_thread_pool.active_thread_count < MAX_THREAD_COUNT) {
             thread = &g_thread_pool.active_threads[g_thread_pool.active_thread_count++];
             create_mutex(&thread->mutex);
             thread->thread_handle = CreateThread(0, 0, thread_process_impl, thread, 0, &thread->thread_id);
         }
-        else
-        {
+        else {
             OutputDebugString("Error: Unable to find available thread to use for process");
         }
     }
@@ -135,7 +113,7 @@ void request_thread_for_process(thread_process_t process, void *input_data)
     release_mutex(&thread->mutex, "thread->requested");
 }
 
-void initialize_thread_pool(void)
-{
+void initialize_thread_pool(void) {
+    
 }
 

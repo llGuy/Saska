@@ -10,21 +10,18 @@
 
 // Main menu
 
-struct widget_t
-{
+struct widget_t {
     image2d_t image;
     uniform_group_t uniform;
 };
 
-struct text_input_t
-{
+struct text_input_t {
     bool typing_in_input = 0;
     ui_box_t input_box;
     ui_input_text_t input_text;
 };
 
-struct main_menu_t
-{
+struct main_menu_t {
     enum buttons_t { BROWSE_SERVER, BUILD_MAP, SETTINGS, QUIT, INVALID_MENU_BUTTON };
 
     const char *button_names[5] = { "BROWSE_SERVER", "BUILD_MAP", "SETTINGS", "QUIT", "INVALID" };
@@ -58,21 +55,18 @@ struct main_menu_t
     smooth_linear_interpolation_t<vector3_t> icon_color_interpolation;
 
     // For the browse server menu
-    struct
-    {
+    struct {
         text_input_t input;
 
         bool joining = 0;
     } browse_menu;
 
-    struct
-    {
+    struct {
         text_input_t input;
     } build_menu;
 
 
-    struct
-    {
+    struct {
         ui_box_t background;
         ui_input_text_t input_text;
         bool prompting_user_name;
@@ -106,8 +100,7 @@ static void s_open_menu(main_menu_t::buttons_t button);
 static void s_initialize_menu_windows(void);
 
 
-void initialize_menus(void)
-{
+void initialize_menus(void) {
     current_menu_mode = menu_mode_t::MAIN_MENU;
     
     // Initialize menu font
@@ -118,8 +111,7 @@ void initialize_menus(void)
 }
 
 
-void prompt_user_for_name(void)
-{
+void prompt_user_for_name(void) {
     main_menu.user_name_prompt.prompting_user_name = 1;
     main_menu.user_name_prompt.background.initialize(CENTER, 7.5f,
                                                      ui_vector2_t(0.0f, 0.0f),
@@ -143,17 +135,14 @@ void prompt_user_for_name(void)
 }
 
 
-void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatcher_t *dispatcher)
-{
-    if (main_menu.user_name_prompt.prompting_user_name)
-    {
+void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatcher_t *dispatcher) {
+    if (main_menu.user_name_prompt.prompting_user_name) {
         main_menu.user_name_prompt.alpha.animate(raw_input->dt);
         uint32_t alpha = (uint32_t)(main_menu.user_name_prompt.alpha.current * 255.0f);
         main_menu.user_name_prompt.background.color &= 0xFFFFFF00;
         main_menu.user_name_prompt.background.color |= alpha;
 
-        if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
-        {
+        if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN) {
             main_menu.user_name_prompt.entered = 1;
 
             char *buffer = (char *)allocate_free_list(sizeof(char) * main_menu.user_name_prompt.input_text.text.char_count + 1);
@@ -171,8 +160,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
         
         main_menu.user_name_prompt.input_text.input(raw_input);
     }
-    else
-    {
+    else {
         // Convert screen cursor positions to ndc coordinates
         // Need to take into account the scissor
 
@@ -185,16 +173,14 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
 
         uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
     
-        if (backbuffer_asp >= swapchain_asp)
-        {
+        if (backbuffer_asp >= swapchain_asp) {
             rect2D_width = swapchain_extent.width;
             rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
             rect2Dx = 0;
             rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
         }
 
-        if (backbuffer_asp < swapchain_asp)
-        {
+        if (backbuffer_asp < swapchain_asp) {
             rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
             rect2D_height = swapchain_extent.height;
             rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
@@ -213,14 +199,11 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
 
         bool hovered_over_button = 0;
     
-        for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
-        {
-            if (s_detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y))
-            {
+        for (uint32_t i = 0; i < (uint32_t)main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i) {
+            if (s_detect_if_user_clicked_on_button((main_menu_t::buttons_t)i, cursor_x, cursor_y)) {
                 hovered_over_button = 1;
             
-                if (main_menu.hovering_over != i)
-                {
+                if (main_menu.hovering_over != i) {
                     // Start interpolation
                     main_menu.background_color_interpolation.in_animation = 1;
                     vector4_t background_start = ui32b_color_to_vec4(0x16161636);
@@ -243,8 +226,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
             
                 main_menu.hovering_over = (main_menu_t::buttons_t)i;
 
-                if (main_menu.background_color_interpolation.in_animation)
-                {
+                if (main_menu.background_color_interpolation.in_animation) {
                     main_menu.background_color_interpolation.animate(raw_input->dt);
                     main_menu.icon_color_interpolation.animate(raw_input->dt);
 
@@ -264,27 +246,22 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
                 }
                 //main_menu.icon_color_interpolation.animate(raw_input->dt);
             }
-            else
-            {
+            else {
                 main_menu.main_menu_buttons[i].color = 0xFFFFFF36;
                 main_menu.main_menu_buttons_backgrounds[i].color = 0x16161636;
             }
         }
 
-        if (!hovered_over_button)
-        {
+        if (!hovered_over_button) {
             main_menu.hovering_over = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
         }
 
         static bool clicked_previous_frame = 0;
     
-        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT)
-        {
-            switch(main_menu.hovering_over)
-            {
+        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state >= button_state_t::INSTANT) {
+            switch(main_menu.hovering_over) {
             case main_menu_t::buttons_t::BROWSE_SERVER: case main_menu_t::buttons_t::BUILD_MAP: case main_menu_t::buttons_t::SETTINGS: {
-                if (!clicked_previous_frame)
-                {
+                if (!clicked_previous_frame) {
                     s_open_menu(main_menu.hovering_over);
                 }
             } break;
@@ -296,8 +273,7 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
 
             clicked_previous_frame = 1;
         }
-        else
-        {
+        else {
             clicked_previous_frame = 0;
         }
 
@@ -309,14 +285,10 @@ void update_menus(raw_input_t *raw_input, element_focus_t focus, event_dispatche
 void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_list,
                           gui_colored_vertex_render_list_t *colored_render_list,
                           element_focus_t focus,
-                          float32_t dt)
-{
-    if (current_menu_mode == menu_mode_t::MAIN_MENU)
-    {
-        if (main_menu.user_name_prompt.prompting_user_name)
-        {
-            if (main_menu.user_name_prompt.entered && !main_menu.user_name_prompt.alpha.in_animation)
-            {
+                          float32_t dt) {
+    if (current_menu_mode == menu_mode_t::MAIN_MENU) {
+        if (main_menu.user_name_prompt.prompting_user_name) {
+            if (main_menu.user_name_prompt.entered && !main_menu.user_name_prompt.alpha.in_animation) {
                 main_menu.user_name_prompt.prompting_user_name = 0;
             }
             
@@ -327,18 +299,15 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
             main_menu.user_name_prompt.input_text.text_color &= 0xFFFFFF00;
             main_menu.user_name_prompt.input_text.text_color |= alpha;
 
-            if (main_menu.user_name_prompt.entered)
-            {
-                for (uint32_t i = 0; i < main_menu.user_name_prompt.input_text.text.char_count; ++i)
-                {
+            if (main_menu.user_name_prompt.entered) {
+                for (uint32_t i = 0; i < main_menu.user_name_prompt.input_text.text.char_count; ++i) {
                     main_menu.user_name_prompt.input_text.text.colors[i] = 0;
                 }
             }
             
             textured_render_list->mark_section(font_uniform);
 
-            if (!main_menu.user_name_prompt.entered)
-            {
+            if (!main_menu.user_name_prompt.entered) {
                 push_input_text_to_render(&main_menu.user_name_prompt.input_text,
                                           &main_menu.user_name_prompt.background,
                                           backbuffer_resolution(),
@@ -347,16 +316,14 @@ void push_menus_to_render(gui_textured_vertex_render_list_t *textured_render_lis
                                           1);
             }
         }
-        else
-        {
+        else {
             s_push_main_menu(textured_render_list, colored_render_list, dt);
         }
     }
 }
 
 
-static void s_main_menu_button_init(main_menu_t::buttons_t button, const char *image_path, float32_t current_button_y, float32_t button_size)
-{
+static void s_main_menu_button_init(main_menu_t::buttons_t button, const char *image_path, float32_t current_button_y, float32_t button_size) {
     main_menu.main_menu_buttons_backgrounds[button].initialize(RIGHT_UP, 1.0f,
                                                                ui_vector2_t(0.0f, current_button_y),
                                                                ui_vector2_t(button_size, button_size),
@@ -377,8 +344,7 @@ static void s_main_menu_button_init(main_menu_t::buttons_t button, const char *i
 }
 
 
-static void s_initialize_main_menu(void)
-{
+static void s_initialize_main_menu(void) {
     main_menu.main_menu.initialize(CENTER, 2.0f,
                                    ui_vector2_t(0.0f, 0.0f),
                                    ui_vector2_t(0.8f, 0.8f),
@@ -427,11 +393,9 @@ static void s_initialize_main_menu(void)
 
 
 static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_list,
-                           gui_colored_vertex_render_list_t *colored_render_list,
-                           float32_t dt)
-{
-    for (uint32_t i = 0; i < main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i)
-    {
+                             gui_colored_vertex_render_list_t *colored_render_list,
+                             float32_t dt) {
+    for (uint32_t i = 0; i < main_menu_t::buttons_t::INVALID_MENU_BUTTON; ++i) {
         main_menu_t::buttons_t button = (main_menu_t::buttons_t)i;
         push_box_to_render_with_texture(&main_menu.main_menu_buttons[button], main_menu.widgets[button].uniform);
 
@@ -440,10 +404,8 @@ static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_
 
     push_box_to_render_reversed(&main_menu.main_menu_slider, vector2_t(main_menu.slider_x_max_size, main_menu.slider_y_max_size) * 2.0f);
 
-    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation)
-    {
-        switch(main_menu.selected_menu)
-        {
+    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation) {
+        switch(main_menu.selected_menu) {
             
             // Render the selected menu
         case main_menu_t::buttons_t::BROWSE_SERVER: {
@@ -465,8 +427,7 @@ static void s_push_main_menu(gui_textured_vertex_render_list_t *textured_render_
 }
 
 
-static bool detect_if_user_clicked_on_widget(ui_box_t *box, float32_t cursor_x, float32_t cursor_y)
-{
+static bool detect_if_user_clicked_on_widget(ui_box_t *box, float32_t cursor_x, float32_t cursor_y) {
     vector2_t normalized_base_position = convert_glsl_to_normalized(box->gls_position.to_fvec2());
     vector2_t normalized_size = box->gls_current_size.to_fvec2() * 2.0f;
 
@@ -476,29 +437,23 @@ static bool detect_if_user_clicked_on_widget(ui_box_t *box, float32_t cursor_x, 
         y_max = normalized_base_position.y + normalized_size.y;
 
     if (x_min < cursor_x && x_max > cursor_x
-        && y_min < cursor_y && y_max > cursor_y)
-    {
+        && y_min < cursor_y && y_max > cursor_y) {
         return(true);
     }
-    else
-    {
+    else {
         return(false);
     }
 }
 
 
-static bool s_detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y)
-{
+static bool s_detect_if_user_clicked_on_button(main_menu_t::buttons_t button, float32_t cursor_x, float32_t cursor_y) {
     return detect_if_user_clicked_on_widget(&main_menu.main_menu_buttons_backgrounds[button], cursor_x, cursor_y);
 }
 
 
-static void s_open_menu(main_menu_t::buttons_t button)
-{
-    if (button != main_menu.selected_menu)
-    {
-        if (main_menu.selected_menu == main_menu_t::buttons_t::INVALID_MENU_BUTTON)
-        {
+static void s_open_menu(main_menu_t::buttons_t button) {
+    if (button != main_menu.selected_menu) {
+        if (main_menu.selected_menu == main_menu_t::buttons_t::INVALID_MENU_BUTTON) {
             // Just do transition in
             main_menu.selected_menu = button;
 
@@ -509,8 +464,7 @@ static void s_open_menu(main_menu_t::buttons_t button)
             main_menu.main_menu_slider_x.current_time = 0.0f;
             main_menu.main_menu_slider_x.max_time = 0.3f;
         }
-        else
-        {
+        else {
             // Need to do transition out, then back in
             main_menu.selected_menu = button;
 
@@ -524,8 +478,7 @@ static void s_open_menu(main_menu_t::buttons_t button)
             main_menu.in_out_transition = 1;
         }
     }
-    else
-    {
+    else {
         // Just do transition out
         main_menu.selected_menu = main_menu_t::buttons_t::INVALID_MENU_BUTTON;
 
@@ -539,14 +492,12 @@ static void s_open_menu(main_menu_t::buttons_t button)
 }
 
 
-static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt, event_dispatcher_t *dispatcher)
-{
+static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_input, float32_t dt, event_dispatcher_t *dispatcher) {
     main_menu.main_menu_slider_x.animate(dt);
 
     main_menu.main_menu_slider.gls_current_size.fx = main_menu.main_menu_slider_x.current;
 
-    if (main_menu.in_out_transition && !main_menu.main_menu_slider_x.in_animation)
-    {
+    if (main_menu.in_out_transition && !main_menu.main_menu_slider_x.in_animation) {
         main_menu.in_out_transition = 0;
         
         main_menu.main_menu_slider_x.in_animation = 1;
@@ -556,18 +507,15 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
         main_menu.main_menu_slider_x.max_time = 0.3f;
     }
 
-    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation)
-    {
-        switch(main_menu.selected_menu)
-        {
+    if (main_menu.selected_menu != main_menu_t::buttons_t::INVALID_MENU_BUTTON && !main_menu.main_menu_slider_x.in_animation) {
+        switch(main_menu.selected_menu) {
             
             // Render the selected menu
         case main_menu_t::buttons_t::BROWSE_SERVER: {
 
             main_menu.browse_menu.input.input_text.input(raw_input);
 
-            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
-            {
+            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN) {
                 // Launch an event
 
                 // Join server
@@ -586,8 +534,7 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
 
             main_menu.build_menu.input.input_text.input(raw_input);
 
-            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN)
-            {
+            if (raw_input->buttons[button_type_t::ENTER].state != button_state_t::NOT_DOWN) {
                 // Launch an event
                 main_menu.build_menu.input.input_text.text.null_terminate();
 
@@ -606,8 +553,7 @@ static void s_update_open_menu(main_menu_t::buttons_t button, raw_input_t *raw_i
 }
 
 
-static void s_initialize_menu_windows(void)
-{
+static void s_initialize_menu_windows(void) {
     main_menu.browse_menu.input.input_box.initialize(LEFT_DOWN, 15.0f, ui_vector2_t(0.05f, 0.05f), ui_vector2_t(0.6f, 0.6f),
         &main_menu.main_menu_slider, 0x16161646, backbuffer_resolution());
 

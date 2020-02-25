@@ -15,12 +15,10 @@ static stack_dynamic_container_t<SOCKET, 50> sockets;
 static network_socket_t main_network_socket;
 
 
-void initialize_socket_api(uint16_t output_port)
-{
+void initialize_socket_api(uint16_t output_port) {
     // This is only for Windows, make sure to change if using Linux / Mac
     WSADATA winsock_data;
-    if (WSAStartup(0x202, &winsock_data))
-    {
+    if (WSAStartup(0x202, &winsock_data)) {
         OutputDebugString("Failed to initialize Winsock\n");
         assert(0);
     }
@@ -36,24 +34,20 @@ void initialize_socket_api(uint16_t output_port)
 }
 
 
-void add_network_socket(network_socket_t *socket)
-{
+void add_network_socket(network_socket_t *socket) {
     socket->socket = sockets.add();
 }
 
 
-SOCKET *get_network_socket(network_socket_t *socket)
-{
+SOCKET *get_network_socket(network_socket_t *socket) {
     return(sockets.get(socket->socket));
 }
 
 
-void initialize_network_socket(network_socket_t *socket_p, int32_t family, int32_t type, int32_t protocol)
-{
+void initialize_network_socket(network_socket_t *socket_p, int32_t family, int32_t type, int32_t protocol) {
     SOCKET new_socket = socket(family, type, protocol);
 
-    if (new_socket == INVALID_SOCKET)
-    {
+    if (new_socket == INVALID_SOCKET) {
         OutputDebugString("Failed to initialize socket\n");
         assert(0);
     }
@@ -62,8 +56,7 @@ void initialize_network_socket(network_socket_t *socket_p, int32_t family, int32
 }
 
 
-void bind_network_socket_to_port(network_socket_t *socket, network_address_t address)
-{
+void bind_network_socket_to_port(network_socket_t *socket, network_address_t address) {
     SOCKET *sock = get_network_socket(socket);
     
     // Convert network_address_t to SOCKADDR_IN
@@ -73,8 +66,7 @@ void bind_network_socket_to_port(network_socket_t *socket, network_address_t add
     address_struct.sin_port = address.port;
     address_struct.sin_addr.s_addr = INADDR_ANY;
     
-    if (bind(*sock, (SOCKADDR *)&address_struct, sizeof(address_struct)) == SOCKET_ERROR)
-    {
+    if (bind(*sock, (SOCKADDR *)&address_struct, sizeof(address_struct)) == SOCKET_ERROR) {
         OutputDebugString("Failed to bind socket to local port");
         
         // Try again with different port
@@ -84,16 +76,14 @@ void bind_network_socket_to_port(network_socket_t *socket, network_address_t add
 }
 
 
-void set_socket_to_non_blocking_mode(network_socket_t *socket)
-{
+void set_socket_to_non_blocking_mode(network_socket_t *socket) {
     SOCKET *sock = get_network_socket(socket);
     u_long enabled = 1;
     ioctlsocket(*sock, FIONBIO, &enabled);
 }
 
 
-int32_t receive_from(char *buffer, uint32_t buffer_size, network_address_t *address_dst)
-{
+int32_t receive_from(char *buffer, uint32_t buffer_size, network_address_t *address_dst) {
     SOCKET *sock = get_network_socket(&main_network_socket);
 
     SOCKADDR_IN from_address = {};
@@ -101,12 +91,10 @@ int32_t receive_from(char *buffer, uint32_t buffer_size, network_address_t *addr
     
     int32_t bytes_received = recvfrom(*sock, buffer, buffer_size, 0, (SOCKADDR *)&from_address, &from_size);
 
-    if (bytes_received == SOCKET_ERROR)
-    {
+    if (bytes_received == SOCKET_ERROR) {
         return 0;
     }
-    else
-    {
+    else {
         buffer[bytes_received] = 0;
     }
 
@@ -120,8 +108,7 @@ int32_t receive_from(char *buffer, uint32_t buffer_size, network_address_t *addr
 }
 
 
-bool send_to(network_address_t address, char *buffer, uint32_t buffer_size)
-{
+bool send_to(network_address_t address, char *buffer, uint32_t buffer_size) {
     SOCKET *sock = get_network_socket(&main_network_socket);
     
     SOCKADDR_IN address_struct = {};
@@ -134,8 +121,7 @@ bool send_to(network_address_t address, char *buffer, uint32_t buffer_size)
 
     int32_t sendto_ret = sendto(*sock, buffer, buffer_size, 0, (SOCKADDR *)&address_struct, sizeof(address_struct));
 
-    if (sendto_ret == SOCKET_ERROR)
-    {
+    if (sendto_ret == SOCKET_ERROR) {
         char error_n[32];
         sprintf_s(error_n, "sendto failed: %d\n", WSAGetLastError());
         OutputDebugString(error_n);
@@ -146,19 +132,16 @@ bool send_to(network_address_t address, char *buffer, uint32_t buffer_size)
 }
 
 
-uint32_t str_to_ipv4_int32(const char *address)
-{
+uint32_t str_to_ipv4_int32(const char *address) {
     return(inet_addr(address));
 }
 
 
-uint32_t host_to_network_byte_order(uint32_t bytes)
-{
+uint32_t host_to_network_byte_order(uint32_t bytes) {
     return(htons(bytes));
 }
 
 
-uint32_t network_to_host_byte_order(uint32_t bytes)
-{
+uint32_t network_to_host_byte_order(uint32_t bytes) {
     return(ntohl(bytes));
 }

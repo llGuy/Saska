@@ -4,8 +4,7 @@
 #include "entity.hpp"
 #include "component.hpp"
 
-struct bullet_create_info_t
-{
+struct bullet_create_info_t {
     uint32_t bullet_index;
     vector3_t ws_position;
     vector3_t ws_direction;
@@ -17,8 +16,7 @@ struct bullet_create_info_t
 };
 
 
-struct bullet_t : entity_t
-{
+struct bullet_t : entity_t {
     uint32_t bullet_index;
     uint32_t player_index;
     rendering_component_t rendering;

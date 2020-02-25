@@ -6,8 +6,7 @@ static constexpr uint32_t CUBEMAP_W = 1000, CUBEMAP_H = 1000;
 static constexpr uint32_t IRRADIANCE_CUBEMAP_W = 32, IRRADIANCE_CUBEMAP_H = 32;
 static constexpr uint32_t PREFILTERED_ENVIRONMENT_CUBEMAP_W = 128, PREFILTERED_ENVIRONMENT_CUBEMAP_H = 128;
 
-struct atmosphere_building_t 
-{
+struct atmosphere_building_t  {
     render_pass_handle_t make_render_pass;
     framebuffer_handle_t make_fbo;
     pipeline_handle_t make_pipeline;
@@ -18,8 +17,7 @@ struct atmosphere_building_t
 static atmosphere_building_t builder;
 
 // Initializes all objects contributing to building the atmosphere like the shaders/FBOs/render passes...
-static void s_atmosphere_builder_init()
-{
+static void s_atmosphere_builder_init() {
     builder.make_render_pass = g_render_pass_manager->add("render_pass.atmosphere_render_pass"_hash);
     auto *atmosphere_render_pass = g_render_pass_manager->get(builder.make_render_pass);
     // ---- Make render pass ----
@@ -74,8 +72,7 @@ static void s_atmosphere_builder_init()
 }
 
 
-struct atmosphere_lighting_t
-{
+struct atmosphere_lighting_t {
     // Irradiance
     render_pass_handle_t generate_irradiance_pass;
     framebuffer_handle_t generate_irradiance_fbo;
@@ -105,8 +102,7 @@ static atmosphere_lighting_t lighting;
 
 
 // Initializes all objects that contribute to allowing for better PBR lighting (IBL, prefiltered maps, ...)
-static void s_atmosphere_lighting_init()
-{
+static void s_atmosphere_lighting_init() {
     lighting.generate_irradiance_pass = g_render_pass_manager->add("render_pass.irradiance_render_pass"_hash);
     auto *irradiance_render_pass = g_render_pass_manager->get(lighting.generate_irradiance_pass);
     // ---- Make render pass ----
@@ -299,8 +295,7 @@ static void s_atmosphere_lighting_init()
     }
 }
 
-struct atmosphere_rendering_t
-{
+struct atmosphere_rendering_t {
     pipeline_handle_t render_pipeline;
     uniform_group_handle_t cubemap_uniform_group;
     model_handle_t cube_handle;
@@ -310,8 +305,7 @@ static atmosphere_rendering_t presenter;
 
 
 // Initializes all objects that contribute to rendering the atmosphere to the screen
-static void s_atmosphere_presenter_init()
-{
+static void s_atmosphere_presenter_init() {
     auto *render_atmosphere_layout_ptr = g_uniform_layout_manager->get(builder.render_atmosphere_layout);
 
     presenter.cubemap_uniform_group = g_uniform_group_manager->add("descriptor_set.cubemap"_hash);
@@ -350,8 +344,7 @@ static void s_atmosphere_presenter_init()
 }
 
 
-static void s_update_atmosphere_main(sun_t *light_pos, uint32_t light_count, gpu_command_queue_t *queue)
-{
+static void s_update_atmosphere_main(sun_t *light_pos, uint32_t light_count, gpu_command_queue_t *queue) {
     queue->begin_render_pass(builder.make_render_pass, builder.make_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
 
     VkViewport viewport;
@@ -362,8 +355,7 @@ static void s_update_atmosphere_main(sun_t *light_pos, uint32_t light_count, gpu
 
     command_buffer_bind_pipeline(&make_ppln->pipeline, &queue->q);
 
-    struct atmos_push_k_t
-    {
+    struct atmos_push_k_t {
         alignas(16) matrix4_t inverse_projection;
         vector4_t light_dir[2];
         vector4_t light_color[2];
@@ -387,8 +379,7 @@ static void s_update_atmosphere_main(sun_t *light_pos, uint32_t light_count, gpu
 }
 
 
-static void s_update_atmosphere_irradiance(gpu_command_queue_t *queue)
-{
+static void s_update_atmosphere_irradiance(gpu_command_queue_t *queue) {
     queue->begin_render_pass(lighting.generate_irradiance_pass, lighting.generate_irradiance_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
 
     VkViewport viewport;
@@ -408,8 +399,7 @@ static void s_update_atmosphere_irradiance(gpu_command_queue_t *queue)
 }
 
 
-void s_update_atmosphere_prefiltered(gpu_command_queue_t *queue)
-{
+void s_update_atmosphere_prefiltered(gpu_command_queue_t *queue) {
     auto *prefiltered_environment_ppln = g_pipeline_manager->get(lighting.generate_prefiltered_environment_pipeline);
 
     matrix4_t projection_matrix = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 512.0f);
@@ -426,15 +416,13 @@ void s_update_atmosphere_prefiltered(gpu_command_queue_t *queue)
     image2d_t *cubemap = g_image_manager->get(lighting.prefiltered_environment_handle);
     image2d_t *interm = g_image_manager->get(lighting.prefiltered_environment_interm_handle);
 
-    for (uint32_t mip = 0; mip < 5; ++mip)
-    {
+    for (uint32_t mip = 0; mip < 5; ++mip) {
         uint32_t width = PREFILTERED_ENVIRONMENT_CUBEMAP_W * (uint32_t)pow(0.5, mip);
         uint32_t height = PREFILTERED_ENVIRONMENT_CUBEMAP_H * (uint32_t)pow(0.5, mip);
 
         float32_t roughness = (float32_t)mip / (float32_t)(5 - 1);
 
-        for (uint32_t layer = 0; layer < 6; ++layer)
-        {
+        for (uint32_t layer = 0; layer < 6; ++layer) {
             queue->begin_render_pass(lighting.generate_prefiltered_environment_pass, lighting.generate_prefiltered_environment_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
 
             // Set viewport
@@ -448,8 +436,7 @@ void s_update_atmosphere_prefiltered(gpu_command_queue_t *queue)
             command_buffer_bind_descriptor_sets(&prefiltered_environment_ppln->layout, { 1, atmosphere_uniform }, &queue->q);
 
             // Push constant
-            struct push_constant_t
-            {
+            struct push_constant_t {
                 matrix4_t mvp;
                 float32_t roughness;
                 float32_t layer;
@@ -482,8 +469,7 @@ void s_update_atmosphere_prefiltered(gpu_command_queue_t *queue)
 }
 
 
-static void s_update_atmosphere_integrate_lookup(gpu_command_queue_t *queue)
-{
+static void s_update_atmosphere_integrate_lookup(gpu_command_queue_t *queue) {
     auto *integrate_lookup_ppln = g_pipeline_manager->get(lighting.integrate_pipeline_handle);
 
     queue->begin_render_pass(lighting.integrate_lookup_pass, lighting.integrate_lookup_fbo, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0, 0.0, 0.0, 0));
@@ -501,8 +487,7 @@ static void s_update_atmosphere_integrate_lookup(gpu_command_queue_t *queue)
 }
 
 
-static void s_update_atmosphere(sun_t *light_pos, uint32_t light_count)
-{
+static void s_update_atmosphere(sun_t *light_pos, uint32_t light_count) {
     VkCommandBuffer cmdbuf;
     init_single_use_command_buffer(get_global_command_pool(), &cmdbuf);
 
@@ -513,8 +498,7 @@ static void s_update_atmosphere(sun_t *light_pos, uint32_t light_count)
 }
 
 
-void initialize_atmosphere(sun_t *light_pos, uint32_t light_count)
-{
+void initialize_atmosphere(sun_t *light_pos, uint32_t light_count) {
     s_atmosphere_builder_init();
     s_atmosphere_lighting_init();
     s_atmosphere_presenter_init();
@@ -522,8 +506,7 @@ void initialize_atmosphere(sun_t *light_pos, uint32_t light_count)
 }
 
 
-void update_atmosphere(sun_t *light_pos, uint32_t light_count, gpu_command_queue_t *queue)
-{
+void update_atmosphere(sun_t *light_pos, uint32_t light_count, gpu_command_queue_t *queue) {
     s_update_atmosphere_main(light_pos, light_count, queue);
     s_update_atmosphere_irradiance(queue);
     s_update_atmosphere_prefiltered(queue);
@@ -531,8 +514,7 @@ void update_atmosphere(sun_t *light_pos, uint32_t light_count, gpu_command_queue
 }
 
 
-void render_atmosphere(uniform_group_t *camera_transforms, const vector3_t &camera_pos, gpu_command_queue_t *queue)
-{
+void render_atmosphere(uniform_group_t *camera_transforms, const vector3_t &camera_pos, gpu_command_queue_t *queue) {
     auto *render_pipeline = g_pipeline_manager->get(presenter.render_pipeline);
     command_buffer_bind_pipeline(&render_pipeline->pipeline, &queue->q);
 
@@ -546,8 +528,7 @@ void render_atmosphere(uniform_group_t *camera_transforms, const vector3_t &came
 
     command_buffer_bind_ibo(cube->index_data, &queue->q);
 
-    struct skybox_push_constant_t
-    {
+    struct skybox_push_constant_t {
         matrix4_t model_matrix;
     } push_k;
 
@@ -559,25 +540,21 @@ void render_atmosphere(uniform_group_t *camera_transforms, const vector3_t &came
 }
 
 
-uniform_group_t *atmosphere_diffuse_uniform()
-{
+uniform_group_t *atmosphere_diffuse_uniform() {
     return g_uniform_group_manager->get(presenter.cubemap_uniform_group);
 }
 
 
-uniform_group_t *atmosphere_irradiance_uniform()
-{
+uniform_group_t *atmosphere_irradiance_uniform() {
     return g_uniform_group_manager->get(lighting.atmosphere_irradiance_uniform_group);
 }
 
 
-uniform_group_t *atmosphere_prefiltered_uniform()
-{
+uniform_group_t *atmosphere_prefiltered_uniform() {
     return g_uniform_group_manager->get(lighting.atmosphere_prefiltered_environment_uniform_group);
 }
 
 
-uniform_group_t *atmosphere_integrate_lookup_uniform()
-{
+uniform_group_t *atmosphere_integrate_lookup_uniform() {
     return g_uniform_group_manager->get(lighting.integrate_lookup_uniform_group);
 }

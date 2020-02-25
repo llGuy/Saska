@@ -6,8 +6,7 @@
 
 #define MAX_EVENTS 20
 
-enum listener_t
-{
+enum listener_t {
     WORLD,
     GUI,
     PARTICLES,
@@ -17,8 +16,7 @@ enum listener_t
     INVALID_LISTENER
 };
 
-enum event_type_t 
-{ 
+enum event_type_t {
     REQUEST_TO_JOIN_SERVER,
     ENTER_SERVER_WORLD,
     LAUNCH_MAP_EDITOR,
@@ -32,18 +30,15 @@ enum event_type_t
     INVALID_EVENT_TYPE
 };
 
-struct event_data_request_to_join_server_t
-{
+struct event_data_request_to_join_server_t {
     const char *ip_address;
 };
 
-struct event_data_launch_map_editor_t
-{
+struct event_data_launch_map_editor_t {
     char *map_name;
 };
 
-struct event_t
-{
+struct event_t {
     event_type_t type;
 
     // Likely to be allocated on free list allocator
@@ -52,14 +47,12 @@ struct event_t
 
 typedef void(*listener_callback_t)(void *object, event_t *);
 
-struct listener_subscriptions_t
-{
+struct listener_subscriptions_t {
     uint32_t count = 0;
     listener_t listeners[listener_t::INVALID_LISTENER] = {};
 };
 
-struct event_dispatcher_t
-{
+struct event_dispatcher_t {
     void set_callback(listener_t listener, listener_callback_t callback, void *object);
     void subscribe(event_type_t type, listener_t listener);
     void submit_event(event_type_t type, void *data);

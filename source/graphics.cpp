@@ -42,28 +42,24 @@ static post_processing_t *g_postfx;
 // Particles
 static particle_rendering_t *g_particle_rendering;
 
-gpu_command_queue_t make_command_queue(VkCommandPool *pool, submit_level_t level)
-{
+gpu_command_queue_t make_command_queue(VkCommandPool *pool, submit_level_t level) {
     gpu_command_queue_t result;
     allocate_command_buffers(pool, level, {1, &result.q});
     return(result);
 }
 
-void begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance)
-{
+void begin_command_queue(gpu_command_queue_t *queue, VkCommandBufferInheritanceInfo *inheritance) {
     begin_command_buffer(&queue->q, (queue->submit_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY ? VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : 0) | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT, inheritance);
 }
     
-void end_command_queue(gpu_command_queue_t *queue)
-{
+void end_command_queue(gpu_command_queue_t *queue) {
     end_command_buffer(&queue->q);
 }
 
 
 // --------------------- Uniform stuff ---------------------
 
-static void make_uniform_pool(void)
-{
+static void make_uniform_pool(void) {
     VkDescriptorPoolSize pool_sizes[3] = {};
 
     init_descriptor_pool_size(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 20, &pool_sizes[0]);
@@ -76,27 +72,23 @@ static void make_uniform_pool(void)
 // Naming is better than Descriptor in case of people familiar with different APIs / also will be useful when introducing other APIs
 using uniform_binding_t = VkDescriptorSetLayoutBinding;
 
-uniform_binding_t make_uniform_binding_s(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags)
-{
+uniform_binding_t make_uniform_binding_s(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags) {
     return init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 
 
-void uniform_layout_info_t::push(const uniform_binding_t &binding_info)
-{
+void uniform_layout_info_t::push(const uniform_binding_t &binding_info) {
     bindings_buffer[binding_count++] = binding_info;
 }
 
-void uniform_layout_info_t::push(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags)
-{
+void uniform_layout_info_t::push(uint32_t count, uint32_t binding, VkDescriptorType uniform_type, VkShaderStageFlags shader_flags) {
     bindings_buffer[binding_count++] = init_descriptor_set_layout_binding(uniform_type, binding, count, shader_flags);
 }
 
 using uniform_layout_t = VkDescriptorSetLayout;
 
-uniform_layout_t make_uniform_layout(uniform_layout_info_t *blueprint)
-{
+uniform_layout_t make_uniform_layout(uniform_layout_info_t *blueprint) {
     VkDescriptorSetLayout layout;
     init_descriptor_set_layout({blueprint->binding_count, blueprint->bindings_buffer}, &layout);
     return(layout);
@@ -107,8 +99,7 @@ uniform_layout_t make_uniform_layout(uniform_layout_info_t *blueprint)
 // Uniform Group is the struct going to be used to alias VkDescriptorSet, and in other APIs, simply groups of uniforms
 using uniform_group_t = VkDescriptorSet;
 
-uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool)
-{
+uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *pool) {
     uniform_group_t uniform_group = allocate_descriptor_set(layout, pool);
 
     return(uniform_group);
@@ -118,8 +109,7 @@ uniform_group_t make_uniform_group(uniform_layout_t *layout, VkDescriptorPool *p
 
 
 // --------------------- Rendering stuff ---------------------
-uint32_t gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size, mesh_t *mesh, uniform_group_t *ubo)
-{
+uint32_t gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32_t push_k_size, mesh_t *mesh, uniform_group_t *ubo) {
     material_t new_mtrl = {};
     new_mtrl.push_k_ptr = push_k_ptr;
     new_mtrl.push_k_size = push_k_size;
@@ -131,24 +121,20 @@ uint32_t gpu_material_submission_queue_t::push_material(void *push_k_ptr, uint32
     return(mtrl_count++);
 }
 
-gpu_command_queue_t *gpu_material_submission_queue_t::get_command_buffer(gpu_command_queue_t *queue)
-{
-    if (cmdbuf_index >= 0)
-    {
+gpu_command_queue_t *gpu_material_submission_queue_t::get_command_buffer(gpu_command_queue_t *queue) {
+    if (cmdbuf_index >= 0) {
 	return(&g_material_queue_manager->active_queues[cmdbuf_index]);
     }
     else return(queue);
 }
     
-void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups, graphics_pipeline_t *graphics_pipeline, gpu_command_queue_t *main_queue, submit_level_t level)
-{
+void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffer_view_t<uniform_group_t> &uniform_groups, graphics_pipeline_t *graphics_pipeline, gpu_command_queue_t *main_queue, submit_level_t level) {
     // Depends on the cmdbuf_index var, not on the submit level that is given
     gpu_command_queue_t *dst_command_queue = get_command_buffer(main_queue);
     // Now depends also on the submit level
     if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) dst_command_queue = main_queue;
 
-    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
-    {
+    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
 	VkCommandBufferInheritanceInfo inheritance_info = {};
 	inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 	inheritance_info.renderPass = g_render_pass_manager->get(main_queue->current_pass_handle)->render_pass;
@@ -163,8 +149,7 @@ void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffe
     uniform_group_t *groups = ALLOCA_T(uniform_group_t, uniform_groups.count + 1);
     memcpy(groups, uniform_groups.buffer, sizeof(uniform_group_t) * uniform_groups.count);
     
-    for (uint32_t i = 0; i < mtrl_count; ++i)
-    {
+    for (uint32_t i = 0; i < mtrl_count; ++i) {
         material_t *mtrl = &mtrls[i];
 
         VkDeviceSize *zero = ALLOCA_T(VkDeviceSize, mtrl->mesh->raw_buffer_list.count);
@@ -172,8 +157,7 @@ void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffe
         
         // TODO: Make sure this doesn't happen to materials which don't need an extra UBO
         uint32_t uniform_count = uniform_groups.count;
-        if (mtrl->ubo)
-        {
+        if (mtrl->ubo) {
             groups[uniform_count] = *mtrl->ubo;
             ++uniform_count;
         }
@@ -183,56 +167,47 @@ void gpu_material_submission_queue_t::submit_queued_materials(const memory_buffe
         command_buffer_bind_descriptor_sets(&graphics_pipeline->layout, { uniform_count, groups }, &dst_command_queue->q);
         command_buffer_bind_vbos(mtrl->mesh->raw_buffer_list, {mtrl->mesh->raw_buffer_list.count, zero}, 0, mtrl->mesh->raw_buffer_list.count, &dst_command_queue->q);
         
-        if (is_using_index_buffer)
-        {
+        if (is_using_index_buffer) {
             command_buffer_bind_ibo(mtrl->mesh->index_data, &dst_command_queue->q);
         }
         
         command_buffer_push_constant(mtrl->push_k_ptr, mtrl->push_k_size, 0, push_k_dst, graphics_pipeline->layout, &dst_command_queue->q);
 
-        if (is_using_index_buffer)
-        {
+        if (is_using_index_buffer) {
             command_buffer_draw_indexed(&dst_command_queue->q, mtrl->mesh->indexed_data);
         }
-        else
-        {
+        else {
             // All of the indexed data is now used as vertex data
             command_buffer_draw(&dst_command_queue->q, mtrl->mesh->indexed_data.index_count, mtrl->mesh->indexed_data.instance_count, mtrl->mesh->indexed_data.first_index, mtrl->mesh->indexed_data.first_instance);
         }
     }
 
-    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
-    {
+    if (cmdbuf_index >= 0 && level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
         end_command_buffer(&dst_command_queue->q);
     }
 }
 
-void gpu_material_submission_queue_t::flush_queue(void)
-{
+void gpu_material_submission_queue_t::flush_queue(void) {
     mtrl_count = 0;
 }
 
-void gpu_material_submission_queue_t::submit_to_cmdbuf(gpu_command_queue_t *queue)
-{
+void gpu_material_submission_queue_t::submit_to_cmdbuf(gpu_command_queue_t *queue) {
     //    command_buffer_execute_commands(&queue->q, {1, get_command_buffer(nullptr)});
 }
 
-gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst, submit_level_t level, gpu_command_queue_pool_t *pool)
-{
+gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_materials, VkShaderStageFlags push_k_dst, submit_level_t level, gpu_command_queue_pool_t *pool) {
     gpu_material_submission_queue_t material_queue;
 
     material_queue.push_k_dst = push_k_dst;
     
     // not used for multi threading - directly gets inlined into the main command queue
-    if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-    {
+    if (level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
 	material_queue.mtrl_count = 0;
 	allocate_memory_buffer(material_queue.mtrls, max_materials);
     }
 
     // used for multi threading - gets submitted to secondary buffer then all the secondary buffers join into the main queue
-    else if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
-    {
+    else if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
 	gpu_command_queue_t command_queue = make_command_queue(pool, level);
 
 	material_queue.mtrl_count = 0;
@@ -245,13 +220,11 @@ gpu_material_submission_queue_t make_gpu_material_submission_queue(uint32_t max_
     return(material_queue);
 }
 
-void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue)
-{
+void submit_queued_materials_from_secondary_queues(gpu_command_queue_t *queue) {
     //    command_buffer_execute_commands(queue, {g_material_queue_manager->active_queue_ptr, g_material_queue_manager->active_queues});
 }
 
-void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, VkImageUsageFlags usage, uint32_t dimensions)
-{
+void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, VkImageUsageFlags usage, uint32_t dimensions) {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     
     init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, mip_levels, flags);
@@ -261,23 +234,20 @@ void make_framebuffer_attachment(image2d_t *img, uint32_t w, uint32_t h, VkForma
     if (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) aspect_flags = VK_IMAGE_ASPECT_DEPTH_BIT;
 
     VkImageViewType view_type = (dimensions == 3) ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
-    if (dimensions == 2 && layer_count > 1)
-    {
+    if (dimensions == 2 && layer_count > 1) {
         view_type = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
     }
     
     init_image_view(&img->image, format, aspect_flags, &img->image_view, view_type, layer_count, mip_levels);
 
-    if (usage & VK_IMAGE_USAGE_SAMPLED_BIT)
-    {
+    if (usage & VK_IMAGE_USAGE_SAMPLED_BIT) {
         init_image_sampler(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                            VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                            VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, (float)mip_levels, &img->image_sampler);
     }
 }
 
-void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter)
-{
+void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint32_t layer_count, uint32_t mip_levels, uint32_t dimensions, VkImageUsageFlags usage, VkFilter filter) {
     VkImageCreateFlags flags = (dimensions == 3) ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
     init_image(w, h, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layer_count, img, mip_levels, flags);
     VkImageAspectFlags aspect_flags = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -287,23 +257,18 @@ void make_texture(image2d_t *img, uint32_t w, uint32_t h, VkFormat format, uint3
                        VK_FALSE, 1, VK_BORDER_COLOR_INT_OPAQUE_BLACK, VK_FALSE, (VkCompareOp)0, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, 0.0f, (float)mip_levels, &img->image_sampler);
 }
 
-void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth)
-{
-    if (colors.count)
-    {
+void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer_count, render_pass_t *compatible, const memory_buffer_view_t<image2d_t> &colors, image2d_t *depth) {
+    if (colors.count) {
         allocate_memory_buffer(fbo->color_attachments, colors.count);
-        for (uint32_t i = 0; i < colors.count; ++i)
-        {
+        for (uint32_t i = 0; i < colors.count; ++i) {
             fbo->color_attachments[i] = colors[i].image_view;
         }
     }
-    else
-    {
+    else {
         fbo->color_attachments.buffer = nullptr;
         fbo->color_attachments.count = 0;
     }
-    if (depth)
-    {
+    if (depth) {
         fbo->depth_attachment = depth->image_view;
     }
     
@@ -312,17 +277,14 @@ void make_framebuffer(framebuffer_t *fbo, uint32_t w, uint32_t h, uint32_t layer
     fbo->extent = VkExtent2D{ w, h };
 }
 
-render_pass_dependency_t make_render_pass_dependency(int32_t src_index, VkPipelineStageFlags src_stage, uint32_t src_access, int32_t dst_index, VkPipelineStageFlags dst_stage, uint32_t dst_access)
-{
+render_pass_dependency_t make_render_pass_dependency(int32_t src_index, VkPipelineStageFlags src_stage, uint32_t src_access, int32_t dst_index, VkPipelineStageFlags dst_stage, uint32_t dst_access) {
     return render_pass_dependency_t{ src_index, src_stage, src_access, dst_index, dst_stage, dst_access };
 }
 
-void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<render_pass_attachment_t> &attachments, const memory_buffer_view_t<render_pass_subpass_t> &subpasses, const memory_buffer_view_t<render_pass_dependency_t> &dependencies, bool clear_every_instance)
-{
+void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<render_pass_attachment_t> &attachments, const memory_buffer_view_t<render_pass_subpass_t> &subpasses, const memory_buffer_view_t<render_pass_dependency_t> &dependencies, bool clear_every_instance) {
     VkAttachmentDescription descriptions_vk[10] = {};
     uint32_t att_i = 0;
-    for (; att_i < attachments.count; ++att_i)
-    {
+    for (; att_i < attachments.count; ++att_i) {
         descriptions_vk[att_i] = init_attachment_description(attachments[att_i].format, VK_SAMPLE_COUNT_1_BIT, clear_every_instance ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                                                              VK_ATTACHMENT_STORE_OP_STORE, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED, attachments[att_i].final_layout);
     }
@@ -331,26 +293,22 @@ void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<ren
     uint32_t sub_i = 0;
     VkAttachmentReference reference_buffer[30] = {};
     uint32_t reference_count = 0;
-    for (; sub_i < subpasses.count; ++sub_i)
-    {
+    for (; sub_i < subpasses.count; ++sub_i) {
         // Max is 10
         uint32_t ref_i = 0;
         uint32_t color_reference_start = reference_count;
-        for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i, ++reference_count)
-        {
+        for (; ref_i < subpasses[sub_i].color_attachment_count; ++ref_i, ++reference_count) {
             reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].color_attachments[ref_i].index, subpasses[sub_i].color_attachments[ref_i].layout);
         }
 
         uint32_t input_reference_start = reference_count;
         uint32_t inp_i = 0;
-        for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i, ++reference_count)
-        {
+        for (; inp_i < subpasses[sub_i].input_attachment_count; ++inp_i, ++reference_count) {
             reference_buffer[reference_count] = init_attachment_reference(subpasses[sub_i].input_attachments[inp_i].index, subpasses[sub_i].input_attachments[inp_i].layout);
         }
 
         uint32_t depth_reference_ptr = reference_count;
-        if (subpasses[sub_i].enable_depth)
-        {
+        if (subpasses[sub_i].enable_depth) {
             reference_buffer[reference_count++] = init_attachment_reference(subpasses[sub_i].depth_attachment.index, subpasses[sub_i].depth_attachment.layout);
         }
         
@@ -359,8 +317,7 @@ void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<ren
 
     VkSubpassDependency dependencies_vk[10] = {};
     uint32_t dep_i = 0;
-    for (; dep_i < dependencies.count; ++dep_i)
-    {
+    for (; dep_i < dependencies.count; ++dep_i) {
         const render_pass_dependency_t *info = &dependencies[dep_i];
         dependencies_vk[dep_i] = init_subpass_dependency(info->src_index, info->dst_index, info->src_stage, info->src_access, info->dst_stage, info->dst_access, VK_DEPENDENCY_BY_REGION_BIT);
     }
@@ -368,8 +325,7 @@ void make_render_pass(render_pass_t *render_pass, const memory_buffer_view_t<ren
     init_render_pass({ att_i, descriptions_vk }, {sub_i, subpasses_vk}, {dep_i, dependencies_vk}, render_pass);
 }
 
-void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool)
-{
+void make_unmappable_gpu_buffer(gpu_buffer_t *dst_buffer, uint32_t size, void *data, gpu_buffer_usage_t usage, gpu_command_queue_pool_t *pool) {
     memory_byte_buffer_t byte_buffer{ size, data };
     invoke_staging_buffer_for_device_local_buffer(byte_buffer, usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT, pool, dst_buffer);
 }
@@ -387,8 +343,7 @@ void fill_graphics_pipeline_info(const shader_modules_t &modules,
                                  const dynamic_states_t &dynamic_states,
                                  render_pass_t *compatible,
                                  uint32_t subpass,
-                                 graphics_pipeline_info_t *info)
-{
+                                 graphics_pipeline_info_t *info) {
     info->modules = modules;
     info->primitive_restart = primitive_restart;
     info->topology = topology;
@@ -406,14 +361,12 @@ void fill_graphics_pipeline_info(const shader_modules_t &modules,
     info->subpass = subpass;
 }
 
-void graphics_pipeline_t::destroy(void)
-{
+void graphics_pipeline_t::destroy(void) {
     //vkDestroyPipelineLayout(g_context->gpu.logical_device, layout, nullptr);
     //vkDestroyPipeline(g_context->gpu.logical_device, pipeline, nullptr);
 }
 
-void make_graphics_pipeline(graphics_pipeline_t *ppln)
-{
+void make_graphics_pipeline(graphics_pipeline_t *ppln) {
     // Declaration of parameters
     shader_modules_t &modules = ppln->info->modules;
     bool primitive_restart = ppln->info->primitive_restart;
@@ -435,10 +388,8 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     VkShaderModule module_objects[shader_modules_t::MAX_SHADERS] = {};
     VkPipelineShaderStageCreateInfo infos[shader_modules_t::MAX_SHADERS] = {};
     
-    for (uint32_t i = 0; i < modules.count; ++i)
-    {
-        if (modules.modules[i].file_handle >= 0)
-        {
+    for (uint32_t i = 0; i < modules.count; ++i) {
+        if (modules.modules[i].file_handle >= 0) {
             remove_and_destroy_file(modules.modules[i].file_handle);
         }
         
@@ -463,15 +414,12 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     init_pipeline_multisampling_info(VK_SAMPLE_COUNT_1_BIT, 0, &multi);
     VkPipelineColorBlendStateCreateInfo blending_info = {};
     VkPipelineColorBlendAttachmentState blend_states[shader_blend_states_t::MAX_BLEND_STATES];
-    for (uint32_t i = 0; i < blends.count; ++i)
-    {
-        if (blends.blend_states[i])
-        {
+    for (uint32_t i = 0; i < blends.count; ++i) {
+        if (blends.blend_states[i]) {
             init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
                                         VK_TRUE, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, &blend_states[i]);
         }
-        else
-        {
+        else {
             init_blend_state_attachment(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
                                         VK_FALSE, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, &blend_states[i]);
         }
@@ -490,33 +438,28 @@ void make_graphics_pipeline(graphics_pipeline_t *ppln)
     VkPushConstantRange pk_range = {};
     init_push_constant_range(pk.stages, pk.size, pk.offset, &pk_range);
     uniform_layout_t real_layouts [shader_uniform_layouts_t::MAX_LAYOUTS] = {};
-    for (uint32_t i = 0; i < layouts.count; ++i)
-    {
+    for (uint32_t i = 0; i < layouts.count; ++i) {
         real_layouts[i] = *g_uniform_layout_manager->get(layouts.layouts[i]);
     }
     memory_buffer_view_t<VkPushConstantRange> pk_range_mb;
-    if (pk_range.size)
-    {
+    if (pk_range.size) {
         pk_range_mb = memory_buffer_view_t<VkPushConstantRange>{1, &pk_range};
     }
-    else
-    {
+    else {
         pk_range_mb = memory_buffer_view_t<VkPushConstantRange>{0, nullptr};
     }
     init_pipeline_layout({layouts.count, real_layouts}, pk_range_mb, &ppln->layout);
     memory_buffer_view_t<VkPipelineShaderStageCreateInfo> shaders_mb = {modules.count, infos};
     init_graphics_pipeline(&shaders_mb, &v_input, &assembly, &view_info, &raster, &multi, &blending_info, &dynamic_info, &depth, &ppln->layout, compatible, subpass, &ppln->pipeline);
 
-    for (uint32_t i = 0; i < modules.count; ++i)
-    {
+    for (uint32_t i = 0; i < modules.count; ++i) {
         destroy_shader_module(&module_objects[i]);
     }
 }
 
 void initialize_3d_unanimated_shader(graphics_pipeline_t *pipeline,
                                      const char *base_shader_path,
-                                     model_t *model)
-{
+                                     model_t *model) {
     uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
     uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
 
@@ -555,8 +498,7 @@ void initialize_3d_unanimated_shader(graphics_pipeline_t *pipeline,
 
 void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
                                             const char *base_shader_path,
-                                            model_t *model)
-{
+                                            model_t *model) {
     uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
     uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
 
@@ -596,8 +538,7 @@ void initialize_3d_unanimated_shadow_shader(graphics_pipeline_t *pipeline,
 void initialize_3d_animated_shader(graphics_pipeline_t *pipeline,
                                    const char *base_shader_path,
                                    model_t *model,
-                                   uniform_layout_handle_t animation_layout)
-{
+                                   uniform_layout_handle_t animation_layout) {
     uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
     uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
 
@@ -637,9 +578,7 @@ void initialize_3d_animated_shader(graphics_pipeline_t *pipeline,
 void initialize_3d_animated_shadow_shader(graphics_pipeline_t *pipeline,
                                           const char *base_shader_path,
                                           model_t *model,
-                                          uniform_layout_handle_t animation_layout)
-
-{ 
+                                          uniform_layout_handle_t animation_layout) {
     uint32_t length_of_base_path = (uint32_t)strlen(base_shader_path);
     uint32_t length_of_extension = (uint32_t)strlen(".xxxx.spv");
 
@@ -752,8 +691,7 @@ void dbg_render_shadow_map_quad(gpu_command_queue_t *queue)
     return(ret);
     }*/
 
-static float32_t float16_to_float32(uint16_t f)
-{
+static float32_t float16_to_float32(uint16_t f) {
     int f32i32 =  ((f & 0x8000) << 16);
     f32i32 |= ((f & 0x7fff) << 13) + 0x38000000;
 
@@ -762,16 +700,14 @@ static float32_t float16_to_float32(uint16_t f)
     return ret;
 }
 
-static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs)
-{
+static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler, const vector2_t &uvs) {
     uint32_t ui_x = (uint32_t)(uvs.x * (float32_t)sampler->resolution.width);
     uint32_t ui_y = (uint32_t)(uvs.y * (float32_t)sampler->resolution.height);
 
     ui_y = sampler->resolution.height - ui_y;
 
     uint32_t pixel_size;
-    switch(sampler->format)
-    {
+    switch(sampler->format) {
     case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_R8G8B8A8_UNORM: {pixel_size = sizeof(uint8_t) * 4; break;}
     case VK_FORMAT_R16G16B16A16_SFLOAT: {pixel_size = sizeof(uint16_t) * 4; break;}
     }
@@ -786,8 +722,7 @@ static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t 
 
     vector4_t final_color = {};
 
-    switch(sampler->format)
-    {
+    switch(sampler->format) {
         /*    case VK_FORMAT_R8G8B8A8_UNORM:
         {
             float32_t r = (float32_t)(*(pixel + 0)) / 256.0f;
@@ -797,8 +732,7 @@ static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t 
             final_color = vector4_t(r, g, b, a);
             break;
             }*/
-    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_R8G8B8A8_UNORM:
-        {
+    case VK_FORMAT_B8G8R8A8_UNORM: case VK_FORMAT_R8G8B8A8_UNORM: {
             float32_t r = (float32_t)(*(pixel + 2)) / 256.0f;
             float32_t g = (float32_t)(*(pixel + 1)) / 256.0f;
             float32_t b = (float32_t)(*(pixel + 0)) / 256.0f;
@@ -806,8 +740,7 @@ static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t 
             final_color = vector4_t(r, g, b, a);
             break;
         }
-    case VK_FORMAT_R16G16B16A16_SFLOAT:
-        {
+    case VK_FORMAT_R16G16B16A16_SFLOAT: {
             uint16_t *pixel_16b = (uint16_t *)pixel;
             float32_t r = float16_to_float32(*(pixel_16b));
             float32_t g = float16_to_float32(*(pixel_16b + 1));
@@ -820,15 +753,13 @@ static vector4_t glsl_texture_function(dbg_pfx_frame_capture_t::dbg_sampler2d_t 
     return(final_color);
 }
 
-static uint32_t get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution)
-{
+static uint32_t get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, float32_t x, float32_t y, VkFormat format, const resolution_t &resolution) {
     uint32_t ui_x = (uint32_t)(x * (float32_t)resolution.width);
     uint32_t ui_y = (uint32_t)(y * (float32_t)resolution.height);
     
     ui_y = resolution.height - ui_y;
     uint32_t pixel_size;
-    switch(format)
-    {
+    switch(format) {
     case VK_FORMAT_B8G8R8A8_UNORM: pixel_size = sizeof(uint8_t) * 4; break;
     case VK_FORMAT_R8G8B8A8_UNORM: pixel_size = sizeof(uint8_t) * 4; break;
     case VK_FORMAT_R16G16B16A16_SFLOAT: pixel_size = sizeof(uint16_t) * 4; break;
@@ -857,8 +788,7 @@ static uint32_t get_pixel_color(image2d_t *image, mapped_gpu_memory_t *memory, f
 
 vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera);
 
-void dbg_handle_input(raw_input_t *raw_input)
-{
+void dbg_handle_input(raw_input_t *raw_input) {
     /*if (raw_input->keyboard[keyboard_button_type_t::P].is_down)
     {
         camera_t *camera = get_camera_bound_to_3d_output();
@@ -872,10 +802,8 @@ void dbg_handle_input(raw_input_t *raw_input)
                        , camera->u);
                        }*/
     
-    if (g_postfx->dbg_in_frame_capture_mode)
-    {
-        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state)
-        {
+    if (g_postfx->dbg_in_frame_capture_mode) {
+        if (raw_input->buttons[button_type_t::MOUSE_LEFT].state) {
             // Isn't normalized
             g_postfx->dbg_capture.window_cursor_position = raw_input->normalized_cursor_position;
             g_postfx->dbg_capture.window_cursor_position.y = raw_input->window_height - g_postfx->dbg_capture.window_cursor_position.y;
@@ -914,21 +842,18 @@ void dbg_handle_input(raw_input_t *raw_input)
     }
 }
 
-static void dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
-{
+static void dbg_make_frame_capture_blit_image(image2d_t *dst_img, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect) {
     VkImageAspectFlags aspect_flags = aspect;
     init_image(w, h, format, VK_IMAGE_TILING_LINEAR, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, 1, dst_img, 1, 0);
     init_image_view(&dst_img->image, format, aspect_flags, &dst_img->image_view, VK_IMAGE_VIEW_TYPE_2D, 1, 1);
 }
 
-static void dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect)
-{
+static void dbg_make_frame_capture_output_blit_image(image2d_t *dst_image, image2d_t *dst_image_linear, uint32_t w, uint32_t h, VkFormat format, VkImageAspectFlags aspect) {
     make_framebuffer_attachment(dst_image, w, h, format, 1, 1, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 2);
     dbg_make_frame_capture_blit_image(dst_image_linear, w, h, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
-static void dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture)
-{
+static void dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture) {
     uniform_layout_handle_t layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.pfx_single_tx_output"_hash);
     uniform_layout_t *layout_ptr = g_uniform_layout_manager->get(layout_hdl);
     
@@ -936,12 +861,10 @@ static void dbg_make_frame_capture_uniform_data(dbg_pfx_frame_capture_t *capture
     update_uniform_group(&capture->blitted_image_uniform, update_binding_t{TEXTURE, &capture->blitted_image, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 }
 
-static void dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture)
-{
+static void dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_capture_t *capture) {
     capture->sampler_count = stage->input_count;
     framebuffer_t *stage_fbo = g_framebuffer_manager->get(stage->fbo);
-    for (uint32_t i = 0; i < capture->sampler_count; ++i)
-    {
+    for (uint32_t i = 0; i < capture->sampler_count; ++i) {
         dbg_pfx_frame_capture_t::dbg_sampler2d_t *sampler = &capture->samplers[i];
         sampler->index = 0;
         sampler->original_image = stage->inputs[i];
@@ -949,8 +872,7 @@ static void dbg_make_frame_capture_samplers(pfx_stage_t *stage, dbg_pfx_frame_ca
     }
 }
 
-static void dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
-{
+static void dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool) {
     // Trying to debug the SSR stage
     pfx_stage_t *stage = &g_postfx->ssr_stage;
     framebuffer_t *stage_fbo = g_framebuffer_manager->get(stage->fbo);
@@ -997,22 +919,20 @@ static void dbg_make_frame_capture_data(gpu_command_queue_pool_t *pool)
 }
 
 void pfx_stage_t::introduce_to_managers(const constant_string_t &ppln_name,
-                                   const constant_string_t &fbo_name,
-                                   const constant_string_t &group_name)
-{
+                                        const constant_string_t &fbo_name,
+                                        const constant_string_t &group_name) {
     ppln = g_pipeline_manager->add(ppln_name);
     fbo = g_framebuffer_manager->add(fbo_name);
     output_group = g_uniform_group_manager->add(group_name);        
 }
 
 static void make_pfx_stage(pfx_stage_t *dst_stage,
-                                      const shader_modules_t &shader_modules,
-                                      const shader_uniform_layouts_t &uniform_layouts,
-                                      const resolution_t &resolution,
-                                      image2d_t *stage_output,
-                                      uniform_layout_t *single_tx_layout_ptr,
-                                      render_pass_t *pfx_render_pass)
-{
+                           const shader_modules_t &shader_modules,
+                           const shader_uniform_layouts_t &uniform_layouts,
+                           const resolution_t &resolution,
+                           image2d_t *stage_output,
+                           uniform_layout_t *single_tx_layout_ptr,
+                           render_pass_t *pfx_render_pass) {
     auto *stage_pipeline = g_pipeline_manager->get(dst_stage->ppln);
     {
         graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
@@ -1044,8 +964,7 @@ static void make_pfx_stage(pfx_stage_t *dst_stage,
     }
 }
 
-void make_postfx_data(gpu_command_queue_pool_t *pool)
-{
+void make_postfx_data(gpu_command_queue_pool_t *pool) {
     g_postfx->pfx_single_tx_layout = g_uniform_layout_manager->add("uniform_layout.pfx_single_tx_output"_hash);
     auto *single_tx_layout_ptr = g_uniform_layout_manager->get(g_postfx->pfx_single_tx_layout);
     {
@@ -1094,8 +1013,7 @@ void make_postfx_data(gpu_command_queue_pool_t *pool)
     {
         VkImageView *swapchain_image_views = get_swapchain_image_views();
         
-        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
-        {
+        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i) {
             final_fbo[i].extent = get_swapchain_extent();
             
             allocate_memory_buffer(final_fbo[i].color_attachments, 1);
@@ -1142,13 +1060,11 @@ void make_postfx_data(gpu_command_queue_pool_t *pool)
     dbg_make_frame_capture_data(pool);
 }
 
-framebuffer_handle_t get_pfx_framebuffer_hdl(void)
-{
+framebuffer_handle_t get_pfx_framebuffer_hdl(void) {
     return(g_postfx->pre_final_stage.fbo);
 }
 
-inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix)
-{
+inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix) {
     queue->begin_render_pass(g_postfx->pfx_render_pass
                              , g_postfx->ssr_stage.fbo
                              , VK_SUBPASS_CONTENTS_INLINE
@@ -1166,8 +1082,7 @@ inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_gr
         uniform_group_t groups[] = { *g_buffer_group, *atmosphere_group, *transforms_group };
         command_buffer_bind_descriptor_sets(&pfx_ssr_ppln->layout, {3, groups}, &queue->q);
 
-        struct ssr_lighting_push_k_t
-        {
+        struct ssr_lighting_push_k_t {
             vector4_t ws_light_position;
             matrix4_t view;
             matrix4_t proj;
@@ -1188,10 +1103,8 @@ inline void apply_ssr(gpu_command_queue_t *queue, uniform_group_t *transforms_gr
     queue->end_render_pass();
 }
 
-inline void render_to_pre_final(gpu_command_queue_t *queue)
-{
-    if (g_postfx->dbg_requested_capture)
-    {
+inline void render_to_pre_final(gpu_command_queue_t *queue) {
+    if (g_postfx->dbg_requested_capture) {
         /*g_postfx->dbg_in_frame_capture_mode = true;
         g_postfx->dbg_requested_capture = false;
 
@@ -1231,12 +1144,10 @@ inline void render_to_pre_final(gpu_command_queue_t *queue)
     uniform_group_t tx_to_render = {};
     
     // TODO: If requested capture mode -> go into capture mode
-    if (g_postfx->dbg_in_frame_capture_mode)
-    {
+    if (g_postfx->dbg_in_frame_capture_mode) {
         tx_to_render = g_postfx->dbg_capture.blitted_image_uniform;
     }
-    else
-    {
+    else {
         tx_to_render = *g_uniform_group_manager->get(g_postfx->ssr_stage.output_group);
     }
     
@@ -1252,17 +1163,14 @@ inline void render_to_pre_final(gpu_command_queue_t *queue)
         uniform_group_t groups[] = { tx_to_render };
         command_buffer_bind_descriptor_sets(&pfx_pre_final_ppln->layout, {1, groups}, &queue->q);
 
-        struct push_k
-        {
+        struct push_k {
             vector4_t db;
         } pk;
 
-        if (g_postfx->dbg_in_frame_capture_mode)
-        {
+        if (g_postfx->dbg_in_frame_capture_mode) {
             pk.db = vector4_t(0.0f);
         }
-        else
-        {
+        else {
             pk.db = vector4_t(-10.0f);
         }
         
@@ -1273,14 +1181,12 @@ inline void render_to_pre_final(gpu_command_queue_t *queue)
     queue->end_render_pass();
 }
 
-void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix)
-{
+void apply_pfx_on_scene(gpu_command_queue_t *queue, uniform_group_t *transforms_group, const matrix4_t &view_matrix, const matrix4_t &projection_matrix) {
     apply_ssr(queue, transforms_group, view_matrix, projection_matrix);
     render_to_pre_final(queue);
 }
 
-void render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
-{
+void render_final_output(uint32_t image_index, gpu_command_queue_t *queue) {
     queue->begin_render_pass(g_postfx->final_render_pass, g_postfx->final_stage.fbo + image_index, VK_SUBPASS_CONTENTS_INLINE, init_clear_color_color(0.0f, 0.0f, 0.0f, 1.0f));
 
     VkExtent2D swapchain_extent = get_swapchain_extent();
@@ -1290,16 +1196,14 @@ void render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
 
     uint32_t rect2D_width, rect2D_height, rect2Dx, rect2Dy;
     
-    if (backbuffer_asp >= swapchain_asp)
-    {
+    if (backbuffer_asp >= swapchain_asp) {
         rect2D_width = swapchain_extent.width;
         rect2D_height = (uint32_t)((float32_t)swapchain_extent.width / backbuffer_asp);
         rect2Dx = 0;
         rect2Dy = (swapchain_extent.height - rect2D_height) / 2;
     }
 
-    if (backbuffer_asp < swapchain_asp)
-    {
+    if (backbuffer_asp < swapchain_asp) {
         rect2D_width = (uint32_t)(swapchain_extent.height * backbuffer_asp);
         rect2D_height = swapchain_extent.height;
         rect2Dx = (swapchain_extent.width - rect2D_width) / 2;
@@ -1320,8 +1224,7 @@ void render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
         uniform_group_t groups[] = { *g_uniform_group_manager->get(g_postfx->pre_final_stage.output_group) };
         command_buffer_bind_descriptor_sets(&pfx_final_ppln->layout, {1, groups}, &queue->q);
 
-        struct ssr_lighting_push_k_t
-        {
+        struct ssr_lighting_push_k_t {
             vector4_t debug;
         } pk;
 
@@ -1333,8 +1236,7 @@ void render_final_output(uint32_t image_index, gpu_command_queue_t *queue)
     queue->end_render_pass();
 }
 
-static void make_cube_model(gpu_command_queue_pool_t *pool)
-{
+static void make_cube_model(gpu_command_queue_pool_t *pool) {
     model_handle_t cube_model_hdl = g_model_manager->add("model.cube_model"_hash);
     auto *cube_model_ptr = g_model_manager->get(cube_model_hdl);
     {
@@ -1365,8 +1267,7 @@ static void make_cube_model(gpu_command_queue_pool_t *pool)
 	
         float32_t radius = 1.0f;
 	
-        static vertex_t vertices[]
-        {
+        static vertex_t vertices[] {
             {{-radius, -radius, radius	}, gray},
             {{radius, -radius, radius	}, gray},
             {{radius, radius, radius	}, gray},
@@ -1390,8 +1291,7 @@ static void make_cube_model(gpu_command_queue_pool_t *pool)
     gpu_buffer_handle_t model_ibo_hdl = g_gpu_buffer_manager->add("ibo.cube_model_ibo"_hash);
     auto *ibo = g_gpu_buffer_manager->get(model_ibo_hdl);
     {
-	static uint32_t mesh_indices[] = 
-            {
+	static uint32_t mesh_indices[] =  {
                 0, 1, 2,
                 2, 3, 0,
 
@@ -1426,8 +1326,7 @@ static void make_cube_model(gpu_command_queue_pool_t *pool)
 static int32_t lua_begin_frame_capture(lua_State *state);
 static int32_t lua_end_frame_capture(lua_State *state);
 
-void make_cubemap_uniform_layout(void)
-{
+void make_cubemap_uniform_layout(void) {
     uniform_layout_handle_t render_atmosphere_layout_hdl = g_uniform_layout_manager->add("descriptor_set_layout.render_atmosphere_layout"_hash);
     auto *render_atmosphere_layout_ptr = g_uniform_layout_manager->get(render_atmosphere_layout_hdl);
     {
@@ -1437,8 +1336,7 @@ void make_cubemap_uniform_layout(void)
     }
 }
 
-void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *raw_input)
-{
+void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *raw_input) {
     make_cubemap_uniform_layout();
     make_uniform_pool();
 
@@ -1501,26 +1399,20 @@ void initialize_game_3d_graphics(gpu_command_queue_pool_t *pool, raw_input_t *ra
 // 2D Graphics
 
 
-void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool)
-{
+void initialize_game_2d_graphics(gpu_command_queue_pool_t *pool) {
     make_postfx_data(pool);
 
     clear_linear();
 }
 
-void hotreload_assets_if_changed(void)
-{
+void hotreload_assets_if_changed(void) {
     bool hotreloading = false;
-    for (uint32_t i = 0; i < g_pipeline_manager->count; ++i)
-    {
+    for (uint32_t i = 0; i < g_pipeline_manager->count; ++i) {
         graphics_pipeline_t *ppln = g_pipeline_manager->get(i);
-        for (uint32_t shader_module = 0; shader_module < ppln->info->modules.count; ++shader_module)
-        {
+        for (uint32_t shader_module = 0; shader_module < ppln->info->modules.count; ++shader_module) {
             shader_module_info_t *info = &ppln->info->modules.modules[shader_module];
-            if (has_file_changed(info->file_handle))
-            {
-                if (!hotreloading)
-                {
+            if (has_file_changed(info->file_handle)) {
+                if (!hotreloading) {
                     hotreloading = true;
                     idle_gpu();
 
@@ -1532,13 +1424,11 @@ void hotreload_assets_if_changed(void)
     }
 }
 
-void destroy_graphics(void)
-{
+void destroy_graphics(void) {
     //    vkDestroyDescriptorPool(gpu->logical_device, g_uniform_pool, nullptr);
 }
 
-static int32_t lua_begin_frame_capture(lua_State *state)
-{
+static int32_t lua_begin_frame_capture(lua_State *state) {
     // Copy images into samplers blitted images
     g_postfx->dbg_requested_capture = true;
 
@@ -1549,8 +1439,7 @@ static int32_t lua_begin_frame_capture(lua_State *state)
     return(0);
 }
 
-static int32_t lua_end_frame_capture(lua_State *state)
-{
+static int32_t lua_end_frame_capture(lua_State *state) {
     g_postfx->dbg_in_frame_capture_mode = false;
 
     console_out("=== End frame capture ===\n");
@@ -1630,8 +1519,7 @@ static vec4 glsl_texture_func(sampler2d_ptr_t &sampler, vec2 &uvs)
 #define SET_UNIFORM(name, uni) glsl::##name = uni
 #define SET_VS_DATA(name, data) glsl::##name = data
 */
-vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera)
-{
+vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uvs, camera_t *camera) {
     /*    glsl::pk_t pk;
 
     vector4_t n_light_dir = camera->v_m * vector4_t(glm::normalize(-g_lighting->suns[0].ws_position), 0.0f);
@@ -1679,8 +1567,7 @@ vector4_t invoke_glsl_code(dbg_pfx_frame_capture_t *capture, const vector2_t &uv
 
 
 // Different formats
-mesh_t load_obj_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
-{
+mesh_t load_obj_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool) {
     return {};
 }
 
@@ -1694,29 +1581,24 @@ mesh_t load_obj_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool
     model_t attribute_and_binding_information;
 };*/
 
-void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh)
-{
+void push_buffer_to_mesh(buffer_type_t buffer_type, mesh_t *mesh) {
     mesh->buffer_types_stack[mesh->buffer_count++] = buffer_type;
     // Validate the buffer type in the buffer object
     mesh->buffers[buffer_type].type = buffer_type;
 }
 
-bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh)
-{
+bool32_t mesh_has_buffer_type(buffer_type_t buffer_type, mesh_t *mesh) {
     return(mesh->buffers[buffer_type].type == buffer_type);
 }
 
-mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh)
-{
-    if (mesh_has_buffer_type(buffer_type, mesh))
-    {
+mesh_buffer_t *get_mesh_buffer_object(buffer_type_t buffer_type, mesh_t *mesh) {
+    if (mesh_has_buffer_type(buffer_type, mesh)) {
         return(&mesh->buffers[buffer_type]);
     }
     return(nullptr);
 }
 
-struct custom_mesh_header_t
-{
+struct custom_mesh_header_t {
     uint32_t vertices_offset;
     uint32_t vertices_size;
     
@@ -1737,8 +1619,7 @@ struct custom_mesh_header_t
 };
 
 // First work on this
-mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool)
-{
+mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *cmd_pool) {
     file_handle_t mesh_file_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t mesh_data = read_file_tmp(mesh_file_handle);
     remove_and_destroy_file(mesh_file_handle);
@@ -1747,8 +1628,7 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
 
     custom_mesh_header_t *header = (custom_mesh_header_t *)mesh_data.content;
 
-    if (header->indices_size)
-    {
+    if (header->indices_size) {
         push_buffer_to_mesh(buffer_type_t::INDICES, &mesh);
         mesh_buffer_t *indices_gpu_buffer = get_mesh_buffer_object(buffer_type_t::INDICES, &mesh);
         uint32_t *indices = (uint32_t *)(mesh_data.content + header->indices_offset);
@@ -1776,8 +1656,7 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
                                    cmd_pool);
     }
     
-    if (header->normals_size)
-    {
+    if (header->normals_size) {
         push_buffer_to_mesh(buffer_type_t::NORMAL, &mesh);
         mesh_buffer_t *normals_gpu_buffer = get_mesh_buffer_object(buffer_type_t::NORMAL, &mesh);
         make_unmappable_gpu_buffer(&normals_gpu_buffer->gpu_buffer,
@@ -1787,8 +1666,7 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
                                    cmd_pool);
         
     }
-    if (header->uvs_size)
-    {
+    if (header->uvs_size) {
         push_buffer_to_mesh(buffer_type_t::UVS, &mesh);
         mesh_buffer_t *uvs_gpu_buffer = get_mesh_buffer_object(buffer_type_t::UVS, &mesh);
         make_unmappable_gpu_buffer(&uvs_gpu_buffer->gpu_buffer,
@@ -1797,8 +1675,7 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
                                    gpu_buffer_usage_t::VERTEX_BUFFER,
                                    cmd_pool);        
     }
-    if (header->affected_joint_weights_size)
-    {
+    if (header->affected_joint_weights_size) {
         push_buffer_to_mesh(buffer_type_t::JOINT_WEIGHT, &mesh);
         mesh_buffer_t *weights_gpu_buffer = get_mesh_buffer_object(buffer_type_t::JOINT_WEIGHT, &mesh);
         vector3_t *weights = (vector3_t *)(mesh_data.content + header->affected_joint_weights_offset);
@@ -1808,8 +1685,7 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
                                    gpu_buffer_usage_t::VERTEX_BUFFER,
                                    cmd_pool);
     }
-    if (header->affected_joint_ids_size)
-    {
+    if (header->affected_joint_ids_size) {
         push_buffer_to_mesh(buffer_type_t::JOINT_INDICES, &mesh);
         mesh_buffer_t *joint_ids_gpu_buffer = get_mesh_buffer_object(buffer_type_t::JOINT_INDICES, &mesh);
         ivector3_t *joint_ids = (ivector3_t *)(mesh_data.content + header->affected_joint_ids_offset);
@@ -1823,16 +1699,13 @@ mesh_t load_custom_mesh_format_mesh(const char *path, gpu_command_queue_pool_t *
     return(mesh);
 }
 
-model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
-{
+model_t make_mesh_attribute_and_binding_information(mesh_t *mesh) {
     model_t model = {};
     uint32_t binding_count = 0;
-    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh))
-    {
+    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh)) {
         binding_count = mesh->buffer_count - 1;
     }
-    else
-    {
+    else {
         binding_count = mesh->buffer_count;
     }
     model.attribute_count = binding_count;
@@ -1841,10 +1714,8 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
     model.bindings = (model_binding_t *)allocate_free_list(sizeof(model_binding_t) * model.binding_count);
 
     uint32_t current_binding = 0;
-    for (uint32_t buffer = 0; buffer < mesh->buffer_count; ++buffer)
-    {
-        if (mesh->buffer_types_stack[buffer] != buffer_type_t::INDICES)
-        {
+    for (uint32_t buffer = 0; buffer < mesh->buffer_count; ++buffer) {
+        if (mesh->buffer_types_stack[buffer] != buffer_type_t::INDICES) {
             // For vertex-type buffers only (vertices buffer, normal buffer, uvs buffer, extra buffers, whatever)
             model_binding_t *binding = &model.bindings[current_binding];
             binding->binding = current_binding;
@@ -1853,8 +1724,7 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
 
             VkFormat format;
             uint32_t attribute_size = 0;
-            switch(mesh->buffer_types_stack[buffer])
-            {
+            switch(mesh->buffer_types_stack[buffer]) {
             case buffer_type_t::VERTEX: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
             case buffer_type_t::NORMAL: { format = VK_FORMAT_R32G32B32_SFLOAT; attribute_size = sizeof(vector3_t); } break;
             case buffer_type_t::UVS: { format = VK_FORMAT_R32G32_SFLOAT; attribute_size = sizeof(vector2_t); } break;
@@ -1881,25 +1751,20 @@ model_t make_mesh_attribute_and_binding_information(mesh_t *mesh)
 }
 
 // Model loading
-mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_pool_t *cmd_pool)
-{
-    switch(format)
-    {
-    case mesh_file_format_t::CUSTOM_MESH:
-        {
+mesh_t load_mesh(mesh_file_format_t format, const char *path, gpu_command_queue_pool_t *cmd_pool) {
+    switch(format) {
+    case mesh_file_format_t::CUSTOM_MESH: {
             return(load_custom_mesh_format_mesh(path, cmd_pool));
         } break;
     }
     return {};
 }
 
-joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton)
-{
+joint_t *get_joint(uint32_t joint_id, skeleton_t *skeleton) {
     return &skeleton->joints[joint_id];
 }
 
-skeleton_t load_skeleton(const char *path)
-{
+skeleton_t load_skeleton(const char *path) {
     file_handle_t skeleton_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t skeleton_data = read_file_tmp(skeleton_handle);
     remove_and_destroy_file(skeleton_handle);
@@ -1912,8 +1777,7 @@ skeleton_t load_skeleton(const char *path)
     // Allocate names
     char *names_bytes = (char *)(skeleton_data.content + sizeof(uint32_t));
     uint32_t char_count = 0;
-    for (uint32_t joint = 0; joint < skeleton.joint_count; ++joint)
-    {
+    for (uint32_t joint = 0; joint < skeleton.joint_count; ++joint) {
         uint32_t length = (uint32_t)strlen(names_bytes + char_count);
         char *name = (char *)allocate_free_list(length + 1);
 
@@ -1927,8 +1791,7 @@ skeleton_t load_skeleton(const char *path)
     skeleton.joints = (joint_t *)allocate_free_list(skeleton.joint_count * sizeof(joint_t));
 
     byte_t *joint_data_pointer = (byte_t *)(names_bytes + char_count);
-    for (uint32_t i = 0; i < skeleton.joint_count; ++i)
-    {
+    for (uint32_t i = 0; i < skeleton.joint_count; ++i) {
         joint_t *current_joint = &skeleton.joints[i];
         memcpy(current_joint, joint_data_pointer + i * sizeof(joint_t), sizeof(joint_t));
     }
@@ -1936,8 +1799,7 @@ skeleton_t load_skeleton(const char *path)
     return skeleton;
 }
 
-animation_cycles_t load_animations(const char *path)
-{
+animation_cycles_t load_animations(const char *path) {
     file_handle_t animation_handle = create_file(path, file_type_flags_t::BINARY | file_type_flags_t::ASSET);
     file_contents_t animation_data = read_file_tmp(animation_handle);
     remove_and_destroy_file(animation_handle);
@@ -1948,8 +1810,7 @@ animation_cycles_t load_animations(const char *path)
     memcpy(&animation_cycles.cycle_count, current_byte, sizeof(uint32_t));
     current_byte += sizeof(uint32_t);
 
-    for (uint32_t i = 0; i < animation_cycles.cycle_count; ++i)
-    {
+    for (uint32_t i = 0; i < animation_cycles.cycle_count; ++i) {
         animation_cycle_t *current_cycle = &animation_cycles.cycles[i];
 
         uint32_t name_length = sizeof(char) * (uint32_t)strlen((char *)current_byte) + 1;
@@ -1969,8 +1830,7 @@ animation_cycles_t load_animations(const char *path)
 
         uint32_t key_frame_formatted_size = sizeof(float32_t) + sizeof(key_frame_joint_transform_t) * joints_per_key_frame;
     
-        for (uint32_t k = 0; k < key_frame_count; ++k)
-        {
+        for (uint32_t k = 0; k < key_frame_count; ++k) {
             key_frame_t *current_frame = &current_cycle->key_frames[k];
             current_frame->joint_transforms_count = joints_per_key_frame;
             current_frame->joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * joints_per_key_frame);
@@ -1985,8 +1845,7 @@ animation_cycles_t load_animations(const char *path)
             key_frame_bytes += key_frame_formatted_size;
             current_byte += key_frame_formatted_size;
 
-            if (k == key_frame_count - 1)
-            {
+            if (k == key_frame_count - 1) {
                 current_cycle->total_animation_time = current_frame->time_stamp;
             }
         }
@@ -1997,14 +1856,12 @@ animation_cycles_t load_animations(const char *path)
     return animation_cycles;
 }
 
-void push_uniform_group_to_destroyed_uniform_group_cache(animation_cycles_t *cycles, animated_instance_t *instance)
-{
+void push_uniform_group_to_destroyed_uniform_group_cache(animation_cycles_t *cycles, animated_instance_t *instance) {
     cycles->destroyed_uniform_groups[cycles->destroyed_groups_count++] = instance->group;
     instance->group = VK_NULL_HANDLE;
 }
 
-animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles)
-{
+animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool, uniform_layout_t *gpu_ubo_layout, skeleton_t *skeleton, animation_cycles_t *cycles) {
     animated_instance_t instance = {};
     
     instance.current_animation_time = 0.0f;
@@ -2014,8 +1871,7 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
     instance.next_bound_cycle = 0;
     instance.interpolated_transforms = (matrix4_t *)allocate_free_list(sizeof(matrix4_t) * skeleton->joint_count);
     instance.current_joint_transforms = (key_frame_joint_transform_t *)allocate_free_list(sizeof(key_frame_joint_transform_t) * skeleton->joint_count);
-    for (uint32_t i = 0; i < skeleton->joint_count; ++i)
-    {
+    for (uint32_t i = 0; i < skeleton->joint_count; ++i) {
         instance.interpolated_transforms[i] = matrix4_t(1.0f);
     }
 
@@ -2025,12 +1881,10 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
                                gpu_buffer_usage_t::UNIFORM_BUFFER,
                                pool);
 
-    if (cycles->destroyed_groups_count)
-    {
+    if (cycles->destroyed_groups_count) {
         instance.group = cycles->destroyed_uniform_groups[--cycles->destroyed_groups_count];
     }
-    else if (instance.group == VK_NULL_HANDLE)
-    {
+    else if (instance.group == VK_NULL_HANDLE) {
         instance.group = make_uniform_group(gpu_ubo_layout, g_uniform_pool);
     }
     
@@ -2039,23 +1893,20 @@ animated_instance_t initialize_animated_instance(gpu_command_queue_pool_t *pool,
     return(instance);
 }
 
-void destroy_animated_instance(animated_instance_t *instance)
-{
+void destroy_animated_instance(animated_instance_t *instance) {
     instance->current_animation_time = 0.0f;
     instance->skeleton = nullptr;
     instance->next_bound_cycle = 0;
     deallocate_free_list(instance->interpolated_transforms);
 }
 
-void update_joint(uint32_t current_joint, skeleton_t *skeleton, matrix4_t *transforms_array, const matrix4_t &ms_parent_transform = matrix4_t(1.0f))
-{
+void update_joint(uint32_t current_joint, skeleton_t *skeleton, matrix4_t *transforms_array, const matrix4_t &ms_parent_transform = matrix4_t(1.0f)) {
     // Relative to parent bone
     matrix4_t *local_transform = &transforms_array[current_joint];
     matrix4_t current_transform = ms_parent_transform * *local_transform;
 
     joint_t *joint_ptr = &skeleton->joints[current_joint];
-    for (uint32_t i = 0; i < joint_ptr->children_joint_count; ++i)
-    {
+    for (uint32_t i = 0; i < joint_ptr->children_joint_count; ++i) {
         update_joint(joint_ptr->children_joint_ids[i], skeleton, transforms_array, current_transform);
     }
 
@@ -2064,26 +1915,21 @@ void update_joint(uint32_t current_joint, skeleton_t *skeleton, matrix4_t *trans
     transforms_array[current_joint] = iterative_model_space_transform;
 }
 
-void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance)
-{
-    if (instance->is_interpolating_between_cycles)
-    {
+void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t *instance) {
+    if (instance->is_interpolating_between_cycles) {
         animation_cycle_t *next_cycle = &instance->cycles->cycles[instance->next_bound_cycle];
         key_frame_t *first_key_frame_of_next_cycle = &next_cycle->key_frames[0];
 
         instance->current_animation_time += dt;
-        if (instance->current_animation_time > instance->in_between_interpolation_time)
-        {
+        if (instance->current_animation_time > instance->in_between_interpolation_time) {
             instance->is_interpolating_between_cycles = 0;
             instance->current_animation_time = 0.0f;
         }
-        else
-        {
+        else {
             float32_t progression = instance->current_animation_time / instance->in_between_interpolation_time;
             
             // Interpolate (but all of the transforms are in bone space)
-            for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
-            {
+            for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint) {
                 key_frame_joint_transform_t *joint_next_state = &first_key_frame_of_next_cycle->joint_transforms[joint];
 
                 vector3_t previous_position = instance->current_joint_transforms[joint].position;
@@ -2099,13 +1945,11 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
         }
     }
 
-    if (!instance->is_interpolating_between_cycles)
-    {
+    if (!instance->is_interpolating_between_cycles) {
         animation_cycle_t *bound_cycle = &instance->cycles->cycles[instance->next_bound_cycle];
         // Increase the animation time
         instance->current_animation_time += dt;
-        if (instance->current_animation_time >= bound_cycle->total_animation_time)
-        {
+        if (instance->current_animation_time >= bound_cycle->total_animation_time) {
             instance->current_animation_time = 0.0f;
         }
 
@@ -2113,13 +1957,11 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
         // frame_a  ----- current_time --- frame_b
         key_frame_t *frame_before = &bound_cycle->key_frames[0];
         key_frame_t *frame_after = &bound_cycle->key_frames[1];
-        for (uint32_t i = 0; i < bound_cycle->key_frame_count - 1; ++i)
-        {
+        for (uint32_t i = 0; i < bound_cycle->key_frame_count - 1; ++i) {
             float32_t previous_stamp = bound_cycle->key_frames[i].time_stamp;
             float32_t next_stamp = bound_cycle->key_frames[i + 1].time_stamp;
 
-            if (previous_stamp < instance->current_animation_time && next_stamp >= instance->current_animation_time)
-            {
+            if (previous_stamp < instance->current_animation_time && next_stamp >= instance->current_animation_time) {
                 frame_before = &bound_cycle->key_frames[i];
                 frame_after = &bound_cycle->key_frames[i + 1];
             }
@@ -2128,8 +1970,7 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
         float32_t progression = (instance->current_animation_time - frame_before->time_stamp) / (frame_after->time_stamp - frame_before->time_stamp);
 
         // Interpolate (but all of the transforms are in bone space)
-        for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint)
-        {
+        for (uint32_t joint = 0; joint < instance->skeleton->joint_count; ++joint) {
             key_frame_joint_transform_t *joint_previous_state = &frame_before->joint_transforms[joint];
             key_frame_joint_transform_t *joint_next_state = &frame_after->joint_transforms[joint];
 
@@ -2145,8 +1986,7 @@ void interpolate_skeleton_joints_into_instance(float32_t dt, animated_instance_t
     }
 }
 
-void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance)
-{
+void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_t *instance) {
     update_gpu_buffer(&instance->interpolated_transforms_ubo,
                       instance->interpolated_transforms,
                       sizeof(matrix4_t) * instance->skeleton->joint_count,
@@ -2157,8 +1997,7 @@ void update_animated_instance_ubo(gpu_command_queue_t *queue, animated_instance_
 }
 
 
-void initialize_particle_rendering(void)
-{
+void initialize_particle_rendering(void) {
     matrix4_t translate = glm::translate(vector3_t(1, 2, 3));
     
     g_particle_rendering->particle_instanced_model.binding_count = 1;
@@ -2192,8 +2031,7 @@ void initialize_particle_rendering(void)
 }
 
 
-particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length, const char *texture_atlas, uint32_t x_count, uint32_t y_count, uint32_t num_images)
-{
+particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, particle_effect_function_t effect, pipeline_handle_t shader, float32_t max_life_length, const char *texture_atlas, uint32_t x_count, uint32_t y_count, uint32_t num_images) {
     particle_spawner_t particles = {};
     particles.max_particles = max_particle_count;
     particles.particles_stack_head = 0;
@@ -2249,8 +2087,7 @@ particle_spawner_t initialize_particle_spawner(uint32_t max_particle_count, part
 }
 
 
-pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path, uniform_layout_handle_t texture_atlas)
-{
+pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &shader_name, const char *vsh_path, const char *fsh_path, uniform_layout_handle_t texture_atlas) {
     pipeline_handle_t handle = g_pipeline_manager->add(shader_name);
     graphics_pipeline_t *pipeline = g_pipeline_manager->get(handle);
     graphics_pipeline_info_t *info = (graphics_pipeline_info_t *)allocate_free_list(sizeof(graphics_pipeline_info_t));
@@ -2270,8 +2107,7 @@ pipeline_handle_t initialize_particle_rendering_shader(const constant_string_t &
 }
 
 
-void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, void *push_constant, uint32_t push_constant_size)
-{
+void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transforms, particle_spawner_t *spawner, void *push_constant, uint32_t push_constant_size) {
     graphics_pipeline_t *particle_pipeline = g_pipeline_manager->get(spawner->shader);
     
     command_buffer_bind_pipeline(&particle_pipeline->pipeline, &queue->q);
@@ -2288,14 +2124,12 @@ void render_particles(gpu_command_queue_t *queue, uniform_group_t *camera_transf
 }
 
 
-void particle_spawner_t::clear(void)
-{
+void particle_spawner_t::clear(void) {
     rendered_particles_stack_head = 0;
 }
 
 
-void particle_spawner_t::push_for_render(uint32_t index)
-{
+void particle_spawner_t::push_for_render(uint32_t index) {
     particle_t *particle = &particles[index];
     rendered_particle_data_t *rendered_particle = &rendered_particles[rendered_particles_stack_head];
     float32_t *distance_to_camera = &distances_from_camera[rendered_particles_stack_head++];
@@ -2308,16 +2142,12 @@ void particle_spawner_t::push_for_render(uint32_t index)
 }
 
 
-void particle_spawner_t::sort_for_render(void)
-{
-    for (uint32_t i = 1; i < rendered_particles_stack_head; ++i)
-    {
-        for (uint32_t j = i; j > 0; --j)
-        {
+void particle_spawner_t::sort_for_render(void) {
+    for (uint32_t i = 1; i < rendered_particles_stack_head; ++i) {
+        for (uint32_t j = i; j > 0; --j) {
             float32_t current_distance = distances_from_camera[j];
             float32_t below_distance = distances_from_camera[j - 1];
-            if (current_distance > below_distance)
-            {
+            if (current_distance > below_distance) {
                 // Swap
                 distances_from_camera[j - 1] = current_distance;
                 distances_from_camera[j] = below_distance;
@@ -2326,8 +2156,7 @@ void particle_spawner_t::sort_for_render(void)
                 rendered_particles[j - 1] = rendered_particles[j];
                 rendered_particles[j] = below;
             }
-            else
-            {
+            else {
                 break;
             }
         }
@@ -2335,32 +2164,26 @@ void particle_spawner_t::sort_for_render(void)
 }
 
 
-void particle_spawner_t::declare_dead(uint32_t index)
-{
+void particle_spawner_t::declare_dead(uint32_t index) {
     particles[index].life = -1.0f;
     
-    if (index == particles_stack_head - 1)
-    {
+    if (index == particles_stack_head - 1) {
         --particles_stack_head;
     }
-    else if (dead_count < max_dead)
-    {
+    else if (dead_count < max_dead) {
         dead[dead_count++] = index;
     }
 }
 
     
-particle_t *particle_spawner_t::fetch_next_dead_particle(uint32_t *index)
-{
-    if (dead_count)
-    {
+particle_t *particle_spawner_t::fetch_next_dead_particle(uint32_t *index) {
+    if (dead_count) {
         uint16_t next_dead = dead[dead_count - 1];
         --dead_count;
         *index = next_dead;
         return(&particles[next_dead]);
     }
-    else if (particles_stack_head < max_particles)
-    {
+    else if (particles_stack_head < max_particles) {
         *index = particles_stack_head;
         particle_t *next_dead = &particles[particles_stack_head++];
         return(next_dead);
@@ -2369,34 +2192,28 @@ particle_t *particle_spawner_t::fetch_next_dead_particle(uint32_t *index)
 }
 
 
-particle_t *particle_spawner_t::particle(uint32_t *index)
-{
+particle_t *particle_spawner_t::particle(uint32_t *index) {
     return(fetch_next_dead_particle(index));
 }
 
 
-void create_mesh_raw_buffer_list(mesh_t *mesh)
-{
+void create_mesh_raw_buffer_list(mesh_t *mesh) {
     uint32_t vbo_count = mesh->buffer_count;
-    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh))
-    {
+    if (mesh_has_buffer_type(buffer_type_t::INDICES, mesh)) {
         --vbo_count;
     }
     allocate_memory_buffer(mesh->raw_buffer_list, vbo_count);
 
     uint32_t buffer_index = 0;
-    for (uint32_t i = 0; i < mesh->buffer_count; ++i)
-    {
-        if (mesh->buffer_types_stack[i] != buffer_type_t::INDICES)
-        {
+    for (uint32_t i = 0; i < mesh->buffer_count; ++i) {
+        if (mesh->buffer_types_stack[i] != buffer_type_t::INDICES) {
             mesh->raw_buffer_list[buffer_index] = mesh->buffers[mesh->buffer_types_stack[i]].gpu_buffer.buffer;
             ++buffer_index;
         }
     }
 }
 
-mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t *index_data, model_index_data_t *model_index_data)
-{
+mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t *index_data, model_index_data_t *model_index_data) {
     mesh_t mesh;
 
     allocate_memory_buffer(mesh.raw_buffer_list, vbos.count);
@@ -2408,24 +2225,20 @@ mesh_t initialize_mesh(memory_buffer_view_t<VkBuffer> &vbos, draw_indexed_data_t
     return(mesh);
 }
 
-void destroy_animation_instance(animated_instance_t *instance)
-{
+void destroy_animation_instance(animated_instance_t *instance) {
     instance->interpolated_transforms_ubo.destroy();
 }
 
-void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force)
-{
+void switch_to_cycle(animated_instance_t *instance, uint32_t cycle_index, bool32_t force) {
     instance->current_animation_time = 0.0f;
-    if (!force)
-    {
+    if (!force) {
         instance->is_interpolating_between_cycles = 1;
     }
     instance->prev_bound_cycle = instance->next_bound_cycle;
     instance->next_bound_cycle = cycle_index;
 }
 
-void initialize_graphics_translation_unit(game_memory_t *memory)
-{
+void initialize_graphics_translation_unit(game_memory_t *memory) {
     g_gpu_buffer_manager = &memory->graphics_state.gpu_buffer_manager;
     g_image_manager = &memory->graphics_state.image_manager;
     g_framebuffer_manager = &memory->graphics_state.framebuffer_manager;
@@ -2446,14 +2259,12 @@ void initialize_graphics_translation_unit(game_memory_t *memory)
     g_particle_rendering = &memory->graphics_state.particle_rendering;
 }
 
-void handle_window_resize(raw_input_t *raw_input)
-{
+void handle_window_resize(raw_input_t *raw_input) {
     idle_gpu();
     
     // Destroy final framebuffer as well as final framebuffer attachments
     auto *final_fbo = g_framebuffer_manager->get(g_postfx->final_stage.fbo);
-    for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
-    {
+    for (uint32_t i = 0; i < get_swapchain_image_count(); ++i) {
         destroy_framebuffer(&final_fbo[i].framebuffer);
     }
 
@@ -2481,8 +2292,7 @@ void handle_window_resize(raw_input_t *raw_input)
     {
         VkImageView *swapchain_image_views = get_swapchain_image_views();
         
-        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i)
-        {
+        for (uint32_t i = 0; i < get_swapchain_image_count(); ++i) {
             final_fbo[i].extent = get_swapchain_extent();
             
             allocate_memory_buffer(final_fbo[i].color_attachments, 1);

@@ -3,8 +3,7 @@
 #include "graphics.hpp"
 #include "raw_input.hpp"
 
-struct camera_t
-{
+struct camera_t {
     bool captured = 0;
 
     vector2_t mp;
@@ -22,8 +21,7 @@ struct camera_t
     matrix4_t p_m;
     matrix4_t v_m;
 
-    void set_default(float32_t w, float32_t h, float32_t m_x, float32_t m_y)
-    {
+    void set_default(float32_t w, float32_t h, float32_t m_x, float32_t m_y) {
         mp = vector2_t(m_x, m_y);
         p = vector3_t(50.0f, 10.0f, 280.0f);
         d = vector3_t(+1, 0.0f, +1);
@@ -35,8 +33,7 @@ struct camera_t
         f = 10000000.0f;
     }
 
-    void compute_projection(void)
-    {
+    void compute_projection(void) {
         p_m = glm::perspective(current_fov, asp, n, f);
     }
 };

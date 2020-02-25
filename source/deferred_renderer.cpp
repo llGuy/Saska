@@ -3,8 +3,7 @@
 #include "deferred_renderer.hpp"
 
 
-struct backbuffer_t
-{
+struct backbuffer_t {
     resolution_t resolution = {};
     render_pass_handle_t render_pass;
     framebuffer_handle_t framebuffer;
@@ -14,8 +13,7 @@ struct backbuffer_t
 static backbuffer_t backbuffer;
 
 
-static void s_backbuffer_init()
-{
+static void s_backbuffer_init() {
     backbuffer.resolution = { 2500, 1400 };
 
     // ---- Make deferred rendering render pass ----
@@ -101,8 +99,7 @@ static void s_backbuffer_init()
 }
 
 
-struct renderer_t
-{
+struct renderer_t {
     pipeline_handle_t lighting;
     uniform_group_handle_t subpass_input;
     uniform_group_handle_t gbuffer;
@@ -112,8 +109,7 @@ struct renderer_t
 static renderer_t renderer;
 
 
-static void s_renderer_init()
-{
+static void s_renderer_init() {
     uniform_layout_handle_t gbuffer_layout_hdl = g_uniform_layout_manager->add("descriptor_set_layout.g_buffer_layout"_hash);
     auto *gbuffer_layout_ptr = g_uniform_layout_manager->get(gbuffer_layout_hdl);
     {
@@ -208,15 +204,13 @@ static void s_renderer_init()
 }
 
 
-void initialize_deferred_renderer()
-{
+void initialize_deferred_renderer() {
     s_backbuffer_init();
     s_renderer_init();
 }
 
 
-void begin_deferred_rendering(gpu_command_queue_t *queue)
-{
+void begin_deferred_rendering(gpu_command_queue_t *queue) {
     queue->begin_render_pass(g_render_pass_manager->get(backbuffer.render_pass),
         g_framebuffer_manager->get(backbuffer.framebuffer),
         VK_SUBPASS_CONTENTS_INLINE,
@@ -233,8 +227,7 @@ void begin_deferred_rendering(gpu_command_queue_t *queue)
 }
 
 
-void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_matrix, gpu_command_queue_t *queue)
-{
+void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_matrix, gpu_command_queue_t *queue) {
     queue->next_subpass(VK_SUBPASS_CONTENTS_INLINE);
 
     auto *dfr_lighting_ppln = g_pipeline_manager->get(renderer.lighting);
@@ -251,8 +244,7 @@ void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_mat
 
     command_buffer_bind_descriptor_sets(&dfr_lighting_ppln->layout, { 6, deferred_sets }, &queue->q);
 
-    struct deferred_lighting_push_k_t
-    {
+    struct deferred_lighting_push_k_t {
         vector4_t light_position;
         matrix4_t view_matrix;
         matrix4_t inverse_view_matrix;
@@ -275,25 +267,21 @@ void do_lighting_and_begin_alpha_rendering(sun_t *sun, const matrix4_t &view_mat
 }
 
 
-void end_deferred_rendering(gpu_command_queue_t *queue)
-{
+void end_deferred_rendering(gpu_command_queue_t *queue) {
     queue->end_render_pass();
 }
 
 
-resolution_t backbuffer_resolution()
-{
+resolution_t backbuffer_resolution() {
     return backbuffer.resolution;
 }
 
 
-render_pass_t *deferred_render_pass()
-{
+render_pass_t *deferred_render_pass() {
     return g_render_pass_manager->get(backbuffer.render_pass);
 }
 
 
-uniform_group_t *gbuffer_uniform()
-{
+uniform_group_t *gbuffer_uniform() {
     return g_uniform_group_manager->get(renderer.gbuffer);
 }

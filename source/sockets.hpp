@@ -7,14 +7,12 @@ void initialize_socket_api(uint16_t output_port);
 
 
 // Easier to use this in Vulkan-style handle instead of a class because of different platform implementations of sockets API
-struct network_socket_t
-{
+struct network_socket_t {
     int32_t socket;
 };
 
 
-struct network_address_t
-{
+struct network_address_t {
     uint16_t port;
     uint32_t ipv4_address;
 };

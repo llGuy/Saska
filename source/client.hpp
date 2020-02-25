@@ -8,8 +8,7 @@
 #include "event_system.hpp"
 
 
-struct historical_player_state_t
-{
+struct historical_player_state_t {
     bool ackowledged = 0;
     uint64_t tick;
     player_state_t player_state;
@@ -17,16 +16,14 @@ struct historical_player_state_t
 
 
 // This will be received from the action flag packets (player state / command / update packets)
-struct local_client_modified_voxel_t
-{
+struct local_client_modified_voxel_t {
     uint8_t x, y, z, value;
 };
 
 
 #define MAX_VOXELS_MODIFIED_PER_CHUNK 100
 
-struct client_modified_chunk_nl_t
-{
+struct client_modified_chunk_nl_t {
     uint16_t chunk_index;
     // TODO: Find way to vary this: maybe have its own linear allocator or something
     local_client_modified_voxel_t modified_voxels[MAX_VOXELS_MODIFIED_PER_CHUNK]; // max 100
@@ -34,8 +31,7 @@ struct client_modified_chunk_nl_t
 };
 
 
-struct client_t
-{
+struct client_t {
     // Name, id, etc...
     const char *name;
     uint16_t client_id;

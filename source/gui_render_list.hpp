@@ -9,13 +9,11 @@
 #define MAX_QUADS_TO_RENDER 1000
 
 
-struct gui_textured_vertex_render_list_t
-{
+struct gui_textured_vertex_render_list_t {
     model_t vtx_attribs;
     graphics_pipeline_t gfx_pipeline;
     
-    struct vertex_section_t
-    {
+    struct vertex_section_t {
         uint32_t section_start, section_size;
     };
     
@@ -30,10 +28,8 @@ struct gui_textured_vertex_render_list_t
 
     gpu_buffer_t vtx_buffer;
 
-    void mark_section(uniform_group_t group)
-    {
-        if (section_count)
-        {
+    void mark_section(uniform_group_t group) {
+        if (section_count) {
             // Get current section
             vertex_section_t *next = &sections[section_count];
 
@@ -45,8 +41,7 @@ struct gui_textured_vertex_render_list_t
 
             ++section_count;
         }
-        else
-        {
+        else {
             sections[0].section_start = 0;
             sections[0].section_size = 0;
 
@@ -56,36 +51,29 @@ struct gui_textured_vertex_render_list_t
         }
     }
 
-    void push_vertex(const gui_textured_vertex_t &vertex)
-    {
+    void push_vertex(const gui_textured_vertex_t &vertex) {
         vertices[vertex_count++] = vertex;
         sections[section_count - 1].section_size += 1;
     }
 
-    void clear_containers(void)
-    {
+    void clear_containers(void) {
         section_count = 0;
         vertex_count = 0;
     }
 
-    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue)
-    {
-        if (vertex_count)
-        {
+    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue) {
+        if (vertex_count) {
             update_gpu_buffer(&vtx_buffer, vertices, sizeof(gui_textured_vertex_t) * vertex_count, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
         }
     }
     
-    void render_textured_quads(gpu_command_queue_t *queue, framebuffer_t *fbo)
-    {
-        if (vertex_count)
-        {
+    void render_textured_quads(gpu_command_queue_t *queue, framebuffer_t *fbo) {
+        if (vertex_count) {
             command_buffer_set_viewport(fbo->extent.width, fbo->extent.height, 0.0f, 1.0f, &queue->q);
             command_buffer_bind_pipeline(&gfx_pipeline.pipeline, &queue->q);
 
             // Loop through each section, bind texture, and render the quads from the section
-            for (uint32_t current_section = 0; current_section < section_count; ++current_section)
-            {
+            for (uint32_t current_section = 0; current_section < section_count; ++current_section) {
                 vertex_section_t *section = &sections[current_section];
                 
                 command_buffer_bind_descriptor_sets(&gfx_pipeline.layout, {1, &textures[current_section]}, &queue->q);
@@ -99,8 +87,7 @@ struct gui_textured_vertex_render_list_t
     }
 };
 
-struct gui_colored_vertex_render_list_t
-{
+struct gui_colored_vertex_render_list_t {
     model_t vtx_attribs;
     graphics_pipeline_t gfx_pipeline;
     
@@ -109,25 +96,20 @@ struct gui_colored_vertex_render_list_t
 
     gpu_buffer_t vtx_buffer;
 
-    void push_vertex(const gui_colored_vertex_t &vertex)
-    {
+    void push_vertex(const gui_colored_vertex_t &vertex) {
         vertices[vertex_count++] = vertex;
     }
     
-    void clear_containers(void)
-    {
+    void clear_containers(void) {
         vertex_count = 0;
     }
 
-    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue)
-    {
+    void sync_gpu_with_vertex_list(gpu_command_queue_t *queue) {
         update_gpu_buffer(&vtx_buffer, &vertices, sizeof(gui_colored_vertex_t) * vertex_count, 0, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT, &queue->q);
     }
 
-    void render_colored_quads(gpu_command_queue_t *queue, framebuffer_t *fbo)
-    {
-        if (vertex_count)
-        {
+    void render_colored_quads(gpu_command_queue_t *queue, framebuffer_t *fbo) {
+        if (vertex_count) {
             command_buffer_set_viewport(fbo->extent.width, fbo->extent.height, 0.0f, 1.0f, &queue->q);
             command_buffer_bind_pipeline(&gfx_pipeline.pipeline, &queue->q);
 

@@ -8,8 +8,7 @@
 #include "fonts.hpp"
 #include "gui_box.hpp"
 
-struct console_t
-{
+struct console_t {
     bool render_console = false;
     bool receive_input;
 
@@ -32,8 +31,7 @@ struct console_t
     uint32_t output_color = 0xBBFFFFFF;
 };
 
-struct user_interface_t
-{
+struct user_interface_t {
     console_t console;
 };
 
@@ -54,8 +52,7 @@ void console_out_i(const vector2_t &v2);
 void console_out_i(float32_t f);
 void console_out_i(int32_t f);
 
-template <typename ...T> void console_out(T &&...t)
-{
+template <typename ...T> void console_out(T &&...t) {
     char dummy[] = { 0, (console_out_i(t), 0)... };
 }
 

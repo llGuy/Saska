@@ -51,11 +51,9 @@ static float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER
 static void init_free_list_allocator_head(free_list_allocator_t *allocator = &free_list_allocator_global);
 static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type, application_mode_t *app_mode, const char **application_name);
 
-struct create_vulkan_surface_win32 : create_vulkan_surface
-{
+struct create_vulkan_surface_win32 : create_vulkan_surface {
     HWND *window_ptr;
-    bool32_t create_proc(void) override
-    {
+    bool32_t create_proc(void) override {
         VkWin32SurfaceCreateInfoKHR create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
         create_info.hwnd = *window_ptr;
@@ -65,18 +63,15 @@ struct create_vulkan_surface_win32 : create_vulkan_surface
 };
 
 
-void send_vibration_to_gamepad(void)
-{
+void send_vibration_to_gamepad(void) {
     // Get gamepad input state and active controller
     int32_t active_controller = -1;
     XINPUT_STATE gamepad_state = {};
     ZeroMemory(&gamepad_state, sizeof(gamepad_state));
                 
-    for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i) {
         DWORD result = XInputGetState(i, &gamepad_state);
-        if (result == ERROR_SUCCESS)
-        {
+        if (result == ERROR_SUCCESS) {
             // Connected
             active_controller = i;
             break;
@@ -93,12 +88,10 @@ void send_vibration_to_gamepad(void)
 
 
 // Win32 entry point
-int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd)
-{
-	if (strlen(cmdline) == 0)
-	{
-		cmdline = "cl";
-	}
+int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmdline, int32_t showcmd) {
+    if (strlen(cmdline) == 0) {
+        cmdline = "cl";
+    }
 
     // Initialize game's dynamic memory
     linear_allocator_global.capacity = (uint32_t)megabytes(30);
@@ -118,8 +111,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     parse_command_line_args(cmdline, &app_type, &app_mode, &application_name);
 
 
-    if (app_type == application_type_t::WINDOW_APPLICATION_MODE)
-    {
+    if (app_type == application_type_t::WINDOW_APPLICATION_MODE) {
         SetProcessDPIAware();
         
         const char *window_class_name = "saska_window_class";
@@ -179,22 +171,17 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
     LARGE_INTEGER clock_frequency;
     QueryPerformanceFrequency(&clock_frequency);
     
-    while(running)
-    {
+    while(running) {
         LARGE_INTEGER tick_start;
         QueryPerformanceCounter(&tick_start);
 
-        switch (app_type)
-        {
-        case application_type_t::WINDOW_APPLICATION_MODE:
-            {
+        switch (app_type) {
+        case application_type_t::WINDOW_APPLICATION_MODE: {
                 raw_input.resized = 0;
                 
                 MSG message;
-                while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE))
-                {
-                    if (message.message == WM_QUIT)
-                    {
+                while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
+                    if (message.message == WM_QUIT) {
                         running = false;
                     }
                     TranslateMessage(&message);
@@ -205,8 +192,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 get_gamepad_state();
 
                 
-                if (raw_input.resized)
-                {
+                if (raw_input.resized) {
                     handle_window_resize(&raw_input);
                 }
 
@@ -222,8 +208,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 client_rect.right = bottom_right.x - 2;
                 client_rect.bottom = bottom_right.y - 2;
 
-                if (raw_input.has_focus)
-                {
+                if (raw_input.has_focus) {
                     ClipCursor(&client_rect);
                 }*/
         
@@ -249,8 +234,7 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
                 raw_input.buttons[button_type_t::F3].state = button_state_t::NOT_DOWN;
                 // TODO: Set input state's normalized cursor position
             } break;
-        case application_type_t::CONSOLE_APPLICATION_MODE:
-            {
+        case application_type_t::CONSOLE_APPLICATION_MODE: {
                 game_tick(&game, &raw_input, (float32_t)dt);
             } break;
         }
@@ -265,22 +249,18 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
         dt = new_dt;
         raw_input.dt = new_dt;
         
-        /*if (new_dt > TICK_TIME)
-        {
+        /*if (new_dt > TICK_TIME) {
             dt = new_dt;
             raw_input.dt = new_dt;
 
             //dt = TICK_TIME;
             //raw_input.dt = TICK_TIME;
         }
-        else
-        {
+        else {
             // Set game tick period by sleeping
-            while (new_dt < TICK_TIME)
-            {
+            while (new_dt < TICK_TIME) {
                 DWORD to_wait = DWORD( (TICK_TIME - new_dt) * 1000 );
-                if (to_wait > 0)
-                {
+                if (to_wait > 0) {
                     Sleep(to_wait);
                 }
 
@@ -305,16 +285,13 @@ int32_t CALLBACK WinMain(HINSTANCE hinstance, HINSTANCE prev_instance, LPSTR cmd
 }
 
 
-static void set_mouse_move_button_state(float32_t value, bool active, button_type_t button)
-{
-    if (active)
-    {
+static void set_mouse_move_button_state(float32_t value, bool active, button_type_t button) {
+    if (active) {
         raw_input.buttons[button].state = (button_state_t)1;
         raw_input.buttons[button].down_amount += (float32_t)dt;
         raw_input.buttons[button].value = value;
     }
-    else
-    {
+    else {
         raw_input.buttons[button].state = (button_state_t)0;
         raw_input.buttons[button].down_amount = 0;
         raw_input.buttons[button].value = 0;
@@ -323,8 +300,7 @@ static void set_mouse_move_button_state(float32_t value, bool active, button_typ
 
 
 // Static definitions
-static void handle_mouse_move_event(LPARAM lparam)
-{
+static void handle_mouse_move_event(LPARAM lparam) {
     static int32_t true_prev_x = 0;
     static int32_t true_prev_y = 0;
  
@@ -339,8 +315,7 @@ static void handle_mouse_move_event(LPARAM lparam)
     int32_t true_x_position = cursor_pos.x;
     int32_t true_y_position = cursor_pos.y;
     
-    if (true_x_position != true_prev_x || true_y_position != true_prev_y)
-    {
+    if (true_x_position != true_prev_x || true_y_position != true_prev_y) {
         raw_input.cursor_moved = true;
         raw_input.previous_cursor_pos_x = raw_input.cursor_pos_x;
         raw_input.previous_cursor_pos_y = raw_input.cursor_pos_y;
@@ -350,13 +325,11 @@ static void handle_mouse_move_event(LPARAM lparam)
     int32_t true_diff_y = true_y_position - true_prev_y;
 
     // Virtual "infinite" cursor space
-    if (raw_input.show_cursor)
-    {
+    if (raw_input.show_cursor) {
         raw_input.cursor_pos_x = (float32_t)cursor_pos.x;
         raw_input.cursor_pos_y = (float32_t)cursor_pos.y;
     }
-    else
-    {
+    else {
         raw_input.cursor_pos_x += (float32_t)true_diff_x;
         raw_input.cursor_pos_y += (float32_t)true_diff_y;
     }
@@ -369,13 +342,11 @@ static void handle_mouse_move_event(LPARAM lparam)
     //output_to_debug_console(dx, " ", dy, "\n");
     
     vector2_t d = vector2_t(0.0f);
-    if (dx != 0 || dy != 0)
-    {
+    if (dx != 0 || dy != 0) {
         d = vector2_t(dx, dy);
     }
 
-    if (raw_input.cursor_moved)
-    {
+    if (raw_input.cursor_moved) {
         set_mouse_move_button_state(d.x, dx > 0, button_type_t::MOUSE_MOVE_RIGHT);
         set_mouse_move_button_state(d.x, dx < 0, button_type_t::MOUSE_MOVE_LEFT);
         set_mouse_move_button_state(d.y, dy > 0, button_type_t::MOUSE_MOVE_UP);
@@ -386,29 +357,25 @@ static void handle_mouse_move_event(LPARAM lparam)
     true_prev_x = true_x_position;
     true_prev_y = true_y_position;
     
-    /*if (true_x_position >= client_rect.right - 2)
-    {
+    /*if (true_x_position >= client_rect.right - 2) {
         POINT infinite = { 2, true_y_position };
         true_x_position = true_prev_x = 2;
         ClientToScreen(window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
-    if (true_x_position <= client_rect.left + 1)
-    {
+    if (true_x_position <= client_rect.left + 1) {
         POINT infinite = { client_rect.right - 2, true_y_position };
         true_x_position = true_prev_x = client_rect.right - 2;
         ClientToScreen(window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
-    if (true_y_position >= client_rect.bottom - 2)
-    {
+    if (true_y_position >= client_rect.bottom - 2) {
         POINT infinite = { true_x_position, client_rect.top + 2 };
         true_y_position = true_prev_y = client_rect.top + 2;
         ClientToScreen(window, &infinite);
         SetCursorPos(infinite.x, infinite.y);
     }
-    if (true_y_position <= client_rect.top + 1)
-    {
+    if (true_y_position <= client_rect.top + 1) {
         POINT infinite = { true_x_position, client_rect.bottom - 2 };
         true_y_position = true_prev_y = client_rect.bottom - 2;
         ClientToScreen(window, &infinite);
@@ -430,8 +397,7 @@ static void handle_mouse_move_event(LPARAM lparam)
     ClientToScreen(window, &top_left_corner);
     top_left_corner.x += client_rect.right / 2;
     top_left_corner.y += client_rect.bottom / 2;
-    if (!raw_input.show_cursor)
-    {
+    if (!raw_input.show_cursor) {
         SetCursorPos(top_left_corner.x, top_left_corner.y);
     }
 
@@ -442,21 +408,17 @@ static void handle_mouse_move_event(LPARAM lparam)
 }
 
 
-static void set_key_state(raw_input_t *raw_input, button_type_t button, int32_t action)
-{
-    if (action == key_action_t::KEY_ACTION_DOWN)
-    {
+static void set_key_state(raw_input_t *raw_input, button_type_t button, int32_t action) {
+    if (action == key_action_t::KEY_ACTION_DOWN) {
         button_input_t *key = &raw_input->buttons[button];
-        switch(key->state)
-        {
+        switch(key->state) {
         case button_state_t::NOT_DOWN: {key->state = button_state_t::INSTANT;} break;
         case button_state_t::INSTANT: {key->state = button_state_t::REPEAT;} break;
         }
         key->down_amount += (float32_t)dt;
         key->value = 1.0f;
     }
-    else if (action == key_action_t::KEY_ACTION_UP)
-    {
+    else if (action == key_action_t::KEY_ACTION_UP) {
         button_input_t *key = &raw_input->buttons[button];
         key->state = button_state_t::NOT_DOWN;
         key->down_amount = 0.0f;
@@ -465,21 +427,17 @@ static void set_key_state(raw_input_t *raw_input, button_type_t button, int32_t 
 }
 
 
-static void set_mouse_button_state(raw_input_t *raw_input, button_type_t button, int32_t action)
-{
-    if (action == key_action_t::KEY_ACTION_DOWN)
-    {
+static void set_mouse_button_state(raw_input_t *raw_input, button_type_t button, int32_t action) {
+    if (action == key_action_t::KEY_ACTION_DOWN) {
         button_input_t *mouse_button = &raw_input->buttons[button];
-        switch(mouse_button->state)
-        {
+        switch(mouse_button->state) {
         case button_state_t::NOT_DOWN: {mouse_button->state = button_state_t::INSTANT;} break;
         case button_state_t::INSTANT: case button_state_t::REPEAT: {mouse_button->state = button_state_t::REPEAT;} break;
         }
         mouse_button->down_amount += (float32_t)dt;
         mouse_button->value = 0.0f;
     }
-    else if (action == key_action_t::KEY_ACTION_UP)
-    {
+    else if (action == key_action_t::KEY_ACTION_UP) {
         button_input_t *mouse_button = &raw_input->buttons[button];
         mouse_button->state = button_state_t::NOT_DOWN;
         mouse_button->down_amount = 0.0f;
@@ -488,13 +446,11 @@ static void set_mouse_button_state(raw_input_t *raw_input, button_type_t button,
 }
 
 
-static void enter_fullscreen(void)
-{
+static void enter_fullscreen(void) {
     POINT point = {0};
     HMONITOR monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST);
     MONITORINFO monitor_info = { sizeof(monitor_info) };
-    if (GetMonitorInfo(monitor, &monitor_info))
-    {
+    if (GetMonitorInfo(monitor, &monitor_info)) {
         DWORD style = WS_POPUP | WS_VISIBLE;
         SetWindowLongPtr(window, GWL_STYLE, style);
         SetWindowPos(window, 0, monitor_info.rcMonitor.left, monitor_info.rcMonitor.top,
@@ -507,25 +463,20 @@ static void enter_fullscreen(void)
 }
 
 
-static void exit_fullscreen(void)
-{
+static void exit_fullscreen(void) {
     // TODO:
 }
 
 
-static void toggle_fullscreen(void)
-{
-    if (!raw_input.toggled_fullscreen)
-    {
+static void toggle_fullscreen(void) {
+    if (!raw_input.toggled_fullscreen) {
         raw_input.toggled_fullscreen = 1;
 
-        if (raw_input.in_fullscreen)
-        {
+        if (raw_input.in_fullscreen) {
             raw_input.in_fullscreen = 0;
             exit_fullscreen();
         }
-        else
-        {
+        else {
             raw_input.in_fullscreen = 1;
             enter_fullscreen();
         }
@@ -533,10 +484,8 @@ static void toggle_fullscreen(void)
 }
 
 
-static void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
-{
-    switch(wparam)
-    {
+static void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action) {
+    switch(wparam) {
     case 0x41: { set_key_state(&raw_input, button_type_t::A, action); } break;
     case 0x42: { set_key_state(&raw_input, button_type_t::B, action); } break;
     case 0x43: { set_key_state(&raw_input, button_type_t::C, action); } break;
@@ -589,21 +538,17 @@ static void handle_keyboard_event(WPARAM wparam, LPARAM lparam, int32_t action)
 }
 
 
-static LRESULT CALLBACK win32_callback(HWND window_handle, UINT message, WPARAM wparam, LPARAM lparam)
-{
-    switch(message)
-    {
+static LRESULT CALLBACK win32_callback(HWND window_handle, UINT message, WPARAM wparam, LPARAM lparam) {
+    switch(message) {
         // Input ...
-    case WM_SIZE:
-        {
+    case WM_SIZE: {
             raw_input.resized = 1;
             raw_input.window_width = LOWORD(lparam);
             raw_input.window_height = HIWORD(lparam);
         } break;
     case WM_MOUSEMOVE: { if (raw_input.has_focus) handle_mouse_move_event(lparam); } break;
     case WM_KEYDOWN: { if (raw_input.has_focus) handle_keyboard_event(wparam, lparam, key_action_t::KEY_ACTION_DOWN); } break;
-    case WM_CHAR:
-        {
+    case WM_CHAR: {
             if (raw_input.char_count != MAX_CHARS && raw_input.has_focus)
             {
                 if (wparam >= 32)
@@ -629,16 +574,13 @@ static LRESULT CALLBACK win32_callback(HWND window_handle, UINT message, WPARAM 
 }
 
 
-static void set_gamepad_button_state(raw_input_t *raw_input, gamepad_button_type_t button, bool active, float32_t value)
-{
-    if (active)
-    {
+static void set_gamepad_button_state(raw_input_t *raw_input, gamepad_button_type_t button, bool active, float32_t value) {
+    if (active) {
         raw_input->gamepad_buttons[button].down_amount += (float32_t)dt;
         raw_input->gamepad_buttons[button].state = (button_state_t)1;
         raw_input->gamepad_buttons[button].value = value;
     }
-    else
-    {
+    else {
         raw_input->gamepad_buttons[button].down_amount = 0.0f;
         raw_input->gamepad_buttons[button].state = (button_state_t)0;
         raw_input->gamepad_buttons[button].value = 0.0f;
@@ -646,26 +588,22 @@ static void set_gamepad_button_state(raw_input_t *raw_input, gamepad_button_type
 }
 
 
-static void get_gamepad_state(void)
-{
+static void get_gamepad_state(void) {
     // Get gamepad input state and active controller
     int32_t active_controller = -1;
     XINPUT_STATE gamepad_state = {};
     ZeroMemory(&gamepad_state, sizeof(gamepad_state));
                 
-    for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < XUSER_MAX_COUNT; ++i) {
         DWORD result = XInputGetState(i, &gamepad_state);
-        if (result == ERROR_SUCCESS)
-        {
+        if (result == ERROR_SUCCESS) {
             // Connected
             active_controller = i;
             break;
         }
     }
 
-    if (active_controller >= 0)
-    {
+    if (active_controller >= 0) {
         XINPUT_GAMEPAD *gamepad = &gamepad_state.Gamepad;
         raw_input.gamepad_packet_number = gamepad_state.dwPacketNumber;
 
@@ -702,15 +640,13 @@ static void get_gamepad_state(void)
             
             float32_t normalized_magnitude = 0;
 
-            if (magnitude > INPUT_DEADZONE)
-            {
+            if (magnitude > INPUT_DEADZONE) {
                 magnitude -= INPUT_DEADZONE;
                 left_thumb -= normalized_left * INPUT_DEADZONE;
                 left_thumb /= (32767.0f - INPUT_DEADZONE);
                 //normalized_magnitude = magnitude / (32767.0f - INPUT_DEADZONE);
             }
-            else
-            {
+            else {
                 magnitude = 0.0;
                 normalized_magnitude = 0.0;
             }
@@ -735,15 +671,13 @@ static void get_gamepad_state(void)
 
             float normalized_magnitude = 0;
 
-            if (magnitude > INPUT_DEADZONE)
-            {
+            if (magnitude > INPUT_DEADZONE) {
                 if (magnitude > 32767) magnitude = 32767;
   
                 magnitude -= INPUT_DEADZONE;
                 normalized_magnitude = magnitude / (32767 - INPUT_DEADZONE);
             }
-            else
-            {
+            else {
                 magnitude = 0.0;
                 normalized_magnitude = 0.0;
             }
@@ -781,18 +715,15 @@ static void get_gamepad_state(void)
 }
 
 
-static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type, application_mode_t *app_mode, const char **application_name)
-{
+static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type, application_mode_t *app_mode, const char **application_name) {
     uint32_t parameter_start = 0;
     bool parsing_parameter = 1;
 
     char parameter[3];
 
     uint32_t i = 0;
-    for (char *c = cmdline; *c; ++c)
-    {
-        if (parsing_parameter && i < 2)
-        {
+    for (char *c = cmdline; *c; ++c) {
+        if (parsing_parameter && i < 2) {
             parameter[i++] = *c;
         }
         
@@ -804,16 +735,14 @@ static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type,
 
     parameter[2] = 0;
 
-    if (strcmp("sv", parameter) == 0)
-    {
+    if (strcmp("sv", parameter) == 0) {
         *app_type = application_type_t::WINDOW_APPLICATION_MODE;
         //*app_type = application_type_t::CONSOLE_APPLICATION_MODE;
         *app_mode = application_mode_t::SERVER_MODE;
 
         *application_name = "Server";
     }
-    else if (strcmp("cl", parameter) == 0)
-    {
+    else if (strcmp("cl", parameter) == 0) {
         *app_type = application_type_t::WINDOW_APPLICATION_MODE;
         *app_mode = application_mode_t::CLIENT_MODE;
 
@@ -822,14 +751,12 @@ static void parse_command_line_args(LPSTR cmdline, application_type_t *app_type,
 }
 
 
-static float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency)
-{
+static float32_t measure_time_difference(LARGE_INTEGER begin_time, LARGE_INTEGER end_time, LARGE_INTEGER frequency) {
     return float32_t(end_time.QuadPart - begin_time.QuadPart) / float32_t(frequency.QuadPart);
 }
 
 
-static void init_free_list_allocator_head(free_list_allocator_t *allocator)
-{
+static void init_free_list_allocator_head(free_list_allocator_t *allocator) {
     allocator->free_block_head = (free_block_header_t *)allocator->start;
     allocator->free_block_head->free_block_size = allocator->available_bytes;
 }
@@ -837,62 +764,53 @@ static void init_free_list_allocator_head(free_list_allocator_t *allocator)
 
 
 // Public
-void request_quit(void)
-{
+void request_quit(void) {
     running = 0;
     PostQuitMessage(0);
 }
 
 
-raw_input_t *get_raw_input(void)
-{
+raw_input_t *get_raw_input(void) {
     return &raw_input;
 }
 
 
-void output_to_debug_console_i(int32_t i)
-{
+void output_to_debug_console_i(int32_t i) {
     char buffer[15] = {};
     sprintf_s(buffer, "%i\0", i);
     OutputDebugString(buffer);
 }
 
 
-void output_to_debug_console_i(float32_t f)
-{
+void output_to_debug_console_i(float32_t f) {
     char buffer[15] = {};
     sprintf_s(buffer, "%f\0", f);
     OutputDebugString(buffer);
 }
 
 
-void output_to_debug_console_i(const vector3_t &v3)
-{
+void output_to_debug_console_i(const vector3_t &v3) {
     output_to_debug_console((float32_t)(v3[0]), "|", (float32_t)(v3[1]), "|", (float32_t)(v3[2]));
 }
 
 
-void output_to_debug_console_i(const quaternion_t &q4)
-{
+void output_to_debug_console_i(const quaternion_t &q4) {
     output_to_debug_console((float32_t)(q4[0]), "|", (float32_t)(q4[1]), "|", (float32_t)(q4[2]), "|", (float32_t)(q4[3]));
 }
 
 
-void output_to_debug_console_i(const char *string)
-{
+void output_to_debug_console_i(const char *string) {
     OutputDebugString(string);
 }
 
 
-void enable_cursor_display(void)
-{
+void enable_cursor_display(void) {
     raw_input.show_cursor = 1;
     ShowCursor(1);
 }
 
 
-void disable_cursor_display(void)
-{
+void disable_cursor_display(void) {
     raw_input.show_cursor = 0;
     ShowCursor(0);
 }

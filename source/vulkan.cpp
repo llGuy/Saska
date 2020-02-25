@@ -13,18 +13,15 @@
 
 static vulkan_context_t *g_context;
 
-void mapped_gpu_memory_t::begin(void)
-{
+void mapped_gpu_memory_t::begin(void) {
     vkMapMemory(g_context->gpu.logical_device, *memory, offset, size, 0, &data);
 }
 
-void mapped_gpu_memory_t::fill(memory_byte_buffer_t byte_buffer)
-{
+void mapped_gpu_memory_t::fill(memory_byte_buffer_t byte_buffer) {
     memcpy(data, byte_buffer.ptr, size);
 }
 
-void mapped_gpu_memory_t::flush(uint32_t offset, uint32_t size)
-{
+void mapped_gpu_memory_t::flush(uint32_t offset, uint32_t size) {
     VkMappedMemoryRange range = {};
     range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
     range.memory = *memory;
@@ -33,65 +30,55 @@ void mapped_gpu_memory_t::flush(uint32_t offset, uint32_t size)
     vkFlushMappedMemoryRanges(g_context->gpu.logical_device, 1, &range);
 }
 
-void mapped_gpu_memory_t::end(void)
-{
+void mapped_gpu_memory_t::end(void) {
     vkUnmapMemory(g_context->gpu.logical_device, *memory);
 }
 
-void gpu_buffer_t::destroy(void)
-{
+void gpu_buffer_t::destroy(void) {
     vkDestroyBuffer(g_context->gpu.logical_device, buffer, nullptr);
     vkFreeMemory(g_context->gpu.logical_device, memory, nullptr);
 }
 
-void destroy_shader_module(VkShaderModule *module)
-{
+void destroy_shader_module(VkShaderModule *module) {
     vkDestroyShaderModule(g_context->gpu.logical_device, *module, nullptr);
 }
 
-VkMemoryRequirements image2d_t::get_memory_requirements(void)
-{
+VkMemoryRequirements image2d_t::get_memory_requirements(void) {
     VkMemoryRequirements requirements = {};
     vkGetImageMemoryRequirements(g_context->gpu.logical_device, image, &requirements);
 
     return(requirements);
 }
 
-void image2d_t::destroy(void)
-{
+void image2d_t::destroy(void) {
     if (image != VK_NULL_HANDLE) vkDestroyImage(g_context->gpu.logical_device, image, nullptr);
     if (image_view != VK_NULL_HANDLE) vkDestroyImageView(g_context->gpu.logical_device, image_view, nullptr);
     if (image_sampler != VK_NULL_HANDLE) vkDestroySampler(g_context->gpu.logical_device, image_sampler, nullptr);
     if (device_memory != VK_NULL_HANDLE) vkFreeMemory(g_context->gpu.logical_device, device_memory, nullptr);
 }
 
-mapped_gpu_memory_t image2d_t::construct_map(void)
-{
+mapped_gpu_memory_t image2d_t::construct_map(void) {
     VkMemoryRequirements requirements = {};
     vkGetImageMemoryRequirements(g_context->gpu.logical_device, image, &requirements);
     return(mapped_gpu_memory_t{0, requirements.size, &device_memory});
 }
 
-void render_pass_t::destroy(void)
-{
+void render_pass_t::destroy(void) {
     vkDestroyRenderPass(g_context->gpu.logical_device, render_pass, nullptr);
 }
 
-void framebuffer_t::destroy(void)
-{
+void framebuffer_t::destroy(void) {
     vkDestroyFramebuffer(g_context->gpu.logical_device, framebuffer, nullptr);
 }
 
-void init_semaphore(VkSemaphore *semaphore)
-{
+void init_semaphore(VkSemaphore *semaphore) {
     VkSemaphoreCreateInfo semaphore_info = {};
     semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	
     VK_CHECK(vkCreateSemaphore(g_context->gpu.logical_device, &semaphore_info, nullptr, semaphore));
 }
 
-void init_fence(VkFenceCreateFlags flags, VkFence *fence)
-{
+void init_fence(VkFenceCreateFlags flags, VkFence *fence) {
     VkFenceCreateInfo fence_info = {};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence_info.flags = flags;
@@ -101,30 +88,25 @@ void init_fence(VkFenceCreateFlags flags, VkFence *fence)
 
 #undef max
 
-void wait_fences(const memory_buffer_view_t<VkFence> &fences)
-{
+void wait_fences(const memory_buffer_view_t<VkFence> &fences) {
     vkWaitForFences(g_context->gpu.logical_device, fences.count, fences.buffer, VK_TRUE, std::numeric_limits<uint64_t>::max());
 }
 
-VkFormat get_device_supported_depth_format(void)
-{
+VkFormat get_device_supported_depth_format(void) {
     return g_context->gpu.supported_depth_format;
 }
 
-next_image_return_t acquire_next_image(VkSemaphore *semaphore, VkFence *fence)
-{
+next_image_return_t acquire_next_image(VkSemaphore *semaphore, VkFence *fence) {
     uint32_t image_index = 0;
     VkResult result = vkAcquireNextImageKHR(g_context->gpu.logical_device, g_context->swapchain.swapchain, std::numeric_limits<uint64_t>::max(), *semaphore, *fence, &image_index);
     return(next_image_return_t{result, image_index});
 }
 
-void reset_fences(const memory_buffer_view_t<VkFence> &fences)
-{
+void reset_fences(const memory_buffer_view_t<VkFence> &fences) {
     vkResetFences(g_context->gpu.logical_device, fences.count, fences.buffer);
 }
 
-uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size)
-{
+uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size) {
     uint32_t alignment = (uint32_t)(g_context->gpu.properties.limits.nonCoherentAtomSize);
 
     uint32_t mod = size % alignment;
@@ -133,21 +115,17 @@ uint32_t adjust_memory_size_for_gpu_alignment(uint32_t size)
     else return size + alignment - mod;
 }
 
-void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, VkCommandPool *pool)
-{
+void free_command_buffer(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, VkCommandPool *pool) {
     vkFreeCommandBuffers(g_context->gpu.logical_device, *pool, command_buffers.count, command_buffers.buffer);
 }
 
-static uint32_t find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements)
-{
+static uint32_t find_memory_type_according_to_requirements(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements) {
     VkPhysicalDeviceMemoryProperties mem_properties;
     vkGetPhysicalDeviceMemoryProperties(g_context->gpu.hardware, &mem_properties);
 
-    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; ++i)
-    {
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; ++i) {
         if (memory_requirements.memoryTypeBits & (1 << i)
-            && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties)
-        {
+            && (mem_properties.memoryTypes[i].propertyFlags & properties) == properties) {
             return(i);
         }
     }
@@ -157,8 +135,7 @@ static uint32_t find_memory_type_according_to_requirements(VkMemoryPropertyFlags
     return(0);
 }
 	
-void allocate_gpu_memory(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements, VkDeviceMemory *dest_memory)
-{
+void allocate_gpu_memory(VkMemoryPropertyFlags properties, VkMemoryRequirements memory_requirements, VkDeviceMemory *dest_memory) {
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = memory_requirements.size;
@@ -167,71 +144,58 @@ void allocate_gpu_memory(VkMemoryPropertyFlags properties, VkMemoryRequirements 
     VK_CHECK(vkAllocateMemory(g_context->gpu.logical_device, &alloc_info, nullptr, dest_memory));
 }
 
-queue_families_t *get_queue_families(void)
-{
+queue_families_t *get_queue_families(void) {
     return &g_context->gpu.queue_families;
 }
 
-VkFormat get_swapchain_format(void)
-{
+VkFormat get_swapchain_format(void) {
     return g_context->swapchain.format;
 }
 
-VkExtent2D get_swapchain_extent(void)
-{
+VkExtent2D get_swapchain_extent(void) {
     return g_context->swapchain.extent;
 }
 
-VkImageView *get_swapchain_image_views(void)
-{
+VkImageView *get_swapchain_image_views(void) {
     return g_context->swapchain.views.buffer;
 }
 
-uint32_t get_swapchain_image_count(void)
-{
+uint32_t get_swapchain_image_count(void) {
     return g_context->swapchain.imgs.count;
 }
 
-VkQueue *get_present_queue(void)
-{
+VkQueue *get_present_queue(void) {
     return &g_context->gpu.present_queue;
 }
 
-VkQueue *get_graphics_queue(void)
-{
+VkQueue *get_graphics_queue(void) {
     return &g_context->gpu.graphics_queue;
 }
 
-VkCommandPool *get_global_command_pool(void)
-{
+VkCommandPool *get_global_command_pool(void) {
     return(&g_context->command_pool);
 }
 
-void gpu_t::find_queue_families(VkSurfaceKHR *surface)
-{
+void gpu_t::find_queue_families(VkSurfaceKHR *surface) {
     uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(hardware, &queue_family_count, nullptr);
 
     VkQueueFamilyProperties *queue_properties = (VkQueueFamilyProperties *)allocate_stack(sizeof(VkQueueFamilyProperties) * queue_family_count, alignment_t(1), "queue_family_list_allocation");
     vkGetPhysicalDeviceQueueFamilyProperties(hardware, &queue_family_count, queue_properties);
 
-    for (uint32_t i = 0; i < queue_family_count; ++i)
-    {
-        if (queue_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && queue_properties[i].queueCount > 0)
-        {
+    for (uint32_t i = 0; i < queue_family_count; ++i) {
+        if (queue_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT && queue_properties[i].queueCount > 0) {
             queue_families.graphics_family = i;
         }
 
         VkBool32 present_support = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(hardware, i, *surface, &present_support);
 	
-        if (queue_properties[i].queueCount > 0 && present_support)
-        {
+        if (queue_properties[i].queueCount > 0 && present_support) {
             queue_families.present_family = i;
         }
 	
-        if (queue_families.complete())
-        {
+        if (queue_families.complete()) {
             break;
         }
     }
@@ -239,21 +203,18 @@ void gpu_t::find_queue_families(VkSurfaceKHR *surface)
     pop_stack();
 }
 
-struct instance_create_validation_layer_params_t
-{
+struct instance_create_validation_layer_params_t {
     bool r_enable;
     uint32_t o_layer_count;
     const char **o_layer_names;
 };
 
-struct instance_create_extension_params_t
-{
+struct instance_create_extension_params_t {
     uint32_t r_extension_count;
     const char **r_extension_names;
 };
 
-static void init_instance(VkApplicationInfo *app_info, instance_create_validation_layer_params_t *validation_params, instance_create_extension_params_t *extension_params)
-{
+static void init_instance(VkApplicationInfo *app_info, instance_create_validation_layer_params_t *validation_params, instance_create_extension_params_t *extension_params) {
     VkInstanceCreateInfo instance_info = {};
     instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instance_info.pApplicationInfo = app_info;
@@ -264,11 +225,9 @@ static void init_instance(VkApplicationInfo *app_info, instance_create_validatio
     VkLayerProperties *properties = (VkLayerProperties *)allocate_stack(sizeof(VkLayerProperties) * layer_count, alignment_t(1), "validation_layer_list_allocation");
     vkEnumerateInstanceLayerProperties(&layer_count, properties);
 
-    for (uint32_t r = 0; r < validation_params->o_layer_count; ++r)
-    {
+    for (uint32_t r = 0; r < validation_params->o_layer_count; ++r) {
         bool found_layer = false;
-        for (uint32_t l = 0; l < layer_count; ++l)
-        {
+        for (uint32_t l = 0; l < layer_count; ++l) {
             if (!strcmp(properties[l].layerName, validation_params->o_layer_names[r])) found_layer = true;
         }
 
@@ -289,15 +248,17 @@ static void init_instance(VkApplicationInfo *app_info, instance_create_validatio
     pop_stack();
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT *message_data, void *user_data)
-{
+static VKAPI_ATTR VkBool32 VKAPI_CALL vulkan_debug_proc(
+    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, 
+    VkDebugUtilsMessageTypeFlagsEXT message_type, 
+    const VkDebugUtilsMessengerCallbackDataEXT *message_data, 
+    void *user_data) {
     output_to_debug_console("Vulkan> ", message_data->pMessage, "\n");
 
     return(VK_FALSE);
 }
 
-static void init_debug_messenger(void)
-{
+static void init_debug_messenger(void) {
     // setup debugger
     VkDebugUtilsMessengerCreateInfoEXT debug_info = {};
     debug_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -315,33 +276,28 @@ static void init_debug_messenger(void)
     VK_CHECK(vk_create_debug_utils_messenger(g_context->instance, &debug_info, nullptr, &g_context->debug_messenger));
 }
 
-static void get_swapchain_support(VkSurfaceKHR *surface)
-{
+static void get_swapchain_support(VkSurfaceKHR *surface) {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.capabilities);
     vkGetPhysicalDeviceSurfaceFormatsKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.available_formats_count, nullptr);
 
-    if (g_context->gpu.swapchain_support.available_formats_count != 0)
-    {
+    if (g_context->gpu.swapchain_support.available_formats_count != 0) {
         g_context->gpu.swapchain_support.available_formats = (VkSurfaceFormatKHR *)allocate_stack(sizeof(VkSurfaceFormatKHR) * g_context->gpu.swapchain_support.available_formats_count, alignment_t(1), "surface_format_list_allocation");
         vkGetPhysicalDeviceSurfaceFormatsKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.available_formats_count, g_context->gpu.swapchain_support.available_formats);
     }
 
     vkGetPhysicalDeviceSurfacePresentModesKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.available_present_modes_count, nullptr);
-    if (g_context->gpu.swapchain_support.available_present_modes_count != 0)
-    {
+    if (g_context->gpu.swapchain_support.available_present_modes_count != 0) {
         g_context->gpu.swapchain_support.available_present_modes = (VkPresentModeKHR *)allocate_stack(sizeof(VkPresentModeKHR) * g_context->gpu.swapchain_support.available_present_modes_count, alignment_t(1), "surface_present_mode_list_allocation");
         vkGetPhysicalDeviceSurfacePresentModesKHR(g_context->gpu.hardware, *surface, &g_context->gpu.swapchain_support.available_present_modes_count, g_context->gpu.swapchain_support.available_present_modes);
     }
 }
     
-struct physical_device_extensions_params_t
-{
+struct physical_device_extensions_params_t {
     uint32_t r_extension_count;
     const char **r_extension_names;
 };
 
-static bool check_if_physical_device_supports_extensions(physical_device_extensions_params_t *extension_params, VkPhysicalDevice gpu)
-{
+static bool check_if_physical_device_supports_extensions(physical_device_extensions_params_t *extension_params, VkPhysicalDevice gpu) {
     uint32_t extension_count;
     vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, nullptr);
 
@@ -349,12 +305,9 @@ static bool check_if_physical_device_supports_extensions(physical_device_extensi
     vkEnumerateDeviceExtensionProperties(gpu, nullptr, &extension_count, extension_properties);
     
     uint32_t required_extensions_left = extension_params->r_extension_count;
-    for (uint32_t i = 0; i < extension_count && required_extensions_left > 0; ++i)
-    {
-        for (uint32_t j = 0; j < extension_params->r_extension_count; ++j)
-        {
-            if (!strcmp(extension_properties[i].extensionName, extension_params->r_extension_names[j]))
-            {
+    for (uint32_t i = 0; i < extension_count && required_extensions_left > 0; ++i) {
+        for (uint32_t j = 0; j < extension_params->r_extension_count; ++j) {
+            if (!strcmp(extension_properties[i].extensionName, extension_params->r_extension_names[j])) {
                 --required_extensions_left;
             }
         }
@@ -364,8 +317,7 @@ static bool check_if_physical_device_supports_extensions(physical_device_extensi
     return(!required_extensions_left);
 }
     
-static bool check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params, VkSurfaceKHR *surface)
-{
+static bool check_if_physical_device_is_suitable(physical_device_extensions_params_t *extension_params, VkSurfaceKHR *surface) {
     g_context->gpu.find_queue_families(surface);
 
     VkPhysicalDeviceProperties device_properties;
@@ -377,8 +329,7 @@ static bool check_if_physical_device_is_suitable(physical_device_extensions_para
     bool swapchain_supported = check_if_physical_device_supports_extensions(extension_params, g_context->gpu.hardware);
 
     bool swapchain_usable = false;
-    if (swapchain_supported)
-    {
+    if (swapchain_supported) {
         get_swapchain_support(surface);
         swapchain_usable = g_context->gpu.swapchain_support.available_formats_count && g_context->gpu.swapchain_support.available_present_modes_count;
     }
@@ -393,8 +344,7 @@ static bool check_if_physical_device_is_suitable(physical_device_extensions_para
            && device_features.fillModeNonSolid);
 }
 
-static void choose_gpu(physical_device_extensions_params_t *extension_params)
-{
+static void choose_gpu(physical_device_extensions_params_t *extension_params) {
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(g_context->instance, &device_count, nullptr);
     
@@ -405,13 +355,11 @@ static void choose_gpu(physical_device_extensions_params_t *extension_params)
 
     for (uint32_t i = 0
              ; i < device_count
-             ; ++i)
-    {
+             ; ++i) {
         g_context->gpu.hardware = devices[i];
 	
         // check if device is suitable
-        if (check_if_physical_device_is_suitable(extension_params, &g_context->surface))
-        {
+        if (check_if_physical_device_is_suitable(extension_params, &g_context->surface)) {
             vkGetPhysicalDeviceProperties(g_context->gpu.hardware, &g_context->gpu.properties);
 		
             break;
@@ -422,8 +370,7 @@ static void choose_gpu(physical_device_extensions_params_t *extension_params)
     //OUTPUT_DEBUG_LOG("%s\n", "found gpu compatible with application");
 }
 
-static void init_device(physical_device_extensions_params_t *gpu_extensions, instance_create_validation_layer_params_t *validation_layers)
-{
+static void init_device(physical_device_extensions_params_t *gpu_extensions, instance_create_validation_layer_params_t *validation_layers) {
     // create the logical device
     queue_families_t *indices = &g_context->gpu.queue_families;
 
@@ -441,10 +388,8 @@ static void init_device(physical_device_extensions_params_t *gpu_extensions, ins
     // fill the unique_family_indices with the indices
     for (uint32_t b = 0, set_bit = 0
              ; b < 32 && set_bit < unique_sets
-             ; ++b)
-    {
-        if (bitset.get(b))
-        {
+             ; ++b) {
+        if (bitset.get(b)) {
             unique_family_indices[set_bit++] = b;
         }
     }
@@ -452,8 +397,7 @@ static void init_device(physical_device_extensions_params_t *gpu_extensions, ins
     float32_t priority1 = 1.0f;
     for (uint32_t i = 0
              ; i < unique_sets
-             ; ++i)
-    {
+             ; ++i) {
         VkDeviceQueueCreateInfo queue_info = {};
         queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queue_info.queueFamilyIndex = unique_family_indices[i];
@@ -486,20 +430,16 @@ static void init_device(physical_device_extensions_params_t *gpu_extensions, ins
     vkGetDeviceQueue(g_context->gpu.logical_device, g_context->gpu.queue_families.present_family, 0, &g_context->gpu.present_queue);
 }
 
-static VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *available_formats, uint32_t format_count)
-{
-    if (format_count == 1 && available_formats[0].format == VK_FORMAT_UNDEFINED)
-    {
+static VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *available_formats, uint32_t format_count) {
+    if (format_count == 1 && available_formats[0].format == VK_FORMAT_UNDEFINED) {
         VkSurfaceFormatKHR format;
         format.format		= VK_FORMAT_B8G8R8A8_UNORM;
         format.colorSpace	= VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     }
     for (uint32_t i = 0
              ; i < format_count
-             ; ++i)
-    {
-        if (available_formats[i].format == VK_FORMAT_B8G8R8A8_UNORM && available_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-        {
+             ; ++i) {
+        if (available_formats[i].format == VK_FORMAT_B8G8R8A8_UNORM && available_formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return(available_formats[i]);
         }
     }
@@ -507,34 +447,27 @@ static VkSurfaceFormatKHR choose_surface_format(VkSurfaceFormatKHR *available_fo
     return(available_formats[0]);
 }
 
-static VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *available_present_modes, uint32_t present_modes_count)
-{
+static VkPresentModeKHR choose_surface_present_mode(const VkPresentModeKHR *available_present_modes, uint32_t present_modes_count) {
     // supported by most hardware
     VkPresentModeKHR best_mode = VK_PRESENT_MODE_FIFO_KHR;
     for (uint32_t i = 0
              ; i < present_modes_count
-             ; ++i)
-    {
-        if (available_present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
-        {
+             ; ++i) {
+        if (available_present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
             return(available_present_modes[i]);
         }
-        else if (available_present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)
-        {
+        else if (available_present_modes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
             best_mode = available_present_modes[i];
         }
     }
     return(best_mode);
 }
 
-static VkExtent2D choose_swapchain_extent(raw_input_t *raw_input, const VkSurfaceCapabilitiesKHR *capabilities)
-{
-    if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max())
-    {
+static VkExtent2D choose_swapchain_extent(raw_input_t *raw_input, const VkSurfaceCapabilitiesKHR *capabilities) {
+    if (capabilities->currentExtent.width != std::numeric_limits<uint64_t>::max()) {
         return(capabilities->currentExtent);
     }
-    else
-    {
+    else {
         int32_t width = raw_input->window_width, height = raw_input->window_height;
 
         VkExtent2D actual_extent	= { (uint32_t)width, (uint32_t)height };
@@ -545,15 +478,13 @@ static VkExtent2D choose_swapchain_extent(raw_input_t *raw_input, const VkSurfac
     }
 }
 
-VkSubresourceLayout get_image_subresource_layout(VkImage *image,VkImageSubresource *subresource)
-{
+VkSubresourceLayout get_image_subresource_layout(VkImage *image,VkImageSubresource *subresource) {
     VkSubresourceLayout layout;
     vkGetImageSubresourceLayout(g_context->gpu.logical_device, *image, subresource, &layout);
     return(layout);
 }
 
-void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, uint32_t mips, VkImageCreateFlags flags)
-{
+void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, uint32_t layers, image2d_t *dest_image, uint32_t mips, VkImageCreateFlags flags) {
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -584,8 +515,7 @@ void init_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling 
     dest_image->layer_count = layers;
 }
     
-void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers, uint32_t mips)
-{
+void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_flags, VkImageView *dest_image_view, VkImageViewType type, uint32_t layers, uint32_t mips) {
     VkImageViewCreateInfo view_info			= {};
     view_info.sType					= VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_info.image					= *image;
@@ -602,8 +532,7 @@ void init_image_view(VkImage *image, VkFormat format, VkImageAspectFlags aspect_
 
 void init_image_sampler(VkFilter mag_filter, VkFilter min_filter, VkSamplerAddressMode u_sampler_address_mode, VkSamplerAddressMode v_sampler_address_mode, VkSamplerAddressMode w_sampler_address_mode,
                         VkBool32 anisotropy_enable, uint32_t max_anisotropy, VkBorderColor clamp_border_color, VkBool32 compare_enable, VkCompareOp compare_op,
-                        VkSamplerMipmapMode mipmap_mode, float32_t mip_lod_bias, float32_t min_lod, float32_t max_lod, VkSampler *dest_sampler)
-{
+                        VkSamplerMipmapMode mipmap_mode, float32_t mip_lod_bias, float32_t min_lod, float32_t max_lod, VkSampler *dest_sampler) {
     VkSamplerCreateInfo sampler_info = {};
     sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_info.magFilter = mag_filter;
@@ -624,8 +553,7 @@ void init_image_sampler(VkFilter mag_filter, VkFilter min_filter, VkSamplerAddre
     VK_CHECK(vkCreateSampler(g_context->gpu.logical_device, &sampler_info, nullptr, dest_sampler));
 }
 
-void begin_command_buffer(VkCommandBuffer *command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance)
-{
+void begin_command_buffer(VkCommandBuffer *command_buffer, VkCommandBufferUsageFlags usage_flags, VkCommandBufferInheritanceInfo *inheritance) {
     VkCommandBufferBeginInfo begin_info = {};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags = usage_flags;
@@ -634,8 +562,7 @@ void begin_command_buffer(VkCommandBuffer *command_buffer, VkCommandBufferUsageF
     vkBeginCommandBuffer(*command_buffer, &begin_info);
 }
 
-void allocate_command_buffers(VkCommandPool *command_pool_source, VkCommandBufferLevel level, const memory_buffer_view_t<VkCommandBuffer> &command_buffers)
-{
+void allocate_command_buffers(VkCommandPool *command_pool_source, VkCommandBufferLevel level, const memory_buffer_view_t<VkCommandBuffer> &command_buffers) {
     VkCommandBufferAllocateInfo allocate_info = {};
     allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocate_info.level = level;
@@ -645,8 +572,7 @@ void allocate_command_buffers(VkCommandPool *command_pool_source, VkCommandBuffe
     vkAllocateCommandBuffers(g_context->gpu.logical_device, &allocate_info, command_buffers.buffer);
 }
     
-void submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, const memory_buffer_view_t<VkSemaphore> &wait_semaphores, const memory_buffer_view_t<VkSemaphore> &signal_semaphores, const memory_buffer_view_t<VkPipelineStageFlags> &wait_stages, VkFence *fence, VkQueue *queue)
-{
+void submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, const memory_buffer_view_t<VkSemaphore> &wait_semaphores, const memory_buffer_view_t<VkSemaphore> &signal_semaphores, const memory_buffer_view_t<VkPipelineStageFlags> &wait_stages, VkFence *fence, VkQueue *queue) {
     VkSubmitInfo submit_info = {};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit_info.commandBufferCount = command_buffers.count;
@@ -662,20 +588,17 @@ void submit(const memory_buffer_view_t<VkCommandBuffer> &command_buffers, const 
     vkQueueSubmit(*queue, 1, &submit_info, *fence);
 }
 
-static bool has_stencil_component(VkFormat format)
-{
+static bool has_stencil_component(VkFormat format) {
     return(format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT);
 }
 
-void init_single_use_command_buffer(VkCommandPool *command_pool, VkCommandBuffer *dst)
-{
+void init_single_use_command_buffer(VkCommandPool *command_pool, VkCommandBuffer *dst) {
     allocate_command_buffers(command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, memory_buffer_view_t<VkCommandBuffer>{1, dst});
 
     begin_command_buffer(dst, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, nullptr);
 }
 
-void destroy_single_use_command_buffer(VkCommandBuffer *command_buffer, VkCommandPool *command_pool)
-{
+void destroy_single_use_command_buffer(VkCommandBuffer *command_buffer, VkCommandPool *command_pool) {
     end_command_buffer(command_buffer);
 
     VkFence null_fence = VK_NULL_HANDLE;
@@ -686,8 +609,7 @@ void destroy_single_use_command_buffer(VkCommandBuffer *command_buffer, VkComman
     free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{1, command_buffer}, command_pool);
 }
 
-void initialize_image_memory_barrier(VkImageLayout layout_before, VkImageLayout layout_after, image2d_t *image, VkImageAspectFlags image_aspect, uint32_t layer_count, image_memory_barrier_t *dst)
-{
+void initialize_image_memory_barrier(VkImageLayout layout_before, VkImageLayout layout_after, image2d_t *image, VkImageAspectFlags image_aspect, uint32_t layer_count, image_memory_barrier_t *dst) {
     dst->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     dst->oldLayout = layout_before;
     dst->newLayout = layout_after;
@@ -699,8 +621,7 @@ void initialize_image_memory_barrier(VkImageLayout layout_before, VkImageLayout 
     dst->subresourceRange.layerCount = layer_count;
 }
 
-void initialize_buffer_memory_barrier(gpu_buffer_t *buffer, uint32_t offset, uint32_t size, VkAccessFlagBits access_before, VkAccessFlags access_after, buffer_memory_barrier_t *dst)
-{
+void initialize_buffer_memory_barrier(gpu_buffer_t *buffer, uint32_t offset, uint32_t size, VkAccessFlagBits access_before, VkAccessFlags access_after, buffer_memory_barrier_t *dst) {
     dst->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     dst->srcAccessMask = access_before;
     dst->dstAccessMask = access_after;
@@ -709,13 +630,11 @@ void initialize_buffer_memory_barrier(gpu_buffer_t *buffer, uint32_t offset, uin
     dst->size = size;
 }
 
-void issue_pipeline_barrier(VkPipelineStageFlags stage_before, VkPipelineStageFlags stage_after, const memory_buffer_view_t<buffer_memory_barrier_t> &buffer_barriers, const memory_buffer_view_t<image_memory_barrier_t> &image_barriers, VkCommandBuffer *cmdbuf)
-{
+void issue_pipeline_barrier(VkPipelineStageFlags stage_before, VkPipelineStageFlags stage_after, const memory_buffer_view_t<buffer_memory_barrier_t> &buffer_barriers, const memory_buffer_view_t<image_memory_barrier_t> &image_barriers, VkCommandBuffer *cmdbuf) {
     vkCmdPipelineBarrier(*cmdbuf, stage_after, stage_before, 0, 0, 0, buffer_barriers.count, buffer_barriers.buffer, image_barriers.count, image_barriers.buffer);
 }
 
-void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool, uint32_t layer_count, uint32_t mip_count)
-{
+void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, VkCommandPool *graphics_command_pool, uint32_t layer_count, uint32_t mip_count) {
     VkCommandBuffer single_use;
     init_single_use_command_buffer(graphics_command_pool, &single_use);
 	
@@ -737,32 +656,28 @@ void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_
     VkPipelineStageFlags source_stage;
     VkPipelineStageFlags destination_stage;
 
-    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-    {
+    if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
         source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         destination_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     }
-    else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
+    else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
         source_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
-    else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
+    else if (old_layout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && new_layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
         source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         destination_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     }
-    else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    {
+    else if (old_layout == VK_IMAGE_LAYOUT_UNDEFINED && new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
         barrier.srcAccessMask = 0;
         barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
             | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -770,22 +685,18 @@ void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_
         source_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         destination_stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     }
-    else
-    {
+    else {
         //OUTPUT_DEBUG_LOG("%s\n", "unsupported layout transition");
         assert(false);
     }
 
-    if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    {
+    if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (has_stencil_component(format))
-        {
+        if (has_stencil_component(format)) {
             barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
     }
-    else
-    {
+    else {
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
@@ -794,8 +705,7 @@ void transition_image_layout(VkImage *image, VkFormat format, VkImageLayout old_
     destroy_single_use_command_buffer(&single_use, graphics_command_pool);
 }
 
-void copy_buffer_into_image(gpu_buffer_t *src_buffer, image2d_t *dst_image, uint32_t width, uint32_t height, VkCommandPool *command_pool)
-{
+void copy_buffer_into_image(gpu_buffer_t *src_buffer, image2d_t *dst_image, uint32_t width, uint32_t height, VkCommandPool *command_pool) {
     VkCommandBuffer command_buffer;
     init_single_use_command_buffer(command_pool, &command_buffer);
 
@@ -817,8 +727,7 @@ void copy_buffer_into_image(gpu_buffer_t *src_buffer, image2d_t *dst_image, uint
     destroy_single_use_command_buffer(&command_buffer, command_pool);
 }
 
-void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPool *command_pool)
-{
+void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPool *command_pool) {
     VkCommandBuffer command_buffer;
     init_single_use_command_buffer(command_pool, &command_buffer);
 
@@ -829,8 +738,7 @@ void copy_buffer(gpu_buffer_t *src_buffer, gpu_buffer_t *dst_buffer, VkCommandPo
     destroy_single_use_command_buffer(&command_buffer, command_pool);
 }
 
-void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before_dst, VkImageLayout layout_before_src, VkCommandBuffer *cmdbuf, uint32_t dest_layer, uint32_t dest_mip)
-{
+void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before_dst, VkImageLayout layout_before_src, VkCommandBuffer *cmdbuf, uint32_t dest_layer, uint32_t dest_mip) {
     VkImageMemoryBarrier image_barrier = {};
     image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     image_barrier.oldLayout = layout_before_src;
@@ -891,8 +799,7 @@ void copy_image(image2d_t *src_image,image2d_t *dst_image,uint32_t width, uint32
     vkCmdPipelineBarrier(*cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, flags_after, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 }
 
-void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before, VkCommandBuffer *cmdbuf)
-{
+void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint32_t height, VkPipelineStageFlags flags_before, VkPipelineStageFlags flags_after, VkImageLayout layout_before, VkCommandBuffer *cmdbuf) {
     VkImageMemoryBarrier image_barrier = {};
     image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     image_barrier.oldLayout = layout_before;
@@ -949,8 +856,7 @@ void blit_image(image2d_t *src_image, image2d_t *dst_image, uint32_t width, uint
     vkCmdPipelineBarrier(*cmdbuf, VK_PIPELINE_STAGE_TRANSFER_BIT, flags_after, 0, 0, nullptr, 0, nullptr, 1, &image_barrier);
 }
 
-void invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items, VkCommandPool *transfer_command_pool, image2d_t *dst_image, int32_t width, int32_t height)
-{
+void invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items, VkCommandPool *transfer_command_pool, image2d_t *dst_image, int32_t width, int32_t height) {
     VkDeviceSize staging_buffer_size = items.size;
 	
     gpu_buffer_t staging_buffer;
@@ -969,8 +875,7 @@ void invoke_staging_buffer_for_device_local_image(memory_byte_buffer_t items, Vk
     vkFreeMemory(g_context->gpu.logical_device, staging_buffer.memory, nullptr);    
 }
 
-void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, VkBufferUsageFlags usage, VkCommandPool *transfer_command_pool, gpu_buffer_t *dst_buffer)
-{
+void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, VkBufferUsageFlags usage, VkCommandPool *transfer_command_pool, gpu_buffer_t *dst_buffer) {
     VkDeviceSize buffer_size = items.size;
 	
     gpu_buffer_t staging_buffer;
@@ -991,8 +896,7 @@ void invoke_staging_buffer_for_device_local_buffer(memory_byte_buffer_t items, V
     vkFreeMemory(g_context->gpu.logical_device, staging_buffer.memory, nullptr);
 }
     
-static void init_swapchain(raw_input_t *raw_input)
-{
+static void init_swapchain(raw_input_t *raw_input) {
     swapchain_details_t *swapchain_details = &g_context->gpu.swapchain_support;
     VkSurfaceFormatKHR surface_format = choose_surface_format(swapchain_details->available_formats, swapchain_details->available_formats_count);
     VkExtent2D surface_extent = choose_swapchain_extent(raw_input, &swapchain_details->capabilities);
@@ -1000,8 +904,7 @@ static void init_swapchain(raw_input_t *raw_input)
 
     // add 1 to the minimum images supported in the swapchain
     uint32_t image_count = swapchain_details->capabilities.minImageCount + 1;
-    if (image_count > swapchain_details->capabilities.maxImageCount)
-    {
+    if (image_count > swapchain_details->capabilities.maxImageCount) {
         image_count = swapchain_details->capabilities.maxImageCount;
     }
 
@@ -1017,14 +920,12 @@ static void init_swapchain(raw_input_t *raw_input)
 
     uint32_t queue_family_indices[] = { (uint32_t)g_context->gpu.queue_families.graphics_family, (uint32_t)g_context->gpu.queue_families.present_family };
 
-    if (g_context->gpu.queue_families.graphics_family != g_context->gpu.queue_families.present_family)
-    {
+    if (g_context->gpu.queue_families.graphics_family != g_context->gpu.queue_families.present_family) {
         swapchain_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         swapchain_info.queueFamilyIndexCount = 2;
         swapchain_info.pQueueFamilyIndices = queue_family_indices;
     }
-    else
-    {
+    else {
         swapchain_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         swapchain_info.queueFamilyIndexCount = 0;
         swapchain_info.pQueueFamilyIndices = nullptr;
@@ -1052,16 +953,14 @@ static void init_swapchain(raw_input_t *raw_input)
 	
     for (uint32_t i = 0
              ; i < image_count
-             ; ++i)
-    {
+             ; ++i) {
         VkImage *image = &g_context->swapchain.imgs[i];
 
         init_image_view(image, g_context->swapchain.format, VK_IMAGE_ASPECT_COLOR_BIT, &g_context->swapchain.views[i], VK_IMAGE_VIEW_TYPE_2D, 1, 1);
     }
 }
     
-void init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions, const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions, const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies, render_pass_t *dest_render_pass)
-{
+void init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attachment_descriptions, const memory_buffer_view_t<VkSubpassDescription> &subpass_descriptions, const memory_buffer_view_t<VkSubpassDependency> &subpass_dependencies, render_pass_t *dest_render_pass) {
     VkRenderPassCreateInfo render_pass_info	= {};
     render_pass_info.sType			= VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     render_pass_info.attachmentCount	= attachment_descriptions.count;
@@ -1076,20 +975,16 @@ void init_render_pass(const memory_buffer_view_t<VkAttachmentDescription> &attac
 }
 
 // find gpu supported depth format
-static VkFormat find_supported_format(const VkFormat *candidates, uint32_t candidate_size, VkImageTiling tiling, VkFormatFeatureFlags features)
-{
+static VkFormat find_supported_format(const VkFormat *candidates, uint32_t candidate_size, VkImageTiling tiling, VkFormatFeatureFlags features) {
     for (uint32_t i = 0
              ; i < candidate_size
-             ; ++i)
-    {
+             ; ++i) {
         VkFormatProperties properties;
         vkGetPhysicalDeviceFormatProperties(g_context->gpu.hardware, candidates[i], &properties);
-        if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
-        {
+        if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features) {
             return(candidates[i]);
         }
-        else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features)
-        {
+        else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features) {
             return(candidates[i]);
         }
     }
@@ -1099,18 +994,15 @@ static VkFormat find_supported_format(const VkFormat *candidates, uint32_t candi
     return VkFormat{};
 }
 
-static void find_depth_format(void)
-{
-    VkFormat formats[] = 
-        {
+static void find_depth_format(void) {
+    VkFormat formats[] =  {
             VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT
         };
     
     g_context->gpu.supported_depth_format = find_supported_format(formats, 3, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
     
-void init_shader(VkShaderStageFlagBits stage_bits, uint32_t content_size, byte_t *file_contents, VkShaderModule *dest_shader_module)
-{
+void init_shader(VkShaderStageFlagBits stage_bits, uint32_t content_size, byte_t *file_contents, VkShaderModule *dest_shader_module) {
     VkShaderModuleCreateInfo shader_info = {};
     shader_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shader_info.codeSize = content_size;
@@ -1119,8 +1011,7 @@ void init_shader(VkShaderStageFlagBits stage_bits, uint32_t content_size, byte_t
     VK_CHECK(vkCreateShaderModule(g_context->gpu.logical_device, &shader_info, nullptr, dest_shader_module));
 }
 
-void init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, const memory_buffer_view_t<VkPushConstantRange> &ranges, VkPipelineLayout *pipeline_layout)
-{
+void init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, const memory_buffer_view_t<VkPushConstantRange> &ranges, VkPipelineLayout *pipeline_layout) {
     VkPipelineLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.setLayoutCount = layouts.count;
@@ -1131,8 +1022,7 @@ void init_pipeline_layout(const memory_buffer_view_t<VkDescriptorSetLayout> &lay
     VK_CHECK(vkCreatePipelineLayout(g_context->gpu.logical_device, &layout_info, nullptr, pipeline_layout));        
 }
     
-void init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts, memory_buffer_view_t<VkPushConstantRange> *ranges, VkPipelineLayout *pipeline_layout)
-{
+void init_pipeline_layout(memory_buffer_view_t<VkDescriptorSetLayout> *layouts, memory_buffer_view_t<VkPushConstantRange> *ranges, VkPipelineLayout *pipeline_layout) {
     VkPipelineLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.setLayoutCount = layouts->count;
@@ -1156,8 +1046,7 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
                        VkPipelineLayout *pipeline_layout,
                        render_pass_t *render_pass,
                        uint32_t subpass,
-                       VkPipeline *pipeline)
-{
+                       VkPipeline *pipeline) {
     VkGraphicsPipelineCreateInfo pipeline_info = {};
     pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipeline_info.stageCount = shaders->count;
@@ -1181,8 +1070,7 @@ init_graphics_pipeline(memory_buffer_view_t<VkPipelineShaderStageCreateInfo> *sh
     VK_CHECK (vkCreateGraphicsPipelines(g_context->gpu.logical_device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, pipeline) );
 }
 
-void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_pool)
-{
+void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_pool) {
     VkCommandPoolCreateInfo pool_info = {};
     pool_info.sType			= VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     pool_info.queueFamilyIndex	= queue_family_index;
@@ -1191,8 +1079,7 @@ void allocate_command_pool(uint32_t queue_family_index, VkCommandPool *command_p
     VK_CHECK(vkCreateCommandPool(g_context->gpu.logical_device, &pool_info, nullptr, command_pool));
 }
 
-void init_framebuffer_attachment(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, image2d_t *attachment, uint32_t layers, VkImageCreateFlags create_flags, VkImageViewType image_view_type)
-{
+void init_framebuffer_attachment(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, image2d_t *attachment, uint32_t layers, VkImageCreateFlags create_flags, VkImageViewType image_view_type) {
     init_image(width, height, format, VK_IMAGE_TILING_OPTIMAL, usage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, layers, attachment, create_flags);
 
     VkImageAspectFlags aspect_flags;
@@ -1202,8 +1089,7 @@ void init_framebuffer_attachment(uint32_t width, uint32_t height, VkFormat forma
     init_image_view(&attachment->image, format, aspect_flags, &attachment->image_view, image_view_type, layers, 1);
 }
     
-void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uint32_t height, uint32_t layer_count, framebuffer_t *framebuffer)
-{
+void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uint32_t height, uint32_t layer_count, framebuffer_t *framebuffer) {
     memory_buffer_view_t<VkImageView> image_view_attachments;
 	
     image_view_attachments.count = framebuffer->color_attachments.count;
@@ -1211,14 +1097,12 @@ void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uin
 	
     for (uint32_t i = 0
              ; i < image_view_attachments.count
-             ; ++i)
-    {
+             ; ++i) {
         VkImageView *image = &framebuffer->color_attachments.buffer[i];
         image_view_attachments.buffer[i] = *image;
     }
 
-    if (framebuffer->depth_attachment != VK_NULL_HANDLE)
-    {
+    if (framebuffer->depth_attachment != VK_NULL_HANDLE) {
         VkImageView *depth_image = &framebuffer->depth_attachment;
         extend_stack_top(sizeof(VkImageView));
         image_view_attachments.buffer[image_view_attachments.count++] = *depth_image;
@@ -1236,8 +1120,7 @@ void init_framebuffer(render_pass_t *compatible_render_pass, uint32_t width, uin
     VK_CHECK(vkCreateFramebuffer(g_context->gpu.logical_device, &fbo_info, nullptr, &framebuffer->framebuffer));
 }
 
-VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout *layout, VkDescriptorPool *descriptor_pool)
-{
+VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout *layout, VkDescriptorPool *descriptor_pool) {
     VkDescriptorSet result;
 	
     VkDescriptorSetAllocateInfo alloc_info	= {};
@@ -1251,8 +1134,7 @@ VkDescriptorSet allocate_descriptor_set(VkDescriptorSetLayout *layout, VkDescrip
     return(result);
 }
     
-void allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets, const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, VkDescriptorPool *descriptor_pool)
-{
+void allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_sets, const memory_buffer_view_t<VkDescriptorSetLayout> &layouts, VkDescriptorPool *descriptor_pool) {
     VkDescriptorSetAllocateInfo alloc_info	= {};
     alloc_info.sType		= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool	= *descriptor_pool;
@@ -1262,8 +1144,7 @@ void allocate_descriptor_sets(memory_buffer_view_t<VkDescriptorSet> &descriptor_
     VK_CHECK(vkAllocateDescriptorSets(g_context->gpu.logical_device, &alloc_info, descriptor_sets.buffer));
 }
 
-void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, VkDescriptorPool *pool)
-{
+void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, VkDescriptorPool *pool) {
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.poolSizeCount = sizes.count;
@@ -1274,8 +1155,7 @@ void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &size
     VK_CHECK(vkCreateDescriptorPool(g_context->gpu.logical_device, &pool_info, nullptr, pool));
 }
     
-void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, descriptor_pool_t *pool)
-{
+void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &sizes, uint32_t max_sets, descriptor_pool_t *pool) {
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_info.poolSizeCount = sizes.count;
@@ -1286,8 +1166,7 @@ void init_descriptor_pool(const memory_buffer_view_t<VkDescriptorPoolSize> &size
     VK_CHECK(vkCreateDescriptorPool(g_context->gpu.logical_device, &pool_info, nullptr, &pool->pool));
 }
 
-void init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSetLayout *dst)
-{
+void init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayoutBinding> &bindings, VkDescriptorSetLayout *dst) {
     VkDescriptorSetLayoutCreateInfo layout_info	= {};
     layout_info.sType				= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount			= bindings.count;
@@ -1296,13 +1175,11 @@ void init_descriptor_set_layout(const memory_buffer_view_t<VkDescriptorSetLayout
     VK_CHECK(vkCreateDescriptorSetLayout(g_context->gpu.logical_device, &layout_info, nullptr, dst));
 }
     
-void update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes)
-{
+void update_descriptor_sets(const memory_buffer_view_t<VkWriteDescriptorSet> &writes) {
     vkUpdateDescriptorSets(g_context->gpu.logical_device, writes.count, writes.buffer, 0, nullptr);
 }
     
-void init_buffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage, VkSharingMode sharing_mode, VkMemoryPropertyFlags memory_properties, gpu_buffer_t *dest_buffer)
-{
+void init_buffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage, VkSharingMode sharing_mode, VkMemoryPropertyFlags memory_properties, gpu_buffer_t *dest_buffer) {
     dest_buffer->size = buffer_size;
 	
     VkBufferCreateInfo buffer_info	= {};
@@ -1322,8 +1199,7 @@ void init_buffer(VkDeviceSize buffer_size, VkBufferUsageFlags usage, VkSharingMo
     vkBindBufferMemory(g_context->gpu.logical_device, dest_buffer->buffer, dest_buffer->memory, 0);
 }
 
-void update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue)
-{
+void update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t offset, VkPipelineStageFlags stage, VkAccessFlags access, VkCommandBuffer *queue) {
     VkBufferMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
     barrier.srcAccessMask = access;
@@ -1340,8 +1216,7 @@ void update_gpu_buffer(gpu_buffer_t *dst, void *data, uint32_t size, uint32_t of
     vkCmdPipelineBarrier(*queue, VK_PIPELINE_STAGE_TRANSFER_BIT, stage, 0, 0, nullptr, 1, &barrier, 0, nullptr);
 }
 
-void command_buffer_begin_render_pass(render_pass_t *render_pass, framebuffer_t *fbo, VkRect2D render_area, const memory_buffer_view_t<VkClearValue> &clear_colors, VkSubpassContents subpass_contents, VkCommandBuffer *command_buffer)
-{
+void command_buffer_begin_render_pass(render_pass_t *render_pass, framebuffer_t *fbo, VkRect2D render_area, const memory_buffer_view_t<VkClearValue> &clear_colors, VkSubpassContents subpass_contents, VkCommandBuffer *command_buffer) {
     VkRenderPassBeginInfo render_pass_info = {};
     render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     render_pass_info.pNext = nullptr;
@@ -1356,13 +1231,11 @@ void command_buffer_begin_render_pass(render_pass_t *render_pass, framebuffer_t 
     vkCmdBeginRenderPass(*command_buffer, &render_pass_info, subpass_contents);
 }
 
-void command_buffer_next_subpass(VkCommandBuffer *cmdbuf, VkSubpassContents contents)
-{
+void command_buffer_next_subpass(VkCommandBuffer *cmdbuf, VkSubpassContents contents) {
     vkCmdNextSubpass(*cmdbuf, contents);
 }
 
-VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uint32_t *image_index, VkQueue *present_queue)
-{
+VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uint32_t *image_index, VkQueue *present_queue) {
     memory_buffer_view_t<VkSwapchainKHR> swapchains{1, &g_context->swapchain.swapchain};
     
     VkPresentInfoKHR present_info = {};
@@ -1377,8 +1250,7 @@ VkResult present(const memory_buffer_view_t<VkSemaphore> &signal_semaphores, uin
     return(vkQueuePresentKHR(*present_queue, &present_info));
 }
     
-graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, raw_input_t *raw_input)
-{
+graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *create_surface_proc, raw_input_t *raw_input) {
     // initialize instance
     static constexpr uint32_t layer_count = 1;
     const char *layer_names[layer_count] = { "VK_LAYER_LUNARG_standard_validation" };
@@ -1447,8 +1319,7 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
 
     allocate_command_buffers(&g_context->command_pool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, memory_buffer_view_t<VkCommandBuffer>{3, g_context->command_buffer});
 
-    for (uint32_t i = 0; i < 2; ++i)
-    {
+    for (uint32_t i = 0; i < 2; ++i) {
         init_semaphore(&g_context->img_ready[i]);
         init_semaphore(&g_context->render_finish[i]);   
         init_fence(VK_FENCE_CREATE_SIGNALED_BIT, &g_context->cpu_wait[i]);
@@ -1457,8 +1328,7 @@ graphics_api_initialize_ret_t initialize_graphics_api(create_vulkan_surface *cre
     return graphics_api_initialize_ret_t{ &g_context->command_pool };
 }
 
-void recreate_swapchain(raw_input_t *raw_input)
-{
+void recreate_swapchain(raw_input_t *raw_input) {
     destroy_swapchain();
 
     get_swapchain_support(&g_context->surface);
@@ -1466,8 +1336,7 @@ void recreate_swapchain(raw_input_t *raw_input)
     init_swapchain(raw_input);
 }
 
-frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input)
-{
+frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input) {
     static uint32_t current_frame = 0;
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -1477,13 +1346,11 @@ frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input)
     
     auto next_image_data = acquire_next_image(&g_context->img_ready[g_context->current_frame], &null_fence);
     
-    if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR)
-    {
+    if (next_image_data.result == VK_ERROR_OUT_OF_DATE_KHR) {
         //recreate_swapchain(raw_input);
 	return {};
     }
-    else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR)
-    {
+    else if (next_image_data.result != VK_SUCCESS && next_image_data.result != VK_SUBOPTIMAL_KHR) {
 	//OUTPUT_DEBUG_LOG("Failed to acquire swapchain image");
     }
     
@@ -1497,8 +1364,7 @@ frame_rendering_data_t begin_frame_rendering(raw_input_t *raw_input)
     return {g_context->image_index, g_context->command_buffer[g_context->current_frame]};
 }
 
-void end_frame_rendering_and_refresh(raw_input_t *raw_input)
-{
+void end_frame_rendering_and_refresh(raw_input_t *raw_input) {
     end_command_buffer(&g_context->command_buffer[g_context->current_frame]);
 
     VkPipelineStageFlags wait_stages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;;
@@ -1516,33 +1382,27 @@ void end_frame_rendering_and_refresh(raw_input_t *raw_input)
                               &g_context->image_index,
                               &g_context->gpu.present_queue);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-    {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         //recreate_swapchain(raw_input);
     }
-    else if (result != VK_SUCCESS)
-    {
+    else if (result != VK_SUCCESS) {
 	//OUTPUT_DEBUG_LOG("%s\n", "failed to present swapchain image");
     }
 }
 
-void destroy_debug_utils_messenger_ext(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks *allocator)
-{
+void destroy_debug_utils_messenger_ext(VkInstance instance, VkDebugUtilsMessengerEXT messenger, const VkAllocationCallbacks *allocator) {
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func != nullptr)
-    {
+    if (func != nullptr) {
         func(instance, messenger, allocator);
     }
 }
     
-void destroy_pipeline(VkPipeline *pipeline)
-{
+void destroy_pipeline(VkPipeline *pipeline) {
     vkDestroyPipeline(g_context->gpu.logical_device, *pipeline, nullptr);
 }
 
 void
-destroy_vulkan_state(void)
-{
+destroy_vulkan_state(void) {
     free_command_buffer(memory_buffer_view_t<VkCommandBuffer>{3, g_context->command_buffer}, &g_context->command_pool);
 
     /*    vkDestroyCommandPool(gpu->logical_device, window_rendering.command_pool, nullptr);
@@ -1563,42 +1423,34 @@ destroy_vulkan_state(void)
     vkDestroyInstance(g_context->instance, nullptr);
 }
 
-void idle_gpu(void)
-{
+void idle_gpu(void) {
     vkDeviceWaitIdle(g_context->gpu.logical_device);
 }
 
-void destroy_framebuffer(VkFramebuffer *fbo)
-{
+void destroy_framebuffer(VkFramebuffer *fbo) {
     vkDestroyFramebuffer(g_context->gpu.logical_device, *fbo, nullptr);
 }
 
-void destroy_render_pass(VkRenderPass *render_pass)
-{
+void destroy_render_pass(VkRenderPass *render_pass) {
     vkDestroyRenderPass(g_context->gpu.logical_device, *render_pass, nullptr);
 }
 
-void destroy_image_view(VkImageView *image_view)
-{
+void destroy_image_view(VkImageView *image_view) {
     vkDestroyImageView(g_context->gpu.logical_device, *image_view, nullptr);
 }
 
-void destroy_swapchain(void)
-{
-    for (uint32_t i = 0; i < g_context->swapchain.views.count; ++i)
-    {
+void destroy_swapchain(void) {
+    for (uint32_t i = 0; i < g_context->swapchain.views.count; ++i) {
         vkDestroyImageView(g_context->gpu.logical_device, g_context->swapchain.views[i], nullptr);
     }
 	
     vkDestroySwapchainKHR(g_context->gpu.logical_device, g_context->swapchain.swapchain, nullptr);
 }
 
-void initialize_vulkan_translation_unit(game_memory_t *memory)
-{
+void initialize_vulkan_translation_unit(game_memory_t *memory) {
     g_context = &memory->graphics_context.context;
 }
 
-bool is_graphics_api_initialized(void)
-{
+bool is_graphics_api_initialized(void) {
     return g_context != nullptr;
 }

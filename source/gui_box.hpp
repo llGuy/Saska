@@ -2,8 +2,7 @@
 
 #include "gui_math.hpp"
 
-struct ui_box_t
-{
+struct ui_box_t {
     ui_box_t *parent {nullptr};
     relative_to_t relative_to;
     ui_vector2_t relative_position;

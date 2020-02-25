@@ -5,8 +5,7 @@
 #undef far
 
 
-struct cameras_t
-{
+struct cameras_t {
     static constexpr uint32_t MAX_CAMERAS = 10;
     uint32_t camera_count = 0;
     camera_t cameras[MAX_CAMERAS] = {};
@@ -21,8 +20,7 @@ struct cameras_t
 static cameras_t cameras;
 
 
-static void s_cameras_init()
-{
+static void s_cameras_init() {
     uniform_layout_handle_t ubo_layout_hdl = g_uniform_layout_manager->get_handle("uniform_layout.camera_transforms_ubo"_hash);
     auto *ubo_layout_ptr = g_uniform_layout_manager->get(ubo_layout_hdl);
 
@@ -51,14 +49,12 @@ static void s_cameras_init()
 }
 
 
-void initialize_cameras()
-{
+void initialize_cameras() {
     s_cameras_init();
 }
 
 
-camera_handle_t add_camera(raw_input_t *input, resolution_t resolution)
-{
+camera_handle_t add_camera(raw_input_t *input, resolution_t resolution) {
     uint32_t index = cameras.camera_count;
     cameras.cameras[index].set_default((float32_t)(resolution.width), (float32_t)(resolution.height), input->cursor_pos_x, input->cursor_pos_y);
     ++cameras.camera_count;
@@ -66,14 +62,12 @@ camera_handle_t add_camera(raw_input_t *input, resolution_t resolution)
 }
 
 
-void remove_all_cameras()
-{
+void remove_all_cameras() {
     cameras.camera_count = 0;
 }
 
 
-void initialize_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t nearp, float32_t farp)
-{
+void initialize_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t nearp, float32_t farp) {
     camera->fov = camera->current_fov = fov;
     camera->asp = asp;
     camera->n = nearp;
@@ -81,8 +75,7 @@ void initialize_camera(camera_t *camera, float32_t fov, float32_t asp, float32_t
 }
 
 
-void update_camera_transforms(gpu_command_queue_t *queue)
-{
+void update_camera_transforms(gpu_command_queue_t *queue) {
     camera_t *camera = camera_bound_to_3d_output();
 
     shadow_matrices_t shadow_data = get_shadow_matrices();
@@ -95,8 +88,7 @@ void update_camera_transforms(gpu_command_queue_t *queue)
     transform_data.view_matrix = camera->v_m;
     transform_data.projection_matrix = projection_matrix;
 
-    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i)
-    {
+    for (uint32_t i = 0; i < SHADOW_BOX_COUNT; ++i) {
         transform_data.shadow_projection_matrix[i] = shadow_data.boxes[i].projection_matrix;
         transform_data.shadow_view_matrix[i] = shadow_data.boxes[i].light_view_matrix;
         transform_data.far_planes[i] = shadow_data.far_planes[i];
@@ -113,54 +105,45 @@ void update_camera_transforms(gpu_command_queue_t *queue)
 }
 
 
-void deinitialize_cameras()
-{
+void deinitialize_cameras() {
     cameras.camera_count = 0;
     cameras.camera_bound_to_3d_output = -1;
 }
 
 
-camera_t *get_camera(camera_handle_t handle)
-{
+camera_t *get_camera(camera_handle_t handle) {
     return &cameras.cameras[handle];
 }
 
 
-camera_t *camera_bound_to_3d_output()
-{
-    switch (cameras.camera_bound_to_3d_output)
-    {
+camera_t *camera_bound_to_3d_output() {
+    switch (cameras.camera_bound_to_3d_output) {
     case -1: return &cameras.spectator_camera;
     default: return &cameras.cameras[cameras.camera_bound_to_3d_output];
     }
 }
 
 
-void bind_camera_to_3d_output(camera_handle_t handle)
-{
+void bind_camera_to_3d_output(camera_handle_t handle) {
     cameras.camera_bound_to_3d_output = handle;
 }
 
 
-gpu_buffer_t camera_transforms()
-{
+gpu_buffer_t camera_transforms() {
     return *g_gpu_buffer_manager->get(cameras.camera_transforms_ubo);
 }
 
 
-uniform_group_t camera_transforms_uniform()
-{
+uniform_group_t camera_transforms_uniform() {
     return *g_uniform_group_manager->get(cameras.camera_transforms_uniform_group);
 }
 
 
-bool is_in_spectator_mode(void)
-{
+bool is_in_spectator_mode(void) {
     return !cameras.camera_count;
 }
 
 
-void update_spectator_camera(const matrix4_t &view_matrix)
-{
+void update_spectator_camera(const matrix4_t &view_matrix) {
     cameras.spectator_camera.v_m = view_matrix;
 }

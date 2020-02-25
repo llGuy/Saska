@@ -6,8 +6,7 @@
 #include "deferred_renderer.hpp"
 
 
-struct crosshair_t
-{
+struct crosshair_t {
     image2d_t crosshair_image;
     uniform_group_t crosshair_group;
 
@@ -20,8 +19,7 @@ struct crosshair_t
     uniform_group_t png_image_uniform;
     
     // Crosshair image is 8x8
-    void get_uvs_for_crosshair(void)
-    {
+    void get_uvs_for_crosshair(void) {
         vector2_t *list = uvs;
         
         // Starting coordinate
@@ -46,23 +44,19 @@ static void s_push_crosshair_for_render(gui_textured_vertex_render_list_t *rende
 
 
 
-void initialize_hud(void)
-{
+void initialize_hud(void) {
     s_initialize_crosshair();
 }
 
 
-void push_hud_to_render(gui_textured_vertex_render_list_t *render_list, element_focus_t focus)
-{
-    if (focus == element_focus_t::WORLD_3D_ELEMENT_FOCUS)
-    {
+void push_hud_to_render(gui_textured_vertex_render_list_t *render_list, element_focus_t focus) {
+    if (focus == element_focus_t::WORLD_3D_ELEMENT_FOCUS) {
         s_push_crosshair_for_render(render_list);
     }
 }
 
 
-static void s_initialize_crosshair(void)
-{
+static void s_initialize_crosshair(void) {
     // Just a dot
     crosshair.selected_crosshair = 1;
 
@@ -107,8 +101,7 @@ static void s_initialize_crosshair(void)
 }
 
 
-static void s_push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list)
-{
+static void s_push_crosshair_for_render(gui_textured_vertex_render_list_t *render_list) {
     render_list->mark_section(crosshair.png_image_uniform);
     
     vector2_t normalized_base_position = convert_glsl_to_normalized(crosshair.crosshair_box.gls_position.to_fvec2());

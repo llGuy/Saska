@@ -7,33 +7,27 @@ static uint32_t font_count;
 static hash_table_inline_t<uint32_t, 10, 3, 4> font_map;
 
 
-font_handle_t add_font(const constant_string_t &font_name)
-{
+font_handle_t add_font(const constant_string_t &font_name) {
     uint32_t current_count = font_count++;
     font_map.insert(font_name.hash, current_count);
     return(current_count);
 }
 
 
-font_t *get_font(const constant_string_t &name)
-{
+font_t *get_font(const constant_string_t &name) {
     return(&fonts[*font_map.get(name.hash)]);
 }
 
 // Loading fonts
-struct fnt_word_t
-{
+struct fnt_word_t {
     char *pointer;
     uint16_t size;
 };
 
 // Except new line
-static char *s_fnt_skip_break_characters(char *pointer)
-{
-    for (;;)
-    {
-        switch (*pointer)
-        {
+static char *s_fnt_skip_break_characters(char *pointer) {
+    for (;;) {
+        switch (*pointer) {
         case ' ': case '=': ++pointer;
         default: return pointer;
         }
@@ -41,12 +35,9 @@ static char *s_fnt_skip_break_characters(char *pointer)
     return nullptr;
 }
 
-static char *s_fnt_goto_next_break_character(char *pointer)
-{
-    for (;;)
-    {
-        switch (*pointer)
-        {
+static char *s_fnt_goto_next_break_character(char *pointer) {
+    for (;;) {
+        switch (*pointer) {
         case ' ': case '=': case '\n': return pointer;
         default: ++pointer;
         }
@@ -54,12 +45,9 @@ static char *s_fnt_goto_next_break_character(char *pointer)
     return nullptr;
 }
 
-static char *s_fnt_skip_line(char *pointer)
-{
-    for (;;)
-    {
-        switch (*pointer)
-        {
+static char *s_fnt_skip_line(char *pointer) {
+    for (;;) {
+        switch (*pointer) {
         case '\n': return ++pointer;
         default: ++pointer;
         }
@@ -67,23 +55,18 @@ static char *s_fnt_skip_line(char *pointer)
     return nullptr;
 }
 
-static char *s_fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word)
-{
+static char *s_fnt_move_and_get_word(char *pointer, fnt_word_t *dst_word) {
     char *new_pointer = s_fnt_goto_next_break_character(pointer);
-    if (dst_word)
-    {
+    if (dst_word) {
         dst_word->pointer = pointer;
         dst_word->size = (int16_t)(new_pointer - pointer);
     }
     return(new_pointer);
 }
 
-static char *s_fnt_skip_until_digit(char *pointer)
-{
-    for (;;)
-    {
-        switch (*pointer)
-        {
+static char *s_fnt_skip_until_digit(char *pointer) {
+    for (;;) {
+        switch (*pointer) {
         case '-': case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': return pointer;
         default: ++pointer;
         }
@@ -91,29 +74,24 @@ static char *s_fnt_skip_until_digit(char *pointer)
     return nullptr;
 }
 
-struct fnt_string_number_t
-{
+struct fnt_string_number_t {
     fnt_word_t word;
     // Maximum 10 chars for a number
     char characters[10];
 };
 
-static int32_t s_fnt_atoi(fnt_word_t word)
-{
+static int32_t s_fnt_atoi(fnt_word_t word) {
     fnt_string_number_t number;
     memcpy(number.characters, word.pointer, sizeof(char) * word.size);
     number.characters[word.size] = '\0';
     return(atoi(number.characters));
 }
 
-static char *s_fnt_get_char_count(char *pointer, int32_t *count)
-{
-    for (;;)
-    {
+static char *s_fnt_get_char_count(char *pointer, int32_t *count) {
+    for (;;) {
         fnt_word_t chars_str;
         pointer = s_fnt_move_and_get_word(pointer, &chars_str);
-        if (chars_str.size == strlen("chars"))
-        {
+        if (chars_str.size == strlen("chars")) {
             pointer = s_fnt_skip_until_digit(pointer);
             fnt_word_t count_str;
             pointer = s_fnt_move_and_get_word(pointer, &count_str);
@@ -125,8 +103,7 @@ static char *s_fnt_get_char_count(char *pointer, int32_t *count)
     }
 }
 
-static char *s_fnt_get_font_attribute_value(char *pointer, int32_t *value)
-{
+static char *s_fnt_get_font_attribute_value(char *pointer, int32_t *value) {
     pointer = s_fnt_skip_until_digit(pointer);
     fnt_word_t value_str;
     pointer = s_fnt_move_and_get_word(pointer, &value_str);
@@ -134,8 +111,7 @@ static char *s_fnt_get_font_attribute_value(char *pointer, int32_t *value)
     return(pointer);
 }
 
-font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file)
-{
+font_t *load_font(const constant_string_t &font_name, const char *fnt_file, const char *png_file) {
     // TODO : Make sure this is parameterised, not fixed!
     static constexpr float32_t FNT_MAP_W = 512.0f, FNT_MAP_H = 512.0f;
     
@@ -147,8 +123,7 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
     int32_t char_count = 0;
     char *current_char = s_fnt_get_char_count((char *)fnt.content, &char_count);
     // Ready to start parsing the file
-    for (uint32_t i = 0; i < (uint32_t)char_count; ++i)
-    {
+    for (uint32_t i = 0; i < (uint32_t)char_count; ++i) {
         // Char ID value
         int32_t char_id = 0;
         current_char = s_fnt_get_font_attribute_value(current_char, &char_id);
@@ -203,13 +178,12 @@ font_t *load_font(const constant_string_t &font_name, const char *fnt_file, cons
 
 
 void ui_text_t::initialize(ui_box_t *box,
-                    font_t *in_font,
-                    font_stream_box_relative_to_t in_relative_to,
-                    float32_t px_x_start,
-                    float32_t px_y_start,
-                    uint32_t in_chars_per_line,
-                    float32_t in_line_height)
-{
+                           font_t *in_font,
+                           font_stream_box_relative_to_t in_relative_to,
+                           float32_t px_x_start,
+                           float32_t px_y_start,
+                           uint32_t in_chars_per_line,
+                           float32_t in_line_height) {
     this->dst_box = box;
     this->font = in_font;
     this->relative_to = in_relative_to;
@@ -220,38 +194,31 @@ void ui_text_t::initialize(ui_box_t *box,
 }
 
 
-void ui_text_t::draw_char(char character, uint32_t color)
-{
+void ui_text_t::draw_char(char character, uint32_t color) {
     colors[char_count] = color;
     characters[char_count++] = character;
 }
 
 
-void ui_text_t::draw_string(const char *string, uint32_t color)
-{
+void ui_text_t::draw_string(const char *string, uint32_t color) {
     uint32_t string_length = (uint32_t)strlen(string);
     memcpy(characters + char_count, string, sizeof(char) * string_length);
-    for (uint32_t i = 0; i < string_length; ++i)
-    {
+    for (uint32_t i = 0; i < string_length; ++i) {
         colors[char_count + i] = color;
     }
     char_count += string_length;
 }
 
 
-void ui_text_t::null_terminate(void)
-{
+void ui_text_t::null_terminate(void) {
     characters[char_count] = 0;
 }
 
 
-void ui_input_text_t::input(raw_input_t *raw_input)
-{
-    for (uint32_t i = 0; i < raw_input->char_count; ++i)
-    {
+void ui_input_text_t::input(raw_input_t *raw_input) {
+    for (uint32_t i = 0; i < raw_input->char_count; ++i) {
         char character[2] = {raw_input->char_stack[i], 0};
-        if (character[0])
-        {
+        if (character[0]) {
             text.colors[cursor_position] = text_color;
             text.characters[cursor_position++] = raw_input->char_stack[i];
             ++text.char_count;
@@ -259,10 +226,8 @@ void ui_input_text_t::input(raw_input_t *raw_input)
         }
     }
 
-    if (raw_input->buttons[button_type_t::BACKSPACE].state)
-    {
-        if (text.char_count && cursor_position)
-        {
+    if (raw_input->buttons[button_type_t::BACKSPACE].state) {
+        if (text.char_count && cursor_position) {
             --cursor_position;
             --text.char_count;
         }

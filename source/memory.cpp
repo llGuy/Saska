@@ -3,8 +3,7 @@
 #include <stdlib.h>
 #include <cassert>
 
-inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
-{
+inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment) {
     byte_t *byte_cast_ptr = (byte_t *)ptr;
     uint8_t adjustment = alignment - (uint8_t)(reinterpret_cast<uint64_t>(ptr) & static_cast<uint64_t>(alignment - 1));
     if (adjustment == 0) return(0);
@@ -12,8 +11,7 @@ inline uint8_t get_alignment_adjust(void *ptr, uint32_t alignment)
     return(adjustment);
 }
 
-void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator)
-{
+void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const char *name, linear_allocator_t *allocator) {
     void *prev = allocator->current;
     void *new_crnt = (byte_t *)allocator->current + alloc_size;
 
@@ -23,13 +21,11 @@ void *allocate_linear_impl(uint32_t alloc_size, alignment_t alignment, const cha
     return(prev);
 }
 
-void clear_linear_impl(linear_allocator_t *allocator)
-{
+void clear_linear_impl(linear_allocator_t *allocator) {
     allocator->current = allocator->start;
 }
 
-void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator)
-{
+void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const char *name, stack_allocator_t *allocator) {
     byte_t *would_be_address;
 
     if (allocator->allocation_count == 0) would_be_address = (uint8_t *)allocator->current + sizeof(stack_allocation_header_t);
@@ -61,27 +57,22 @@ void *allocate_stack_impl(uint32_t allocation_size, alignment_t alignment, const
     return(start_address + sizeof(stack_allocation_header_t));
 }
 
-void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator)
-{
+void extend_stack_top_impl(uint32_t extension_size, stack_allocator_t *allocator) {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     current_header->size += extension_size;
 }
 
-void pop_stack_impl(stack_allocator_t *allocator)
-{
+void pop_stack_impl(stack_allocator_t *allocator) {
     stack_allocation_header_t *current_header = (stack_allocation_header_t *)allocator->current;
     
 #if DEBUG
-    if (allocator->allocation_count == 1)
-    {
+    if (allocator->allocation_count == 1) {
 	OUTPUT_DEBUG_LOG("cleared stack : last allocation was \"%s\"\n", current_header->allocation_name);
     }
-    else if (allocator->allocation_count == 0)
-    {
+    else if (allocator->allocation_count == 0) {
 	OUTPUT_DEBUG_LOG("%s\n", "stack already cleared : pop stack call ignored");
     }
-    else
-    {
+    else {
 	OUTPUT_DEBUG_LOG("poping allocation \"%s\" -> new head is \"%s\"\n", current_header->allocation_name
 			 , ((stack_allocation_header_t *)(current_header->prev))->allocation_name);
     }
@@ -92,8 +83,7 @@ void pop_stack_impl(stack_allocator_t *allocator)
     --(allocator->allocation_count);
 }
 
-void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator)
-{
+void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, const char *name, free_list_allocator_t *allocator) {
     uint32_t total_allocation_size = allocation_size + sizeof(free_list_allocation_header_t);
 
     allocator->used_memory += total_allocation_size;
@@ -103,12 +93,9 @@ void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, c
     free_block_header_t *previous_free_block = nullptr;
     free_block_header_t *smallest_free_block = allocator->free_block_head;
 
-    for (free_block_header_t *header = allocator->free_block_head; header; header = header->next_free_block)
-    {
-	if (header->free_block_size >= total_allocation_size)
-	{
-	    if (smallest_free_block->free_block_size >= header->free_block_size || smallest_free_block->free_block_size < total_allocation_size)
-	    {
+    for (free_block_header_t *header = allocator->free_block_head; header; header = header->next_free_block) {
+	if (header->free_block_size >= total_allocation_size) {
+	    if (smallest_free_block->free_block_size >= header->free_block_size || smallest_free_block->free_block_size < total_allocation_size) {
 		smallest_free_block = header;
 		break;
 	    }
@@ -116,15 +103,13 @@ void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, c
 	previous_free_block = header;
     }
     free_block_header_t *next = smallest_free_block->next_free_block;
-    if (previous_free_block)
-    {
+    if (previous_free_block) {
 	uint32_t previous_smallest_block_size = smallest_free_block->free_block_size;
 	previous_free_block->next_free_block = (free_block_header_t *)(((byte_t *)smallest_free_block) + total_allocation_size);
 	previous_free_block->next_free_block->free_block_size = previous_smallest_block_size - total_allocation_size;
 	previous_free_block->next_free_block->next_free_block = next;
     }
-    else
-    {
+    else {
 	free_block_header_t *new_block = (free_block_header_t *)(((byte_t *)smallest_free_block) + total_allocation_size);
 	allocator->free_block_head = new_block;
 	new_block->free_block_size = smallest_free_block->free_block_size - total_allocation_size;
@@ -140,8 +125,7 @@ void *allocate_free_list_impl(uint32_t allocation_size, alignment_t alignment, c
 }
 
 // TODO(luc) : optimize free list allocator so that all the blocks are stored in order
-void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
-{
+void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator) {
     free_list_allocation_header_t *allocation_header = (free_list_allocation_header_t *)((byte_t *)pointer - sizeof(free_list_allocation_header_t));
     free_block_header_t *new_free_block_header = (free_block_header_t *)allocation_header;
     new_free_block_header->free_block_size = allocation_header->size + sizeof(free_block_header_t);
@@ -156,10 +140,8 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
     
     // check if possible to merge free blocks
     bool merged = false;
-    for (; current_header; current_header = current_header->next_free_block)
-    {
-	if (new_free_block_header > previous && new_free_block_header < current_header)
-	{
+    for (; current_header; current_header = current_header->next_free_block) {
+	if (new_free_block_header > previous && new_free_block_header < current_header) {
 	    viable_prev = previous;
 	    viable_next = current_header;
 	}
@@ -167,8 +149,7 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 	// check if free blocks will overlap
 	// does the header go over the newly freed header
 	if (current_header->free_block_size + (byte_t *)current_header >= (byte_t *)new_free_block_header
-	    && (byte_t *)current_header < (byte_t *)new_free_block_header)
-	{
+	    && (byte_t *)current_header < (byte_t *)new_free_block_header) {
 	    current_header->free_block_size = (uint32_t)(((byte_t *)new_free_block_header + new_free_block_header->free_block_size) - (byte_t *)current_header);
 	    new_free_block_header = current_header;
 	    previous = current_header;
@@ -177,16 +158,13 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
 	}
 	// does the newly freed header go over the header
 	if ((byte_t *)current_header <= (byte_t *)new_free_block_header + new_free_block_header->free_block_size
-	    && (byte_t *)current_header > (byte_t *)new_free_block_header)
-	{
+	    && (byte_t *)current_header > (byte_t *)new_free_block_header) {
 	    // if current header is not the head of the list
         new_free_block_header->free_block_size = (uint32_t)((byte_t *)((byte_t *)current_header + current_header->free_block_size) - (byte_t *)new_free_block_header);
-	    /*if (previous)
-	      {
+	    /*if (previous) {
 	      previous->next_free_block = new_free_block_header;
 	      }*/
-	    if (!previous)
-	    {
+        if (!previous) {
 		allocator->free_block_head = new_free_block_header;
 	    }
 	    new_free_block_header->next_free_block = current_header->next_free_block;
@@ -207,25 +185,21 @@ void deallocate_free_list_impl(void *pointer, free_list_allocator_t *allocator)
     // if viable_prev == nullptr && viable_next != nullptr -> new block should be before the head
     // if viable_prev != nullptr && viable_next != nullptr -> new block should be between prev and next
     // if viable_prev == nullptr && viable_next == nullptr -> new block should be after the last header
-    if (!viable_prev && viable_next)
-    {
+    if (!viable_prev && viable_next) {
 	free_block_header_t *old_head = allocator->free_block_head;
 	allocator->free_block_head = new_free_block_header;
 	allocator->free_block_head->next_free_block = old_head;
     }
-    else if (viable_prev && viable_next)
-    {
+    else if (viable_prev && viable_next) {
 	viable_prev->next_free_block = new_free_block_header;
 	new_free_block_header->next_free_block = viable_next;
     }
-    else if (!viable_prev && !viable_next)
-    {
+    else if (!viable_prev && !viable_next) {
 	// at the end of the loop, previous is that last current before current = nullptr
 	previous->next_free_block = new_free_block_header;
     }
 
-    if (new_free_block_header->free_block_size == 2033)
-    {
+    if (new_free_block_header->free_block_size == 2033) {
         __debugbreak();
     }
 }

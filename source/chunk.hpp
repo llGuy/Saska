@@ -10,8 +10,7 @@
 
 
 // Will always be allocated on the heap
-struct chunk_t
-{
+struct chunk_t {
     ivector3_t xs_bottom_corner;
     ivector3_t chunk_coord;
 
@@ -31,8 +30,7 @@ struct chunk_t
     mesh_t gpu_mesh;
     gpu_buffer_t chunk_mesh_gpu_buffer;
 
-    struct push_k // Rendering stuff
-    {
+    struct push_k { // Rendering stuff
         matrix4_t model_matrix;
         vector4_t color;
     } push_k;
@@ -41,12 +39,10 @@ struct chunk_t
 
     bool added_to_history = 0;
 
-    union
-    {
+    union {
         // Flags and stuff
         uint32_t flags;
-        struct
-        {
+        struct {
             uint32_t was_previously_modified_by_client: 1;
             uint32_t index_of_modified_chunk: 31;
         };

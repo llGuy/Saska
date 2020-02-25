@@ -7,8 +7,7 @@
 #include "utility.hpp"
 
 
-struct chunks_state_flags_t
-{
+struct chunks_state_flags_t {
     // Should not be updating if 
     uint32_t should_update_chunk_meshes_from_now: 1;
     // Number of chunks to update received from server
@@ -23,6 +22,9 @@ void initialize_chunks_state(void);
 void populate_chunks_state(struct game_state_initialize_packet_t *packet);
 void populate_chunks_state(const char *map_path);
 void deinitialize_chunks_state(void);
+
+void start_map_editor_mode();
+void stop_map_editor_mode();
 
 void fill_game_state_initialize_packet_with_chunk_state(struct game_state_initialize_packet_t *packet);
 struct voxel_chunk_values_packet_t *initialize_chunk_values_packets(uint32_t *count);

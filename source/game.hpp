@@ -14,29 +14,24 @@ enum application_type_t { WINDOW_APPLICATION_MODE, CONSOLE_APPLICATION_MODE };
 
 enum element_focus_t { WORLD_3D_ELEMENT_FOCUS, UI_ELEMENT_CONSOLE, UI_ELEMENT_MENU, UI_ELEMENT_INPUT };
 
-struct focus_stack_t
-{
+struct focus_stack_t {
     int32_t current_foci = -1;
     element_focus_t foci [ 10 ];
 
-    void pop_focus(void)
-    {
+    void pop_focus(void) {
         --current_foci;
     }
     
-    void push_focus(element_focus_t focus)
-    {
+    void push_focus(element_focus_t focus) {
         foci[++current_foci] = focus;
     }
     
-    element_focus_t get_current_focus(void)
-    {
+    element_focus_t get_current_focus(void) {
         return foci[current_foci];
     }
 };
 
-struct game_memory_t
-{
+struct game_memory_t {
     graphics_t graphics_state;
     graphics_context_t graphics_context;
     user_interface_t user_interface_state;

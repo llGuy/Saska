@@ -9,8 +9,7 @@ enum button_type_t { A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T,
 
 enum button_state_t : bool { NOT_DOWN, INSTANT, REPEAT, RELEASE };
 
-struct button_input_t
-{
+struct button_input_t {
     button_state_t state = button_state_t::NOT_DOWN;
     float32_t down_amount = 0.0f;
     float32_t value = 0.0f;
@@ -26,8 +25,7 @@ enum gamepad_button_type_t { DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
                              LEFT_TRIGGER, RIGHT_TRIGGER,
                              INVALID_BUTTON };
 
-struct gamepad_button_input_t
-{
+struct gamepad_button_input_t {
     button_state_t state = button_state_t::NOT_DOWN;
     float32_t down_amount;
     float32_t value = 0.0f;
@@ -35,8 +33,7 @@ struct gamepad_button_input_t
 
 #define MAX_CHARS 10
 
-struct raw_input_t
-{
+struct raw_input_t {
     button_input_t buttons[button_type_t::INVALID_KEY];
 
     uint32_t char_count;

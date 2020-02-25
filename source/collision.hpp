@@ -4,8 +4,7 @@
 
 enum collision_primitive_type_t { CPT_FACE, CPT_EDGE, CPT_VERTEX };
 
-struct collision_t
-{
+struct collision_t {
     collision_primitive_type_t primitive_type;
 
     uint8_t detected: 1;

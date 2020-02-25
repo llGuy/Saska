@@ -4,8 +4,7 @@
 #include "sockets.hpp"
 #include "packets.hpp"
 
-struct serializer_t
-{
+struct serializer_t {
     uint32_t data_buffer_size;
     uint8_t *data_buffer;
     uint32_t data_buffer_head = 0;

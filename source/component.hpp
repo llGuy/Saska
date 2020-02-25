@@ -8,8 +8,7 @@
 #include "camera_view.hpp"
 
 
-struct hitbox_t
-{
+struct hitbox_t {
     // Relative to the size of the entity
     // These are the values of when the entity size = 1
     float32_t x_max, x_min;
@@ -18,8 +17,7 @@ struct hitbox_t
 };
 
 
-struct physics_component_create_info_t
-{
+struct physics_component_create_info_t {
     bool enabled;    
 };
 
@@ -27,8 +25,7 @@ struct physics_component_create_info_t
 enum entity_physics_state_t { IN_AIR, ON_GROUND };
 
 
-struct physics_component_t
-{
+struct physics_component_t {
     float32_t standing_movement_speed = 0.0f;
     
     bool enabled;
@@ -49,15 +46,13 @@ private:
 };
 
 
-struct terraform_power_component_create_info_t
-{
+struct terraform_power_component_create_info_t {
     float32_t speed;
     float32_t terraform_radius;
 };
 
 
-struct terraform_power_component_t
-{
+struct terraform_power_component_t {
     // Some sort of limit or something
     float32_t speed;
     float32_t terraform_radius;
@@ -66,8 +61,7 @@ struct terraform_power_component_t
 };
 
 
-struct camera_component_create_info_t
-{
+struct camera_component_create_info_t {
     // From add_camera() function from graphics.hpp
     uint32_t camera_index;
     bool is_third_person;
@@ -75,8 +69,7 @@ struct camera_component_create_info_t
 };
 
 
-struct camera_component_t
-{
+struct camera_component_t {
     // Can be set to -1, in that case, there is no camera bound
     camera_handle_t camera{-1};
 
@@ -107,16 +100,14 @@ struct camera_component_t
 };
 
 
-struct animation_component_create_info_t
-{
+struct animation_component_create_info_t {
     uniform_layout_t *ubo_layout;
     skeleton_t *skeleton;
     animation_cycles_t *cycles;
 };
 
 
-struct animation_component_t
-{
+struct animation_component_t {
     // Rendering the animated entity
     animated_instance_t animation_instance;
     animation_cycles_t *cycles;
@@ -125,16 +116,13 @@ struct animation_component_t
 };
 
 
-struct rendering_component_create_info_t
-{
+struct rendering_component_create_info_t {
 };
 
 
-struct rendering_component_t
-{
+struct rendering_component_t {
     // push constant stuff for the graphics pipeline
-    struct
-    {
+    struct {
 	// in world space
 	matrix4_t ws_t{1.0f};
 	vector4_t color;
@@ -143,8 +131,7 @@ struct rendering_component_t
         float32_t metalness;
     } push_k;
 
-    struct
-    {
+    struct {
         matrix4_t ws_t{1.0f};
         vector4_t color;
 
@@ -158,15 +145,13 @@ struct rendering_component_t
 };
 
 
-struct shoot_component_create_info_t
-{
+struct shoot_component_create_info_t {
     float32_t cool_off;
     float32_t shoot_speed;
 };
 
 
-struct shoot_component_t
-{
+struct shoot_component_t {
     float32_t cool_off;
     float32_t shoot_speed;
 
@@ -174,8 +159,7 @@ struct shoot_component_t
 };
 
 
-struct burnable_component_t
-{
+struct burnable_component_t {
     bool burning = 0;
     // Going to have to update this every frame
     int32_t particle_index = 0;
@@ -186,15 +170,13 @@ struct burnable_component_t
 };
 
 
-struct entity_body_t
-{
+struct entity_body_t {
     float32_t weight = 1.0f;
     hitbox_t hitbox;
 };
 
 
-struct network_component_create_info_t
-{
+struct network_component_create_info_t {
     uint32_t entity_index;
     uint32_t client_state_index;
 };
@@ -203,18 +185,15 @@ struct network_component_create_info_t
 #define MAX_PLAYER_STATES 40
 
 
-struct remote_player_snapshot_t
-{
+struct remote_player_snapshot_t {
     vector3_t ws_position;
     vector3_t ws_direction;
     vector3_t ws_up_vector;
     quaternion_t ws_rotation;
     uint32_t action_flags;
 
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             uint8_t rolling_mode: 1;
             // ...
         };
@@ -224,16 +203,13 @@ struct remote_player_snapshot_t
 
 
 // What is player doing, how has it changed (mouse movement, etc..)
-struct player_state_t
-{
+struct player_state_t {
     uint32_t action_flags;
     float32_t mouse_x_diff;
     float32_t mouse_y_diff;
     // Flags
-    union
-    {
-        struct
-        {
+    union {
+        struct {
             uint8_t is_entering: 1;
             uint8_t rolling_mode: 1;
             uint8_t physics_state: 2;
@@ -254,8 +230,7 @@ struct player_state_t
 };
 
 
-struct network_component_t
-{
+struct network_component_t {
     uint32_t commands_to_flush = 0;
     
     // May be different from client to client
@@ -267,8 +242,7 @@ struct network_component_t
     circular_buffer_t<struct player_state_t> player_states_cbuffer;
 
     // Stuff for remote players
-    struct
-    {
+    struct {
         // Rendering time for the remote players will be 100ms behind (two snapshots - TODO: Make this depend on the snapshot rate of the server)
         
         // This will only be allocated for remote players
@@ -285,13 +259,11 @@ struct network_component_t
 };
 
 
-struct bounce_physics_component_create_info_t
-{
+struct bounce_physics_component_create_info_t {
 };
 
 
-struct bounce_physics_component_t
-{
+struct bounce_physics_component_t {
     // Data
     void tick(struct bullet_t *affected_bullet, float32_t dt);
 };

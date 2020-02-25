@@ -5,39 +5,33 @@
 
 #include "chunk.hpp"
 
-void serializer_t::initialize(uint32_t max_size)
-{
+void serializer_t::initialize(uint32_t max_size) {
     data_buffer = (uint8_t *)allocate_linear(max_size * sizeof(uint8_t));
 }
 
-uint8_t *serializer_t::grow_data_buffer(uint32_t bytes)
-{
+uint8_t *serializer_t::grow_data_buffer(uint32_t bytes) {
     uint32_t previous = data_buffer_head;
     data_buffer_head += bytes;
     return(&data_buffer[previous]);
 }
 
-void serializer_t::send_serialized_message(network_address_t address)
-{
+void serializer_t::send_serialized_message(network_address_t address) {
     send_to(address,
             (char *)data_buffer,
             data_buffer_head);
 }
 
-void serializer_t::serialize_uint8(uint8_t u8)
-{
+void serializer_t::serialize_uint8(uint8_t u8) {
     uint8_t *pointer = grow_data_buffer(1);
     *pointer = u8;
 }
 
-uint8_t serializer_t::deserialize_uint8(void)
-{
+uint8_t serializer_t::deserialize_uint8(void) {
     uint8_t *pointer = grow_data_buffer(1);
     return(*pointer);
 }
 
-void serializer_t::serialize_float32(float32_t f32)
-{
+void serializer_t::serialize_float32(float32_t f32) {
     uint8_t *pointer = grow_data_buffer(4);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(float32_t *)pointer = f32;
@@ -50,8 +44,7 @@ void serializer_t::serialize_float32(float32_t f32)
 #endif
 }
 
-float32_t serializer_t::deserialize_float32(void)
-{
+float32_t serializer_t::deserialize_float32(void) {
     uint8_t *pointer = grow_data_buffer(4);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(float32_t *)pointer);
@@ -66,15 +59,13 @@ float32_t serializer_t::deserialize_float32(void)
 #endif
 }
 
-void serializer_t::serialize_vector3(const vector3_t &v3)
-{
+void serializer_t::serialize_vector3(const vector3_t &v3) {
     serialize_float32(v3.x);
     serialize_float32(v3.y);
     serialize_float32(v3.z);
 }
 
-vector3_t serializer_t::deserialize_vector3(void)
-{
+vector3_t serializer_t::deserialize_vector3(void) {
     vector3_t v3 = {};
     v3.x = deserialize_float32();
     v3.y = deserialize_float32();
@@ -83,8 +74,7 @@ vector3_t serializer_t::deserialize_vector3(void)
     return(v3);
 }
 
-void serializer_t::serialize_uint16(uint16_t u16)
-{
+void serializer_t::serialize_uint16(uint16_t u16) {
     uint8_t *pointer = grow_data_buffer(2);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(uint16_t *)pointer = u16;
@@ -94,8 +84,7 @@ void serializer_t::serialize_uint16(uint16_t u16)
 #endif
 }
 
-uint16_t serializer_t::deserialize_uint16(void)
-{
+uint16_t serializer_t::deserialize_uint16(void) {
     uint8_t *pointer = grow_data_buffer(2);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(uint16_t *)pointer);
@@ -107,8 +96,7 @@ uint16_t serializer_t::deserialize_uint16(void)
 #endif
 }
 
-void serializer_t::serialize_uint32(uint32_t u32)
-{
+void serializer_t::serialize_uint32(uint32_t u32) {
     uint8_t *pointer = grow_data_buffer(4);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(uint32_t *)pointer = u32;
@@ -120,8 +108,7 @@ void serializer_t::serialize_uint32(uint32_t u32)
 #endif
 }
 
-uint32_t serializer_t::deserialize_uint32(void)
-{
+uint32_t serializer_t::deserialize_uint32(void) {
     uint8_t *pointer = grow_data_buffer(4);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(uint32_t *)pointer);
@@ -135,8 +122,7 @@ uint32_t serializer_t::deserialize_uint32(void)
 #endif
 }
 
-void serializer_t::serialize_uint64(uint64_t u64)
-{
+void serializer_t::serialize_uint64(uint64_t u64) {
     uint8_t *pointer = grow_data_buffer(8);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     *(uint64_t *)pointer = u64;
@@ -152,8 +138,7 @@ void serializer_t::serialize_uint64(uint64_t u64)
 #endif
 }
 
-uint64_t serializer_t::deserialize_uint64(void)
-{
+uint64_t serializer_t::deserialize_uint64(void) {
     uint8_t *pointer = grow_data_buffer(8);
 #if defined (__i386) || defined (__x86_64__) || defined (_M_IX86) || defined(_M_X64)
     return(*(uint64_t *)pointer);
@@ -171,8 +156,7 @@ uint64_t serializer_t::deserialize_uint64(void)
 #endif
 }
 
-void serializer_t::serialize_string(const char *string)
-{
+void serializer_t::serialize_string(const char *string) {
     uint32_t string_length = (uint32_t)strlen(string);
     
     uint8_t *pointer = grow_data_buffer((uint32_t)strlen(string) + 1);
@@ -180,8 +164,7 @@ void serializer_t::serialize_string(const char *string)
 }
 
 
-const char *serializer_t::deserialize_string(void)
-{
+const char *serializer_t::deserialize_string(void) {
     uint8_t *pointer = &data_buffer[data_buffer_head];
     uint32_t string_length = (uint32_t)strlen((char *)pointer);
     grow_data_buffer(string_length + 1);
@@ -191,22 +174,19 @@ const char *serializer_t::deserialize_string(void)
     return(ret);
 }
 
-void serializer_t::serialize_bytes(uint8_t *bytes, uint32_t size)
-{
+void serializer_t::serialize_bytes(uint8_t *bytes, uint32_t size) {
     uint8_t *pointer = grow_data_buffer(size);
     memcpy(pointer, bytes, size);
 }
 
 
-void serializer_t::deserialize_bytes(uint8_t *bytes, uint32_t size)
-{
+void serializer_t::deserialize_bytes(uint8_t *bytes, uint32_t size) {
     uint8_t *pointer = grow_data_buffer(size);
     memcpy(bytes, pointer, size);
 }
 
 
-void serializer_t::serialize_packet_header(packet_header_t *packet)
-{
+void serializer_t::serialize_packet_header(packet_header_t *packet) {
     serialize_uint32(packet->bytes);
     serialize_uint64(packet->current_tick);
     serialize_uint64(packet->current_packet_id);
@@ -214,8 +194,7 @@ void serializer_t::serialize_packet_header(packet_header_t *packet)
 }
 
 
-void serializer_t::deserialize_packet_header(packet_header_t *packet)
-{
+void serializer_t::deserialize_packet_header(packet_header_t *packet) {
     packet->bytes = deserialize_uint32();
     packet->current_tick = deserialize_uint64();
     packet->current_packet_id = deserialize_uint64();
@@ -223,20 +202,17 @@ void serializer_t::deserialize_packet_header(packet_header_t *packet)
 }
 
 
-void serializer_t::serialize_client_join_packet(client_join_packet_t *packet)
-{
+void serializer_t::serialize_client_join_packet(client_join_packet_t *packet) {
     serialize_string(packet->client_name);
 }
 
 
-void serializer_t::deserialize_client_join_packet(client_join_packet_t *packet)
-{
+void serializer_t::deserialize_client_join_packet(client_join_packet_t *packet) {
     packet->client_name = deserialize_string();
 }
 
 
-void serializer_t::serialize_client_input_state_packet(player_state_t *state)
-{
+void serializer_t::serialize_client_input_state_packet(player_state_t *state) {
     serialize_uint32(state->action_flags);
     serialize_float32(state->mouse_x_diff);
     serialize_float32(state->mouse_y_diff);
@@ -246,8 +222,7 @@ void serializer_t::serialize_client_input_state_packet(player_state_t *state)
 }
 
 
-void serializer_t::deserialize_client_input_state_packet(client_input_state_packet_t *packet)
-{
+void serializer_t::deserialize_client_input_state_packet(client_input_state_packet_t *packet) {
     packet->action_flags = deserialize_uint32();
     packet->mouse_x_diff = deserialize_float32();
     packet->mouse_y_diff = deserialize_float32();
@@ -257,8 +232,7 @@ void serializer_t::deserialize_client_input_state_packet(client_input_state_pack
 }
 
 
-void serializer_t::serialize_player_state_initialize_packet(player_state_initialize_packet_t *packet)
-{
+void serializer_t::serialize_player_state_initialize_packet(player_state_initialize_packet_t *packet) {
     serialize_uint32(packet->client_id);
     serialize_string(packet->player_name);
     
@@ -274,8 +248,7 @@ void serializer_t::serialize_player_state_initialize_packet(player_state_initial
 }
 
 
-void serializer_t::deserialize_player_state_initialize_packet(player_state_initialize_packet_t *packet)
-{
+void serializer_t::deserialize_player_state_initialize_packet(player_state_initialize_packet_t *packet) {
     packet->client_id = deserialize_uint32();
     packet->player_name = deserialize_string();
     
@@ -290,8 +263,7 @@ void serializer_t::deserialize_player_state_initialize_packet(player_state_initi
 }
 
 
-void serializer_t::serialize_voxel_state_initialize_packet(voxel_state_initialize_packet_t *packet)
-{
+void serializer_t::serialize_voxel_state_initialize_packet(voxel_state_initialize_packet_t *packet) {
     serialize_uint32(packet->grid_edge_size);
     serialize_float32(packet->size);
     serialize_uint32(packet->chunk_count);
@@ -299,8 +271,7 @@ void serializer_t::serialize_voxel_state_initialize_packet(voxel_state_initializ
 }
 
 
-void serializer_t::deserialize_voxel_state_initialize_packet(voxel_state_initialize_packet_t *packet)
-{
+void serializer_t::deserialize_voxel_state_initialize_packet(voxel_state_initialize_packet_t *packet) {
     packet->grid_edge_size = deserialize_uint32();
     packet->size = deserialize_float32();
     packet->chunk_count = deserialize_uint32();
@@ -308,8 +279,7 @@ void serializer_t::deserialize_voxel_state_initialize_packet(voxel_state_initial
 }
 
 
-void serializer_t::serialize_voxel_chunk_values_packet(voxel_chunk_values_packet_t *packet)
-{
+void serializer_t::serialize_voxel_chunk_values_packet(voxel_chunk_values_packet_t *packet) {
     serialize_uint8(packet->chunk_coord_x);
     serialize_uint8(packet->chunk_coord_y);
     serialize_uint8(packet->chunk_coord_z);
@@ -317,8 +287,7 @@ void serializer_t::serialize_voxel_chunk_values_packet(voxel_chunk_values_packet
 }
 
 
-void serializer_t::deserialize_voxel_chunk_values_packet(voxel_chunk_values_packet_t *packet)
-{
+void serializer_t::deserialize_voxel_chunk_values_packet(voxel_chunk_values_packet_t *packet) {
     packet->chunk_coord_x = deserialize_uint8();
     packet->chunk_coord_y = deserialize_uint8();
     packet->chunk_coord_z = deserialize_uint8();
@@ -328,20 +297,17 @@ void serializer_t::deserialize_voxel_chunk_values_packet(voxel_chunk_values_pack
 }
 
 
-void serializer_t::serialize_game_state_initialize_packet(game_state_initialize_packet_t *packet)
-{
+void serializer_t::serialize_game_state_initialize_packet(game_state_initialize_packet_t *packet) {
     serialize_voxel_state_initialize_packet(&packet->voxels);
     serialize_uint32(packet->client_index);
     serialize_uint32(packet->player_count);
-    for (uint32_t i = 0; i < packet->player_count; ++i)
-    {
+    for (uint32_t i = 0; i < packet->player_count; ++i) {
         serialize_player_state_initialize_packet(&packet->player[i]);
     }
 }
 
 
-void serializer_t::serialize_game_snapshot_player_state_packet(game_snapshot_player_state_packet_t *packet)
-{
+void serializer_t::serialize_game_snapshot_player_state_packet(game_snapshot_player_state_packet_t *packet) {
     serialize_uint32(packet->client_id);
     
     serialize_float32(packet->ws_position.x);
@@ -375,8 +341,7 @@ void serializer_t::serialize_game_snapshot_player_state_packet(game_snapshot_pla
 }
 
 
-void serializer_t::deserialize_game_snapshot_player_state_packet(game_snapshot_player_state_packet_t *packet)
-{
+void serializer_t::deserialize_game_snapshot_player_state_packet(game_snapshot_player_state_packet_t *packet) {
     packet->client_id = deserialize_uint32();
     
     packet->ws_position.x = deserialize_float32();
@@ -410,16 +375,13 @@ void serializer_t::deserialize_game_snapshot_player_state_packet(game_snapshot_p
 }
 
 
-void serializer_t::serialize_client_modified_voxels_packet(client_modified_voxels_packet_t *packet)
-{
+void serializer_t::serialize_client_modified_voxels_packet(client_modified_voxels_packet_t *packet) {
     serialize_uint32(packet->modified_chunk_count);
 
-    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
-    {
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk) {
         serialize_uint16(packet->modified_chunks[chunk].chunk_index);
         serialize_uint32(packet->modified_chunks[chunk].modified_voxel_count);
-        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
-        {
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel) {
             serialize_uint8(packet->modified_chunks[chunk].modified_voxels[voxel].x);
             serialize_uint8(packet->modified_chunks[chunk].modified_voxels[voxel].y);
             serialize_uint8(packet->modified_chunks[chunk].modified_voxels[voxel].z);
@@ -429,21 +391,18 @@ void serializer_t::serialize_client_modified_voxels_packet(client_modified_voxel
 }
 
 
-void serializer_t::deserialize_client_modified_voxels_packet(client_modified_voxels_packet_t *packet)
-{
+void serializer_t::deserialize_client_modified_voxels_packet(client_modified_voxels_packet_t *packet) {
     packet->modified_chunk_count = deserialize_uint32();
 
     packet->modified_chunks = (client_modified_chunk_t *)allocate_linear(sizeof(client_modified_chunk_t) * packet->modified_chunk_count);
 
-    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk)
-    {
+    for (uint32_t chunk = 0; chunk < packet->modified_chunk_count; ++chunk) {
         packet->modified_chunks[chunk].chunk_index = deserialize_uint16();
 
         packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32();
         
         packet->modified_chunks[chunk].modified_voxels = (local_client_modified_voxel_t *)allocate_linear(sizeof(local_client_modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count);
-        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
-        {
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel) {
             packet->modified_chunks[chunk].modified_voxels[voxel].x = deserialize_uint8();
             packet->modified_chunks[chunk].modified_voxels[voxel].y = deserialize_uint8();
             packet->modified_chunks[chunk].modified_voxels[voxel].z = deserialize_uint8();
@@ -453,16 +412,13 @@ void serializer_t::deserialize_client_modified_voxels_packet(client_modified_vox
 }
 
 
-void serializer_t::serialize_game_snapshot_voxel_delta_packet(game_snapshot_voxel_delta_packet_t *packet)
-{
+void serializer_t::serialize_game_snapshot_voxel_delta_packet(game_snapshot_voxel_delta_packet_t *packet) {
     serialize_uint32(packet->modified_count);
 
-    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
-    {
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk) {
         serialize_uint16(packet->modified_chunks[chunk].chunk_index);
         serialize_uint32(packet->modified_chunks[chunk].modified_voxel_count);
-        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
-        {
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel) {
             serialize_uint8(packet->modified_chunks[chunk].modified_voxels[voxel].previous_value);
             serialize_uint8(packet->modified_chunks[chunk].modified_voxels[voxel].next_value);
             serialize_uint16(packet->modified_chunks[chunk].modified_voxels[voxel].index);
@@ -471,23 +427,20 @@ void serializer_t::serialize_game_snapshot_voxel_delta_packet(game_snapshot_voxe
 }
 
 
-void serializer_t::deserialize_game_snapshot_voxel_delta_packet(game_snapshot_voxel_delta_packet_t *packet, linear_allocator_t *allocator)
-{
+void serializer_t::deserialize_game_snapshot_voxel_delta_packet(game_snapshot_voxel_delta_packet_t *packet, linear_allocator_t *allocator) {
     packet->modified_count = deserialize_uint32();
 
     packet->modified_chunks = (modified_chunk_t *)allocate_linear(sizeof(modified_chunk_t) * packet->modified_count, 1, "", allocator);
 
     uint32_t output_count = 0;
     
-    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk)
-    {
+    for (uint32_t chunk = 0; chunk < packet->modified_count; ++chunk) {
         packet->modified_chunks[chunk].chunk_index = deserialize_uint16();
 
         packet->modified_chunks[chunk].modified_voxel_count = deserialize_uint32();
         
         packet->modified_chunks[chunk].modified_voxels = (modified_voxel_t *)allocate_linear(sizeof(modified_voxel_t) * packet->modified_chunks[chunk].modified_voxel_count, 1, "", allocator);
-        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel)
-        {
+        for (uint32_t voxel = 0; voxel < packet->modified_chunks[chunk].modified_voxel_count; ++voxel) {
             packet->modified_chunks[chunk].modified_voxels[voxel].previous_value = deserialize_uint8();
             packet->modified_chunks[chunk].modified_voxels[voxel].next_value = deserialize_uint8();
             packet->modified_chunks[chunk].modified_voxels[voxel].index = deserialize_uint16();
@@ -497,21 +450,18 @@ void serializer_t::deserialize_game_snapshot_voxel_delta_packet(game_snapshot_vo
         }
     }
 
-    if (output_count)
-    {
+    if (output_count) {
         output_to_debug_console("\n");
     }
 }
 
 
-void serializer_t::deserialize_game_state_initialize_packet(game_state_initialize_packet_t *packet)
-{
+void serializer_t::deserialize_game_state_initialize_packet(game_state_initialize_packet_t *packet) {
     deserialize_voxel_state_initialize_packet(&packet->voxels);
     packet->client_index = deserialize_uint32();
     packet->player_count = deserialize_uint32();
     packet->player = (player_state_initialize_packet_t *)allocate_linear(sizeof(player_state_initialize_packet_t) * packet->player_count);
-    for (uint32_t i = 0; i < packet->player_count; ++i)
-    {
+    for (uint32_t i = 0; i < packet->player_count; ++i) {
         deserialize_player_state_initialize_packet(&packet->player[i]);
     }
 }

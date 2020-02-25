@@ -27,16 +27,14 @@ enum game_input_action_type_t { // Menu stuff
                                // Invalid
                                INVALID_ACTION };
 
-struct game_input_action_t
-{
+struct game_input_action_t {
     button_state_t state;
     float32_t value;
     float32_t down_amount = 0.0f;
 };
 
 // To translate from raw_input_t to player_input_t
-struct game_input_t
-{
+struct game_input_t {
     game_input_action_t actions[game_input_action_type_t::INVALID_ACTION];
 };
 

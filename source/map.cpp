@@ -11,8 +11,7 @@
 // - Loaded chunk count (basically chunks that need to be rendered because they contain meshes) | 1b
 
 
-void load_map(map_data_t *data, const char *src_path, model_t *chunk_model)
-{
+void load_map(map_data_t *data, const char *src_path, model_t *chunk_model) {
     file_handle_t file = create_file(src_path, file_type_flags_t::ASSET | file_type_flags_t::BINARY);
     file_contents_t content = read_file_tmp(file);
 
@@ -38,12 +37,9 @@ void load_map(map_data_t *data, const char *src_path, model_t *chunk_model)
     data->to_update_count = (uint32_t)serializer.deserialize_uint8();
     data->to_update = (chunk_t **)allocate_free_list(sizeof(chunk_t *) * data->max_chunks);
 
-    for (uint32_t z = 0; z < data->grid_edge_size; ++z)
-    {
-        for (uint32_t y = 0; y < data->grid_edge_size; ++y)
-        {
-            for (uint32_t x = 0; x < data->grid_edge_size; ++x)
-            {
+    for (uint32_t z = 0; z < data->grid_edge_size; ++z) {
+        for (uint32_t y = 0; y < data->grid_edge_size; ++y) {
+            for (uint32_t x = 0; x < data->grid_edge_size; ++x) {
                 uint32_t i = convert_3d_to_1d_index(x, y, z, data->grid_edge_size);
                 chunk_t **chunk_pptr = &data->chunks[i];
                 *chunk_pptr = (chunk_t *)allocate_free_list(sizeof(chunk_t));
@@ -53,8 +49,7 @@ void load_map(map_data_t *data, const char *src_path, model_t *chunk_model)
                 chunk_t *chunk_ptr = *chunk_pptr;
                 chunk_ptr->initialize(position, ivector3_t(x, y, z), true, vector3_t(data->chunk_size));
 
-                switch (get_app_type())
-                {
+                switch (get_app_type()) {
                 case application_type_t::WINDOW_APPLICATION_MODE: {
                     chunk_ptr->initialize_for_rendering(chunk_model);
                 } break;
@@ -66,8 +61,7 @@ void load_map(map_data_t *data, const char *src_path, model_t *chunk_model)
         }    
     }
     
-    for (uint32_t i = 0; i < data->to_update_count; ++i)
-    {
+    for (uint32_t i = 0; i < data->to_update_count; ++i) {
         uint8_t x = serializer.deserialize_uint8();
         uint8_t y = serializer.deserialize_uint8();
         uint8_t z = serializer.deserialize_uint8();
@@ -87,8 +81,7 @@ void load_map(map_data_t *data, const char *src_path, model_t *chunk_model)
 }
 
 
-void save_map(map_data_t *data, const char *dst_path)
-{
+void save_map(map_data_t *data, const char *dst_path) {
     delete_file(dst_path);
 
     // Delete current file and write to a new one
@@ -109,8 +102,7 @@ void save_map(map_data_t *data, const char *dst_path)
     serializer.serialize_float32(data->chunk_size);
     serializer.serialize_uint8(data->to_update_count);
 
-    for (uint32_t i = 0; i < data->to_update_count; ++i)
-    {
+    for (uint32_t i = 0; i < data->to_update_count; ++i) {
         chunk_t *chunk_ptr = data->to_update[i];
 
         serializer.serialize_uint8(chunk_ptr->chunk_coord.x);

@@ -3,8 +3,7 @@
 #include "player.hpp"
 #include "graphics.hpp"
 
-void player_t::initialize(player_create_info_t *info)
-{
+void player_t::initialize(player_create_info_t *info) {
     static vector4_t colors[player_color_t::INVALID_COLOR] = { vector4_t(0.0f, 0.0f, 0.7f, 1.0f),
                                                                vector4_t(0.7f, 0.0f, 0.0f, 1.0f),
                                                                vector4_t(0.4f, 0.4f, 0.4f, 1.0f),
@@ -45,8 +44,7 @@ void player_t::initialize(player_create_info_t *info)
     physics.enabled = info->physics_info.enabled;
     animation.cycles = info->animation_info.cycles;
 
-    switch (get_app_type())
-    {
+    switch (get_app_type()) {
     case application_type_t::WINDOW_APPLICATION_MODE: {
         animation.animation_instance = initialize_animated_instance(get_global_command_pool(), info->animation_info.ubo_layout, info->animation_info.skeleton, info->animation_info.cycles);
         switch_to_cycle(&animation.animation_instance, player_t::animated_state_t::IDLE, 1);
@@ -66,8 +64,7 @@ void player_t::initialize(player_create_info_t *info)
 }
 
 
-player_state_t player_t::create_player_state(void)
-{
+player_state_t player_t::create_player_state(void) {
     player_state_t state = {};
     state.action_flags = action_flags;
     state.mouse_x_diff = camera.mouse_diff.x;

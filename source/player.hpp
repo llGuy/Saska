@@ -13,8 +13,7 @@ enum player_color_t { BLUE, RED, GRAY, DARK_GRAY, GREEN, ORANGE, INVALID_COLOR }
 using player_handle_t = int32_t;
 
 
-struct player_create_info_t
-{
+struct player_create_info_t {
     constant_string_t name;
     vector3_t ws_position;
     vector3_t ws_direction;
@@ -32,8 +31,7 @@ struct player_create_info_t
 };
 
 
-struct player_t : entity_t
-{
+struct player_t : entity_t {
     constant_string_t id;
     
     vector3_t surface_normal;
